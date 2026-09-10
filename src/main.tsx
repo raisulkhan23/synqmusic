@@ -29,6 +29,7 @@ const Liked = lazy(() => import("./pages/Liked.tsx"));
 const Playlists = lazy(() => import("./pages/Playlists.tsx"));
 const PlaylistDetail = lazy(() => import("./pages/PlaylistDetail.tsx"));
 const Album = lazy(() => import("./pages/Album.tsx"));
+const Admin = lazy(() => import("./pages/Admin.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
 // Simple loading fallback for route transitions
@@ -162,6 +163,7 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="/playlists" element={<Playlists />} />
                 <Route path="/playlist/:id" element={<PlaylistDetail />} />
                 <Route path="/album/:id" element={<Album />} />
+                <Route path="/admin" element={<Admin />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>

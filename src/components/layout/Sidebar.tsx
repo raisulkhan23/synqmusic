@@ -13,6 +13,7 @@ import {
   LogOut,
   Plus,
   Search,
+  ShieldCheck,
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router";
 
@@ -66,6 +67,22 @@ export function Sidebar() {
             {label}
           </NavLink>
         ))}
+        {user?.role === "admin" && (
+          <NavLink
+            to="/admin"
+            className={({ isActive }) =>
+              cn(
+                "mt-1 flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                isActive
+                  ? "bg-white/[0.07] text-foreground"
+                  : "text-muted-foreground hover:bg-white/[0.04] hover:text-foreground",
+              )
+            }
+          >
+            <ShieldCheck className="size-[18px] text-[rgb(var(--tint))]" />
+            Admin
+          </NavLink>
+        )}
       </nav>
 
       <div className="mt-6 flex items-center justify-between px-5">

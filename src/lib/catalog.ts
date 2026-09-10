@@ -228,7 +228,7 @@ export const MIXES: Mix[] = [
   {
     id: "mix-top",
     title: "This Week's Top Tracks",
-    description: "The most played songs in the SoundScape universe.",
+    description: "The most played songs across the Soundscape catalog.",
     gradient: ["#e11d48", "#7c3aed"],
     trackIds: [
       "afterglow-afterglow", "prism-chromatic", "afterglow-night-drive", "sl-midnight-courier",

@@ -126,9 +126,9 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                 <div className="mb-4 mt-4 flex justify-center">
                   <Logo to="/" className="text-lg" />
                 </div>
-                <CardTitle className="font-display text-xl">Get Started</CardTitle>
+                <CardTitle className="font-display text-xl">Sign in or sign up</CardTitle>
                 <CardDescription>
-                  Enter your email to log in or sign up
+                  Enter your email and we&apos;ll send you a one-time code
                 </CardDescription>
               </CardHeader>
               <form onSubmit={handleEmailSubmit}>

@@ -27,6 +27,13 @@ export function AppShell() {
 
   const likedQuery = useQuery(api.likes.myLikedTrackIds);
   const toggleLikeMutation = useMutation(api.likes.toggleLike);
+  const currentUser = useQuery(api.users.currentUser);
+  const claimAdminIfEmpty = useMutation(api.admin.claimAdminIfEmpty);
+
+  // First account on the deployment becomes an admin (bootstrap).
+  useEffect(() => {
+    if (currentUser) void claimAdminIfEmpty();
+  }, [currentUser, claimAdminIfEmpty]);
 
   // Keep the player store's liked map in sync with Convex.
   useEffect(() => {

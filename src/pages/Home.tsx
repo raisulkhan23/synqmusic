@@ -75,7 +75,7 @@ export default function Home() {
             <p className="mt-3 font-display text-[15px] font-semibold">{label}</p>
             <p className="mt-0.5 truncate text-xs text-muted-foreground">{detail}</p>
           </Link>
-        )}
+        ))}
       </section>
 
       {/* featured mix hero */}
