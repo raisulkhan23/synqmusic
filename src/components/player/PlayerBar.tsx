@@ -1,14 +1,18 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { SeekBar } from "@/components/player/SeekBar";
 import { TransportControls } from "@/components/player/TransportControls";
 import { VolumeControl } from "@/components/player/VolumeControl";
-import { albumById, artistById } from "@/lib/catalog";
-import { coverArt, dominantColor } from "@/lib/covers";
+import { api } from "@/convex/_generated/api";
+import { albumById } from "@/lib/catalog";
+import { accentFromString, coverArt, dominantColor } from "@/lib/covers";
 import { formatTime } from "@/lib/format";
+import { toPlayableYoutube } from "@/lib/playable";
 import { usePlayerStore } from "@/store/player";
-import { Heart, ListMusic, Loader2, Maximize2 } from "lucide-react";
+import { useAction } from "convex/react";
+import { Heart, ListMusic, Loader2, Maximize2, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 export function PlayerBar() {
   const current = usePlayerStore((s) => s.current);
@@ -22,37 +26,81 @@ export function PlayerBar() {
   const setQueueOpen = usePlayerStore((s) => s.setQueueOpen);
   const setFullscreen = usePlayerStore((s) => s.setFullscreen);
   const setAccent = usePlayerStore((s) => s.setAccent);
+  const errorNonce = usePlayerStore((s) => s.errorNonce);
+  const replaceCurrentStream = usePlayerStore((s) => s.replaceCurrentStream);
+  const resolveStream = useAction(api.youtube.resolveStream);
 
-  const album = current ? albumById(current.albumId) : null;
-  const artist = current ? artistById(current.artistId) : null;
-
-  // Sample the current cover art and tint the whole app with its dominant color.
+  // Sample the current artwork and tint the whole app with its dominant color.
+  // Remote (YouTube) art can't be sampled cross-origin, so derive a stable,
+  // pleasant accent from the track instead.
   useEffect(() => {
-    if (!album) {
+    if (!current) {
       setAccent(null);
       return;
     }
-    setAccent(album.accent);
-    const src = coverArt(album);
     let cancelled = false;
-    void dominantColor(src).then((c) => {
-      if (!cancelled && c) setAccent(c);
-    });
+
+    if (current.source === "catalog" && current.catalogTrack) {
+      const album = albumById(current.catalogTrack.albumId);
+      setAccent(album.accent);
+      void dominantColor(coverArt(album)).then((c) => {
+        if (!cancelled && c) setAccent(c);
+      });
+    } else {
+      setAccent(accentFromString(`${current.title} ${current.artistName}`));
+    }
+
     return () => {
       cancelled = true;
     };
-  }, [current?.id, album, setAccent]);
+  }, [current?.id, current?.source, current?.title, current?.artistName, setAccent]);
 
-  if (!current || !album || !artist) return null;
+  // Auto-fallback: if a YouTube stream fails to load, try the next search
+  // result automatically (one attempt per alternative, manual switching also
+  // available in the queue panel).
+  const attempts = useRef(0);
+  const lastErrorTrack = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (errorNonce === 0) return;
+    const s = usePlayerStore.getState();
+    const track = s.current;
+    if (!track || track.source !== "youtube") return;
+
+    if (lastErrorTrack.current !== track.id) {
+      lastErrorTrack.current = track.id;
+      attempts.current = 0;
+    }
+    const alternatives = track.alternatives ?? [];
+    if (attempts.current >= alternatives.length) {
+      toast.error("No more sources available for this track");
+      return;
+    }
+    const next = alternatives[attempts.current];
+    attempts.current += 1;
+
+    toast.loading(`Trying another source for "${track.title}"…`, { id: "yt-fallback" });
+    void resolveStream({ videoId: next.id })
+      .then(({ url }) => {
+        toast.success("Switched to an alternative source", { id: "yt-fallback" });
+        replaceCurrentStream(toPlayableYoutube(next, url, alternatives));
+      })
+      .catch(() => {
+        toast.error("Alternative source failed too", { id: "yt-fallback" });
+      });
+  }, [errorNonce, resolveStream, replaceCurrentStream]);
+
+  if (!current) return null;
 
   const isLiked = liked[current.id] !== undefined;
+  const catalogTrack = current.source === "catalog" ? current.catalogTrack : undefined;
 
   return (
     <footer className="glass z-30 flex h-[76px] shrink-0 items-center gap-3 border-t border-white/[0.07] px-3 sm:px-4">
       {/* now playing */}
       <div className="flex min-w-0 w-[26%] items-center gap-3 sm:w-[30%]">
         <div className="relative size-12 shrink-0 overflow-hidden rounded-md shadow-lg ring-1 ring-white/10">
-          <img src={coverArt(album)} alt="" className="size-full object-cover" />
+          <img src={current.coverUrl} alt="" className="size-full object-cover" />
           {isBuffering && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/40">
               <Loader2 className="size-4 animate-spin text-white" />
@@ -68,13 +116,35 @@ export function PlayerBar() {
           >
             {current.title}
           </p>
-          <Link
-            to={`/album/${album.id}`}
-            className="block truncate text-xs text-muted-foreground transition-colors hover:text-foreground hover:underline"
-          >
-            {artist.name}
-          </Link>
+          {catalogTrack ? (
+            <Link
+              to={`/album/${catalogTrack.albumId}`}
+              className="block truncate text-xs text-muted-foreground transition-colors hover:text-foreground hover:underline"
+            >
+              {current.artistName}
+            </Link>
+          ) : (
+            <p className="block truncate text-xs text-muted-foreground">
+              {current.artistName}
+            </p>
+          )}
         </div>
+        {current.source === "youtube" && (
+          <button
+            type="button"
+            aria-label="Try another source"
+            title="Try another source"
+            onClick={() => {
+              const s = usePlayerStore.getState();
+              if (s.current) {
+                usePlayerStore.setState({ errorNonce: s.errorNonce + 1 });
+              }
+            }}
+            className="hidden shrink-0 rounded-full p-1.5 text-muted-foreground/70 transition-colors hover:bg-white/[0.06] hover:text-foreground sm:block"
+          >
+            <RefreshCw className="size-3.5" />
+          </button>
+        )}
         <button
           type="button"
           aria-label={isLiked ? "Remove from liked songs" : "Add to liked songs"}

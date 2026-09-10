@@ -3,8 +3,6 @@ import { SeekBar } from "@/components/player/SeekBar";
 import { TransportControls } from "@/components/player/TransportControls";
 import { VisualizerCanvas } from "@/components/player/VisualizerCanvas";
 import { VolumeControl } from "@/components/player/VolumeControl";
-import { albumById, artistById } from "@/lib/catalog";
-import { coverArt } from "@/lib/covers";
 import { formatTime } from "@/lib/format";
 import { usePlayerStore } from "@/store/player";
 import { ChevronDown, Heart, ListMusic } from "lucide-react";
@@ -22,13 +20,11 @@ export function FullscreenPlayer() {
   const setFullscreen = usePlayerStore((s) => s.setFullscreen);
   const setQueueOpen = usePlayerStore((s) => s.setQueueOpen);
 
-  const album = current ? albumById(current.albumId) : null;
-  const artist = current ? artistById(current.artistId) : null;
   const a = accent ?? { r: 196, g: 246, b: 152 };
 
   return (
     <AnimatePresence>
-      {fullscreen && current && album && artist && (
+      {fullscreen && current && (
         <motion.div
           key="fullscreen-player"
           initial={{ opacity: 0 }}
@@ -67,9 +63,11 @@ export function FullscreenPlayer() {
               </button>
               <div className="hidden text-center sm:block">
                 <p className="font-display text-sm font-semibold tracking-tight">
-                  {album.title}
+                  {current.albumName}
                 </p>
-                <p className="text-xs text-muted-foreground">{album.year} · Demo catalog</p>
+                <p className="text-xs text-muted-foreground">
+                  {current.source === "catalog" ? "Soundscape catalog" : "Streamed from YouTube"}
+                </p>
               </div>
               <div className="flex items-center gap-1">
                 <button
@@ -102,8 +100,8 @@ export function FullscreenPlayer() {
             {/* artwork */}
             <div className="flex flex-1 items-center justify-center py-6">
               <motion.img
-                src={coverArt(album)}
-                alt={`${album.title} cover art`}
+                src={current.coverUrl}
+                alt={`${current.title} cover art`}
                 className="size-[min(38vh,340px)] rounded-2xl object-cover shadow-[0_30px_80px_rgba(0,0,0,0.6)] ring-1 ring-white/10"
                 animate={{ y: [0, -12, 0] }}
                 transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
@@ -117,7 +115,7 @@ export function FullscreenPlayer() {
                   {current.title}
                 </h2>
                 <p className="mt-1 truncate text-sm text-muted-foreground">
-                  {artist.name} · {album.title}
+                  {current.artistName} · {current.albumName}
                 </p>
               </div>
 

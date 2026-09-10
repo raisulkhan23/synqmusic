@@ -91,6 +91,36 @@ export interface RGB {
 
 const rgbKey = (r: number, g: number, b: number) => `${r >> 4},${g >> 4},${b >> 4}`;
 
+/** Deterministic accent derived from a string (used for remote/YouTube art). */
+export function accentFromString(input: string): RGB {
+  let hash = 0;
+  for (let i = 0; i < input.length; i++) {
+    hash = (hash * 31 + input.charCodeAt(i)) >>> 0;
+  }
+  const hue = hash % 360;
+  return hslToRgb(hue, 0.68, 0.55);
+}
+
+function hslToRgb(h: number, s: number, l: number): RGB {
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = l - c / 2;
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  if (h < 60) [r, g, b] = [c, x, 0];
+  else if (h < 120) [r, g, b] = [x, c, 0];
+  else if (h < 180) [r, g, b] = [0, c, x];
+  else if (h < 240) [r, g, b] = [0, x, c];
+  else if (h < 300) [r, g, b] = [x, 0, c];
+  else [r, g, b] = [c, 0, x];
+  return {
+    r: Math.round((r + m) * 255),
+    g: Math.round((g + m) * 255),
+    b: Math.round((b + m) * 255),
+  };
+}
+
 export async function dominantColor(src: string): Promise<RGB | null> {
   try {
     const img = new Image();

@@ -5,13 +5,20 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Equalizer } from "@/components/player/Equalizer";
-import { albumById, artistById, trackById, type Track } from "@/lib/catalog";
-import { coverArt } from "@/lib/covers";
+import { api } from "@/convex/_generated/api";
 import { formatTime } from "@/lib/format";
-import { cn } from "@/lib/utils";
+import { toPlayableYoutube } from "@/lib/playable";
 import { usePlayerStore } from "@/store/player";
-import { GripVertical, ListMusic, Trash2, X } from "lucide-react";
+import { useAction } from "convex/react";
+import { GripVertical, ListMusic, RefreshCw, Trash2, X } from "lucide-react";
+import { toast } from "sonner";
 
 export function QueuePanel() {
   const open = usePlayerStore((s) => s.queueOpen);
@@ -24,15 +31,35 @@ export function QueuePanel() {
   const removeFromQueue = usePlayerStore((s) => s.removeFromQueue);
   const replaceUpcoming = usePlayerStore((s) => s.replaceUpcoming);
   const clearQueue = usePlayerStore((s) => s.clearQueue);
+  const replaceCurrentStream = usePlayerStore((s) => s.replaceCurrentStream);
+  const resolveStream = useAction(api.youtube.resolveStream);
 
   const upcoming = queueIndex >= 0 ? queue.slice(queueIndex + 1) : queue;
   const upcomingIds = upcoming.map((t) => t.id);
 
   const handleReorder = (ids: string[]) => {
+    const byId = new Map(upcoming.map((t) => [t.id, t]));
     const reordered = ids
-      .map((id) => trackById(id))
-      .filter((t): t is Track => t !== undefined);
+      .map((id) => byId.get(id))
+      .filter((t): t is NonNullable<typeof t> => t !== undefined);
     replaceUpcoming(reordered);
+  };
+
+  const switchSource = (videoId: string) => {
+    const track = usePlayerStore.getState().current;
+    if (!track || track.source !== "youtube") return;
+    const alternatives = track.alternatives ?? [];
+    const alt = alternatives.find((a) => a.id === videoId);
+    if (!alt) return;
+    toast.loading(`Switching source for "${track.title}"…`, { id: "yt-switch" });
+    void resolveStream({ videoId: alt.id })
+      .then(({ url }) => {
+        toast.success("Source switched", { id: "yt-switch" });
+        replaceCurrentStream(toPlayableYoutube(alt, url, alternatives));
+      })
+      .catch(() => {
+        toast.error("That source could not be loaded", { id: "yt-switch" });
+      });
   };
 
   return (
@@ -68,16 +95,55 @@ export function QueuePanel() {
               </p>
               <div className="flex items-center gap-3">
                 <img
-                  src={coverArt(albumById(current.albumId))}
+                  src={current.coverUrl}
                   alt=""
                   className="size-11 shrink-0 rounded-md object-cover"
                 />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold">{current.title}</p>
                   <p className="truncate text-xs text-muted-foreground">
-                    {artistById(current.artistId).name}
+                    {current.artistName}
                   </p>
                 </div>
+                {current.source === "youtube" &&
+                  (current.alternatives?.length ?? 0) > 0 && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          aria-label="Switch source"
+                          title="Switch source"
+                          className="flex shrink-0 items-center gap-1 rounded-full border border-white/10 px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
+                        >
+                          <RefreshCw className="size-3" />
+                          Source
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-64">
+                        {current.alternatives?.map((alt) => (
+                          <DropdownMenuItem
+                            key={alt.id}
+                            onSelect={() => switchSource(alt.id)}
+                            className="gap-2"
+                          >
+                            <img
+                              src={alt.thumbnail}
+                              alt=""
+                              className="size-8 shrink-0 rounded object-cover"
+                            />
+                            <span className="min-w-0">
+                              <span className="block truncate text-xs font-medium">
+                                {alt.title}
+                              </span>
+                              <span className="block truncate text-[11px] text-muted-foreground">
+                                {alt.artist} · {formatTime(alt.duration)}
+                              </span>
+                            </span>
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
                 {isPlaying && <Equalizer className="shrink-0" />}
               </div>
             </section>
@@ -111,7 +177,7 @@ export function QueuePanel() {
                   >
                     <GripVertical className="size-4 shrink-0 text-muted-foreground/50 group-hover:text-muted-foreground" />
                     <img
-                      src={coverArt(albumById(track.albumId))}
+                      src={track.coverUrl}
                       alt=""
                       className="size-10 shrink-0 rounded-md object-cover"
                     />
@@ -121,7 +187,7 @@ export function QueuePanel() {
                     >
                       <p className="truncate text-sm font-medium">{track.title}</p>
                       <p className="truncate text-xs text-muted-foreground">
-                        {artistById(track.artistId).name}
+                        {track.artistName}
                       </p>
                     </div>
                     <span className="shrink-0 text-xs tabular-nums text-muted-foreground/70">
@@ -133,9 +199,7 @@ export function QueuePanel() {
                       onClick={() =>
                         removeFromQueue(queueIndex + 1 + upcoming.indexOf(track))
                       }
-                      className={cn(
-                        "shrink-0 rounded-full p-1.5 text-muted-foreground/60 transition-colors hover:bg-white/10 hover:text-foreground",
-                      )}
+                      className="shrink-0 rounded-full p-1.5 text-muted-foreground/60 transition-colors hover:bg-white/10 hover:text-foreground"
                     >
                       <X className="size-3.5" />
                     </button>

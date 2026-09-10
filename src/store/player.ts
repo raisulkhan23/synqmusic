@@ -1,7 +1,8 @@
 import { create } from "zustand";
 import { getAudio } from "@/lib/audio";
-import { albumById, artistById, type Track } from "@/lib/catalog";
+import type { Track } from "@/lib/catalog";
 import type { RGB } from "@/lib/covers";
+import { isPlayable, toPlayable, type Playable } from "@/lib/playable";
 
 export type RepeatMode = "off" | "all" | "one";
 
@@ -13,14 +14,15 @@ export interface LikeMutation {
 
 interface PlayerStore {
   // playback
-  queue: Track[];
+  queue: Playable[];
   queueIndex: number;
-  current: Track | null;
+  current: Playable | null;
   isPlaying: boolean;
   isBuffering: boolean;
   currentTime: number;
   duration: number;
   bufferedEnd: number;
+  errorNonce: number;
 
   // preferences
   volume: number;
@@ -38,8 +40,9 @@ interface PlayerStore {
   likedLoaded: boolean;
 
   // actions
-  playTrack: (track: Track, list?: Track[]) => void;
+  playTrack: (track: Track | Playable, list?: (Track | Playable)[]) => void;
   playIndex: (index: number) => void;
+  replaceCurrentStream: (playable: Playable) => void;
   togglePlay: () => void;
   next: () => void;
   prev: () => void;
@@ -52,7 +55,7 @@ interface PlayerStore {
   setFullscreen: (open: boolean) => void;
   setAccent: (accent: RGB | null) => void;
   removeFromQueue: (index: number) => void;
-  replaceUpcoming: (upcoming: Track[]) => void;
+  replaceUpcoming: (upcoming: Playable[]) => void;
   clearQueue: () => void;
 
   setLiked: (liked: Record<string, number>) => void;
@@ -139,7 +142,11 @@ function wireAudio() {
   });
 
   audio.addEventListener("error", () => {
-    usePlayerStore.setState({ isBuffering: false, isPlaying: false });
+    usePlayerStore.setState((s) => ({
+      isBuffering: false,
+      isPlaying: false,
+      errorNonce: s.errorNonce + 1,
+    }));
   });
 }
 
@@ -152,7 +159,7 @@ const randomIndex = (length: number, exclude: number): number => {
 
 // --- media session (lock screen / hardware keys) ------------------------------
 
-function syncMediaSession(track: Track | null, playing: boolean) {
+function syncMediaSession(track: Playable | null, playing: boolean) {
   if (!("mediaSession" in navigator)) return;
   if (!track) {
     navigator.mediaSession.metadata = null;
@@ -160,8 +167,8 @@ function syncMediaSession(track: Track | null, playing: boolean) {
   }
   navigator.mediaSession.metadata = new MediaMetadata({
     title: track.title,
-    artist: artistById(track.artistId).name,
-    album: albumById(track.albumId).title,
+    artist: track.artistName,
+    album: track.albumName,
   });
   navigator.mediaSession.playbackState = playing ? "playing" : "paused";
 }
@@ -171,7 +178,9 @@ function syncMediaSession(track: Track | null, playing: boolean) {
 export const usePlayerStore = create<PlayerStore>()((set, get) => {
   wireAudio();
 
-  const loadTrack = (track: Track) => {
+  const norm = (t: Track | Playable): Playable => (isPlayable(t) ? t : toPlayable(t));
+
+  const loadTrack = (track: Playable) => {
     const audio = getAudio();
     audio.src = track.audioUrl;
     audio.load();
@@ -183,12 +192,21 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     });
   };
 
-  const playTrack = (track: Track, list?: Track[]) => {
-    const list2 = list && list.length > 0 ? list : [track];
+  const playTrack = (track: Track | Playable, list?: (Track | Playable)[]) => {
+    const list2 =
+      list && list.length > 0 ? list.map(norm) : [norm(track)];
     const idx = list2.findIndex((t) => t.id === track.id);
     const index = idx >= 0 ? idx : 0;
     set({ queue: list2, queueIndex: index });
     loadTrack(list2[index]);
+  };
+
+  const replaceCurrentStream = (playable: Playable) => {
+    const s = get();
+    const index = Math.max(0, s.queueIndex);
+    const queue = s.queue.map((t, i) => (i === index ? playable : t));
+    set({ queue, queueIndex: index });
+    loadTrack(playable);
   };
 
   const playIndex = (index: number) => {
@@ -336,6 +354,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     currentTime: 0,
     duration: 0,
     bufferedEnd: 0,
+    errorNonce: 0,
 
     volume: initialVolume,
     muted: initialMuted,
@@ -351,6 +370,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
 
     playTrack,
     playIndex,
+    replaceCurrentStream,
     togglePlay,
     next,
     prev,
