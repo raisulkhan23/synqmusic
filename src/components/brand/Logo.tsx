@@ -9,7 +9,7 @@ export function Logo({ to = "/", className }: { to?: string; className?: string 
         <AudioLines className="size-5" />
       </span>
       <span className="font-display text-[17px] font-bold tracking-tight">
-        SoundScape
+        Soundscape
       </span>
     </Link>
   );

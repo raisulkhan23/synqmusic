@@ -77,7 +77,7 @@ export default function Landing() {
             className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-1.5 text-xs font-medium text-muted-foreground"
           >
             <span className="size-1.5 rounded-full bg-brand" />
-            SoundScape demo · ad-free · 320 kbps
+            Soundscape · ad-free · 320 kbps
           </motion.div>
 
           <motion.h1
@@ -97,8 +97,8 @@ export default function Landing() {
             transition={{ duration: 0.55, delay: 0.16 }}
             className="mt-5 max-w-md text-base leading-7 text-muted-foreground sm:text-lg"
           >
-            SoundScape streams a hand-tuned catalog in crisp quality — with a live
-            frequency visualizer, a queue you can rearrange, and absolutely zero ads.
+            Soundscape streams a carefully curated catalog in crisp 320 kbps — with
+            a live visualizer, a queue you can rearrange, and absolutely no ads.
           </motion.p>
 
           <motion.div
@@ -304,10 +304,10 @@ export default function Landing() {
       <section id="catalog" className="relative z-10 mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">
         <motion.div {...fadeUp} className="mx-auto max-w-2xl text-center">
           <h2 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">
-            The demo catalog
+            The Soundscape catalog
           </h2>
           <p className="mt-3 text-muted-foreground">
-            Six albums, six artists, twenty-four tracks — each with its own artwork
+            Six albums, six artists, twenty-four tracks — each with original artwork
             and a live color tint that follows the music.
           </p>
         </motion.div>
@@ -345,7 +345,7 @@ export default function Landing() {
             className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/[0.04] px-6 py-3 text-sm font-semibold transition-colors hover:bg-white/[0.08]"
           >
             <AudioLines className="size-4 text-brand" />
-            Sign in to play them all
+            Sign in to listen
           </Link>
         </motion.div>
       </section>
@@ -389,7 +389,7 @@ export default function Landing() {
         <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-6 px-4 py-10 sm:flex-row sm:px-6">
           <Logo to="/" />
           <p className="text-xs text-muted-foreground">
-            © 2026 SoundScape · Demo catalog — audio courtesy of SoundHelix
+            © 2026 Soundscape · Demo catalog — audio courtesy of SoundHelix
           </p>
           <nav className="flex items-center gap-5 text-xs font-medium text-muted-foreground">
             <a href="#features" className="transition-colors hover:text-foreground">

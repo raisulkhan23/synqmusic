@@ -1,20 +1,54 @@
 import { motion } from "framer-motion";
+import { Link } from "react-router";
 import { AlbumCard } from "@/components/tracks/AlbumCard";
 import { MixCard } from "@/components/tracks/MixCard";
 import { PlayHeaderButton } from "@/components/tracks/PlayHeaderButton";
 import { SectionRow } from "@/components/tracks/SectionRow";
 import { TrackRow } from "@/components/tracks/TrackRow";
-import { albumsByNewest, MIXES, topTracks, tracksByIds } from "@/lib/catalog";
+import { api } from "@/convex/_generated/api";
+import { albumsByNewest, ALBUMS, MIXES, topTracks, tracksByIds } from "@/lib/catalog";
 import { formatTime, greeting, pluralize } from "@/lib/format";
 import { usePlayerStore } from "@/store/player";
+import { useQuery } from "convex/react";
+import { Heart, LibraryBig, ListMusic, Search } from "lucide-react";
 
 export default function Home() {
   const playTrack = usePlayerStore((s) => s.playTrack);
+  const likedCount = usePlayerStore((s) => Object.keys(s.liked).length);
+  const likedLoaded = usePlayerStore((s) => s.likedLoaded);
+  const playlists = useQuery(api.playlists.myPlaylists);
   const featured = MIXES.find((m) => m.id === "mix-top") ?? MIXES[0];
   const featuredTracks = tracksByIds(featured.trackIds);
   const mixes = MIXES.filter((m) => m.id !== featured.id);
   const albums = albumsByNewest();
   const top = topTracks(8);
+
+  const quickLinks = [
+    {
+      to: "/liked",
+      label: "Liked Songs",
+      detail: likedLoaded ? `${likedCount} ${likedCount === 1 ? "song" : "songs"}` : "…",
+      icon: Heart,
+    },
+    {
+      to: "/playlists",
+      label: "Playlists",
+      detail: playlists === undefined ? "…" : `${playlists.length} ${playlists.length === 1 ? "playlist" : "playlists"}`,
+      icon: ListMusic,
+    },
+    {
+      to: "/library",
+      label: "Library",
+      detail: `${ALBUMS.length} albums in the catalog`,
+      icon: LibraryBig,
+    },
+    {
+      to: "/search",
+      label: "Search",
+      detail: "Find any track, album or artist",
+      icon: Search,
+    },
+  ];
 
   return (
     <div className="flex flex-col gap-10">
@@ -23,9 +57,26 @@ export default function Home() {
           {greeting()}
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          The demo catalog is live — 24 tracks, zero ads, instant playback.
+          Your dashboard — the catalog is ready, 24 tracks, zero ads.
         </p>
       </header>
+
+      {/* personal quick links */}
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {quickLinks.map(({ to, label, detail, icon: Icon }) => (
+          <Link
+            key={to}
+            to={to}
+            className="group rounded-2xl border border-white/[0.07] bg-white/[0.03] p-4 transition-all hover:border-[rgb(var(--tint)_/_0.35)] hover:bg-white/[0.05]"
+          >
+            <span className="flex size-9 items-center justify-center rounded-xl bg-[rgb(var(--tint)_/_0.14)] text-[rgb(var(--tint))] transition-transform group-hover:scale-105">
+              <Icon className="size-[18px]" />
+            </span>
+            <p className="mt-3 font-display text-[15px] font-semibold">{label}</p>
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">{detail}</p>
+          </Link>
+        )}
+      </section>
 
       {/* featured mix hero */}
       <motion.section
@@ -65,13 +116,13 @@ export default function Home() {
         </div>
       </motion.section>
 
-      <SectionRow title="Made for you" subtitle="Mixes curated from the demo catalog">
+      <SectionRow title="Made for you" subtitle="Editorial mixes, curated from the catalog">
         {mixes.map((mix) => (
           <MixCard key={mix.id} mix={mix} />
         ))}
       </SectionRow>
 
-      <SectionRow title="New releases" subtitle="Fresh from the SoundScape label">
+      <SectionRow title="New releases" subtitle="Fresh from the Soundscape label">
         {albums.map((album) => (
           <AlbumCard key={album.id} album={album} />
         ))}

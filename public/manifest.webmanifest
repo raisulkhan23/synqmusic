@@ -1,11 +1,11 @@
 {
-  "name": "freebuff.com application",
-  "short_name": "freebuff.com",
-  "description": "freebuff.com application",
+  "name": "Soundscape",
+  "short_name": "Soundscape",
+  "description": "Play music, uninterrupted. A curated, ad-free streaming experience.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#000000",
+  "background_color": "#0e0f14",
+  "theme_color": "#0e0f14",
   "icons": [
     {
       "src": "/logo.png",

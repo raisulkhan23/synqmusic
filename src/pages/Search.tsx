@@ -32,7 +32,7 @@ export default function Search() {
       <header>
         <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">Search</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Find tracks, albums and artists across the demo catalog.
+          Find tracks, albums and artists across the catalog.
         </p>
       </header>
 
@@ -56,7 +56,8 @@ export default function Search() {
         <div className="flex flex-col items-center gap-3 py-16 text-center">
           <SearchX className="size-10 text-muted-foreground/40" />
           <p className="text-sm text-muted-foreground">
-            No results for “{query}”. Try a mood like “chill” or an artist name.
+            Nothing matches “{query}” yet. Try a mood like “chill” or an artist
+            name.
           </p>
         </div>
       ) : (
