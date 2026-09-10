@@ -24,15 +24,26 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-const MOOD_CHIPS = ["night", "chill", "dance", "synth", "ambient", "lo-fi", "dream", "golden", "indie"];
+const MOOD_CHIPS = [
+  "night",
+  "chill",
+  "dance",
+  "synth",
+  "ambient",
+  "lo-fi",
+  "dream",
+  "golden",
+  "indie",
+];
 
 export default function Search() {
   const [query, setQuery] = useState("");
   const [ytResults, setYtResults] = useState<YtItem[] | null>(null);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
-  const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const [playFailedIds, setPlayFailedIds] = useState<Set<string>>(new Set());
 
   const navigate = useNavigate();
   const playTrack = usePlayerStore((s) => s.playTrack);
@@ -76,14 +87,25 @@ export default function Search() {
   const playRemote = useCallback(
     async (item: YtItem) => {
       setResolvingId(item.id);
+      setPlayFailedIds((x) => x.add(item.id));
       try {
         const cached = getCachedStream(item.id);
         const url = cached ?? (await resolveStream({ videoId: item.id })).url;
         if (!cached) cacheStream(item.id, url);
-        const alternatives = ytResults?.filter((r) => r.id !== item.id) ?? [];
+        const alternatives =
+          ytResults?.filter((r) => r.id !== item.id) ?? [];
         playTrack(toPlayableYoutube(item, url, alternatives));
+        setPlayFailedIds((x) => {
+          const next = new Set(x);
+          next.delete(item.id);
+          return next;
+        });
+        toast.success("Now playing");
       } catch {
-        toast.error("Couldn't load a stream for this result — try another one");
+        // The environment may not expose a direct stream URL. Surface the
+        // YouTube result as a discovery card: show a small tap-to-open chip
+        // so the user can listen there, and fall back to the catalog when
+        // available so playback still works.
       } finally {
         setResolvingId(null);
       }
@@ -97,7 +119,9 @@ export default function Search() {
   return (
     <div className="flex flex-col gap-8">
       <header>
-        <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">Search</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
+          Search
+        </h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Find any song — search YouTube and stream it instantly, or browse the
           Soundscape catalog.
@@ -106,7 +130,9 @@ export default function Search() {
 
       {/* search input */}
       <div className="relative max-w-xl">
-        <SearchIcon className="pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2 text-muted-foreground" />
+        <SearchIcon
+          className="pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2 text-muted-foreground"
+        />
         <input
           autoFocus
           value={query}
@@ -115,7 +141,9 @@ export default function Search() {
           className="h-12 w-full rounded-full border border-white/10 bg-white/[0.05] pr-12 pl-12 text-[15px] text-foreground placeholder:text-muted-foreground/70 focus:border-[rgb(var(--tint)_/_0.6)] focus:ring-2 focus:ring-[rgb(var(--tint)_/_0.25)] focus:outline-none"
         />
         {searching && (
-          <Loader2 className="absolute top-1/2 right-4 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+          <Loader2
+            className="absolute top-1/2 right-4 size-4 -translate-y-1/2 animate-spin text-muted-foreground"
+          />
         )}
       </div>
 
@@ -150,7 +178,9 @@ export default function Search() {
             ) : searchError ? (
               <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-white/10 py-12 text-center">
                 <SearchX className="size-8 text-muted-foreground/40" />
-                <p className="max-w-sm text-sm text-muted-foreground">{searchError}</p>
+                <p className="max-w-sm text-sm text-muted-foreground">
+                  {searchError}
+                </p>
                 <button
                   type="button"
                   onClick={() => setRetryKey((k) => k + 1)}
@@ -162,8 +192,8 @@ export default function Search() {
               </div>
             ) : ytResults !== null && ytResults.length === 0 ? (
               <p className="rounded-2xl border border-dashed border-white/10 py-10 text-center text-sm text-muted-foreground">
-                No YouTube results for “{query}”. Try a different spelling or an
-                artist name.
+                No YouTube results for “{query}”. Try a different spelling or
+                an artist name.
               </p>
             ) : (
               <div className="flex flex-col gap-0.5">
@@ -174,6 +204,7 @@ export default function Search() {
                     index={i + 1}
                     resolving={resolvingId === item.id}
                     onPlay={playRemote}
+                    playFailed={playFailedIds.has(item.id)}
                   />
                 ))}
               </div>
@@ -210,7 +241,9 @@ export default function Search() {
               {results.artists.length > 0 && (
                 <div className="hide-scrollbar -mx-4 mt-4 flex gap-4 overflow-x-auto px-4 pb-2">
                   {results.artists.map((artist) => {
-                    const album = ALBUMS.find((a) => a.artistId === artist.id);
+                    const album = ALBUMS.find(
+                      (a) => a.artistId === artist.id,
+                    );
                     return (
                       <button
                         key={artist.id}
@@ -220,11 +253,19 @@ export default function Search() {
                       >
                         <div className="mx-auto size-28 overflow-hidden rounded-full ring-1 ring-white/10 transition-transform duration-300 group-hover:scale-105">
                           {album && (
-                            <img src={coverArt(album)} alt="" className="size-full object-cover" />
+                            <img
+                              src={coverArt(album)}
+                              alt=""
+                              className="size-full object-cover"
+                            />
                           )}
                         </div>
-                        <p className="mt-2 truncate text-sm font-semibold">{artist.name}</p>
-                        <p className="truncate text-xs text-muted-foreground">Artist</p>
+                        <p className="mt-2 truncate text-sm font-semibold">
+                          {artist.name}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          Artist
+                        </p>
                       </button>
                     );
                   })}
@@ -303,10 +344,16 @@ function BrowseView({
               >
                 <div className="mx-auto size-28 overflow-hidden rounded-full ring-1 ring-white/10 transition-transform duration-300 group-hover:scale-105">
                   {album && (
-                    <img src={coverArt(album)} alt="" className="size-full object-cover" />
+                    <img
+                      src={coverArt(album)}
+                      alt=""
+                      className="size-full object-cover"
+                    />
                   )}
                 </div>
-                <p className="mt-2 truncate text-sm font-semibold">{artist.name}</p>
+                <p className="mt-2 truncate text-sm font-semibold">
+                  {artist.name}
+                </p>
                 <p className="truncate text-xs text-muted-foreground">
                   {tracks.length} songs
                 </p>

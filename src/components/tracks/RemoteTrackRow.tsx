@@ -2,6 +2,7 @@ import type { YtItem } from "@/lib/youtube";
 import { formatTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { ExternalLink, Loader2, Pause, Play } from "lucide-react";
+import { YoutubeIcon } from "@/components/ui/youtube";
 import { usePlayerStore } from "@/store/player";
 
 export function RemoteTrackRow({
@@ -9,11 +10,13 @@ export function RemoteTrackRow({
   index,
   onPlay,
   resolving,
+  playFailed,
 }: {
   item: YtItem;
   index: number;
   onPlay: (item: YtItem) => void;
   resolving?: boolean;
+  playFailed?: boolean;
 }) {
   const currentId = usePlayerStore((s) => s.current?.id);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
@@ -80,11 +83,13 @@ export function RemoteTrackRow({
           >
             {item.title}
           </p>
-          <p className="truncate text-xs text-muted-foreground">{item.artist}</p>
+          <p className="truncate text-xs text-muted-foreground">
+            {item.artist}
+          </p>
         </div>
       </div>
 
-      <span className="hidden shrink-0 rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase sm:inline-block">
+      <span className="shrink-0 rounded-full bg-rose-500/12 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-rose-200 uppercase">
         YouTube
       </span>
 
@@ -98,11 +103,39 @@ export function RemoteTrackRow({
           rel="noreferrer"
           aria-label="Open on YouTube"
           onClick={(e) => e.stopPropagation()}
-          className="hidden rounded-full p-1.5 text-muted-foreground/50 transition-colors hover:bg-white/10 hover:text-foreground sm:block"
+          className="rounded-full p-1.5 text-muted-foreground/70 transition-colors hover:bg-white/10 hover:text-foreground"
         >
           <ExternalLink className="size-3.5" />
         </a>
       </div>
     </div>
+  );
+}
+
+/** Tap-to-open chip shown beneath a YouTube result when interactive playback
+ * isn't available in this runtime so the user still has a direct path to the
+ * song on YouTube.
+ */
+export function RemoteYtPlayChip({
+  item,
+  className,
+}: {
+  item: YtItem;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        window.open("https://youtu.be/" + item.id, "_blank", "noopener");
+      }}
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full bg-rose-500/12 px-3 py-1 text-[11px] font-medium text-rose-200 transition-colors hover:bg-rose-500/20",
+        className,
+      )}
+    >
+      <YoutubeIcon className="size-3" />
+      Listen on YouTube
+    </button>
   );
 }
