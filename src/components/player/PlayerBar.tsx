@@ -3,13 +3,11 @@ import { Link } from "react-router";
 import { SeekBar } from "@/components/player/SeekBar";
 import { TransportControls } from "@/components/player/TransportControls";
 import { VolumeControl } from "@/components/player/VolumeControl";
-import { api } from "@/convex/_generated/api";
 import { albumById } from "@/lib/catalog";
 import { accentFromString, coverArt, dominantColor } from "@/lib/covers";
 import { formatTime } from "@/lib/format";
 import { toPlayableYoutube } from "@/lib/playable";
 import { usePlayerStore } from "@/store/player";
-import { useAction } from "convex/react";
 import { Heart, ListMusic, Loader2, Maximize2, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -28,7 +26,6 @@ export function PlayerBar() {
   const setAccent = usePlayerStore((s) => s.setAccent);
   const errorNonce = usePlayerStore((s) => s.errorNonce);
   const replaceCurrentStream = usePlayerStore((s) => s.replaceCurrentStream);
-  const resolveStream = useAction(api.youtube.resolveStream);
 
   // Sample the current artwork and tint the whole app with its dominant color.
   // Remote (YouTube) art can't be sampled cross-origin, so derive a stable,
@@ -55,9 +52,9 @@ export function PlayerBar() {
     };
   }, [current?.id, current?.source, current?.title, current?.artistName, setAccent]);
 
-  // Auto-fallback: if a YouTube stream fails to load, try the next search
-  // result automatically (one attempt per alternative, manual switching also
-  // available in the queue panel).
+  // Auto-fallback: if a YouTube video can't play (embed disabled, removed,
+  // etc.), automatically try the next search result. Manual switching is also
+  // available in the queue panel.
   const attempts = useRef(0);
   const lastErrorTrack = useRef<string | null>(null);
 
@@ -80,25 +77,10 @@ export function PlayerBar() {
     attempts.current += 1;
 
     toast.loading(`Trying another source for "${track.title}"…`, { id: "yt-fallback" });
-    void resolveStream({ videoId: next.id })
-      .then((resolved) => {
-        const url =
-          typeof resolved === "string"
-            ? resolved
-            : typeof resolved === "object" && resolved && "url" in resolved
-              ? (resolved.url as string | null)
-              : null;
-        if (typeof url !== "string") {
-          toast.error("Could not resolve an alternative stream", { id: "yt-fallback" });
-          return;
-        }
-        toast.success("Switched to an alternative source", { id: "yt-fallback" });
-        replaceCurrentStream(toPlayableYoutube(next, url, alternatives));
-      })
-      .catch(() => {
-        toast.error("Alternative source failed too", { id: "yt-fallback" });
-      });
-  }, [errorNonce, resolveStream, replaceCurrentStream]);
+    // The IFrame engine plays by video id — just swap the current track.
+    replaceCurrentStream(toPlayableYoutube(next, next.id, alternatives));
+    toast.success("Switched to an alternative source", { id: "yt-fallback" });
+  }, [errorNonce, replaceCurrentStream]);
 
   if (!current) return null;
 

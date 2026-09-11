@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { AlbumCard } from "@/components/tracks/AlbumCard";
 import { RemoteTrackRow } from "@/components/tracks/RemoteTrackRow";
@@ -12,7 +12,7 @@ import {
 } from "@/lib/catalog";
 import { coverArt } from "@/lib/covers";
 import { toPlayableYoutube } from "@/lib/playable";
-import { cacheStream, getCachedStream, type YtItem } from "@/lib/youtube";
+import { type YtItem } from "@/lib/youtube";
 import { usePlayerStore } from "@/store/player";
 import { useAction } from "convex/react";
 import {
@@ -43,12 +43,9 @@ export default function Search() {
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
-  const [resolvingId, setResolvingId] = useState<string | null>(null);
-  const [playFailedIds, setPlayFailedIds] = useState<Set<string>>(new Set());
 
   const navigate = useNavigate();
   const playTrack = usePlayerStore((s) => s.playTrack);
-  const resolveStream = useAction(api.youtube.resolveStream);
   const searchYt = useAction(api.youtube.searchYoutube);
 
   const debouncedQuery = useDebounced(query, 450);
@@ -86,45 +83,17 @@ export default function Search() {
   }, [debouncedQuery, searchYt, retryKey]);
 
   const playRemote = useCallback(
-    async (item: YtItem) => {
-      setResolvingId(item.id);
-      setPlayFailedIds((x) => x.add(item.id));
-      try {
-        const cached = getCachedStream(item.id);
-        const resolved = cached ?? (await resolveStream({ videoId: item.id }));
-        const url =
-          typeof resolved === "string"
-            ? resolved
-            : typeof resolved === "object" && resolved && "url" in resolved
-              ? (resolved.url as string | null)
-              : null;
-        if (!cached && typeof url === "string") cacheStream(item.id, url);
-        const alternatives =
-          ytResults?.filter((r) => r.id !== item.id) ?? [];
-        if (typeof url !== "string") {
-          toast.error("Could not resolve a playable stream for this video");
-          return;
-        }
-        playTrack(toPlayableYoutube(item, url, alternatives));
-        setPlayFailedIds((x) => {
-          const next = new Set(x);
-          next.delete(item.id);
-          return next;
-        });
-        toast.success("Now playing");
-      } catch {
-        // The environment may not expose a direct stream URL. Surface the
-        // YouTube result as a discovery card: show a small tap-to-open chip
-        // so the user can listen there, and fall back to the catalog when
-        // available so playback still works.
-      } finally {
-        setResolvingId(null);
-      }
+    (item: YtItem) => {
+      // Playback goes through the hidden YouTube IFrame player, so no stream
+      // resolution is needed — the video id is all the engine requires.
+      const alternatives = ytResults?.filter((r) => r.id !== item.id) ?? [];
+      playTrack(toPlayableYoutube(item, item.id, alternatives));
+      toast.success("Now playing");
     },
-    [resolveStream, playTrack, ytResults],
+    [playTrack, ytResults],
   );
 
-  const results = searchCatalog(query);
+  const results = useMemo(() => searchCatalog(query), [query]);
   const hasQuery = query.trim().length > 0;
 
   return (
@@ -222,9 +191,7 @@ export default function Search() {
                     key={item.id}
                     item={item}
                     index={i + 1}
-                    resolving={resolvingId === item.id}
                     onPlay={playRemote}
-                    playFailed={playFailedIds.has(item.id)}
                   />
                 ))}
               </div>

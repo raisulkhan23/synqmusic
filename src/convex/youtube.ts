@@ -2,11 +2,15 @@ import { ConvexError, v } from "convex/values";
 import { action } from "./_generated/server";
 
 // ---------------------------------------------------------------------------
-// Soundscape audio source resolver (v2).
-// These actions talk to YouTube's InnerTube API (the same endpoints the
-// official apps use) to search for tracks and to resolve a direct, playable
-// audio stream URL for a video. No external keys required — the public
-// INNERTUBE key below is the one embedded in every YouTube client.
+// Soundscape audio source resolver (v3).
+// Talks to YouTube's InnerTube API to search for tracks and to resolve a
+// direct, playable audio stream URL for a video. No external keys required —
+// the public INNERTUBE key below is embedded in every YouTube client.
+//
+// v3 fixes: search now uses the WEB client (matches the response parser and
+// avoids the 400s that the stale ANDROID client started returning), client
+// identity headers are sent, and search falls back to an unfiltered query if
+// the video-filter param is rejected.
 // ---------------------------------------------------------------------------
 
 export interface YtItem {
@@ -17,51 +21,91 @@ export interface YtItem {
   thumbnail: string;
 }
 
-/**
- * The public shape returned when a stream can't be resolved. The frontend
- * treats this as a cue to show the YouTube link as the primary action rather
- * than attempting playback.
- */
-export interface StreamUnavailable {
-  url: null;
-  title: string;
-  reason: string;
-  youtubeUrl: string;
-}
-
 const API = "https://www.youtube.com/youtubei/v1/";
-const UA =
-  "com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip";
 const INNERTUBE_KEY = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8";
 
 interface InnerTubeClient {
+  /** X-Youtube-Client-Name header value */
+  id: string;
   clientName: string;
   clientVersion: string;
-  androidSdkVersion?: number;
-  deviceModel?: string;
-  osVersion?: string;
+  userAgent: string;
+  extra?: Record<string, unknown>;
 }
 
-// Clients that return unencrypted stream URLs, in preference order.
-const CLIENTS: InnerTubeClient[] = [
-  { clientName: "ANDROID", clientVersion: "19.09.37", androidSdkVersion: 30 },
-  {
-    clientName: "IOS",
-    clientVersion: "19.09.3",
-    deviceModel: "iPhone14,3",
-    osVersion: "16.5.0",
-  },
-  { clientName: "MWEB", clientVersion: "2.20240801.01.00" },
-];
+// WEB — reliable for `search`, returns the twoColumnSearchResultsRenderer
+// shape the parser below expects.
+const WEB: InnerTubeClient = {
+  id: "1",
+  clientName: "WEB",
+  clientVersion: "2.20240801.01.00",
+  userAgent:
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
+};
 
-async function innerTube(endpoint: string, body: unknown): Promise<Record<string, unknown>> {
+// ANDROID / IOS — historically returned unencrypted stream URLs for `player`.
+const ANDROID: InnerTubeClient = {
+  id: "3",
+  clientName: "ANDROID",
+  clientVersion: "19.44.38",
+  userAgent: "com.google.android.youtube/19.44.38 (Linux; U; Android 14) gzip",
+  extra: { androidSdkVersion: 34 },
+};
+
+const IOS: InnerTubeClient = {
+  id: "5",
+  clientName: "IOS",
+  clientVersion: "19.45.4",
+  userAgent:
+    "com.google.ios.youtube/19.45.4 (iPhone16,2; U; CPU iOS 18_1_0 like Mac OS X)",
+  extra: { deviceModel: "iPhone16,2", osVersion: "18.1.0.22B83" },
+};
+
+const MWEB: InnerTubeClient = {
+  id: "2",
+  clientName: "MWEB",
+  clientVersion: "2.20240801.01.00",
+  userAgent:
+    "Mozilla/5.0 (iPad; CPU OS 16_7_10 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
+};
+
+// Android VR (Daydream) client — newer client that is generally not subject
+// to the datacenter bot-check that blocks ANDROID/IOS stream resolution.
+const ANDROID_VR: InnerTubeClient = {
+  id: "28",
+  clientName: "ANDROID_VR",
+  clientVersion: "1.60.19",
+  userAgent:
+    "com.google.android.apps.youtube.vr.oculus/1.60.19 (Linux; U; Android 12; eureka-user Build/SQ3A.220605.009.A1) gzip",
+  extra: { androidSdkVersion: 31, osName: "Android", osVersion: "12" },
+};
+
+// TV embedded client — typically not subject to the datacenter bot-check that
+// blocks ANDROID/IOS stream resolution from cloud IPs.
+const TV_EMBEDDED: InnerTubeClient = {
+  id: "85",
+  clientName: "TVHTML5_SIMPLY_EMBEDDED_PLAYER",
+  clientVersion: "2.0",
+  userAgent:
+    "Mozilla/5.0 (PlayStation; PlayStation 4/12.00) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.4 Safari/605.1.15",
+  extra: { clientScreen: "EMBED" },
+};
+
+async function innerTube(
+  endpoint: string,
+  client: InnerTubeClient,
+  body: unknown,
+): Promise<Record<string, unknown>> {
   const res = await fetch(`${API}${endpoint}?prettyPrint=false`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "User-Agent": UA,
+      "User-Agent": client.userAgent,
       "X-Goog-Api-Key": INNERTUBE_KEY,
+      "X-Youtube-Client-Name": client.id,
+      "X-Youtube-Client-Version": client.clientVersion,
       Origin: "https://www.youtube.com",
+      "X-Origin": "https://www.youtube.com",
     },
     body: JSON.stringify(body),
   });
@@ -75,8 +119,10 @@ const clientContext = (client: InnerTubeClient) => ({
   client: {
     hl: "en",
     gl: "US",
-    userAgent: UA,
-    ...client,
+    userAgent: client.userAgent,
+    clientName: client.clientName,
+    clientVersion: client.clientVersion,
+    ...client.extra,
   },
 });
 
@@ -123,7 +169,9 @@ function extractSearchResults(data: Record<string, unknown>): YtItem[] {
         (get(vr, ["title", "simpleText"]) as string) ??
         "Untitled";
       const artist =
-        (get(vr, ["ownerText", "runs", "0", "text"]) as string) ?? "Unknown artist";
+        (get(vr, ["ownerText", "runs", "0", "text"]) as string) ??
+        (get(vr, ["longBylineText", "runs", "0", "text"]) as string) ??
+        "Unknown artist";
       const lengthText = get(vr, ["lengthText", "simpleText"]) as string | undefined;
       const thumbs = get(vr, ["thumbnail", "thumbnails"]);
       const thumbnail = Array.isArray(thumbs)
@@ -145,10 +193,25 @@ export const searchYoutube = action({
   args: { query: v.string() },
   handler: async (_ctx, { query }): Promise<{ items: YtItem[] }> => {
     if (!query.trim()) return { items: [] };
-    const data = await innerTube("search", {
-      context: clientContext(CLIENTS[0]),
+
+    // Preferred: WEB client with the "video only" search filter (protobuf param).
+    try {
+      const data = await innerTube("search", WEB, {
+        context: clientContext(WEB),
+        query,
+        params: "EgIQAQ%3D%3D",
+      });
+      const items = extractSearchResults(data);
+      if (items.length > 0) return { items };
+    } catch {
+      // fall through to the unfiltered retry below
+    }
+
+    // Fallback: some deployments reject the filter param — retry unfiltered.
+    // The parser only keeps videoRenderer entries, so results stay clean.
+    const data = await innerTube("search", WEB, {
+      context: clientContext(WEB),
       query,
-      params: "EgIQAQ%3D%3D", // video-only search filter
     });
     return { items: extractSearchResults(data) };
   },
@@ -157,10 +220,9 @@ export const searchYoutube = action({
 /**
  * Resolve a direct, playable audio stream URL for a YouTube video. Tries
  * several clients in order and picks the highest-quality audio-only format.
+ * Always resolves (never throws) — when no stream is available it returns
+ * { url: null, reason, youtubeUrl } so the UI can link out instead.
  */
-// Convex actions can only return JSON-serializable values. For stream
-// resolution we always return an object shaped like { url, title } so the
-// frontend can destructure it uniformly.
 export const resolveStream = action({
   args: {
     videoId: v.string()
@@ -170,13 +232,15 @@ export const resolveStream = action({
     let lastTitle: string | undefined;
     let lastYoutubeUrl: string | undefined;
 
-    for (const client of CLIENTS) {
+    for (const client of [ANDROID_VR, TV_EMBEDDED, ANDROID, IOS, MWEB]) {
       try {
-        const data = await innerTube("player", {
+        const data = await innerTube("player", client, {
           context: clientContext(client),
           videoId,
           contentCheckOk: true,
           racyCheckOk: true,
+          // Third-party embed params required by the TV embedded client.
+          thirdParty: { embedUrl: "https://www.youtube.com" },
         });
 
         const status = get(data, ["playabilityStatus", "status"]) as string | undefined;

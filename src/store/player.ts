@@ -3,6 +3,7 @@ import { getAudio } from "@/lib/audio";
 import type { Track } from "@/lib/catalog";
 import type { RGB } from "@/lib/covers";
 import { isPlayable, toPlayable, type Playable } from "@/lib/playable";
+import * as ytEngine from "@/lib/youtubePlayer";
 
 export type RepeatMode = "off" | "all" | "one";
 
@@ -80,7 +81,7 @@ const initialMuted = readBool("ss.muted", false);
 const initialShuffle = readBool("ss.shuffle", false);
 const initialRepeat = (localStorage.getItem("ss.repeat") as RepeatMode | null) ?? "off";
 
-// --- audio element wiring ----------------------------------------------------
+// --- audio element wiring (catalog playback) ---------------------------------
 
 let wired = false;
 function wireAudio() {
@@ -150,6 +151,43 @@ function wireAudio() {
   });
 }
 
+// --- youtube iframe engine wiring --------------------------------------------
+
+let ytWired = false;
+function wireYoutubeEngine() {
+  if (ytWired) return;
+  ytWired = true;
+
+  ytEngine.setHandlers({
+    onStateChange: (state) => {
+      // -1 unstarted, 0 ended, 1 playing, 2 paused, 3 buffering, 5 cued
+      if (state === 1) {
+        usePlayerStore.setState({ isPlaying: true, isBuffering: false });
+      } else if (state === 2) {
+        usePlayerStore.setState({ isPlaying: false, isBuffering: false });
+      } else if (state === 3) {
+        usePlayerStore.setState({ isBuffering: true });
+      }
+    },
+    onTime: (currentTime, duration) => {
+      usePlayerStore.setState({
+        currentTime,
+        duration: duration > 0 ? duration : usePlayerStore.getState().duration,
+        bufferedEnd: currentTime,
+      });
+    },
+    onError: (code) => {
+      if (ytEngine.isFatalError(code)) {
+        usePlayerStore.setState((s) => ({
+          isBuffering: false,
+          isPlaying: false,
+          errorNonce: s.errorNonce + 1,
+        }));
+      }
+    },
+  });
+}
+
 const randomIndex = (length: number, exclude: number): number => {
   if (length <= 1) return 0;
   let i = Math.floor(Math.random() * length);
@@ -177,19 +215,34 @@ function syncMediaSession(track: Playable | null, playing: boolean) {
 
 export const usePlayerStore = create<PlayerStore>()((set, get) => {
   wireAudio();
+  wireYoutubeEngine();
 
   const norm = (t: Track | Playable): Playable => (isPlayable(t) ? t : toPlayable(t));
 
+  /** Route loading/playback to the right engine for the given track. */
   const loadTrack = (track: Playable) => {
-    const audio = getAudio();
-    audio.src = track.audioUrl;
-    audio.load();
-    audio.currentTime = 0;
-    set({ current: track, currentTime: 0, duration: track.duration, bufferedEnd: 0, isBuffering: true });
-    syncMediaSession(track, true);
-    void audio.play().catch(() => {
-      set({ isPlaying: false, isBuffering: false });
+    // Pause the other engine so both never talk at once.
+    if (track.source === "youtube") {
+      getAudio().pause();
+      ytEngine
+        .play(track.audioUrl, { volume: get().volume, muted: get().muted })
+        .catch(() => {
+          set({ isPlaying: false, isBuffering: false, errorNonce: get().errorNonce + 1 });
+        });
+    } else {
+      ytEngine.pause();
+      const audio = getAudio();
+      audio.src = track.audioUrl;
+      audio.load();
+    }
+    set({
+      current: track,
+      currentTime: 0,
+      duration: track.duration,
+      bufferedEnd: 0,
+      isBuffering: true,
     });
+    syncMediaSession(track, true);
   };
 
   const playTrack = (track: Track | Playable, list?: (Track | Playable)[]) => {
@@ -219,6 +272,12 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
   const togglePlay = () => {
     const s = get();
     if (s.current) {
+      if (s.current.source === "youtube") {
+        // The engine emits state events, so just nudge it in the right direction.
+        if (s.isPlaying) ytEngine.pause();
+        else ytEngine.resume();
+        return;
+      }
       const audio = getAudio();
       if (audio.paused) {
         void audio.play().catch(() => undefined);
@@ -267,16 +326,21 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
   };
 
   const seek = (time: number) => {
-    const audio = getAudio();
-    const duration = get().duration;
+    const s = get();
+    const duration = s.duration;
     const t = Math.max(0, Math.min(time, duration || time));
-    audio.currentTime = t;
+    if (s.current?.source === "youtube") {
+      ytEngine.seek(t);
+    } else {
+      getAudio().currentTime = t;
+    }
     set({ currentTime: t });
   };
 
   const setVolume = (volume: number) => {
     const v = Math.min(1, Math.max(0, volume));
     getAudio().volume = v;
+    ytEngine.setVolume(v);
     localStorage.setItem("ss.volume", String(v));
     set({ volume: v });
   };
@@ -285,6 +349,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     const s = get();
     const nextMuted = !s.muted;
     getAudio().muted = nextMuted;
+    ytEngine.setMuted(nextMuted);
     localStorage.setItem("ss.muted", nextMuted ? "1" : "0");
     if (!nextMuted && s.volume === 0) {
       get().setVolume(0.8);

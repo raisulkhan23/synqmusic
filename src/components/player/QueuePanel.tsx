@@ -12,11 +12,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Equalizer } from "@/components/player/Equalizer";
-import { api } from "@/convex/_generated/api";
 import { formatTime } from "@/lib/format";
 import { toPlayableYoutube } from "@/lib/playable";
 import { usePlayerStore } from "@/store/player";
-import { useAction } from "convex/react";
 import { GripVertical, ListMusic, RefreshCw, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
@@ -32,7 +30,6 @@ export function QueuePanel() {
   const replaceUpcoming = usePlayerStore((s) => s.replaceUpcoming);
   const clearQueue = usePlayerStore((s) => s.clearQueue);
   const replaceCurrentStream = usePlayerStore((s) => s.replaceCurrentStream);
-  const resolveStream = useAction(api.youtube.resolveStream);
 
   const upcoming = queueIndex >= 0 ? queue.slice(queueIndex + 1) : queue;
   const upcomingIds = upcoming.map((t) => t.id);
@@ -45,31 +42,15 @@ export function QueuePanel() {
     replaceUpcoming(reordered);
   };
 
+  // Sources play through the YouTube IFrame engine, so switching is just a
+  // matter of loading a different video id — no stream resolution needed.
   const switchSource = (videoId: string) => {
     const track = usePlayerStore.getState().current;
     if (!track || track.source !== "youtube") return;
     const alternatives = track.alternatives ?? [];
     const alt = alternatives.find((a) => a.id === videoId);
     if (!alt) return;
-    toast.loading(`Switching source for "${track.title}"…`, { id: "yt-switch" });
-    void resolveStream({ videoId: alt.id })
-      .then((resolved) => {
-        const url =
-          typeof resolved === "string"
-            ? resolved
-            : typeof resolved === "object" && resolved && "url" in resolved
-              ? (resolved.url as string | null)
-              : null;
-        if (typeof url !== "string") {
-          toast.error("That source could not be loaded", { id: "yt-switch" });
-          return;
-        }
-        toast.success("Source switched", { id: "yt-switch" });
-        replaceCurrentStream(toPlayableYoutube(alt, url, alternatives));
-      })
-      .catch(() => {
-        toast.error("That source could not be loaded", { id: "yt-switch" });
-      });
+    replaceCurrentStream(toPlayableYoutube(alt, alt.id, alternatives));
   };
 
   return (
