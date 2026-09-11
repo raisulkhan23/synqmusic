@@ -13,6 +13,7 @@ import {
   topTracks,
   trackById,
   tracksByIds,
+  type Track,
 } from "@/lib/catalog";
 import { formatTime, greeting, pluralize } from "@/lib/format";
 import { usePlayerStore } from "@/store/player";
@@ -35,11 +36,11 @@ export default function Home() {
   const top = topTracks(8);
 
   const recentTracks = useMemo(
-    () => (recent ?? []).map((r) => trackById(r.trackId)).filter((t) => t !== null),
+    () => (recent ?? []).map((r) => trackById(r.trackId)).filter((t): t is Track => t !== undefined),
     [recent],
   );
   const mostTracks = useMemo(
-    () => (mostPlayed ?? []).map((r) => trackById(r.trackId)).filter((t) => t !== null),
+    () => (mostPlayed ?? []).map((r) => trackById(r.trackId)).filter((t): t is Track => t !== undefined),
     [mostPlayed],
   );
 

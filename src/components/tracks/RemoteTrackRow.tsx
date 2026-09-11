@@ -16,7 +16,6 @@ export function RemoteTrackRow({
   index: number;
   onPlay: (item: YtItem) => void;
   resolving?: boolean;
-  playFailed?: boolean;
 }) {
   const currentId = usePlayerStore((s) => s.current?.id);
   const isPlaying = usePlayerStore((s) => s.isPlaying);

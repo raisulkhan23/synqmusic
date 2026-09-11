@@ -53,33 +53,36 @@ export default function Search() {
   // Live YouTube search, debounced.
   useEffect(() => {
     const q = debouncedQuery.trim();
-    if (!q) {
-      setYtResults(null);
+    const run = () => {
+      if (!q) {
+        setYtResults(null);
+        setSearchError(null);
+        setSearching(false);
+        return;
+      }
+      let cancelled = false;
+      setSearching(true);
       setSearchError(null);
-      setSearching(false);
-      return;
-    }
-    let cancelled = false;
-    setSearching(true);
-    setSearchError(null);
-    searchYt({ query: q })
-      .then(({ items }) => {
-        if (!cancelled) setYtResults(items);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setYtResults([]);
-          setSearchError(
-            "YouTube is unreachable right now. Try searching on YouTube directly, or browse the catalog below.",
-          );
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setSearching(false);
-      });
-    return () => {
-      cancelled = true;
+      searchYt({ query: q })
+        .then(({ items }) => {
+          if (!cancelled) setYtResults(items);
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setYtResults([]);
+            setSearchError(
+              "YouTube is unreachable right now. Try searching on YouTube directly, or browse the catalog below.",
+            );
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setSearching(false);
+        });
+      return () => {
+        cancelled = true;
+      };
     };
+    run();
   }, [debouncedQuery, searchYt, retryKey]);
 
   const playRemote = useCallback(

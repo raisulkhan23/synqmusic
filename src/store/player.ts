@@ -725,9 +725,9 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
         const item = state.queue[index];
         if (index === state.queueIndex) return state; // don't remove the playing track
         const queue = state.queue.filter((_, i) => i !== index);
-        const queueIndex = index < state.queueIndex ? state.queueIndex - 1 : state.queueIndex;
+        const queueIndex2 = index < state.queueIndex ? state.queueIndex - 1 : state.queueIndex;
         lastRemoved = { item, index };
-        return { queue, queueIndex };
+        return { queue, queueIndex: queueIndex2 };
       }),
     undoRemoveFromQueue: () => {
       if (!lastRemoved) return;
