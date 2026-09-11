@@ -21,6 +21,7 @@ import {
   Search as SearchIcon,
   SearchX,
   Youtube,
+  ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -47,8 +48,8 @@ export default function Search() {
 
   const navigate = useNavigate();
   const playTrack = usePlayerStore((s) => s.playTrack);
-  const searchYt = useAction(api.youtube.searchYoutube);
   const resolveStream = useAction(api.youtube.resolveStream);
+  const searchYt = useAction(api.youtube.searchYoutube);
 
   const debouncedQuery = useDebounced(query, 450);
 
@@ -72,7 +73,7 @@ export default function Search() {
         if (!cancelled) {
           setYtResults([]);
           setSearchError(
-            "YouTube is unreachable right now. The catalog below still works — or try again in a moment.",
+            "YouTube is unreachable right now. Try searching on YouTube directly, or browse the catalog below.",
           );
         }
       })
@@ -191,10 +192,19 @@ export default function Search() {
                 <p className="max-w-sm text-sm text-muted-foreground">
                   {searchError}
                 </p>
+                <a
+                  href={`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-1 flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium transition-colors hover:bg-white/[0.08]"
+                >
+                  <ExternalLink className="size-3.5" />
+                  Open on YouTube
+                </a>
                 <button
                   type="button"
                   onClick={() => setRetryKey((k) => k + 1)}
-                  className="mt-1 flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium transition-colors hover:bg-white/[0.08]"
+                  className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium transition-colors hover:bg-white/[0.08]"
                 >
                   <RefreshCw className="size-3.5" />
                   Try again
@@ -202,7 +212,7 @@ export default function Search() {
               </div>
             ) : ytResults !== null && ytResults.length === 0 ? (
               <p className="rounded-2xl border border-dashed border-white/10 py-10 text-center text-sm text-muted-foreground">
-                No YouTube results for “{query}”. Try a different spelling or
+                No YouTube results for "{query}". Try a different spelling or
                 an artist name.
               </p>
             ) : (
