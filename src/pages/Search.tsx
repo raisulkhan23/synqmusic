@@ -90,10 +90,20 @@ export default function Search() {
       setPlayFailedIds((x) => x.add(item.id));
       try {
         const cached = getCachedStream(item.id);
-        const url = cached ?? (await resolveStream({ videoId: item.id })).url;
-        if (!cached) cacheStream(item.id, url);
+        const resolved = cached ?? (await resolveStream({ videoId: item.id }));
+        const url =
+          typeof resolved === "string"
+            ? resolved
+            : typeof resolved === "object" && resolved && "url" in resolved
+              ? (resolved.url as string | null)
+              : null;
+        if (!cached && typeof url === "string") cacheStream(item.id, url);
         const alternatives =
           ytResults?.filter((r) => r.id !== item.id) ?? [];
+        if (typeof url !== "string") {
+          toast.error("Could not resolve a playable stream for this video");
+          return;
+        }
         playTrack(toPlayableYoutube(item, url, alternatives));
         setPlayFailedIds((x) => {
           const next = new Set(x);

@@ -81,7 +81,17 @@ export function PlayerBar() {
 
     toast.loading(`Trying another source for "${track.title}"…`, { id: "yt-fallback" });
     void resolveStream({ videoId: next.id })
-      .then(({ url }) => {
+      .then((resolved) => {
+        const url =
+          typeof resolved === "string"
+            ? resolved
+            : typeof resolved === "object" && resolved && "url" in resolved
+              ? (resolved.url as string | null)
+              : null;
+        if (typeof url !== "string") {
+          toast.error("Could not resolve an alternative stream", { id: "yt-fallback" });
+          return;
+        }
         toast.success("Switched to an alternative source", { id: "yt-fallback" });
         replaceCurrentStream(toPlayableYoutube(next, url, alternatives));
       })

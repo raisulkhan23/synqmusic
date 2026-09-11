@@ -158,18 +158,17 @@ export const searchYoutube = action({
  * Resolve a direct, playable audio stream URL for a YouTube video. Tries
  * several clients in order and picks the highest-quality audio-only format.
  */
-export const resolveStream = action<{
-  videoId: string;
-}>({
+// Convex actions can only return JSON-serializable values. For stream
+// resolution we always return an object shaped like { url, title } so the
+// frontend can destructure it uniformly.
+export const resolveStream = action({
   args: {
     videoId: v.string()
   },
-  handler: async (_ctx, { videoId }): Promise<
-    | { url: string; title: string }
-    | StreamUnavailable
-  > => {
+  handler: async (_ctx, { videoId }): Promise<{ url: string | null; title: string; reason?: string; youtubeUrl?: string }> => {
     let lastError: string | undefined;
     let lastTitle: string | undefined;
+    let lastYoutubeUrl: string | undefined;
 
     for (const client of CLIENTS) {
       try {
@@ -188,6 +187,7 @@ export const resolveStream = action<{
           lastError =
             (get(data, ["playabilityStatus", "reason"]) as string) ??
             `Playback unavailable (${status})`;
+          lastYoutubeUrl = `https://youtu.be/${videoId}`;
           continue;
         }
 
@@ -224,6 +224,7 @@ export const resolveStream = action<{
         // Player returned OK but no audio formats — treat as unavailable.
         lastTitle = videoTitle ?? `YouTube video ${videoId}`;
         lastError = "No audio stream available for this video";
+        lastYoutubeUrl = `https://youtu.be/${videoId}`;
       } catch (error) {
         lastError =
           error instanceof Error ? error.message : "Stream resolution failed";
@@ -234,7 +235,7 @@ export const resolveStream = action<{
       url: null,
       title: lastTitle ?? `YouTube video ${videoId}`,
       reason: lastError ?? "No playable audio stream found for this video",
-      youtubeUrl: `https://youtu.be/${videoId}`,
+      youtubeUrl: lastYoutubeUrl ?? `https://youtu.be/${videoId}`,
     };
   },
 });

@@ -53,7 +53,17 @@ export function QueuePanel() {
     if (!alt) return;
     toast.loading(`Switching source for "${track.title}"…`, { id: "yt-switch" });
     void resolveStream({ videoId: alt.id })
-      .then(({ url }) => {
+      .then((resolved) => {
+        const url =
+          typeof resolved === "string"
+            ? resolved
+            : typeof resolved === "object" && resolved && "url" in resolved
+              ? (resolved.url as string | null)
+              : null;
+        if (typeof url !== "string") {
+          toast.error("That source could not be loaded", { id: "yt-switch" });
+          return;
+        }
         toast.success("Source switched", { id: "yt-switch" });
         replaceCurrentStream(toPlayableYoutube(alt, url, alternatives));
       })
