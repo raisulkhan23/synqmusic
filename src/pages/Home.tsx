@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import { AlbumCard } from "@/components/tracks/AlbumCard";
 import { MixCard } from "@/components/tracks/MixCard";
 import { PlayHeaderButton } from "@/components/tracks/PlayHeaderButton";
+import { RemoteTrackRow } from "@/components/tracks/RemoteTrackRow";
 import { SectionRow } from "@/components/tracks/SectionRow";
 import { TrackRow } from "@/components/tracks/TrackRow";
 import { api } from "@/convex/_generated/api";
@@ -16,11 +17,21 @@ import {
   type Track,
 } from "@/lib/catalog";
 import { formatTime, greeting, pluralize } from "@/lib/format";
+import { toPlayableYoutube } from "@/lib/playable";
+import type { YtItem } from "@/lib/youtube";
 import { usePlayerStore } from "@/store/player";
-import { useQuery } from "convex/react";
-import { Dices, Heart, LibraryBig, ListMusic, Play, Search } from "lucide-react";
+import { useAction, useQuery } from "convex/react";
+import {
+  Dices,
+  Flame,
+  Heart,
+  LibraryBig,
+  ListMusic,
+  Play,
+  Search,
+} from "lucide-react";
 import { toast } from "sonner";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 export default function Home() {
   const playTrack = usePlayerStore((s) => s.playTrack);
@@ -29,11 +40,37 @@ export default function Home() {
   const playlists = useQuery(api.playlists.myPlaylists);
   const recent = useQuery(api.history.recentlyPlayed, { limit: 8 });
   const mostPlayed = useQuery(api.history.mostPlayed, { limit: 8 });
+  const searchYt = useAction(api.youtube.searchYoutube);
+
   const featured = MIXES.find((m) => m.id === "mix-top") ?? MIXES[0];
   const featuredTracks = tracksByIds(featured.trackIds);
   const mixes = MIXES.filter((m) => m.id !== featured.id);
   const albums = albumsByNewest();
   const top = topTracks(8);
+
+  // Trending YouTube songs of the week, fetched once on load.
+  const [trending, setTrending] = useState<YtItem[] | null>(null);
+  const [trendingError, setTrendingError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    searchYt({ query: "top songs this week" })
+      .then(({ items }) => {
+        if (!cancelled) setTrending(items);
+      })
+      .catch(() => {
+        if (!cancelled) setTrendingError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [searchYt]);
+
+  const playTrending = (item: YtItem) => {
+    // Same IFrame-based playback as search: the video id is all the engine needs.
+    const alternatives = trending?.filter((r) => r.id !== item.id) ?? [];
+    playTrack(toPlayableYoutube(item, item.id, alternatives));
+  };
 
   const recentTracks = useMemo(
     () => (recent ?? []).map((r) => trackById(r.trackId)).filter((t): t is Track => t !== undefined),
@@ -128,8 +165,7 @@ export default function Home() {
       )}
 
       {/* personal quick links */}
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {quickLinks.map(({ to, label, detail, icon: Icon }) => (
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">        {quickLinks.map(({ to, label, detail, icon: Icon }) => (
           <Link
             key={to}
             to={to}
@@ -187,6 +223,33 @@ export default function Home() {
           <MixCard key={mix.id} mix={mix} />
         ))}
       </SectionRow>
+
+      {/* trending YouTube songs of the week */}
+      {trending && trending.length > 0 && (
+        <section>
+          <div className="mb-3 flex items-end justify-between gap-4">
+            <div>
+              <h2 className="font-display flex items-center gap-2 text-lg font-bold tracking-tight sm:text-xl">
+                <Flame className="size-5 text-[rgb(var(--tint))]" />
+                Songs of the week
+              </h2>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                Trending right now, streamed live from YouTube.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            {trending.slice(0, 8).map((item, i) => (
+              <RemoteTrackRow
+                key={item.id}
+                item={item}
+                index={i + 1}
+                onPlay={playTrending}
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
       <SectionRow title="New releases" subtitle="Fresh from the Soundscape label">
         {albums.map((album) => (

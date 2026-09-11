@@ -308,6 +308,10 @@ function wireYoutubeEngine() {
   ytEngine.setHandlers({
     onStateChange: (state) => {
       // -1 unstarted, 0 ended, 1 playing, 2 paused, 3 buffering, 5 cued
+      // The engine emits events asynchronously: when we switch to a catalog
+      // track we pause the engine, and its late "paused" event must not flip
+      // isPlaying off while the audio element is already playing.
+      if (!usePlayerStore.getState().current?.youtubeId) return;
       if (state === 1) {
         usePlayerStore.setState({ isPlaying: true, isBuffering: false });
       } else if (state === 2) {
@@ -433,6 +437,10 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
         if (audio.readyState >= 1) applyResume();
         else audio.addEventListener("loadedmetadata", applyResume, { once: true });
       }
+      // Actually start playback. loadTrack is always reached from a user
+      // gesture (row click) or auto-advance, so autoplay is permitted —
+      // without this the song only loads and needs a second click.
+      void audio.play().catch(() => undefined);
     }
     set({
       current: track,
