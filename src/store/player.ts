@@ -772,10 +772,10 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
         return { queue, queueIndex: 0, current };
       }),
     clearQueue: () =>
-      set((state) => ({
-        queue: state.current ? [state.current] : [],
-        queueIndex: state.current ? 0 : -1,
-        current: state.current,
+      set((s2) => ({
+        queue: s2.current ? [s2.current] : [],
+        queueIndex: s2.current ? 0 : -1,
+        current: s2.current,
       })),
     setHistoryRecorder: (fn) => {
       historyRecorder = fn;

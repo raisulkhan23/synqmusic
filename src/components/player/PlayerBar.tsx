@@ -47,7 +47,7 @@ function SleepTimerButton() {
   const sleepEndsAt = usePlayerStore((s) => s.sleepEndsAt);
   const sleepAtSongEnd = usePlayerStore((s) => s.sleepAtSongEnd);
   const setSleepTimer = usePlayerStore((s) => s.setSleepTimer);
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(() => Date.now());
 
   const active = sleepEndsAt !== null || sleepAtSongEnd;
 

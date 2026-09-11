@@ -10,7 +10,6 @@ export function RemoteTrackRow({
   index,
   onPlay,
   resolving,
-  playFailed,
 }: {
   item: YtItem;
   index: number;
