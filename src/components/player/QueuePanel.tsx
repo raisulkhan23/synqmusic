@@ -15,8 +15,19 @@ import { Equalizer } from "@/components/player/Equalizer";
 import { formatTime } from "@/lib/format";
 import { toPlayableYoutube } from "@/lib/playable";
 import { usePlayerStore } from "@/store/player";
-import { GripVertical, ListMusic, RefreshCw, Trash2, X } from "lucide-react";
+import {
+  ArrowLeftRight,
+  Clock3,
+  GripVertical,
+  ListMusic,
+  RefreshCw,
+  Sparkles,
+  Trash2,
+  Undo2,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 export function QueuePanel() {
   const open = usePlayerStore((s) => s.queueOpen);
@@ -27,9 +38,16 @@ export function QueuePanel() {
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const playIndex = usePlayerStore((s) => s.playIndex);
   const removeFromQueue = usePlayerStore((s) => s.removeFromQueue);
+  const undoRemoveFromQueue = usePlayerStore((s) => s.undoRemoveFromQueue);
   const replaceUpcoming = usePlayerStore((s) => s.replaceUpcoming);
   const clearQueue = usePlayerStore((s) => s.clearQueue);
   const replaceCurrentStream = usePlayerStore((s) => s.replaceCurrentStream);
+  const history = usePlayerStore((s) => s.history);
+  const playFromHistory = usePlayerStore((s) => s.playFromHistory);
+  const shuffle = usePlayerStore((s) => s.shuffle);
+  const smartShuffle = usePlayerStore((s) => s.smartShuffle);
+  const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
+  const toggleSmartShuffle = usePlayerStore((s) => s.toggleSmartShuffle);
 
   const upcoming = queueIndex >= 0 ? queue.slice(queueIndex + 1) : queue;
   const upcomingIds = upcoming.map((t) => t.id);
@@ -64,7 +82,44 @@ export function QueuePanel() {
             <ListMusic className="size-4 text-[rgb(var(--tint))]" />
             Queue
           </SheetTitle>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
+            {/* smart shuffle */}
+            <button
+              type="button"
+              aria-label="Smart shuffle"
+              title={smartShuffle ? "Smart shuffle on" : "Smart shuffle off"}
+              onClick={() => {
+                toggleSmartShuffle();
+                toast(smartShuffle ? "Smart shuffle off" : "Smart shuffle on — avoids repeats");
+              }}
+              className={cn(
+                "flex items-center gap-1 rounded-full px-2 py-1 text-xs transition-colors",
+                smartShuffle
+                  ? "bg-[rgb(var(--tint)_/_0.15)] text-[rgb(var(--tint))]"
+                  : "text-muted-foreground hover:bg-white/5 hover:text-foreground",
+              )}
+            >
+              <Sparkles className="size-3.5" />
+              Smart
+            </button>
+            {/* plain shuffle */}
+            <button
+              type="button"
+              aria-label="Shuffle"
+              title={shuffle ? "Shuffle on" : "Shuffle off"}
+              onClick={() => {
+                toggleShuffle();
+                toast(shuffle ? "Shuffle off" : "Shuffle on");
+              }}
+              className={cn(
+                "flex items-center gap-1 rounded-full px-2 py-1 text-xs transition-colors",
+                shuffle
+                  ? "bg-[rgb(var(--tint)_/_0.15)] text-[rgb(var(--tint))]"
+                  : "text-muted-foreground hover:bg-white/5 hover:text-foreground",
+              )}
+            >
+              <ArrowLeftRight className="size-3.5" />
+            </button>
             {queue.length > 1 && (
               <button
                 type="button"
@@ -151,8 +206,9 @@ export function QueuePanel() {
 
           {upcoming.length > 0 && (
             <section className="min-h-0">
-              <p className="px-1 pb-2 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
-                Next up · {upcoming.length}
+              <p className="flex items-center gap-1.5 px-1 pb-2 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
+                <Clock3 className="size-3" />
+                Playing next · {upcoming.length}
               </p>
               <Reorder.Group
                 axis="y"
@@ -187,9 +243,15 @@ export function QueuePanel() {
                     <button
                       type="button"
                       aria-label={`Remove ${track.title} from queue`}
-                      onClick={() =>
-                        removeFromQueue(queueIndex + 1 + upcoming.indexOf(track))
-                      }
+                      onClick={() => {
+                        removeFromQueue(queueIndex + 1 + upcoming.indexOf(track));
+                        toast("Removed from queue", {
+                          action: {
+                            label: "Undo",
+                            onClick: () => undoRemoveFromQueue(),
+                          },
+                        });
+                      }}
                       className="shrink-0 rounded-full p-1.5 text-muted-foreground/60 transition-colors hover:bg-white/10 hover:text-foreground"
                     >
                       <X className="size-3.5" />
@@ -197,6 +259,43 @@ export function QueuePanel() {
                   </Reorder.Item>
                 ))}
               </Reorder.Group>
+            </section>
+          )}
+
+          {/* queue history — what you previously played */}
+          {history.length > 0 && (
+            <section className="min-h-0">
+              <p className="flex items-center gap-1.5 px-1 pb-2 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
+                <Undo2 className="size-3" />
+                Recently played · {history.length}
+              </p>
+              <div className="space-y-1">
+                {history.slice(0, 10).map((track, i) => (
+                  <div
+                    key={`${track.id}-${i}`}
+                    className="group flex items-center gap-2 rounded-lg px-1 py-1.5 transition-colors hover:bg-white/[0.05]"
+                  >
+                    <Clock3 className="size-4 shrink-0 text-muted-foreground/40" />
+                    <img
+                      src={track.coverUrl}
+                      alt=""
+                      className="size-10 shrink-0 rounded-md object-cover"
+                    />
+                    <div
+                      className="min-w-0 flex-1 cursor-pointer"
+                      onClick={() => playFromHistory(i)}
+                    >
+                      <p className="truncate text-sm font-medium">{track.title}</p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {track.artistName}
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-xs tabular-nums text-muted-foreground/70">
+                      {formatTime(track.duration)}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </section>
           )}
         </div>

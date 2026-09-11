@@ -1,5 +1,6 @@
 import { useEffect } from "react";
-import { Outlet, NavLink } from "react-router";
+import { NavLink, Outlet, useNavigate } from "react-router";
+import { toast } from "sonner";
 import { FullscreenPlayer } from "@/components/player/FullscreenPlayer";
 import { PlayerBar } from "@/components/player/PlayerBar";
 import { QueuePanel } from "@/components/player/QueuePanel";
@@ -21,12 +22,15 @@ const MOBILE_NAV = [
 const DEFAULT_TINT = "203 244 143";
 
 export function AppShell() {
+  const navigate = useNavigate();
   const accent = usePlayerStore((s) => s.accent);
   const setLiked = usePlayerStore((s) => s.setLiked);
   const setLikeMutation = usePlayerStore((s) => s.setLikeMutation);
+  const setHistoryRecorder = usePlayerStore((s) => s.setHistoryRecorder);
 
   const likedQuery = useQuery(api.likes.myLikedTrackIds);
   const toggleLikeMutation = useMutation(api.likes.toggleLike);
+  const recordPlay = useMutation(api.history.recordPlay);
   const currentUser = useQuery(api.users.currentUser);
   const claimAdminIfEmpty = useMutation(api.admin.claimAdminIfEmpty);
 
@@ -47,7 +51,24 @@ export function AppShell() {
     setLikeMutation((trackId: string) => toggleLikeMutation({ trackId }));
   }, [toggleLikeMutation, setLikeMutation]);
 
-  // Global keyboard shortcuts (space = play/pause, arrows = seek).
+  // Fire-and-forget play history recording (recently / most played).
+  useEffect(() => {
+    setHistoryRecorder((trackId: string) => {
+      void recordPlay({ trackId }).catch(() => undefined);
+    });
+  }, [recordPlay, setHistoryRecorder]);
+
+  // Keyboard "/" (and other nav shortcuts) route via this event.
+  useEffect(() => {
+    const onNavigate = (e: Event) => {
+      const to = (e as CustomEvent<string>).detail;
+      if (typeof to === "string") void navigate(to);
+    };
+    window.addEventListener("ss:navigate", onNavigate);
+    return () => window.removeEventListener("ss:navigate", onNavigate);
+  }, [navigate]);
+
+  // Global keyboard shortcuts.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
@@ -68,6 +89,36 @@ export function AppShell() {
       } else if (e.key === "ArrowLeft") {
         e.preventDefault();
         s.seek(Math.max(0, s.currentTime - 5));
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        s.setVolume(Math.min(1, s.volume + 0.05));
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        s.setVolume(Math.max(0, s.volume - 0.05));
+      } else if (e.key === "ArrowUp" && e.shiftKey) {
+        /* handled above */
+      } else if (e.key.toLowerCase() === "m") {
+        s.toggleMute();
+        toast(s.muted ? "Unmuted" : "Muted");
+      } else if (e.key.toLowerCase() === "n") {
+        s.next();
+      } else if (e.key.toLowerCase() === "p") {
+        s.prev();
+      } else if (e.key.toLowerCase() === "s") {
+        s.toggleShuffle();
+        toast(s.shuffle ? "Shuffle off" : "Shuffle on");
+      } else if (e.key.toLowerCase() === "r") {
+        s.cycleRepeat();
+        toast(`Repeat: ${s.repeat}`);
+      } else if (e.key.toLowerCase() === "q") {
+        s.setQueueOpen(!s.queueOpen);
+      } else if (e.key.toLowerCase() === "f") {
+        s.setFullscreen(!s.fullscreen);
+      } else if (e.key.toLowerCase() === "l") {
+        if (s.current) s.toggleLike(s.current.id);
+      } else if (e.key === "/") {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent("ss:navigate", { detail: "/search" }));
       }
     };
     window.addEventListener("keydown", onKeyDown);

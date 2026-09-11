@@ -6,22 +6,51 @@ import { PlayHeaderButton } from "@/components/tracks/PlayHeaderButton";
 import { SectionRow } from "@/components/tracks/SectionRow";
 import { TrackRow } from "@/components/tracks/TrackRow";
 import { api } from "@/convex/_generated/api";
-import { albumsByNewest, ALBUMS, MIXES, topTracks, tracksByIds } from "@/lib/catalog";
+import {
+  albumsByNewest,
+  ALBUMS,
+  MIXES,
+  topTracks,
+  trackById,
+  tracksByIds,
+} from "@/lib/catalog";
 import { formatTime, greeting, pluralize } from "@/lib/format";
 import { usePlayerStore } from "@/store/player";
 import { useQuery } from "convex/react";
-import { Heart, LibraryBig, ListMusic, Search } from "lucide-react";
+import { Dices, Heart, LibraryBig, ListMusic, Play, Search } from "lucide-react";
+import { toast } from "sonner";
+import { useMemo } from "react";
 
 export default function Home() {
   const playTrack = usePlayerStore((s) => s.playTrack);
   const likedCount = usePlayerStore((s) => Object.keys(s.liked).length);
   const likedLoaded = usePlayerStore((s) => s.likedLoaded);
   const playlists = useQuery(api.playlists.myPlaylists);
+  const recent = useQuery(api.history.recentlyPlayed, { limit: 8 });
+  const mostPlayed = useQuery(api.history.mostPlayed, { limit: 8 });
   const featured = MIXES.find((m) => m.id === "mix-top") ?? MIXES[0];
   const featuredTracks = tracksByIds(featured.trackIds);
   const mixes = MIXES.filter((m) => m.id !== featured.id);
   const albums = albumsByNewest();
   const top = topTracks(8);
+
+  const recentTracks = useMemo(
+    () => (recent ?? []).map((r) => trackById(r.trackId)).filter((t) => t !== null),
+    [recent],
+  );
+  const mostTracks = useMemo(
+    () => (mostPlayed ?? []).map((r) => trackById(r.trackId)).filter((t) => t !== null),
+    [mostPlayed],
+  );
+
+  // "Play something random" across the whole catalog.
+  const surpriseMe = () => {
+    const all = topTracks(999);
+    if (all.length === 0) return;
+    const pick = all[Math.floor(Math.random() * all.length)];
+    playTrack(pick, all);
+    toast.success(`🎲 Now playing: ${pick.title}`);
+  };
 
   const quickLinks = [
     {
@@ -50,6 +79,9 @@ export default function Home() {
     },
   ];
 
+  // the single last-played track, for "Continue listening"
+  const continueTrack = recentTracks[0] ?? null;
+
   return (
     <div className="flex flex-col gap-10">
       <header>
@@ -60,6 +92,39 @@ export default function Home() {
           Your dashboard — the catalog is ready, 24 tracks, zero ads.
         </p>
       </header>
+
+      {/* continue listening + surprise me */}
+      {(continueTrack || likedLoaded) && (
+        <section className="flex flex-wrap items-center gap-3">
+          {continueTrack && (
+            <button
+              type="button"
+              onClick={() => playTrack(continueTrack, recentTracks)}
+              className="group flex min-w-0 flex-1 items-center gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.03] p-3 text-left transition-all hover:border-[rgb(var(--tint)_/_0.35)] hover:bg-white/[0.05]"
+            >
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[rgb(var(--tint)_/_0.14)] text-[rgb(var(--tint))] transition-transform group-hover:scale-105">
+                <Play className="size-4 fill-current" />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
+                  Continue listening
+                </span>
+                <span className="block truncate font-display text-[15px] font-semibold">
+                  {continueTrack.title}
+                </span>
+              </span>
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={surpriseMe}
+            className="flex items-center gap-2 rounded-2xl border border-white/[0.07] bg-white/[0.03] px-5 py-3 text-sm font-semibold transition-all hover:border-[rgb(var(--tint)_/_0.35)] hover:bg-white/[0.05]"
+          >
+            <Dices className="size-4 text-[rgb(var(--tint))]" />
+            Play something random
+          </button>
+        </section>
+      )}
 
       {/* personal quick links */}
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -127,6 +192,50 @@ export default function Home() {
           <AlbumCard key={album.id} album={album} />
         ))}
       </SectionRow>
+
+      {/* most played (personal) */}
+      {mostTracks.length >= 2 && (
+        <section>
+          <div className="mb-3 flex items-end justify-between gap-4">
+            <div>
+              <h2 className="font-display text-lg font-bold tracking-tight sm:text-xl">
+                Your most played
+              </h2>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                Based on your listening history.
+              </p>
+            </div>
+            <PlayHeaderButton list={mostTracks} />
+          </div>
+          <div className="mt-1 flex flex-col gap-0.5">
+            {mostTracks.slice(0, 5).map((track, i) => (
+              <TrackRow key={track.id} track={track} list={mostTracks} index={i + 1} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* recently played (personal) */}
+      {recentTracks.length >= 2 && (
+        <section>
+          <div className="mb-3 flex items-end justify-between gap-4">
+            <div>
+              <h2 className="font-display text-lg font-bold tracking-tight sm:text-xl">
+                Recently played
+              </h2>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                Jump back in where you left off.
+              </p>
+            </div>
+            <PlayHeaderButton list={recentTracks} />
+          </div>
+          <div className="mt-1 flex flex-col gap-0.5">
+            {recentTracks.slice(0, 5).map((track, i) => (
+              <TrackRow key={track.id} track={track} list={recentTracks} index={i + 1} />
+            ))}
+          </div>
+        </section>
+      )}
 
       <section>
         <div className="mb-3 flex items-end justify-between gap-4">

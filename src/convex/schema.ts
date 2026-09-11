@@ -50,6 +50,17 @@ const schema = defineSchema(
       createdAt: v.number(),
       updatedAt: v.number(),
     }).index("by_user", ["userId"]),
+
+    // listening history: one row per user+track, updated on every play
+    playHistory: defineTable({
+      userId: v.id("users"),
+      trackId: v.string(), // id of the track in the SoundScape demo catalog
+      playedAt: v.number(),
+      playCount: v.number(),
+    })
+      .index("by_user_track", ["userId", "trackId"])
+      .index("by_user_playedAt", ["userId", "playedAt"])
+      .index("by_user", ["userId"]),
   },
   {
     schemaValidation: false,

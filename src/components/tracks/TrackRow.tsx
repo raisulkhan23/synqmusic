@@ -1,6 +1,7 @@
 import { Link } from "react-router";
 import { AddToPlaylistMenu } from "@/components/playlists/AddToPlaylistMenu";
 import { Equalizer } from "@/components/player/Equalizer";
+import { TrackContextMenu } from "@/components/tracks/TrackContextMenu";
 import { albumById, artistById, type Track } from "@/lib/catalog";
 import { coverArt } from "@/lib/covers";
 import { formatTime } from "@/lib/format";
@@ -41,6 +42,7 @@ export function TrackRow({ track, list, index, showAlbum = true, onRemove }: Tra
   };
 
   return (
+    <TrackContextMenu track={track}>
     <div
       role="button"
       tabIndex={0}
@@ -163,5 +165,6 @@ export function TrackRow({ track, list, index, showAlbum = true, onRemove }: Tra
         )}
       </div>
     </div>
+    </TrackContextMenu>
   );
 }

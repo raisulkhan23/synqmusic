@@ -9,11 +9,12 @@
 // ---------------------------------------------------------------------------
 
 interface YtPlayerLike {
-  loadVideoById: (id: string) => void;
+  loadVideoById: (id: string, startSeconds?: number) => void;
   playVideo: () => void;
   pauseVideo: () => void;
   seekTo: (seconds: number, allowSeekAhead: boolean) => void;
   setVolume: (v: number) => void;
+  setPlaybackRate: (rate: number) => void;
   mute: () => void;
   unMute: () => void;
   getCurrentTime: () => number;
@@ -52,6 +53,8 @@ export interface YtEngineHandlers {
   /** 2 invalid param, 5 html5 error, 100 not found, 101/150 embed disabled */
   onError?: (code: number) => void;
 }
+
+let currentRate = 1;
 
 let handlers: YtEngineHandlers = {};
 let player: YtPlayerLike | null = null;
@@ -139,11 +142,26 @@ async function ensurePlayer(): Promise<YtPlayerLike> {
         events: {
           onReady: (e) => {
             clearTimeout(timeout);
+            try {
+              e.target.setPlaybackRate(currentRate);
+            } catch {
+              /* rate applied later on load */
+            }
             resolve(e.target);
           },
           onStateChange: (e) => {
             lastState = e.data;
             handlers.onStateChange?.(e.data);
+            // State 0 (ended) doesn't fire onTime again — push a final time
+            // sample so the store can run A-B repeat / auto-advance logic.
+            if (e.data === 0) {
+              try {
+                const d = e.target.getDuration() ?? 0;
+                handlers.onTime?.(d > 0 ? d : 0, d);
+              } catch {
+                /* ignore */
+              }
+            }
           },
           onError: (e) => {
             handlers.onError?.(e.data);
@@ -167,14 +185,19 @@ export function setHandlers(next: YtEngineHandlers): void {
 /** Load a video and start playing. Safe to call repeatedly (reuses the player). */
 export async function play(
   videoId: string,
-  opts: { volume: number; muted: boolean },
+  opts: { volume: number; muted: boolean; startSeconds?: number },
 ): Promise<void> {
   const p = await ensurePlayer();
   p.setVolume(Math.round(Math.min(1, Math.max(0, opts.volume)) * 100));
   if (opts.muted) p.mute();
   else p.unMute();
+  try {
+    p.setPlaybackRate(currentRate);
+  } catch {
+    /* ignore */
+  }
   lastState = -1;
-  p.loadVideoById(videoId);
+  p.loadVideoById(videoId, Math.max(0, opts.startSeconds ?? 0));
 }
 
 export function resume(): void {
@@ -214,6 +237,16 @@ export function setMuted(muted: boolean): void {
   try {
     if (muted) player?.mute();
     else player?.unMute();
+  } catch {
+    /* not ready yet */
+  }
+}
+
+/** Playback speed 0.5–2. Applied to the current player and remembered. */
+export function setRate(rate: number): void {
+  currentRate = Math.min(2, Math.max(0.5, rate));
+  try {
+    player?.setPlaybackRate(currentRate);
   } catch {
     /* not ready yet */
   }
