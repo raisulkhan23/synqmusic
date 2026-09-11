@@ -11,6 +11,11 @@ export function Logo({ to = "/", className }: { to?: string; className?: string 
       <span className="font-display text-[17px] font-bold tracking-tight">
         Soundscape
       </span>
+      <span
+        className="rounded-full border border-[rgb(var(--tint)/0.35)] bg-[rgb(var(--tint)/0.12)] px-1.5 py-px text-[9px] font-bold tracking-[0.08em] text-[rgb(var(--tint))] uppercase"
+      >
+        Beta
+      </span>
     </Link>
   );
 }
