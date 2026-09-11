@@ -49,6 +49,7 @@ export default function Search() {
   const [ytResults, setYtResults] = useState<YtItem[] | null>(null);
   const [spotifyResults, setSpotifyResults] = useState<SpotifyTrack[] | null>(null);
   const [spotifyUnavailable, setSpotifyUnavailable] = useState(false);
+  const [spotifyNotice, setSpotifyNotice] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
@@ -99,6 +100,7 @@ export default function Search() {
     if (source !== "spotify" || !q) {
       setSpotifyResults(null);
       setSpotifyUnavailable(false);
+      setSpotifyNotice(null);
       return;
     }
     let cancelled = false;
@@ -107,12 +109,19 @@ export default function Search() {
         if (!cancelled) {
           setSpotifyResults(items);
           setSpotifyUnavailable(false);
+          setSpotifyNotice(null);
         }
       })
-      .catch(() => {
+      .catch((e) => {
         if (!cancelled) {
           setSpotifyResults([]);
           setSpotifyUnavailable(true);
+          const msg = e instanceof Error ? e.message : String(e);
+          setSpotifyNotice(
+            /premium/i.test(msg)
+              ? "Spotify now requires the app owner's account to have an active Premium subscription for Web API access. Once the account that created this app upgrades, it can take a few hours for access to activate."
+              : null,
+          );
         }
       });
     return () => {
@@ -356,9 +365,9 @@ export default function Search() {
             {spotifyUnavailable ? (
               <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-white/10 py-12 text-center">
                 <SearchX className="size-8 text-muted-foreground/40" />
-                <p className="max-w-sm text-sm text-muted-foreground">
-                  Spotify isn't connected yet. Add your app's client ID and
-                  secret to search its catalog of 100M+ tracks.
+                <p className="max-w-md text-sm text-muted-foreground">
+                  {spotifyNotice ??
+                    "Spotify isn't connected yet. Add your app's client ID and secret to search its catalog of 100M+ tracks."}
                 </p>
               </div>
             ) : spotifyResults === null ? (

@@ -82,7 +82,8 @@ export const searchTracks = action({
       { headers: { Authorization: `Bearer ${token}` } },
     );
     if (!res.ok) {
-      throw new ConvexError(`Spotify API returned ${res.status}`);
+      const body = await res.text();
+      throw new ConvexError(`Spotify API returned ${res.status}: ${body}`);
     }
 
     const data = (await res.json()) as { tracks?: { items?: SpotifyApiTrack[] } };
