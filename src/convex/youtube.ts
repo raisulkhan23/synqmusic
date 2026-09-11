@@ -158,20 +158,12 @@ export const searchYoutube = action({
  * Resolve a direct, playable audio stream URL for a YouTube video. Tries
  * several clients in order and picks the highest-quality audio-only format.
  */
-const streamResultValidator = v.union([
-  v.object({ url: v.string(), title: v.string() }),
-  v.object({
-    url: v.null(),
-    title: v.string(),
-    reason: v.string(),
-    youtubeUrl: v.string(),
-  }),
-]);
-
-export const resolveStream = action<typeof streamResultValidator, {
+export const resolveStream = action<{
   videoId: string;
 }>({
-  args: { videoId: v.string() },
+  args: {
+    videoId: v.string()
+  },
   handler: async (_ctx, { videoId }): Promise<
     | { url: string; title: string }
     | StreamUnavailable
