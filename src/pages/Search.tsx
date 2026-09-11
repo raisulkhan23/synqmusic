@@ -2,9 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { AlbumCard } from "@/components/tracks/AlbumCard";
 import { RemoteTrackRow } from "@/components/tracks/RemoteTrackRow";
-import { SpotifyTrackRow } from "@/components/tracks/SpotifyTrackRow";
 import { TrackRow } from "@/components/tracks/TrackRow";
-import { SpotifyIcon } from "@/components/ui/spotify";
 import { api } from "@/convex/_generated/api";
 import {
   ALBUMS,
@@ -14,7 +12,6 @@ import {
 } from "@/lib/catalog";
 import { coverArt } from "@/lib/covers";
 import { toPlayableYoutube } from "@/lib/playable";
-import type { SpotifyTrack } from "@/lib/spotify";
 import { type YtItem } from "@/lib/youtube";
 import { usePlayerStore } from "@/store/player";
 import { useAction } from "convex/react";
@@ -27,9 +24,6 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
-
-type Source = "youtube" | "spotify";
 
 const MOOD_CHIPS = [
   "night",
@@ -45,11 +39,7 @@ const MOOD_CHIPS = [
 
 export default function Search() {
   const [query, setQuery] = useState("");
-  const [source, setSource] = useState<Source>("youtube");
   const [ytResults, setYtResults] = useState<YtItem[] | null>(null);
-  const [spotifyResults, setSpotifyResults] = useState<SpotifyTrack[] | null>(null);
-  const [spotifyUnavailable, setSpotifyUnavailable] = useState(false);
-  const [spotifyNotice, setSpotifyNotice] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
@@ -57,12 +47,10 @@ export default function Search() {
   const navigate = useNavigate();
   const playTrack = usePlayerStore((s) => s.playTrack);
   const searchYt = useAction(api.youtube.searchYoutube);
-  const searchSpotify = useAction(api.spotify.searchTracks);
 
   const debouncedQuery = useDebounced(query, 450);
 
-  // Live YouTube search, debounced. We always keep YouTube results around —
-  // they double as the playback engine for Spotify matches.
+  // Live YouTube search, debounced.
   useEffect(() => {
     const q = debouncedQuery.trim();
     if (!q) {
@@ -94,41 +82,6 @@ export default function Search() {
     };
   }, [debouncedQuery, searchYt, retryKey]);
 
-  // Spotify search, debounced — only fetched while the Spotify tab is open.
-  useEffect(() => {
-    const q = debouncedQuery.trim();
-    if (source !== "spotify" || !q) {
-      setSpotifyResults(null);
-      setSpotifyUnavailable(false);
-      setSpotifyNotice(null);
-      return;
-    }
-    let cancelled = false;
-    searchSpotify({ query: q })
-      .then(({ items }) => {
-        if (!cancelled) {
-          setSpotifyResults(items);
-          setSpotifyUnavailable(false);
-          setSpotifyNotice(null);
-        }
-      })
-      .catch((e) => {
-        if (!cancelled) {
-          setSpotifyResults([]);
-          setSpotifyUnavailable(true);
-          const msg = e instanceof Error ? e.message : String(e);
-          setSpotifyNotice(
-            /premium/i.test(msg)
-              ? "Spotify now requires the app owner's account to have an active Premium subscription for Web API access. Once the account that created this app upgrades, it can take a few hours for access to activate."
-              : null,
-          );
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [debouncedQuery, source, searchSpotify]);
-
   const playRemote = useCallback(
     (item: YtItem) => {
       // Playback goes through the hidden YouTube IFrame player, so no stream
@@ -138,81 +91,6 @@ export default function Search() {
       toast.success("Now playing");
     },
     [playTrack, ytResults],
-  );
-
-  /** Normalized "title artist" with YouTube noise stripped for matching. */
-  const normalize = useCallback((s: string) => {
-    return s
-      .toLowerCase()
-      .replace(/\((official|lyric[s]?|audio|video|hd|4k|remaster(ed)?|visualizer)[^)]*\)/g, "")
-      .replace(/\[(official|lyric[s]?|audio|video|hd|4k|remaster(ed)?|visualizer)[^\]]*\]/g, "")
-      .replace(/\b(official|lyrics?|audio|video|hd|4k|remaster(ed)?|visualizer|mv|m\/v)\b/g, "")
-      .replace(/[^a-z0-9\s]/g, "")
-      .replace(/\s+/g, " ")
-      .trim();
-  }, []);
-
-  const tokensOf = useCallback((s: string) => normalize(s).split(" ").filter(Boolean), [normalize]);
-
-  const playSpotify = useCallback(
-    (item: SpotifyTrack) => {
-      // Full-track playback: find the best YouTube video for this track using
-      // the results we already have, then play it through the IFrame engine.
-      const target = `${item.title} ${item.artist}`.toLowerCase();
-      const targetTokens = new Set(tokensOf(target));
-
-      let best: YtItem | undefined;
-      let bestScore = -Infinity;
-      for (const r of ytResults ?? []) {
-        const titleTokens = tokensOf(r.title);
-        const matched = titleTokens.filter((t) => targetTokens.has(t)).length;
-        const primaryArtist = normalize(item.artist.split(",")[0]);
-        const artistOk = primaryArtist && normalize(r.title).includes(primaryArtist) ? 1 : 0;
-        const durDelta = Math.abs((r.duration || 0) - item.duration);
-        const durScore = durDelta <= 3 ? 3 : durDelta <= 15 ? 1 : 0;
-        const score = matched / Math.max(titleTokens.length, 1) + artistOk + durScore - durDelta / 600;
-        if (score > bestScore) {
-          bestScore = score;
-          best = r;
-        }
-      }
-
-      if (best) {
-        const alternatives = (ytResults ?? []).filter((r) => r.id !== best.id);
-        const playable = {
-          ...toPlayableYoutube(best, best.id, alternatives),
-          title: item.title,
-          artistName: item.artist,
-          albumName: item.album || "Spotify",
-          coverUrl: item.thumbnail || best.thumbnail,
-          duration: item.duration || best.duration,
-          source: "spotify" as const,
-          id: `spotify:${item.id}`,
-          youtubeId: best.id,
-        };
-        playTrack(playable);
-        toast.success("Now playing");
-        return;
-      }
-
-      // No YouTube match (or search failed): fall back to Spotify's 30s clip.
-      if (item.previewUrl) {
-        playTrack({
-          id: `spotify:${item.id}`,
-          title: item.title,
-          artistName: item.artist,
-          albumName: item.album || "Spotify",
-          coverUrl: item.thumbnail,
-          audioUrl: item.previewUrl,
-          duration: 30,
-          source: "spotify",
-        });
-        toast("Playing the 30-second preview — full track unavailable", { icon: "ℹ️" });
-        return;
-      }
-      toast.error("No playable source found for this track");
-    },
-    [playTrack, ytResults, normalize, tokensOf],
   );
 
   const results = useMemo(() => searchCatalog(query), [query]);
@@ -225,8 +103,8 @@ export default function Search() {
           Search
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Find any song — search YouTube, Spotify or the Soundscape catalog and
-          stream it instantly.
+          Find any song — search YouTube and stream it instantly, or browse the
+          Soundscape catalog.
         </p>
       </header>
 
@@ -253,38 +131,7 @@ export default function Search() {
         <BrowseView onPick={setQuery} onAlbum={(id) => navigate(`/album/${id}`)} />
       ) : (
         <div className="flex flex-col gap-10">
-          {/* source toggle */}
-          <div className="flex w-fit gap-1 rounded-full border border-white/10 bg-white/[0.04] p-1">
-            <button
-              type="button"
-              onClick={() => setSource("youtube")}
-              className={cn(
-                "flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition-all",
-                source === "youtube"
-                  ? "bg-[rgb(var(--tint)/_0.18)] text-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              <Youtube className="size-3.5" />
-              YouTube
-            </button>
-            <button
-              type="button"
-              onClick={() => setSource("spotify")}
-              className={cn(
-                "flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition-all",
-                source === "spotify"
-                  ? "bg-emerald-500/18 text-emerald-100"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              <SpotifyIcon className="size-3.5" />
-              Spotify
-            </button>
-          </div>
-
           {/* YouTube results */}
-          {source === "youtube" && (
           <section>
             <div className="mb-2 flex items-center gap-2">
               <Youtube className="size-4 text-[rgb(var(--tint))]" />
@@ -350,60 +197,8 @@ export default function Search() {
               </div>
             )}
           </section>
-          )}
 
-          {/* Spotify results */}
-          {source === "spotify" && (
-          <section>
-            <div className="mb-2 flex items-center gap-2">
-              <SpotifyIcon className="size-4 text-emerald-300" />
-              <h2 className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
-                Results from Spotify
-              </h2>
-            </div>
-
-            {spotifyUnavailable ? (
-              <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-white/10 py-12 text-center">
-                <SearchX className="size-8 text-muted-foreground/40" />
-                <p className="max-w-md text-sm text-muted-foreground">
-                  {spotifyNotice ??
-                    "Spotify isn't connected yet. Add your app's client ID and secret to search its catalog of 100M+ tracks."}
-                </p>
-              </div>
-            ) : spotifyResults === null ? (
-              <div className="flex flex-col gap-0.5">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center gap-3 rounded-xl px-3 py-2"
-                  >
-                    <div className="size-10 animate-pulse rounded-md bg-white/[0.05]" />
-                    <div className="flex-1 space-y-2">
-                      <div className="h-3.5 w-2/3 animate-pulse rounded bg-white/[0.05]" />
-                      <div className="h-3 w-1/3 animate-pulse rounded bg-white/[0.05]" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : spotifyResults.length === 0 ? (
-              <p className="rounded-2xl border border-dashed border-white/10 py-10 text-center text-sm text-muted-foreground">
-                No Spotify results for "{query}". Try a different spelling or
-                an artist name.
-              </p>
-            ) : (
-              <div className="flex flex-col gap-0.5">
-                {spotifyResults.map((item, i) => (
-                  <SpotifyTrackRow
-                    key={item.id}
-                    item={item}
-                    index={i + 1}
-                    onPlay={playSpotify}
-                  />
-                ))}
-              </div>
-            )}
-          </section>
-          )}
+          {/* catalog matches */}
           {(results.tracks.length > 0 ||
             results.albums.length > 0 ||
             results.artists.length > 0) && (

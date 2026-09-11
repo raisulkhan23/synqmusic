@@ -1,11 +1,13 @@
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { SeekBar } from "@/components/player/SeekBar";
 import { TransportControls } from "@/components/player/TransportControls";
 import { VisualizerCanvas } from "@/components/player/VisualizerCanvas";
 import { VolumeControl } from "@/components/player/VolumeControl";
 import { formatTime } from "@/lib/format";
+import { dismissVideo, presentVideo } from "@/lib/youtubePlayer";
 import { usePlayerStore } from "@/store/player";
-import { ChevronDown, Heart, ListMusic } from "lucide-react";
+import { ChevronDown, Heart, ListMusic, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function FullscreenPlayer() {
@@ -21,6 +23,29 @@ export function FullscreenPlayer() {
   const setQueueOpen = usePlayerStore((s) => s.setQueueOpen);
 
   const a = accent ?? { r: 196, g: 246, b: 152 };
+
+  // YouTube tracks surface the live video in fullscreen. The engine's iframe
+  // is CSS-positioned over this placeholder (never re-parented), so playback
+  // continues seamlessly while the video is on screen.
+  const isYoutube = current?.source === "youtube" || !!current?.youtubeId;
+  const videoFrameRef = useRef<HTMLDivElement | null>(null);
+  const [videoReady, setVideoReady] = useState(false);
+
+  useEffect(() => {
+    if (!fullscreen || !isYoutube) return;
+    setVideoReady(false);
+    const t = setTimeout(() => setVideoReady(true), 350); // after the enter animation
+    return () => {
+      clearTimeout(t);
+      setVideoReady(false);
+      dismissVideo();
+    };
+  }, [fullscreen, isYoutube, current?.id]);
+
+  useEffect(() => {
+    if (!fullscreen || !isYoutube || !videoReady) return;
+    presentVideo(() => videoFrameRef.current?.getBoundingClientRect() ?? null);
+  }, [fullscreen, isYoutube, videoReady]);
 
   return (
     <AnimatePresence>
@@ -97,15 +122,40 @@ export function FullscreenPlayer() {
               </div>
             </div>
 
-            {/* artwork */}
+            {/* artwork / live video */}
             <div className="flex flex-1 items-center justify-center py-6">
-              <motion.img
-                src={current.coverUrl}
-                alt={`${current.title} cover art`}
-                className="size-[min(38vh,340px)] rounded-2xl object-cover shadow-[0_30px_80px_rgba(0,0,0,0.6)] ring-1 ring-white/10"
-                animate={{ y: [0, -12, 0] }}
-                transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
-              />
+              {isYoutube ? (
+                <div
+                  ref={videoFrameRef}
+                  className="relative aspect-video w-[min(72vh,640px)] max-w-full overflow-hidden rounded-2xl bg-black shadow-[0_30px_80px_rgba(0,0,0,0.6)] ring-1 ring-white/10"
+                >
+                  {/* cover art until the live iframe lands on top of it */}
+                  <img
+                    src={current.coverUrl}
+                    alt=""
+                    className="absolute inset-0 size-full object-cover"
+                  />
+                  <AnimatePresence>
+                    {!videoReady && (
+                      <motion.div
+                        initial={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="absolute inset-0 flex items-center justify-center bg-black/60"
+                      >
+                        <Loader2 className="size-7 animate-spin text-white/70" />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              ) : (
+                <motion.img
+                  src={current.coverUrl}
+                  alt={`${current.title} cover art`}
+                  className="size-[min(38vh,340px)] rounded-2xl object-cover shadow-[0_30px_80px_rgba(0,0,0,0.6)] ring-1 ring-white/10"
+                  animate={{ y: [0, -12, 0] }}
+                  transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
+                />
+              )}
             </div>
 
             {/* metadata + controls */}

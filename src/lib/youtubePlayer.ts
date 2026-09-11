@@ -55,8 +55,20 @@ export interface YtEngineHandlers {
 
 let handlers: YtEngineHandlers = {};
 let player: YtPlayerLike | null = null;
+let hostEl: HTMLDivElement | null = null;
 let lastState = -1;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
+
+// Video presentation: when set, the (otherwise hidden) player iframe is
+// positioned over this rect provider's target so the fullscreen view can show
+// the actual video. Pure CSS — the iframe is never re-parented, so playback
+// never interrupts.
+let presentTarget: (() => DOMRect | null) | null = null;
+
+const OFFSCREEN_STYLE =
+  "position:fixed;left:-9999px;top:0;width:200px;height:200px;opacity:0;pointer-events:none;border:0;";
+const PRESENT_BASE_STYLE =
+  "position:fixed;z-index:71;opacity:1;pointer-events:none;border:0;border-radius:16px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,0.6);";
 
 let apiPromise: Promise<void> | null = null;
 
@@ -107,9 +119,9 @@ async function ensurePlayer(): Promise<YtPlayerLike> {
 
   const host = document.createElement("div");
   // Off-screen but rendered — fully display:none players can refuse autoplay.
-  host.style.cssText =
-    "position:fixed;left:-9999px;top:0;width:200px;height:200px;opacity:0;pointer-events:none;border:0;";
+  host.style.cssText = OFFSCREEN_STYLE;
   document.body.appendChild(host);
+  hostEl = host;
 
   player = await new Promise<YtPlayerLike>((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error("YT player init timed out")), 10_000);
@@ -210,4 +222,52 @@ export function setMuted(muted: boolean): void {
 /** YT error code → human message (100/101/150 = unusable video). */
 export function isFatalError(code: number): boolean {
   return code === 2 || code === 5 || code === 100 || code === 101 || code === 150;
+}
+
+// --- video presentation (fullscreen video mode) ------------------------------
+
+let rafId: number | null = null;
+
+function syncPresentation(): void {
+  if (rafId !== null) return;
+  rafId = requestAnimationFrame(() => {
+    rafId = null;
+    if (!hostEl) return;
+    if (!presentTarget) {
+      hostEl.style.cssText = OFFSCREEN_STYLE;
+      return;
+    }
+    const rect = presentTarget();
+    if (!rect) {
+      hostEl.style.cssText = OFFSCREEN_STYLE;
+      return;
+    }
+    hostEl.style.cssText =
+      PRESENT_BASE_STYLE +
+      `left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;`;
+  });
+}
+
+/**
+ * Show the live YouTube video over the element described by `getRect` (its
+ * bounding box). The iframe is moved with CSS only, so playback continues
+ * uninterrupted. While presented, position is kept in sync on resize/scroll.
+ */
+export function presentVideo(getRect: () => DOMRect | null): void {
+  presentTarget = getRect;
+  syncPresentation();
+  window.addEventListener("resize", syncPresentation);
+  window.addEventListener("scroll", syncPresentation, true);
+}
+
+/** Hide the video again — the player returns off-screen, still playing. */
+export function dismissVideo(): void {
+  presentTarget = null;
+  if (rafId !== null) {
+    cancelAnimationFrame(rafId);
+    rafId = null;
+  }
+  if (hostEl) hostEl.style.cssText = OFFSCREEN_STYLE;
+  window.removeEventListener("resize", syncPresentation);
+  window.removeEventListener("scroll", syncPresentation, true);
 }
