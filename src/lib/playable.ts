@@ -3,9 +3,9 @@ import { coverArt } from "@/lib/covers";
 import type { YtItem } from "@/lib/youtube";
 
 /**
- * A normalized item in the player queue. Catalog tracks and resolved YouTube
- * streams both become Playables, so the player UI never has to care where the
- * audio came from.
+ * A normalized item in the player queue. Catalog tracks, YouTube results and
+ * Spotify results all become Playables, so the player UI never has to care
+ * where the audio came from.
  */
 export interface Playable {
   id: string;
@@ -15,9 +15,11 @@ export interface Playable {
   coverUrl: string;
   audioUrl: string;
   duration: number;
-  source: "catalog" | "youtube";
+  source: "catalog" | "youtube" | "spotify";
   /** Present for catalog tracks, used for album navigation. */
   catalogTrack?: Track;
+  /** Set when this track plays through the YouTube IFrame engine (by video id). */
+  youtubeId?: string;
   /** Present for YouTube tracks, used for manual source switching. */
   alternatives?: YtItem[];
 }
@@ -51,6 +53,7 @@ export function toPlayableYoutube(
     audioUrl,
     duration: item.duration,
     source: "youtube",
+    youtubeId: item.id,
     alternatives,
   };
 }

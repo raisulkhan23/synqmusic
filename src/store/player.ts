@@ -221,11 +221,12 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
 
   /** Route loading/playback to the right engine for the given track. */
   const loadTrack = (track: Playable) => {
-    // Pause the other engine so both never talk at once.
-    if (track.source === "youtube") {
+    // Route to the YouTube IFrame engine by video id (YouTube results AND
+    // Spotify matches both play this way); otherwise use the audio element.
+    if (track.youtubeId) {
       getAudio().pause();
       ytEngine
-        .play(track.audioUrl, { volume: get().volume, muted: get().muted })
+        .play(track.youtubeId, { volume: get().volume, muted: get().muted })
         .catch(() => {
           set({ isPlaying: false, isBuffering: false, errorNonce: get().errorNonce + 1 });
         });
@@ -272,7 +273,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
   const togglePlay = () => {
     const s = get();
     if (s.current) {
-      if (s.current.source === "youtube") {
+      if (s.current.youtubeId) {
         // The engine emits state events, so just nudge it in the right direction.
         if (s.isPlaying) ytEngine.pause();
         else ytEngine.resume();
@@ -329,7 +330,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     const s = get();
     const duration = s.duration;
     const t = Math.max(0, Math.min(time, duration || time));
-    if (s.current?.source === "youtube") {
+    if (s.current?.youtubeId) {
       ytEngine.seek(t);
     } else {
       getAudio().currentTime = t;
