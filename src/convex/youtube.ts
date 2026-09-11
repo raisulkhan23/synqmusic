@@ -17,6 +17,18 @@ export interface YtItem {
   thumbnail: string;
 }
 
+/**
+ * The public shape returned when a stream can't be resolved. The frontend
+ * treats this as a cue to show the YouTube link as the primary action rather
+ * than attempting playback.
+ */
+export interface StreamUnavailable {
+  url: null;
+  title: string;
+  reason: string;
+  youtubeUrl: string;
+}
+
 const API = "https://www.youtube.com/youtubei/v1/";
 const UA =
   "com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip";
@@ -146,10 +158,26 @@ export const searchYoutube = action({
  * Resolve a direct, playable audio stream URL for a YouTube video. Tries
  * several clients in order and picks the highest-quality audio-only format.
  */
-export const resolveStream = action({
+const streamResultValidator = v.union([
+  v.object({ url: v.string(), title: v.string() }),
+  v.object({
+    url: v.null(),
+    title: v.string(),
+    reason: v.string(),
+    youtubeUrl: v.string(),
+  }),
+]);
+
+export const resolveStream = action<typeof streamResultValidator, {
+  videoId: string;
+}>({
   args: { videoId: v.string() },
-  handler: async (_ctx, { videoId }): Promise<{ url: string; title: string }> => {
-    let lastError = "No playable audio stream found for this video";
+  handler: async (_ctx, { videoId }): Promise<
+    | { url: string; title: string }
+    | StreamUnavailable
+  > => {
+    let lastError: string | undefined;
+    let lastTitle: string | undefined;
 
     for (const client of CLIENTS) {
       try {
@@ -162,15 +190,19 @@ export const resolveStream = action({
 
         const status = get(data, ["playabilityStatus", "status"]) as string | undefined;
         if (status && status !== "OK") {
-          const reason =
+          lastTitle =
+            (get(data, ["videoDetails", "title"]) as string) ??
+            `YouTube video ${videoId}`;
+          lastError =
             (get(data, ["playabilityStatus", "reason"]) as string) ??
             `Playback unavailable (${status})`;
-          lastError = reason;
           continue;
         }
 
         const videoTitle =
-          (get(data, ["videoDetails", "title"]) as string) ?? undefined;
+          (get(data, ["videoDetails", "title"]) as string) ??
+          undefined;
+        if (videoTitle) lastTitle = videoTitle;
 
         const adaptive = get(data, ["streamingData", "adaptiveFormats"]);
         const base = get(data, ["streamingData", "formats"]);
@@ -191,14 +223,26 @@ export const resolveStream = action({
         )[0] as Record<string, unknown> | undefined;
 
         if (best?.url) {
-          return { url: best.url as string, title: videoTitle ?? "YouTube audio" };
+          return {
+            url: best.url as string,
+            title: videoTitle ?? "YouTube audio",
+          };
         }
+
+        // Player returned OK but no audio formats — treat as unavailable.
+        lastTitle = videoTitle ?? `YouTube video ${videoId}`;
+        lastError = "No audio stream available for this video";
       } catch (error) {
         lastError =
           error instanceof Error ? error.message : "Stream resolution failed";
       }
     }
 
-    throw new ConvexError(lastError);
+    return {
+      url: null,
+      title: lastTitle ?? `YouTube video ${videoId}`,
+      reason: lastError ?? "No playable audio stream found for this video",
+      youtubeUrl: `https://youtu.be/${videoId}`,
+    };
   },
 });
