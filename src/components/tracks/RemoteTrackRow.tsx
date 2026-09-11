@@ -10,11 +10,14 @@ export function RemoteTrackRow({
   index,
   onPlay,
   resolving,
+  source = "youtube",
 }: {
   item: YtItem;
   index: number;
   onPlay: (item: YtItem) => void;
   resolving?: boolean;
+  /** Which provider the chart row came from (affects badge + link-out). */
+  source?: "youtube" | "spotify";
 }) {
   const currentId = usePlayerStore((s) => s.current?.id);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
@@ -87,8 +90,15 @@ export function RemoteTrackRow({
         </div>
       </div>
 
-      <span className="shrink-0 rounded-full bg-rose-500/12 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-rose-200 uppercase">
-        YouTube
+      <span
+        className={cn(
+          "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide uppercase",
+          source === "spotify"
+            ? "bg-[#1DB954]/15 text-[#1ED760]"
+            : "bg-rose-500/12 text-rose-200",
+        )}
+      >
+        {source === "spotify" ? "Spotify" : "YouTube"}
       </span>
 
       <div className="flex items-center justify-end gap-1">
@@ -96,10 +106,14 @@ export function RemoteTrackRow({
           {formatTime(item.duration)}
         </span>
         <a
-          href={`https://youtu.be/${item.id}`}
+          href={
+            source === "spotify"
+              ? `https://open.spotify.com/track/${item.id}`
+              : `https://youtu.be/${item.id}`
+          }
           target="_blank"
           rel="noreferrer"
-          aria-label="Open on YouTube"
+          aria-label={source === "spotify" ? "Open on Spotify" : "Open on YouTube"}
           onClick={(e) => e.stopPropagation()}
           className="rounded-full p-1.5 text-muted-foreground/70 transition-colors hover:bg-white/10 hover:text-foreground"
         >

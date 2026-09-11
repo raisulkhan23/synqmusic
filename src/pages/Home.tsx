@@ -40,6 +40,9 @@ export default function Home() {
   const playlists = useQuery(api.playlists.myPlaylists);
   const recent = useQuery(api.history.recentlyPlayed, { limit: 8 });
   const mostPlayed = useQuery(api.history.mostPlayed, { limit: 8 });
+  // Chart data comes from Spotify (key-free public embed data); clicking a row
+  // then resolves the matching video on YouTube for playback.
+  const spotifyChart = useAction(api.spotify.spotifyChart);
   const searchYt = useAction(api.youtube.searchYoutube);
 
   const featured = MIXES.find((m) => m.id === "mix-top") ?? MIXES[0];
@@ -48,13 +51,14 @@ export default function Home() {
   const albums = albumsByNewest();
   const top = topTracks(8);
 
-  // Trending YouTube songs of the week, fetched once on load.
+  // Trending songs of the week, sourced from Spotify's public chart data and
+  // fetched once on load. Playback resolves through the YouTube engine.
   const [trending, setTrending] = useState<YtItem[] | null>(null);
   const [trendingError, setTrendingError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    searchYt({ query: "top songs this week" })
+    spotifyChart({})
       .then(({ items }) => {
         if (!cancelled) setTrending(items);
       })
@@ -64,12 +68,36 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [searchYt]);
+  }, [spotifyChart]);
+
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
 
   const playTrending = (item: YtItem) => {
-    // Same IFrame-based playback as search: the video id is all the engine needs.
-    const alternatives = trending?.filter((r) => r.id !== item.id) ?? [];
-    playTrack(toPlayableYoutube(item, item.id, alternatives));
+    // Spotify supplies the chart metadata; playback resolves through YouTube.
+    setResolvingId(item.id);
+    // Drop the comma-separated featured artists for a cleaner search query.
+    const primaryArtist = item.artist.split(",")[0]?.trim() ?? item.artist;
+    searchYt({ query: `${item.title} ${primaryArtist}` })
+      .then(({ items }) => {
+        const best = items[0];
+        if (!best) {
+          toast.error(`Couldn't find "${item.title}" on YouTube`);
+          return;
+        }
+        // Keep the Spotify id for highlighting + the Spotify artwork, but route
+        // the actual playback to the matched YouTube video.
+        const playable = {
+          ...toPlayableYoutube(item, `https://youtu.be/${best.id}`, items.slice(1)),
+          youtubeId: best.id,
+        };
+        playTrack(playable);
+      })
+      .catch(() => {
+        toast.error("Playback failed — try again in a moment");
+      })
+      .finally(() => {
+        setResolvingId(null);
+      });
   };
 
   const recentTracks = useMemo(
@@ -224,7 +252,7 @@ export default function Home() {
         ))}
       </SectionRow>
 
-      {/* trending YouTube songs of the week */}
+      {/* songs of the week, sourced from Spotify's public chart */}
       {trending && trending.length > 0 && (
         <section>
           <div className="mb-3 flex items-end justify-between gap-4">
@@ -234,7 +262,7 @@ export default function Home() {
                 Songs of the week
               </h2>
               <p className="mt-0.5 text-sm text-muted-foreground">
-                Trending right now, streamed live from YouTube.
+                Spotify&apos;s most-played songs right now, playable via YouTube.
               </p>
             </div>
           </div>
@@ -245,6 +273,8 @@ export default function Home() {
                 item={item}
                 index={i + 1}
                 onPlay={playTrending}
+                resolving={resolvingId === item.id}
+                source="spotify"
               />
             ))}
           </div>
