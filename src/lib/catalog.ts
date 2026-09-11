@@ -56,6 +56,12 @@ export const ARTISTS: Artist[] = [
   { id: "glass-harbor", name: "The Glass Harbor", bio: "Ambient tides recorded near the sea." },
   { id: "cassette-coast", name: "Cassette Coast", bio: "Dream pop for humid summers." },
   { id: "nocturne-city", name: "Nocturne City", bio: "Lo-fi beats made after midnight." },
+  { id: "aurora-motive", name: "Aurora Motive", bio: "Cinematic electropop with orchestral swells." },
+  { id: "velvet-antenna", name: "Velvet Antenna", bio: "Groove-heavy funktronica from the warehouse district." },
+  { id: "paper-jupiter", name: "Paper Jupiter", bio: "Folktronica stories mapped by hand." },
+  { id: "iron-meridian", name: "Iron Meridian", bio: "Alt-rock with stadium-sized choruses." },
+  { id: "lumen-vale", name: "Lumen Vale", bio: "Ethereal vocal electronica from the coast." },
+  { id: "sundial-theory", name: "Sundial Theory", bio: "Future soul with a brass backbone." },
 ];
 
 // --- albums -----------------------------------------------------------------
@@ -67,6 +73,12 @@ const ACCENT = {
   teal: { r: 13, g: 148, b: 136 },
   rose: { r: 225, g: 29, b: 72 },
   pine: { r: 22, g: 163, b: 74 },
+  fuchsia: { r: 162, g: 28, b: 175 },
+  amber: { r: 202, g: 138, b: 4 },
+  lime: { r: 101, g: 163, b: 13 },
+  red: { r: 220, g: 38, b: 38 },
+  sky: { r: 14, g: 165, b: 233 },
+  indigo: { r: 99, g: 102, b: 241 },
 } as const;
 
 export const ALBUMS: Album[] = [
@@ -130,6 +142,66 @@ export const ALBUMS: Album[] = [
     accent: ACCENT.pine,
     variant: 5,
   },
+  {
+    id: "polarize",
+    title: "Polarize",
+    artistId: "aurora-motive",
+    year: 2025,
+    description: "Cinematic electropop that splits the night into color.",
+    palette: ["#3b0764", "#a21caf", "#f0abfc"],
+    accent: ACCENT.fuchsia,
+    variant: 0,
+  },
+  {
+    id: "gold-wiring",
+    title: "Gold Wiring",
+    artistId: "velvet-antenna",
+    year: 2024,
+    description: "Groove-heavy funktronica wired for the dancefloor.",
+    palette: ["#713f12", "#eab308", "#fef08a"],
+    accent: ACCENT.amber,
+    variant: 4,
+  },
+  {
+    id: "cartography",
+    title: "Cartography",
+    artistId: "paper-jupiter",
+    year: 2024,
+    description: "Folktronica roadmaps drawn in pencil and pollen.",
+    palette: ["#14532d", "#65a30d", "#d9f99d"],
+    accent: ACCENT.lime,
+    variant: 5,
+  },
+  {
+    id: "fault-lines",
+    title: "Fault Lines",
+    artistId: "iron-meridian",
+    year: 2025,
+    description: "Alt-rock built on shifting ground and big choruses.",
+    palette: ["#450a0a", "#dc2626", "#fca5a5"],
+    accent: ACCENT.red,
+    variant: 2,
+  },
+  {
+    id: "halo-signal",
+    title: "Halo Signal",
+    artistId: "lumen-vale",
+    year: 2023,
+    description: "Ethereal vocal electronica broadcast from the coast.",
+    palette: ["#0c4a6e", "#0ea5e9", "#bae6fd"],
+    accent: ACCENT.sky,
+    variant: 1,
+  },
+  {
+    id: "low-light-theory",
+    title: "Low Light Theory",
+    artistId: "sundial-theory",
+    year: 2023,
+    description: "Future soul and brass for the hour after sunset.",
+    palette: ["#1e1b4b", "#6366f1", "#c7d2fe"],
+    accent: ACCENT.indigo,
+    variant: 3,
+  },
 ];
 
 // --- tracks -----------------------------------------------------------------
@@ -192,6 +264,36 @@ export const TRACKS: Track[] = [
   T("sl-paper-lanterns", "Paper Lanterns", "nocturne-city", "streetlights", 6, 73, ["lo-fi", "chill"]),
   T("sl-midnight-courier", "Midnight Courier", "nocturne-city", "streetlights", 7, 89, ["lo-fi", "night"]),
   T("sl-streetlight-static", "Streetlight Static", "nocturne-city", "streetlights", 8, 75, ["lo-fi", "dream"]),
+  // Polarize — Aurora Motive
+  T("aur-polarize", "Polarize", "aurora-motive", "polarize", 2, 96, ["synth", "dance"]),
+  T("aur-glass-cathedral", "Glass Cathedral", "aurora-motive", "polarize", 7, 88, ["synth", "night"]),
+  T("aur-static-bloom", "Static Bloom", "aurora-motive", "polarize", 11, 84, ["synth", "dream"]),
+  T("aur-northern-wire", "Northern Wire", "aurora-motive", "polarize", 14, 79, ["electronic", "chill"]),
+  // Gold Wiring — Velvet Antenna
+  T("va-gold-wiring", "Gold Wiring", "velvet-antenna", "gold-wiring", 3, 93, ["funk", "groove"]),
+  T("va-pocket-funk", "Pocket Funk", "velvet-antenna", "gold-wiring", 8, 86, ["funk", "dance"]),
+  T("va-brass-knuckles", "Brass Knuckles", "velvet-antenna", "gold-wiring", 12, 80, ["funk", "energy"]),
+  T("va-slow-tremble", "Slow Tremble", "velvet-antenna", "gold-wiring", 15, 72, ["groove", "chill"]),
+  // Cartography — Paper Jupiter
+  T("pj-cartography", "Cartography", "paper-jupiter", "cartography", 4, 87, ["folk", "dream"]),
+  T("pj-map-of-june", "Map of June", "paper-jupiter", "cartography", 9, 83, ["folk", "golden"]),
+  T("pj-papercuts", "Papercuts", "paper-jupiter", "cartography", 13, 77, ["folk", "chill"]),
+  T("pj-cedar-lines", "Cedar Lines", "paper-jupiter", "cartography", 16, 74, ["folk", "dream"]),
+  // Fault Lines — Iron Meridian
+  T("im-fault-lines", "Fault Lines", "iron-meridian", "fault-lines", 5, 91, ["rock", "energy"]),
+  T("im-wolf-hour", "The Wolf Hour", "iron-meridian", "fault-lines", 10, 85, ["rock", "night"]),
+  T("im-reverb-riot", "Reverb Riot", "iron-meridian", "fault-lines", 1, 78, ["rock", "dance"]),
+  T("im-quiet-ammunition", "Quiet Ammunition", "iron-meridian", "fault-lines", 6, 70, ["rock", "indie"]),
+  // Halo Signal — Lumen Vale
+  T("lv-halo-signal", "Halo Signal", "lumen-vale", "halo-signal", 6, 90, ["electronic", "ethereal"]),
+  T("lv-slow-glow", "Slow Glow", "lumen-vale", "halo-signal", 2, 82, ["electronic", "dream"]),
+  T("lv-glass-tide", "Glass Tide", "lumen-vale", "halo-signal", 10, 76, ["ambient", "dream"]),
+  T("lv-lullaby-circuit", "Lullaby Circuit", "lumen-vale", "halo-signal", 13, 71, ["electronic", "chill"]),
+  // Low Light Theory — Sundial Theory
+  T("slt-blue-hour", "Blue Hour", "sundial-theory", "low-light-theory", 8, 89, ["soul", "jazz"]),
+  T("slt-brass-rain", "Brass Rain", "sundial-theory", "low-light-theory", 3, 81, ["soul", "groove"]),
+  T("slt-monsoon-swing", "Monsoon Swing", "sundial-theory", "low-light-theory", 11, 75, ["jazz", "dance"]),
+  T("slt-sunfall-studies", "Sunfall Studies", "sundial-theory", "low-light-theory", 16, 73, ["soul", "chill"]),
 ];
 
 // --- curated mixes ----------------------------------------------------------
@@ -231,8 +333,9 @@ export const MIXES: Mix[] = [
     description: "The most played songs across the Soundscape catalog.",
     gradient: ["#e11d48", "#7c3aed"],
     trackIds: [
-      "afterglow-afterglow", "prism-chromatic", "afterglow-night-drive", "sl-midnight-courier",
-      "mm-borrowed-light", "prism-lucid-skyline", "sl-neon-rain", "mm-meridian",
+      "aur-polarize", "afterglow-afterglow", "prism-chromatic", "va-gold-wiring",
+      "afterglow-night-drive", "im-fault-lines", "sl-midnight-courier", "lv-halo-signal",
+      "mm-borrowed-light", "prism-lucid-skyline", "slt-blue-hour", "sl-neon-rain",
     ],
   },
   {
@@ -241,6 +344,26 @@ export const MIXES: Mix[] = [
     description: "High-energy dance and synth that loop forever.",
     gradient: ["#16a34a", "#065f46"],
     trackIds: ["prism-chromatic", "afterglow-night-drive", "prism-velvet-static", "prism-lucid-skyline", "ss-boardwalk-echo", "afterglow-palm-chrome", "sl-neon-rain"],
+  },
+  {
+    id: "mix-fresh",
+    title: "Fresh Finds",
+    description: "New releases lighting up the Soundscape catalog.",
+    gradient: ["#a21caf", "#312e81"],
+    trackIds: [
+      "aur-polarize", "va-gold-wiring", "im-fault-lines", "lv-halo-signal",
+      "slt-blue-hour", "pj-cartography", "aur-glass-cathedral", "va-pocket-funk",
+    ],
+  },
+  {
+    id: "mix-groove",
+    title: "Groove Theory",
+    description: "Funk, soul and swing with a modern pulse.",
+    gradient: ["#eab308", "#7c2d12"],
+    trackIds: [
+      "va-gold-wiring", "va-pocket-funk", "slt-brass-rain", "slt-monsoon-swing",
+      "va-brass-knuckles", "va-slow-tremble",
+    ],
   },
 ];
 
