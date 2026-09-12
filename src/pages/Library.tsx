@@ -121,7 +121,7 @@ export default function Library() {
           Albums
         </h2>
         <p className="-mt-2 mb-3 text-sm text-muted-foreground">
-          The complete Soundscape catalog · {ALBUMS.length} albums
+          The complete SoundCore catalog · {ALBUMS.length} albums
         </p>
         <div className="hide-scrollbar -mx-4 flex gap-4 overflow-x-auto px-4 pb-2">
           {albums.map((album) => (

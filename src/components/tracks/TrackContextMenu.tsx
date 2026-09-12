@@ -64,7 +64,7 @@ export function TrackContextMenu({
     const url = `${window.location.origin}/album/${album.id}`;
     const shareData = {
       title: `${track.title} — ${artist.name}`,
-      text: `Listen to ${track.title} by ${artist.name} on SoundScape`,
+      text: `Listen to ${track.title} by ${artist.name} on SoundCore`,
       url,
     };
     if (navigator.share) {

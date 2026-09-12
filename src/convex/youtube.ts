@@ -2,15 +2,11 @@ import { ConvexError, v } from "convex/values";
 import { action } from "./_generated/server";
 
 // ---------------------------------------------------------------------------
-// Soundscape audio source resolver (v3).
-// Talks to YouTube's InnerTube API to search for tracks and to resolve a
-// direct, playable audio stream URL for a video. No external keys required —
-// the public INNERTUBE key below is embedded in every YouTube client.
-//
-// v3 fixes: search now uses the WEB client (matches the response parser and
-// avoids the 400s that the stale ANDROID client started returning), client
-// identity headers are sent, and search falls back to an unfiltered query if
-// the video-filter param is rejected.
+// SoundCore audio source resolver.
+// Talks to YouTube InnerTube / YouTube Music to search for music and to
+// resolve a direct, playable audio stream for a video. No external keys
+// required — the public INNERTUBE key below is embedded in every YouTube
+// client.
 // ---------------------------------------------------------------------------
 
 export interface YtItem {

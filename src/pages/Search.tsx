@@ -107,7 +107,7 @@ export default function Search() {
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Find any song — search YouTube and stream it instantly, or browse the
-          Soundscape catalog.
+          SoundCore catalog.
         </p>
       </header>
 
@@ -207,7 +207,7 @@ export default function Search() {
             results.artists.length > 0) && (
             <section>
               <h2 className="mb-2 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
-                From the Soundscape catalog
+                From the SoundCore catalog
               </h2>
               {results.tracks.length > 0 && (
                 <div className="flex flex-col gap-0.5">

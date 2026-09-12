@@ -35,7 +35,7 @@ const schema = defineSchema(
     // catalog track ids liked by a user (ordered by when they were liked)
     likedSongs: defineTable({
       userId: v.id("users"),
-      trackId: v.string(), // id of the track in the SoundScape demo catalog
+      trackId: v.string(), // id of the track in the SoundCore demo catalog
       createdAt: v.number(),
     })
       .index("by_user_track", ["userId", "trackId"])
@@ -70,7 +70,7 @@ const schema = defineSchema(
     // listening history: one row per user+track, updated on every play
     playHistory: defineTable({
       userId: v.id("users"),
-      trackId: v.string(), // id of the track in the SoundScape demo catalog
+      trackId: v.string(), // id of the track in the SoundCore demo catalog
       playedAt: v.number(),
       playCount: v.number(),
     })

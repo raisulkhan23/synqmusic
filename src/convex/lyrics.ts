@@ -28,7 +28,7 @@ export const fetchLyrics = action({
     if (duration && duration > 0) params.set("duration", String(Math.round(duration)));
 
     const res = await fetch(`https://lrclib.net/api/get?${params.toString()}`, {
-      headers: { "User-Agent": "SoundScape/1.0 (web player)" },
+      headers: { "User-Agent": "SoundCore/1.0 (web player)" },
     });
 
     // Try a fuzzy search fallback when the exact lookup misses.
@@ -41,7 +41,7 @@ export const fetchLyrics = action({
     if (!synced) {
       const searchRes = await fetch(
         `https://lrclib.net/api/search?${new URLSearchParams({ track_name: title, artist_name: artist }).toString()}`,
-        { headers: { "User-Agent": "SoundScape/1.0 (web player)" } },
+        { headers: { "User-Agent": "SoundCore/1.0 (web player)" } },
       );
       if (searchRes.ok) {
         const results = (await searchRes.json()) as { syncedLyrics?: string | null }[];
