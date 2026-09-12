@@ -109,12 +109,12 @@ export function AppShell() {
         s.seek(Math.max(0, s.currentTime - 5));
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
-        s.setVolume(Math.min(1, s.volume + 0.05));
+        const step = e.shiftKey ? 0.1 : 0.05;
+        s.setVolume(Math.min(1, s.volume + step));
       } else if (e.key === "ArrowDown") {
         e.preventDefault();
-        s.setVolume(Math.max(0, s.volume - 0.05));
-      } else if (e.key === "ArrowUp" && e.shiftKey) {
-        /* handled above */
+        const step = e.shiftKey ? 0.1 : 0.05;
+        s.setVolume(Math.max(0, s.volume - step));
       } else if (e.key.toLowerCase() === "m") {
         s.toggleMute();
         toast(s.muted ? "Unmuted" : "Muted");

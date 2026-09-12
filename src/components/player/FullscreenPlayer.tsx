@@ -61,11 +61,20 @@ function LyricsPanel({ onClose }: { onClose: () => void }) {
     ? `${current.title}|${current.artistName}|${current.albumName}`
     : "";
 
+  // Reset dirty state whenever the tracked key changes — purely derived from
+  // React dependencies, so it's safe to keep this sequence out of the fetch
+  // effect (avoids set-state-inside-effect warnings).
+  useEffect(() => {
+    if (!key) return;
+    setLines(null);
+    setLoading(true);
+  }, [key]);
+
+  // Fetch lyrics for the tracked track. Re-runs whenever key or the action
+  // changes; cancellations and result overwrites are handled below.
   useEffect(() => {
     if (!current) return;
     let cancelled = false;
-    setLines(null);
-    setLoading(true);
     fetchLyrics({
       title: cleanLyricsQuery(current.title),
       artist: cleanLyricsQuery(current.artistName),
@@ -85,7 +94,7 @@ function LyricsPanel({ onClose }: { onClose: () => void }) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, fetchLyrics]);
+  }, [fetchLyrics]);
 
   // current line index (last line whose t <= currentTime)
   const activeIndex = useMemo(() => {
@@ -239,7 +248,6 @@ function AbRepeatControls() {
 export function FullscreenPlayer() {
   const fullscreen = usePlayerStore((s) => s.fullscreen);
   const current = usePlayerStore((s) => s.current);
-  const isPlaying = usePlayerStore((s) => s.isPlaying);
   const currentTime = usePlayerStore((s) => s.currentTime);
   const duration = usePlayerStore((s) => s.duration);
   const liked = usePlayerStore((s) => s.liked);
