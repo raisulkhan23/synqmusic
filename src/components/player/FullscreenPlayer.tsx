@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { api } from "@/convex/_generated/api";
 import { formatTime } from "@/lib/format";
-import { dismissVideo, presentVideo } from "@/lib/youtubePlayer";
+import { dismissVideo, getYtHost, presentVideo } from "@/lib/youtubePlayer";
 import { usePlayerStore } from "@/store/player";
 import { toast } from "sonner";
 import {
@@ -264,7 +264,14 @@ export function FullscreenPlayer() {
   useEffect(() => {
     if (!fullscreen || !isYoutube) return;
     setVideoReady(false);
-    const t = setTimeout(() => setVideoReady(true), 350); // after the enter animation
+    // After the enter animation, move the live YouTube player element into
+    // the video frame. Same player instance — playback never interrupts.
+    const t = setTimeout(() => {
+      const ok = videoFrameRef.current
+        ? presentVideo(videoFrameRef.current)
+        : false;
+      setVideoReady(ok);
+    }, 350);
     return () => {
       clearTimeout(t);
       setVideoReady(false);
@@ -272,12 +279,14 @@ export function FullscreenPlayer() {
     };
   }, [fullscreen, isYoutube, current?.id]);
 
+  // Re-present when the lyrics panel toggles (frame may remount).
   useEffect(() => {
     if (!fullscreen || !isYoutube || !videoReady) return;
-    presentVideo(() => videoFrameRef.current?.getBoundingClientRect() ?? null);
-    // Re-sync when the lyrics panel opens/closes — the video frame moves.
-    return () => dismissVideo();
-  }, [fullscreen, isYoutube, videoReady, lyricsOpen]);
+    if (videoFrameRef.current && !videoFrameRef.current.contains(getYtHost())) {
+      presentVideo(videoFrameRef.current);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lyricsOpen]);
 
   if (!fullscreen || !current) return <AnimatePresence />;
 

@@ -1,11 +1,17 @@
 // ---------------------------------------------------------------------------
-// Hidden YouTube IFrame Player engine.
+// YouTube IFrame Player engine.
 //
 // YouTube bot-blocks datacenter IPs that try to resolve raw stream URLs, but
 // the official IFrame Player API is designed to run in the user's browser and
-// is not subject to that check. This module owns one hidden iframe player and
+// is not subject to that check. This module owns one YouTube player and
 // exposes a small imperative API that mirrors the pieces of HTMLAudioElement
 // the player store relies on (play / pause / seek / volume / state events).
+//
+// The player element lives inside `hostEl`. Normally the host is parked off-
+// screen (audio-only mode); when the fullscreen player is open, the host is
+// APPENDED into the fullscreen video frame so the real video is visible —
+// no CSS positioning tricks, no re-parenting glitches. Playback continues
+// through the same player instance the whole time.
 // ---------------------------------------------------------------------------
 
 interface YtPlayerLike {
@@ -59,19 +65,14 @@ let currentRate = 1;
 let handlers: YtEngineHandlers = {};
 let player: YtPlayerLike | null = null;
 let hostEl: HTMLDivElement | null = null;
+let mountEl: HTMLDivElement | null = null;
 let lastState = -1;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 
-// Video presentation: when set, the (otherwise hidden) player iframe is
-// positioned over this rect provider's target so the fullscreen view can show
-// the actual video. Pure CSS — the iframe is never re-parented, so playback
-// never interrupts.
-let presentTarget: (() => DOMRect | null) | null = null;
-
 const OFFSCREEN_STYLE =
-  "position:fixed;left:-9999px;top:0;width:640px;height:360px;opacity:0;pointer-events:none;border:0;overflow:hidden;";
-const PRESENT_BASE_STYLE =
-  "position:fixed;z-index:80;opacity:1;pointer-events:auto;border:0;border-radius:16px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,0.6);";
+  "position:fixed;left:-9999px;top:0;width:640px;height:360px;opacity:0;pointer-events:none;border:0;overflow:hidden;z-index:-1;";
+const ONSCREEN_STYLE =
+  "position:relative;width:100%;height:100%;opacity:1;pointer-events:auto;border:0;overflow:hidden;";
 
 let apiPromise: Promise<void> | null = null;
 
@@ -120,17 +121,17 @@ async function ensurePlayer(): Promise<YtPlayerLike> {
   const YT = window.YT;
   if (!YT?.Player) throw new Error("YouTube IFrame API unavailable");
 
-  // IMPORTANT: YT.Player *replaces* the element you pass it with an iframe.
-  // So we pass an inner div and keep a stable wrapper (hostEl) in the DOM —
-  // presentation CSS targets the wrapper, and the iframe fills it.
+  // YT.Player REPLACES the element you pass it with an iframe. So we pass an
+  // inner div (mountEl) and keep a stable wrapper (hostEl) that we can move
+  // between the off-screen parking spot and the fullscreen video frame.
   const host = document.createElement("div");
-  // Off-screen but rendered — fully display:none players can refuse autoplay.
   host.style.cssText = OFFSCREEN_STYLE;
   const mount = document.createElement("div");
   mount.style.cssText = "width:100%;height:100%;";
   host.appendChild(mount);
   document.body.appendChild(host);
   hostEl = host;
+  mountEl = mount;
 
   player = await new Promise<YtPlayerLike>((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error("YT player init timed out")), 10_000);
@@ -181,16 +182,6 @@ async function ensurePlayer(): Promise<YtPlayerLike> {
   });
 
   startPolling();
-
-  // The mount element has been replaced by the iframe — make the iframe fill
-  // the wrapper so presentVideo() can size the wrapper freely.
-  const iframe = mount.querySelector("iframe") ?? (mount.nextElementSibling instanceof HTMLIFrameElement ? mount.nextElementSibling : null);
-  if (iframe) {
-    iframe.style.width = "100%";
-    iframe.style.height = "100%";
-    iframe.style.border = "0";
-  }
-
   return player;
 }
 
@@ -214,6 +205,14 @@ export async function play(
   }
   lastState = -1;
   p.loadVideoById(videoId, Math.max(0, opts.startSeconds ?? 0));
+  // A fresh load can reset the rate — re-apply once buffering settles.
+  setTimeout(() => {
+    try {
+      player?.setPlaybackRate(currentRate);
+    } catch {
+      /* gone */
+    }
+  }, 800);
 }
 
 export function resume(): void {
@@ -258,83 +257,51 @@ export function setMuted(muted: boolean): void {
   }
 }
 
-/** Playback speed 0.5–2. Applied to the current player and remembered. */
+/**
+ * Playback speed 0.5–2. Applied immediately and re-applied shortly after —
+ * YouTube resets the rate on fresh loads and sometimes on resume, so a single
+ * call is not enough.
+ */
 export function setRate(rate: number): void {
   currentRate = Math.min(2, Math.max(0.5, rate));
-  try {
-    // Apply now for the playing track...
-    player?.setPlaybackRate(currentRate);
-  } catch {
-    /* not ready yet */
-  }
-  try {
-    // ...and once more after the player finishes buffering, since a fresh
-    // loadVideoById can reset the rate back to 1 while it prepares.
-    player?.getDuration ?? null;
-    const p = player;
-    if (p) {
-      setTimeout(() => {
-        try {
-          p.setPlaybackRate(currentRate);
-        } catch {
-          /* gone */
-        }
-      }, 400);
+  const apply = () => {
+    try {
+      player?.setPlaybackRate(currentRate);
+    } catch {
+      /* not ready */
     }
-  } catch {
-    /* ignore */
-  }
+  };
+  apply();
+  setTimeout(apply, 300);
+  setTimeout(apply, 1000);
+}
+
+/**
+ * Move the player element INTO the given fullscreen container element so the
+ * actual YouTube video is visible. Playback continues through the same
+ * player — nothing is reloaded. Returns false when the engine isn't ready.
+ */
+export function presentVideo(container: HTMLElement): boolean {
+  if (!hostEl || !container) return false;
+  if (container.contains(hostEl)) return true;
+  hostEl.style.cssText = ONSCREEN_STYLE;
+  container.appendChild(hostEl);
+  return true;
+}
+
+/** Return the player to its off-screen parking spot (audio-only mode). */
+export function dismissVideo(): void {
+  if (!hostEl) return;
+  hostEl.style.cssText = OFFSCREEN_STYLE;
+  document.body.appendChild(hostEl);
+}
+
+/** The engine's player host element, so consumers can check containment. */
+export function getYtHost(): HTMLElement | null {
+  return hostEl;
 }
 
 /** YT error code → human message (100/101/150 = unusable video). */
 export function isFatalError(code: number): boolean {
   return code === 2 || code === 5 || code === 100 || code === 101 || code === 150;
-}
-
-// --- video presentation (fullscreen video mode) ------------------------------
-
-let rafId: number | null = null;
-
-function syncPresentation(): void {
-  if (rafId !== null) return;
-  rafId = requestAnimationFrame(() => {
-    rafId = null;
-    if (!hostEl) return;
-    if (!presentTarget) {
-      hostEl.style.cssText = OFFSCREEN_STYLE;
-      return;
-    }
-    const rect = presentTarget();
-    if (!rect) {
-      hostEl.style.cssText = OFFSCREEN_STYLE;
-      return;
-    }
-    hostEl.style.cssText =
-      PRESENT_BASE_STYLE +
-      `left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;`;
-  });
-}
-
-/**
- * Show the live YouTube video over the element described by `getRect` (its
- * bounding box). The iframe is moved with CSS only, so playback continues
- * uninterrupted. While presented, position is kept in sync on resize/scroll.
- */
-export function presentVideo(getRect: () => DOMRect | null): void {
-  presentTarget = getRect;
-  syncPresentation();
-  window.addEventListener("resize", syncPresentation);
-  window.addEventListener("scroll", syncPresentation, true);
-}
-
-/** Hide the video again — the player returns off-screen, still playing. */
-export function dismissVideo(): void {
-  presentTarget = null;
-  if (rafId !== null) {
-    cancelAnimationFrame(rafId);
-    rafId = null;
-  }
-  if (hostEl) hostEl.style.cssText = OFFSCREEN_STYLE;
-  window.removeEventListener("resize", syncPresentation);
-  window.removeEventListener("scroll", syncPresentation, true);
 }
