@@ -376,6 +376,13 @@ export function FullscreenPlayer() {
                 ref={videoFrameRef}
                 className="fade-rise relative aspect-video w-[min(72vh,640px)] max-w-full overflow-hidden rounded-2xl bg-black shadow-[0_30px_80px_rgba(0,0,0,0.6)] ring-1 ring-white/10"
               >
+                {/* Shield: absorbs clicks so YouTube's in-frame UI (title bar,
+                    watch-later, share, end-screen links) can't be triggered. */}
+                <div
+                  aria-hidden="true"
+                  className="absolute inset-0 z-[1]"
+                  style={{ pointerEvents: "auto", background: "transparent" }}
+                />
                 {/* cover art until the live iframe lands on top of it */}
                 <img
                   src={current.coverUrl}

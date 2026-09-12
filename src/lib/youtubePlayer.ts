@@ -145,6 +145,12 @@ async function ensurePlayer(): Promise<YtPlayerLike> {
           disablekb: 1,
           playsinline: 1,
           rel: 0,
+          // Strip YouTube's own UI: no branding, no annotations, no captions,
+          // no fullscreen button.
+          modestbranding: 1,
+          iv_load_policy: 3,
+          cc_load_policy: 0,
+          fs: 0,
         },
         events: {
           onReady: (e) => {
@@ -213,6 +219,23 @@ export async function play(
       /* gone */
     }
   }, 800);
+  suppressYtOverlays();
+}
+
+/**
+ * YouTube overlays (title bar, end-screen links, watch-later/share buttons)
+ * are rendered inside the iframe, but some sit in a same-origin shell we can
+ * style. This injects one suppression stylesheet, once per session.
+ */
+function suppressYtOverlays(): void {
+  const styleId = "ss-yt-overlay-suppression";
+  if (document.getElementById(styleId)) return;
+  const style = document.createElement("style");
+  style.id = styleId;
+  style.textContent = `
+    .ytp-pause-overlay, .ytp-ce-element, .ytp-show-tiles { display: none !important; }
+  `;
+  document.head.appendChild(style);
 }
 
 export function resume(): void {
