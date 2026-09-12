@@ -125,27 +125,6 @@ export function RemoteTrackRow({
       </div>
       </div>
 
-      <div className="flex items-center justify-end gap-2">
-        <button
-          type="button"
-          aria-label={isLiked ? "Remove from liked songs" : "Add to liked songs"}
-          onClick={(e) => {
-            e.stopPropagation();
-            likeThis();
-          }}
-          className={cn(
-            "shrink-0 rounded-full p-1.5 transition-colors",
-            isLiked
-              ? "text-[rgb(var(--tint))]"
-              : "text-muted-foreground/70 hover:bg-white/10 hover:text-foreground",
-          )}
-        >
-          <Heart className={cn("size-4", isLiked && "fill-current")} />
-        </button>
-        <span className="shrink-0 text-sm tabular-nums text-muted-foreground/70">
-          {formatTime(item.duration)}
-        </span>
-      </div>
     </div>
   );
 }
