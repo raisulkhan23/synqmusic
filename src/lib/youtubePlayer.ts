@@ -246,9 +246,27 @@ export function setMuted(muted: boolean): void {
 export function setRate(rate: number): void {
   currentRate = Math.min(2, Math.max(0.5, rate));
   try {
+    // Apply now for the playing track...
     player?.setPlaybackRate(currentRate);
   } catch {
     /* not ready yet */
+  }
+  try {
+    // ...and once more after the player finishes buffering, since a fresh
+    // loadVideoById can reset the rate back to 1 while it prepares.
+    player?.getDuration ?? null;
+    const p = player;
+    if (p) {
+      setTimeout(() => {
+        try {
+          p.setPlaybackRate(currentRate);
+        } catch {
+          /* gone */
+        }
+      }, 400);
+    }
+  } catch {
+    /* ignore */
   }
 }
 

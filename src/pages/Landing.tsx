@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import { Link } from "react-router";
 import { Logo } from "@/components/brand/Logo";
-import { ALBUMS, artistById } from "@/lib/catalog";
+import { ALBUMS } from "@/lib/catalog";
 import { coverArt } from "@/lib/covers";
 import {
   Activity,
@@ -26,7 +26,6 @@ const fadeUp = {
 };
 
 export default function Landing() {
-  const featuredAlbums = ALBUMS.slice(0, 6);
 
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-background text-foreground">
@@ -43,9 +42,6 @@ export default function Landing() {
         <nav className="hidden items-center gap-7 text-sm font-medium text-muted-foreground md:flex">
           <a href="#features" className="transition-colors hover:text-foreground">
             Features
-          </a>
-          <a href="#catalog" className="transition-colors hover:text-foreground">
-            Catalog
           </a>
           <a href="#visualizer" className="transition-colors hover:text-foreground">
             Visualizer
@@ -129,8 +125,6 @@ export default function Landing() {
             className="mt-10 flex flex-wrap gap-x-8 gap-y-3 text-sm text-muted-foreground"
           >
             {[
-              ["24", "tracks"],
-              ["6", "albums"],
               ["0", "ads"],
               ["320k", "bitrate"],
             ].map(([n, label]) => (
@@ -300,56 +294,6 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* catalog preview */}
-      <section id="catalog" className="relative z-10 mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">
-        <motion.div {...fadeUp} className="mx-auto max-w-2xl text-center">
-          <h2 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">
-            The Soundscape catalog
-          </h2>
-          <p className="mt-3 text-muted-foreground">
-            Six albums, six artists, twenty-four tracks — each with original artwork
-            and a live color tint that follows the music.
-          </p>
-        </motion.div>
-
-        <div className="mt-12 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-          {featuredAlbums.map((album, i) => (
-            <motion.div
-              key={album.id}
-              {...fadeUp}
-              transition={{ duration: 0.5, delay: i * 0.06 }}
-              className="group cursor-pointer"
-            >
-              <div className="relative aspect-square overflow-hidden rounded-xl ring-1 ring-white/10">
-                <img
-                  src={coverArt(album)}
-                  alt={`${album.title} cover art`}
-                  className="size-full object-cover transition-transform duration-500 group-hover:scale-110"
-                />
-                <div className="absolute inset-0 bg-black/35 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-                <span className="absolute right-2 bottom-2 flex size-9 translate-y-2 items-center justify-center rounded-full bg-brand text-black opacity-0 shadow-lg transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
-                  <Play className="ml-0.5 size-4 fill-current" />
-                </span>
-              </div>
-              <p className="mt-2 truncate text-sm font-semibold">{album.title}</p>
-              <p className="truncate text-xs text-muted-foreground">
-                {artistById(album.artistId).name}
-              </p>
-            </motion.div>
-          ))}
-        </div>
-
-        <motion.div {...fadeUp} className="mt-10 text-center">
-          <Link
-            to="/auth?returnTo=/home"
-            className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/[0.04] px-6 py-3 text-sm font-semibold transition-colors hover:bg-white/[0.08]"
-          >
-            <AudioLines className="size-4 text-brand" />
-            Sign in to listen
-          </Link>
-        </motion.div>
-      </section>
-
       {/* CTA band */}
       <section id="visualizer" className="relative z-10 mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">
         <motion.div
@@ -389,14 +333,11 @@ export default function Landing() {
         <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-6 px-4 py-10 sm:flex-row sm:px-6">
           <Logo to="/" />
           <p className="text-xs text-muted-foreground">
-            © 2026 Soundscape · Demo catalog — audio courtesy of SoundHelix
+            © 2026 Soundscape · Currently in beta
           </p>
           <nav className="flex items-center gap-5 text-xs font-medium text-muted-foreground">
             <a href="#features" className="transition-colors hover:text-foreground">
               Features
-            </a>
-            <a href="#catalog" className="transition-colors hover:text-foreground">
-              Catalog
             </a>
             <a href="#visualizer" className="transition-colors hover:text-foreground">
               Visualizer

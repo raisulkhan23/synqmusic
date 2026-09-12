@@ -608,6 +608,13 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     ytEngine.setRate(r);
     localStorage.setItem("ss.rate", String(r));
     set({ rate: r });
+    // Nudge the seek bar / HUD to re-sync: the YouTube engine reports time in
+    // wall-clock seconds, which drifts from the seek bar's duration-based
+    // progress when the rate changes mid-play.
+    const s = get();
+    if (s.current?.youtubeId) {
+      usePlayerStore.setState({ currentTime: s.currentTime });
+    }
   };
 
   const setSleepTimer = (mode: number | "end" | null) => {

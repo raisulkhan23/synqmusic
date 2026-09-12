@@ -31,6 +31,20 @@ import { cn } from "@/lib/utils";
 
 const RATES = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
+/**
+ * YouTube titles/channel names don't match lyrics databases directly — strip
+ * the noise ("(Official Video)", "- Topic", "VEVO", ...) before lookup.
+ */
+function cleanLyricsQuery(raw: string): string {
+  return raw
+    .replace(/\s*[-–]\s*(Topic|VEVO|Official)\s*$/i, "")
+    .replace(/\s*\([^)]*(official|video|audio|lyrics|hd|hq|mv|visualizer|remaster|lyric)[^)]*\)/gi, "")
+    .replace(/\s*\[[^\]]*(official|video|audio|lyrics|hd|hq|mv|visualizer|remaster|lyric)[^\]]*\]/gi, "")
+    .replace(/\s*【[^】]*】/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 // ---------------------------------------------------------------------------
 
 /** Synced-lyrics panel with auto-scroll + click-to-seek. */
@@ -53,9 +67,9 @@ function LyricsPanel({ onClose }: { onClose: () => void }) {
     setLines(null);
     setLoading(true);
     fetchLyrics({
-      title: current.title,
-      artist: current.artistName,
-      album: current.albumName,
+      title: cleanLyricsQuery(current.title),
+      artist: cleanLyricsQuery(current.artistName),
+      album: current.albumName ? cleanLyricsQuery(current.albumName) : undefined,
       duration: current.duration,
     })
       .then((res) => {

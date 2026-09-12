@@ -147,6 +147,10 @@ export function Sidebar() {
         )}
       </div>
 
+      <p className="px-5 pb-2 text-[10px] tracking-wide text-muted-foreground/50">
+        Currently in beta
+      </p>
+
       <div className="flex items-center gap-2.5 border-t border-white/[0.06] px-4 py-3">
         <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[rgb(var(--tint))] text-sm font-bold text-black">
           {initials}
