@@ -1,23 +1,69 @@
 import { useNavigate } from "react-router";
+import { RemoteTrackRow } from "@/components/tracks/RemoteTrackRow";
 import { PlayHeaderButton } from "@/components/tracks/PlayHeaderButton";
 import { TrackRow } from "@/components/tracks/TrackRow";
+import { api } from "@/convex/_generated/api";
 import { trackById } from "@/lib/catalog";
 import { formatTime } from "@/lib/format";
+import { toPlayableYoutube } from "@/lib/playable";
+import type { YtItem } from "@/lib/youtube";
+import { toast } from "sonner";
 import { usePlayerStore } from "@/store/player";
+import { useAction, useQuery } from "convex/react";
 import { Heart } from "lucide-react";
+import { useState } from "react";
 
 export default function Liked() {
   const navigate = useNavigate();
   const liked = usePlayerStore((s) => s.liked);
   const likedLoaded = usePlayerStore((s) => s.likedLoaded);
   const toggleLike = usePlayerStore((s) => s.toggleLike);
+  const playTrack = usePlayerStore((s) => s.playTrack);
+  const searchYt = useAction(api.youtube.searchYoutube);
+
+  const [resolvingRemoteId, setResolvingRemoteId] = useState<string | null>(null);
+  const remoteQuery = useQuery(api.likes.myLikedRemote);
+  const remoteLikes = remoteQuery ?? [];
 
   const likedTracks = Object.entries(liked)
     .sort((a, b) => b[1] - a[1])
     .map(([id]) => trackById(id))
-    .filter((t): t is NonNullable<typeof t> => t !== undefined);
+    .filter((t): t is NonNullable<typeof t> => t !== undefined)
+    .filter((t) => remoteLikes.every((r) => r.trackId !== t.id));
 
-  const total = likedTracks.reduce((sum, t) => sum + t.duration, 0);
+  const totalCount = likedTracks.length + remoteLikes.length;
+  const totalSeconds =
+    likedTracks.reduce((sum, t) => sum + t.duration, 0) +
+    remoteLikes.reduce((sum, r) => sum + r.duration, 0);
+
+  const playRemoteLike = (row: (typeof remoteLikes)[number]) => {
+    if (resolvingRemoteId) return;
+    setResolvingRemoteId(row.trackId);
+    searchYt({ query: `${row.title} ${row.artistName.split(",")[0]?.trim() ?? row.artistName}` })
+      .then(({ items }) => {
+        const best = items[0];
+        if (!best) {
+          toast.error(`Couldn't find "${row.title}" on YouTube`);
+          return;
+        }
+        const item: YtItem = {
+          id: row.trackId,
+          title: row.title,
+          artist: row.artistName,
+          thumbnail: row.coverUrl,
+          duration: row.duration,
+        };
+        const playable = {
+          ...toPlayableYoutube(item, `https://youtu.be/${best.id}`, items.slice(1)),
+          youtubeId: best.id,
+        };
+        playTrack(playable);
+      })
+      .catch(() => toast.error("Playback failed — try again in a moment"))
+      .finally(() => setResolvingRemoteId(null));
+  };
+
+  const total = totalSeconds;
 
   return (
     <div className="flex flex-col gap-6">
@@ -38,8 +84,8 @@ export default function Liked() {
             </h1>
             <p className="mt-1.5 text-sm text-muted-foreground">
               {likedLoaded
-                ? likedTracks.length > 0
-                  ? `${likedTracks.length} ${likedTracks.length === 1 ? "song" : "songs"} · ${formatTime(total)}`
+              ? totalCount > 0
+                ? `${totalCount} ${totalCount === 1 ? "song" : "songs"} · ${formatTime(total)}`
                   : "Nothing here yet"
                 : "Loading…"}
             </p>
@@ -47,18 +93,34 @@ export default function Liked() {
         </div>
       </div>
 
-      {likedTracks.length > 0 ? (
+      {totalCount > 0 ? (
         <>
           <div className="flex items-center gap-3 px-2">
             <PlayHeaderButton list={likedTracks} />
           </div>
           <div className="flex flex-col gap-0.5">
+            {remoteLikes.map((row, i) => (
+              <RemoteTrackRow
+                key={row.trackId}
+                item={{
+                  id: row.trackId,
+                  title: row.title,
+                  artist: row.artistName,
+                  thumbnail: row.coverUrl,
+                  duration: row.duration,
+                }}
+                index={i + 1}
+                resolving={resolvingRemoteId === row.trackId}
+                onPlay={() => playRemoteLike(row)}
+                source={row.source === "spotify" ? "spotify" : "youtube"}
+              />
+            ))}
             {likedTracks.map((track, i) => (
               <TrackRow
                 key={track.id}
                 track={track}
                 list={likedTracks}
-                index={i + 1}
+                index={remoteLikes.length + i + 1}
                 onRemove={() => toggleLike(track.id)}
               />
             ))}

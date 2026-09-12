@@ -10,7 +10,7 @@ import { api } from "@/convex/_generated/api";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { Heart, House, LibraryBig, Search } from "lucide-react";
-import { usePlayerStore } from "@/store/player";
+import { usePlayerStore, type RemoteLikeSnapshot } from "@/store/player";
 
 const MOBILE_NAV = [
   { to: "/home", label: "Home", icon: House },
@@ -47,8 +47,26 @@ export function AppShell() {
   }, [likedQuery, setLiked]);
 
   // Wire the store's optimistic toggle to the Convex mutation.
+  // Remote tracks (YouTube/Spotify) aren't in the catalog, so we include a
+  // snapshot of the currently-playing track so they can be rendered from
+  // Liked Songs later.
   useEffect(() => {
-    setLikeMutation((trackId: string) => toggleLikeMutation({ trackId }));
+    setLikeMutation((trackId: string, remote?: RemoteLikeSnapshot) => {
+      const current = usePlayerStore.getState().current;
+      const snapshot =
+        remote ??
+        (current && current.id === trackId && current.source !== "catalog"
+          ? {
+              title: current.title,
+              artistName: current.artistName,
+              coverUrl: current.coverUrl,
+              duration: current.duration,
+              youtubeId: current.youtubeId,
+              source: current.source,
+            }
+          : undefined);
+      return toggleLikeMutation({ trackId, remote: snapshot });
+    });
   }, [toggleLikeMutation, setLikeMutation]);
 
   // Fire-and-forget play history recording (recently / most played).

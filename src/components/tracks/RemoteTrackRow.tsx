@@ -1,7 +1,7 @@
 import type { YtItem } from "@/lib/youtube";
 import { formatTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { ExternalLink, Loader2, Pause, Play } from "lucide-react";
+import { ExternalLink, Heart, Loader2, Pause, Play } from "lucide-react";
 import { YoutubeIcon } from "@/components/ui/youtube";
 import { usePlayerStore } from "@/store/player";
 
@@ -21,7 +21,20 @@ export function RemoteTrackRow({
 }) {
   const currentId = usePlayerStore((s) => s.current?.id);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
+  const liked = usePlayerStore((s) => s.liked);
+  const toggleLike = usePlayerStore((s) => s.toggleLike);
   const isCurrent = currentId === item.id;
+  const isLiked = liked[item.id] !== undefined;
+
+  const likeThis = () =>
+    toggleLike(item.id, {
+      title: item.title,
+      artistName: item.artist,
+      coverUrl: item.thumbnail,
+      duration: item.duration,
+      youtubeId: item.id,
+      source,
+    });
 
   return (
     <div
@@ -102,6 +115,22 @@ export function RemoteTrackRow({
       </span>
 
       <div className="flex items-center justify-end gap-1">
+        <button
+          type="button"
+          aria-label={isLiked ? "Remove from liked songs" : "Add to liked songs"}
+          onClick={(e) => {
+            e.stopPropagation();
+            likeThis();
+          }}
+          className={cn(
+            "rounded-full p-1.5 transition-colors",
+            isLiked
+              ? "text-[rgb(var(--tint))]"
+              : "text-muted-foreground/70 hover:bg-white/10 hover:text-foreground",
+          )}
+        >
+          <Heart className={cn("size-4", isLiked && "fill-current")} />
+        </button>
         <span className="text-sm tabular-nums text-muted-foreground/70">
           {formatTime(item.duration)}
         </span>

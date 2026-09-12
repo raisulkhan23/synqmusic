@@ -9,8 +9,17 @@ export type RepeatMode = "off" | "all" | "one";
 
 let likeMutation: LikeMutation | null = null;
 
+export interface RemoteLikeSnapshot {
+  title: string;
+  artistName: string;
+  coverUrl: string;
+  duration: number;
+  youtubeId?: string;
+  source: string;
+}
+
 export interface LikeMutation {
-  (trackId: string): Promise<boolean>;
+  (trackId: string, remote?: RemoteLikeSnapshot): Promise<boolean>;
 }
 
 /** Fire-and-forget recorder for catalog plays (wired to Convex in AppShell). */
@@ -92,7 +101,7 @@ interface PlayerStore {
 
   setLiked: (liked: Record<string, number>) => void;
   setLikeMutation: (fn: LikeMutation | null) => void;
-  toggleLike: (trackId: string) => void;
+  toggleLike: (trackId: string, remote?: RemoteLikeSnapshot) => void;
 }
 
 // --- persistence helpers ----------------------------------------------------
@@ -640,7 +649,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     likeMutation = fn;
   };
 
-  const toggleLike = (trackId: string) => {
+  const toggleLike = (trackId: string, remote?: RemoteLikeSnapshot) => {
     const s = get();
     const wasLiked = s.liked[trackId] !== undefined;
     const createdAt = Date.now();
@@ -654,7 +663,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     });
 
     if (!likeMutation) return;
-    likeMutation(trackId)
+    likeMutation(trackId, remote)
       .then((nowLiked) => {
         // reconcile with the server's answer
         set((state) => {
