@@ -47,58 +47,60 @@ export function RemoteTrackRow({
         }
       }}
       className={cn(
-        "group relative grid cursor-pointer grid-cols-[28px_minmax(0,1fr)] items-center gap-3 rounded-xl px-3 py-1.5 transition-colors hover:bg-white/[0.05]",
+        "group relative flex cursor-pointer flex-col gap-2 rounded-xl px-3 py-1.5 transition-colors hover:bg-white/[0.05]",
         isCurrent && "bg-white/[0.04]",
       )}
     >
-      <div className="relative flex items-center justify-center">
-        {resolving ? (
-          <Loader2 className="size-4 animate-spin text-[rgb(var(--tint))]" />
-        ) : (
-          <span className="text-sm tabular-nums text-muted-foreground/60">
-            {index}
-          </span>
-        )}
-        {!resolving && (
-          <button
-            type="button"
-            aria-label={`Play ${item.title}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              onPlay(item);
-            }}
-            className="absolute inset-0 hidden items-center justify-center group-hover:flex"
-          >
-            {isCurrent && isPlaying ? (
-              <Pause className="size-4 fill-current text-foreground" />
-            ) : (
-              <Play className="ml-0.5 size-4 fill-current text-foreground" />
-            )}
-          </button>
-        )}
-      </div>
-
-      <div className="flex min-w-0 flex-1 items-center gap-3">
-        <div className="relative size-10 shrink-0 overflow-hidden rounded-md ring-1 ring-white/10">
-          <img
-            src={item.thumbnail}
-            alt=""
-            className="size-full object-cover"
-            loading="lazy"
-          />
+      <div className="flex items-center gap-3">
+        <div className="relative flex items-center justify-center">
+          {resolving ? (
+            <Loader2 className="size-4 animate-spin text-[rgb(var(--tint))]" />
+          ) : (
+            <span className="text-sm tabular-nums text-muted-foreground/60">
+              {index}
+            </span>
+          )}
+          {!resolving && (
+            <button
+              type="button"
+              aria-label={`Play ${item.title}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onPlay(item);
+              }}
+              className="absolute inset-0 hidden items-center justify-center group-hover:flex"
+            >
+              {isCurrent && isPlaying ? (
+                <Pause className="size-4 fill-current text-foreground" />
+              ) : (
+                <Play className="ml-0.5 size-4 fill-current text-foreground" />
+              )}
+            </button>
+          )}
         </div>
-        <div className="min-w-0">
-          <p
-            className={cn(
-              "truncate text-sm font-medium",
-              isCurrent && "text-[rgb(var(--tint))]",
-            )}
-          >
-            {item.title}
-          </p>
-          <p className="truncate text-xs text-muted-foreground">
-            {item.artist}
-          </p>
+
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="relative size-10 shrink-0 overflow-hidden rounded-md ring-1 ring-white/10">
+            <img
+              src={item.thumbnail}
+              alt=""
+              className="size-full object-cover"
+              loading="lazy"
+            />
+          </div>
+          <div className="min-w-0">
+            <p
+              className={cn(
+                "truncate text-sm font-medium",
+                isCurrent && "text-[rgb(var(--tint))]",
+              )}
+            >
+              {item.title}
+            </p>
+            <p className="truncate text-xs text-muted-foreground">
+              {item.artist}
+            </p>
+          </div>
         </div>
       </div>
 
