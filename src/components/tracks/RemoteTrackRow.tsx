@@ -48,7 +48,7 @@ export function RemoteTrackRow({
         }
       }}
       className={cn(
-        "group grid cursor-pointer grid-cols-[28px_minmax(0,1fr)_auto_52px] items-center gap-3 rounded-xl px-3 py-1.5 transition-colors hover:bg-white/[0.05]",
+        "group relative grid cursor-pointer grid-cols-[28px_minmax(0,1fr)] items-center gap-3 rounded-xl px-3 py-1.5 transition-colors hover:bg-white/[0.05]",
         isCurrent && "bg-white/[0.04]",
       )}
     >
@@ -79,7 +79,7 @@ export function RemoteTrackRow({
         )}
       </div>
 
-      <div className="flex min-w-0 items-center gap-3">
+      <div className="flex min-w-0 flex-1 items-center gap-3">
         <div className="relative size-10 shrink-0 overflow-hidden rounded-md ring-1 ring-white/10">
           <img
             src={item.thumbnail}
@@ -103,18 +103,17 @@ export function RemoteTrackRow({
         </div>
       </div>
 
-      <span
-        className={cn(
-          "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide uppercase",
-          source === "spotify"
-            ? "bg-[#1DB954]/15 text-[#1ED760]"
-            : "bg-rose-500/12 text-rose-200",
-        )}
-      >
-        {source === "spotify" ? "Spotify" : "YouTube"}
-      </span>
-
-      <div className="flex items-center justify-end gap-1">
+      <div className="flex items-center gap-1">
+        <span
+          className={cn(
+            "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide uppercase",
+            source === "spotify"
+              ? "bg-[#1DB954]/15 text-[#1ED760]"
+              : "bg-rose-500/12 text-rose-200",
+          )}
+        >
+          {source === "spotify" ? "Spotify" : "YouTube"}
+        </span>
         <button
           type="button"
           aria-label={isLiked ? "Remove from liked songs" : "Add to liked songs"}
@@ -123,7 +122,7 @@ export function RemoteTrackRow({
             likeThis();
           }}
           className={cn(
-            "rounded-full p-1.5 transition-colors",
+            "shrink-0 rounded-full p-1.5 transition-colors",
             isLiked
               ? "text-[rgb(var(--tint))]"
               : "text-muted-foreground/70 hover:bg-white/10 hover:text-foreground",
@@ -131,7 +130,7 @@ export function RemoteTrackRow({
         >
           <Heart className={cn("size-4", isLiked && "fill-current")} />
         </button>
-        <span className="text-sm tabular-nums text-muted-foreground/70">
+        <span className="shrink-0 text-sm tabular-nums text-muted-foreground/70">
           {formatTime(item.duration)}
         </span>
       </div>
