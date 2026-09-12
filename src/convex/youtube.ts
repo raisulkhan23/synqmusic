@@ -185,35 +185,146 @@ function extractSearchResults(data: Record<string, unknown>): YtItem[] {
   return out;
 }
 
+// ---------------------------------------------------------------------------
+// Music-only search (YouTube Music).
+// Uses the YouTube Music InnerTube endpoint with the WEB_REMIX client, which
+// exclusively serves music content — no vlogs, podcasts, uploads, etc.
+// ---------------------------------------------------------------------------
+
+const MUSIC_CLIENT: InnerTubeClient = {
+  id: "67",
+  clientName: "WEB_REMIX",
+  clientVersion: "1.20240801.01.00",
+  userAgent:
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
+};
+
+const MUSIC_API = "https://music.youtube.com/youtubei/v1/";
+
+async function musicSearch(query: string): Promise<YtItem[]> {
+  const res = await fetch(`${MUSIC_API}search?prettyPrint=false`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "User-Agent": MUSIC_CLIENT.userAgent,
+      "X-Goog-Api-Key": INNERTUBE_KEY,
+      "X-Youtube-Client-Name": MUSIC_CLIENT.id,
+      "X-Youtube-Client-Version": MUSIC_CLIENT.clientVersion,
+      Origin: "https://music.youtube.com",
+      "X-Origin": "https://music.youtube.com",
+      Referer: "https://music.youtube.com/",
+    },
+    body: JSON.stringify({
+      context: {
+        client: {
+          hl: "en",
+          gl: "US",
+          clientName: MUSIC_CLIENT.clientName,
+          clientVersion: MUSIC_CLIENT.clientVersion,
+        },
+      },
+      query,
+      // "Songs" filter — only actual music tracks.
+      params: "Eg-KAQwIARAAGAAgACgAMABqChAEEAMQBBApEAU%3D",
+    }),
+  });
+  if (!res.ok) throw new ConvexError(`YouTube Music API returned ${res.status}`);
+  const data = (await res.json()) as Record<string, unknown>;
+  return extractMusicResults(data);
+}
+
 /**
- * Search YouTube for a track. Returns up to 10 video results with enough
- * metadata to render a premium result list.
+ * Heuristics that reject anything that is not a real music track:
+ * - duration must be between 30s and 15 min (filters streams, mixes, livesets)
+ * - title/owner must not look like a podcast, interview, mix, etc.
+ */
+const NON_MUSIC_RE =
+  /\b(podcast|episode|interview|full album|mix(?:ed)? by|megamix|dj set|live set|1 hour|10 hours|hours of|asmr|reaction|tutorial|karaoke|cover\s*\?*)\b/i;
+
+function isMusicTrack(item: YtItem): boolean {
+  if (item.duration > 0 && (item.duration < 30 || item.duration > 900)) return false;
+  const hay = `${item.title} ${item.artist}`;
+  return !NON_MUSIC_RE.test(hay);
+}
+
+function extractMusicResults(data: Record<string, unknown>): YtItem[] {
+  const out: YtItem[] = [];
+  const sections = get(data, ["contents", "tabbedSearchResultsRenderer", "tabs", "0", "tabRenderer", "content", "sectionListRenderer", "contents"]);
+  const flat = Array.isArray(sections)
+    ? sections
+    : get(data, ["contents", "sectionListRenderer", "contents"]);
+  if (!Array.isArray(flat)) return out;
+
+  for (const section of flat) {
+    const items = get(section, ["musicShelfRenderer", "contents"]);
+    if (!Array.isArray(items)) continue;
+    for (const item of items) {
+      const renderer = get(item, ["musicResponsiveListItemRenderer"]) as Record<string, unknown> | undefined;
+      if (!renderer) continue;
+
+      // Only real, playable songs (videoId + playlistItemData implies a track).
+      const videoId = get(renderer, ["playlistItemData", "videoId"]) as string | undefined;
+      if (!videoId) continue;
+
+      const flex = get(renderer, ["flexColumns"]);
+      if (!Array.isArray(flex)) continue;
+      const textOf = (col: unknown) =>
+        (get(col, ["musicResponsiveListItemFlexColumnRenderer", "text", "runs", "0", "text"]) as string | undefined) ?? "";
+      const title = textOf(flex[0]) || "Untitled";
+      // Column 1 packs artist + album + duration as separate runs, e.g.
+      // ["Artist", " • ", "Album", " • ", "2:21"].
+      const runs = (get(flex[1], ["musicResponsiveListItemFlexColumnRenderer", "text", "runs"]) as Array<{ text?: string }> | undefined) ?? [];
+      const runTexts = runs.map((r) => r.text ?? "");
+      const artist = runTexts[0] || "Unknown artist";
+      const durationMatch = [...runTexts]
+        .reverse()
+        .find((t) => /^\d{1,2}:\d{2}(:\d{2})?$/.test(t.trim()));
+      const durationRaw = durationMatch ?? textOf(flex[2]) ?? "";
+
+      const thumbs = get(renderer, ["thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails"]);
+      const thumbnail = Array.isArray(thumbs)
+        ? ((thumbs[thumbs.length - 1] as { url?: string })?.url ?? "")
+        : "";
+
+      const entry: YtItem = {
+        id: videoId,
+        title,
+        artist,
+        duration: parseLength(durationRaw),
+        thumbnail,
+      };
+      if (isMusicTrack(entry)) out.push(entry);
+      if (out.length >= 10) return out;
+    }
+  }
+  return out;
+}
+
+/**
+ * Search YouTube for music. Uses the YouTube Music endpoint so ONLY music
+ * tracks are ever returned — no podcasts, vlogs, mixes, or other videos.
  */
 export const searchYoutube = action({
   args: { query: v.string() },
   handler: async (_ctx, { query }): Promise<{ items: YtItem[] }> => {
     if (!query.trim()) return { items: [] };
 
-    // Preferred: WEB client with the "video only" search filter (protobuf param).
+    // Preferred: YouTube Music "Songs" search — guaranteed music-only.
     try {
-      const data = await innerTube("search", WEB, {
-        context: clientContext(WEB),
-        query,
-        params: "EgIQAQ%3D%3D",
-      });
-      const items = extractSearchResults(data);
+      const items = await musicSearch(query);
       if (items.length > 0) return { items };
     } catch {
-      // fall through to the unfiltered retry below
+      // fall through to the video-filter retry below
     }
 
-    // Fallback: some deployments reject the filter param — retry unfiltered.
-    // The parser only keeps videoRenderer entries, so results stay clean.
+    // Fallback: regular YouTube search with the "video only" filter, then
+    // run the music heuristics on the results so nothing non-musical leaks in.
     const data = await innerTube("search", WEB, {
       context: clientContext(WEB),
       query,
+      params: "EgIQAQ%3D%3D",
     });
-    return { items: extractSearchResults(data) };
+    return { items: extractSearchResults(data).filter(isMusicTrack) };
   },
 });
 
