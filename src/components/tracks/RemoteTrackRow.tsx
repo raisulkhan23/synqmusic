@@ -1,8 +1,7 @@
 import type { YtItem } from "@/lib/youtube";
 import { formatTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { ExternalLink, Heart, Loader2, Pause, Play } from "lucide-react";
-import { YoutubeIcon } from "@/components/ui/youtube";
+import { Heart, Loader2, Pause, Play } from "lucide-react";
 import { usePlayerStore } from "@/store/player";
 
 export function RemoteTrackRow({
@@ -103,17 +102,7 @@ export function RemoteTrackRow({
         </div>
       </div>
 
-      <div className="flex items-center gap-1">
-        <span
-          className={cn(
-            "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide uppercase",
-            source === "spotify"
-              ? "bg-[#1DB954]/15 text-[#1ED760]"
-              : "bg-rose-500/12 text-rose-200",
-          )}
-        >
-          {source === "spotify" ? "Spotify" : "YouTube"}
-        </span>
+      <div className="flex items-center justify-end gap-2">
         <button
           type="button"
           aria-label={isLiked ? "Remove from liked songs" : "Add to liked songs"}
