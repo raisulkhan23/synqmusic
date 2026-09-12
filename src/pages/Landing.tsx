@@ -307,8 +307,8 @@ export default function Landing() {
               Ready to listen?
             </h2>
             <p className="mx-auto mt-3 max-w-md text-muted-foreground">
-              Sign in with your email or jump straight in as a guest. Either way,
-              the music starts immediately.
+              Sign in with your email or a quick OAuth login, and the music
+              starts immediately.
             </p>
             <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
               <Link
@@ -316,12 +316,6 @@ export default function Landing() {
                 className="rounded-full bg-brand px-7 py-3 text-sm font-semibold text-brand-foreground shadow-[0_10px_36px_rgb(203_244_143/0.4)] transition-transform hover:scale-105"
               >
                 Start listening
-              </Link>
-              <Link
-                to="/auth"
-                className="rounded-full border border-white/12 bg-white/[0.04] px-7 py-3 text-sm font-semibold transition-colors hover:bg-white/[0.08]"
-              >
-                Continue as guest
               </Link>
             </div>
           </div>
