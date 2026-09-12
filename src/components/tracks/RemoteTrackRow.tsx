@@ -79,29 +79,50 @@ export function RemoteTrackRow({
           )}
         </div>
 
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="relative size-10 shrink-0 overflow-hidden rounded-md ring-1 ring-white/10">
-            <img
-              src={item.thumbnail}
-              alt=""
-              className="size-full object-cover"
-              loading="lazy"
-            />
-          </div>
-          <div className="min-w-0">
-            <p
-              className={cn(
-                "truncate text-sm font-medium",
-                isCurrent && "text-[rgb(var(--tint))]",
-              )}
-            >
-              {item.title}
-            </p>
-            <p className="truncate text-xs text-muted-foreground">
-              {item.artist}
-            </p>
-          </div>
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="relative size-10 shrink-0 overflow-hidden rounded-md ring-1 ring-white/10">
+          <img
+            src={item.thumbnail}
+            alt=""
+            className="size-full object-cover"
+            loading="lazy"
+          />
         </div>
+        <div className="min-w-0 flex-1">
+          <p
+            className={cn(
+              "truncate text-sm font-medium",
+              isCurrent && "text-[rgb(var(--tint))]",
+            )}
+          >
+            {item.title}
+          </p>
+          <p className="truncate text-xs text-muted-foreground">
+            {item.artist}
+          </p>
+        </div>
+        <div className="shrink-0 flex items-center gap-2">
+          <button
+            type="button"
+            aria-label={isLiked ? "Remove from liked songs" : "Add to liked songs"}
+            onClick={(e) => {
+              e.stopPropagation();
+              likeThis();
+            }}
+            className={cn(
+              "rounded-full p-1.5 transition-colors",
+              isLiked
+                ? "text-[rgb(var(--tint))]"
+                : "text-muted-foreground/70 hover:bg-white/10 hover:text-foreground",
+            )}
+          >
+            <Heart className={cn("size-4", isLiked && "fill-current")} />
+          </button>
+          <span className="text-sm tabular-nums text-muted-foreground/70">
+            {formatTime(item.duration)}
+          </span>
+        </div>
+      </div>
       </div>
 
       <div className="flex items-center justify-end gap-2">
