@@ -150,19 +150,6 @@ export function TrackRow({ track, list, index, showAlbum = true, onRemove }: Tra
           track={track}
           className="hidden md:inline-flex md:opacity-0 md:group-hover:opacity-100"
         />
-        {onRemove && (
-          <button
-            type="button"
-            aria-label={`Remove ${track.title}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              onRemove();
-            }}
-            className="rounded-full p-1.5 text-muted-foreground/70 transition-colors hover:bg-white/10 hover:text-foreground"
-          >
-            <X className="size-4" />
-          </button>
-        )}
       </div>
     </div>
     </TrackContextMenu>

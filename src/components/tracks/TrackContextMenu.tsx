@@ -101,8 +101,7 @@ export function TrackContextMenu({
           <ListEnd className="size-4" />
           Add to queue
         </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
+        <DropdownMenuSeparator />        <DropdownMenuItem
           className="gap-2"
           onSelect={() => toggleLike(track.id)}
         >
@@ -111,12 +110,20 @@ export function TrackContextMenu({
           />
           {isLiked ? "Remove from Liked" : "Add to Liked"}
         </DropdownMenuItem>
+        <DropdownMenuSeparator />
         <DropdownMenuItem
           className="gap-2"
           onSelect={() => navigate(`/album/${album.id}`)}
         >
           <ExternalLink className="size-4" />
           Go to album
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          className="gap-2"
+          onSelect={() => navigate(`/artist/${artist.id}`)}
+        >
+          <Link2 className="size-4" />
+          Go to artist
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem className="gap-2" onSelect={() => copyLink()}>
@@ -131,3 +138,4 @@ export function TrackContextMenu({
     </DropdownMenu>
   );
 }
+
