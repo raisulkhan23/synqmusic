@@ -134,49 +134,7 @@ export function RemoteTrackRow({
         <span className="text-sm tabular-nums text-muted-foreground/70">
           {formatTime(item.duration)}
         </span>
-        <a
-          href={
-            source === "spotify"
-              ? `https://open.spotify.com/track/${item.id}`
-              : `https://youtu.be/${item.id}`
-          }
-          target="_blank"
-          rel="noreferrer"
-          aria-label={source === "spotify" ? "Open on Spotify" : "Open on YouTube"}
-          onClick={(e) => e.stopPropagation()}
-          className="rounded-full p-1.5 text-muted-foreground/70 transition-colors hover:bg-white/10 hover:text-foreground"
-        >
-          <ExternalLink className="size-3.5" />
-        </a>
       </div>
     </div>
-  );
-}
-
-/** Tap-to-open chip shown beneath a YouTube result when interactive playback
- * isn't available in this runtime so the user still has a direct path to the
- * song on YouTube.
- */
-export function RemoteYtPlayChip({
-  item,
-  className,
-}: {
-  item: YtItem;
-  className?: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={() => {
-        window.open("https://youtu.be/" + item.id, "_blank", "noopener");
-      }}
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-full bg-rose-500/12 px-3 py-1 text-[11px] font-medium text-rose-200 transition-colors hover:bg-rose-500/20",
-        className,
-      )}
-    >
-      <YoutubeIcon className="size-3" />
-      Listen on YouTube
-    </button>
   );
 }
