@@ -41,6 +41,22 @@ const schema = defineSchema(
       .index("by_user_track", ["userId", "trackId"])
       .index("by_user", ["userId"]),
 
+    // playback snapshots for liked remote tracks (YouTube/Spotify chart items
+    // that don't exist in the catalog), keyed by the same trackId as likedSongs
+    likedRemote: defineTable({
+      userId: v.id("users"),
+      trackId: v.string(),
+      title: v.string(),
+      artistName: v.string(),
+      coverUrl: v.string(),
+      duration: v.number(),
+      youtubeId: v.optional(v.string()),
+      source: v.string(),
+      createdAt: v.number(),
+    })
+      .index("by_user_track", ["userId", "trackId"])
+      .index("by_user", ["userId"]),
+
     // user-created playlists referencing catalog track ids
     playlists: defineTable({
       userId: v.id("users"),
