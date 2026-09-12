@@ -170,6 +170,62 @@
     backdrop-filter: blur(24px) saturate(1.4);
     -webkit-backdrop-filter: blur(24px) saturate(1.4);
   }
+  /*
+   * Liquid glass — a fluid, refractive glass surface. Adds a moving
+   * specular highlight, an inner rim light, and stronger saturation so
+   * panels feel like polished glass rather than flat frosted plastic.
+   */
+  .liquid-glass {
+    position: relative;
+    background: color-mix(in oklab, var(--card) 52%, transparent);
+    backdrop-filter: blur(28px) saturate(1.8) brightness(1.06);
+    -webkit-backdrop-filter: blur(28px) saturate(1.8) brightness(1.06);
+    box-shadow:
+      inset 0 1px 0 0 rgb(255 255 255 / 0.08),
+      inset 0 -1px 0 0 rgb(255 255 255 / 0.04),
+      inset 1px 0 0 0 rgb(255 255 255 / 0.03),
+      0 8px 32px rgb(0 0 0 / 0.25);
+  }
+  /* specular sheen that drifts across the surface */
+  .liquid-glass::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background: linear-gradient(
+      115deg,
+      transparent 30%,
+      rgb(255 255 255 / 0.06) 45%,
+      rgb(255 255 255 / 0.1) 50%,
+      rgb(255 255 255 / 0.06) 55%,
+      transparent 70%
+    );
+    background-size: 250% 100%;
+    animation: glass-sheen 9s ease-in-out infinite;
+  }
+  @keyframes glass-sheen {
+    0%,
+    100% {
+      background-position: 120% 0;
+    }
+    50% {
+      background-position: -40% 0;
+    }
+  }
+  /* tinted refraction blob that reacts to the current accent color */
+  .liquid-glass::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background: radial-gradient(
+      120% 90% at 12% 0%,
+      rgb(var(--tint, 255 255 255) / 0.07),
+      transparent 55%
+    );
+  }
   .hide-scrollbar {
     scrollbar-width: none;
   }

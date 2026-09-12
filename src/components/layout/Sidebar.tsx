@@ -44,7 +44,7 @@ export function Sidebar() {
       .toUpperCase() ?? "U";
 
   return (
-    <aside className="glass hidden w-60 shrink-0 flex-col border-r border-white/[0.06] lg:flex">
+    <aside className="liquid-glass hidden w-60 shrink-0 flex-col border-r border-white/[0.06] lg:flex">
       <div className="flex h-16 items-center px-5">
         <Logo to="/home" />
       </div>

@@ -154,7 +154,7 @@ export function AppShell() {
 
       <div className="flex min-w-0 flex-1 flex-col">
         {/* mobile top bar */}
-        <div className="glass sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between border-b border-white/[0.06] px-4 lg:hidden">
+        <div className="liquid-glass sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between border-b border-white/[0.06] px-4 lg:hidden">
           <Logo to="/home" />
           <nav className="flex items-center gap-1">
             {MOBILE_NAV.map(({ to, label, icon: Icon }) => (

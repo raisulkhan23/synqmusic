@@ -143,7 +143,7 @@ export default function Landing() {
           transition={{ duration: 0.6, delay: 0.2 }}
           className="relative mx-auto w-full max-w-md"
         >
-          <div className="glass relative rounded-3xl border border-white/10 p-6 shadow-[0_40px_90px_rgba(0,0,0,0.55)]">
+          <div className="liquid-glass relative rounded-3xl border border-white/10 p-6 shadow-[0_40px_90px_rgba(0,0,0,0.55)]">
             {/* now playing */}
             <div className="flex items-center gap-4">
               <div className="relative shrink-0">
