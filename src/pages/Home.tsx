@@ -193,7 +193,7 @@ export default function Home() {
       )}
 
       {/* personal quick links */}
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">        {quickLinks.map(({ to, label, detail, icon: Icon }) => (
+      <section className="stagger grid grid-cols-2 gap-3 lg:grid-cols-4">        {quickLinks.map(({ to, label, detail, icon: Icon }) => (
           <Link
             key={to}
             to={to}
@@ -301,7 +301,7 @@ export default function Home() {
             </div>
             <PlayHeaderButton list={mostTracks} />
           </div>
-          <div className="mt-1 flex flex-col gap-0.5">
+          <div className="stagger mt-1 flex flex-col gap-0.5">
             {mostTracks.slice(0, 5).map((track, i) => (
               <TrackRow key={track.id} track={track} list={mostTracks} index={i + 1} />
             ))}
@@ -323,7 +323,7 @@ export default function Home() {
             </div>
             <PlayHeaderButton list={recentTracks} />
           </div>
-          <div className="mt-1 flex flex-col gap-0.5">
+          <div className="stagger mt-1 flex flex-col gap-0.5">
             {recentTracks.slice(0, 5).map((track, i) => (
               <TrackRow key={track.id} track={track} list={recentTracks} index={i + 1} />
             ))}
@@ -343,7 +343,7 @@ export default function Home() {
           </div>
           <PlayHeaderButton list={top} />
         </div>
-        <div className="mt-1 flex flex-col gap-0.5">
+        <div className="stagger mt-1 flex flex-col gap-0.5">
           {top.map((track, i) => (
             <TrackRow key={track.id} track={track} list={top} index={i + 1} />
           ))}

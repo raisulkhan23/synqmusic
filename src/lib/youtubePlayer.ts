@@ -69,9 +69,9 @@ let pollTimer: ReturnType<typeof setInterval> | null = null;
 let presentTarget: (() => DOMRect | null) | null = null;
 
 const OFFSCREEN_STYLE =
-  "position:fixed;left:-9999px;top:0;width:200px;height:200px;opacity:0;pointer-events:none;border:0;";
+  "position:fixed;left:-9999px;top:0;width:640px;height:360px;opacity:0;pointer-events:none;border:0;overflow:hidden;";
 const PRESENT_BASE_STYLE =
-  "position:fixed;z-index:71;opacity:1;pointer-events:none;border:0;border-radius:16px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,0.6);";
+  "position:fixed;z-index:80;opacity:1;pointer-events:auto;border:0;border-radius:16px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,0.6);";
 
 let apiPromise: Promise<void> | null = null;
 
@@ -120,18 +120,24 @@ async function ensurePlayer(): Promise<YtPlayerLike> {
   const YT = window.YT;
   if (!YT?.Player) throw new Error("YouTube IFrame API unavailable");
 
+  // IMPORTANT: YT.Player *replaces* the element you pass it with an iframe.
+  // So we pass an inner div and keep a stable wrapper (hostEl) in the DOM —
+  // presentation CSS targets the wrapper, and the iframe fills it.
   const host = document.createElement("div");
   // Off-screen but rendered — fully display:none players can refuse autoplay.
   host.style.cssText = OFFSCREEN_STYLE;
+  const mount = document.createElement("div");
+  mount.style.cssText = "width:100%;height:100%;";
+  host.appendChild(mount);
   document.body.appendChild(host);
   hostEl = host;
 
   player = await new Promise<YtPlayerLike>((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error("YT player init timed out")), 10_000);
     try {
-      new YT.Player(host, {
-        height: "200",
-        width: "200",
+      new YT.Player(mount, {
+        height: "100%",
+        width: "100%",
         playerVars: {
           autoplay: 1,
           controls: 0,
@@ -175,6 +181,16 @@ async function ensurePlayer(): Promise<YtPlayerLike> {
   });
 
   startPolling();
+
+  // The mount element has been replaced by the iframe — make the iframe fill
+  // the wrapper so presentVideo() can size the wrapper freely.
+  const iframe = mount.querySelector("iframe") ?? (mount.nextElementSibling instanceof HTMLIFrameElement ? mount.nextElementSibling : null);
+  if (iframe) {
+    iframe.style.width = "100%";
+    iframe.style.height = "100%";
+    iframe.style.border = "0";
+  }
+
   return player;
 }
 

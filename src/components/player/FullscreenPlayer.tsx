@@ -275,7 +275,9 @@ export function FullscreenPlayer() {
   useEffect(() => {
     if (!fullscreen || !isYoutube || !videoReady) return;
     presentVideo(() => videoFrameRef.current?.getBoundingClientRect() ?? null);
-  }, [fullscreen, isYoutube, videoReady]);
+    // Re-sync when the lyrics panel opens/closes — the video frame moves.
+    return () => dismissVideo();
+  }, [fullscreen, isYoutube, videoReady, lyricsOpen]);
 
   if (!fullscreen || !current) return <AnimatePresence />;
 
@@ -291,7 +293,7 @@ export function FullscreenPlayer() {
       >
         {/* ambient accent glows */}
         <div
-          className="pointer-events-none absolute -top-48 left-1/2 h-[520px] w-[780px] -translate-x-1/2 rounded-full blur-3xl"
+          className="glow-pulse pointer-events-none absolute -top-48 left-1/2 h-[520px] w-[780px] -translate-x-1/2 rounded-full blur-3xl"
           style={{
             background: `radial-gradient(closest-side, rgb(${a.r} ${a.g} ${a.b} / 0.2), transparent)`,
           }}
@@ -363,7 +365,7 @@ export function FullscreenPlayer() {
             {isYoutube ? (
               <div
                 ref={videoFrameRef}
-                className="relative aspect-video w-[min(72vh,640px)] max-w-full overflow-hidden rounded-2xl bg-black shadow-[0_30px_80px_rgba(0,0,0,0.6)] ring-1 ring-white/10"
+                className="fade-rise relative aspect-video w-[min(72vh,640px)] max-w-full overflow-hidden rounded-2xl bg-black shadow-[0_30px_80px_rgba(0,0,0,0.6)] ring-1 ring-white/10"
               >
                 {/* cover art until the live iframe lands on top of it */}
                 <img
