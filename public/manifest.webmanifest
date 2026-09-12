@@ -1,6 +1,6 @@
 {
-  "name": "Soundscape",
-  "short_name": "Soundscape",
+  "name": "SoundCore",
+  "short_name": "SoundCore",
   "description": "Play music, uninterrupted. A curated, ad-free streaming experience.",
   "start_url": "/",
   "display": "standalone",
