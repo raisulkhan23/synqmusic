@@ -71,8 +71,6 @@ let pollTimer: ReturnType<typeof setInterval> | null = null;
 
 const OFFSCREEN_STYLE =
   "position:fixed;left:-9999px;top:0;width:640px;height:360px;opacity:0;pointer-events:none;border:0;overflow:hidden;z-index:-1;";
-const ONSCREEN_STYLE =
-  "position:relative;width:100%;height:100%;opacity:1;pointer-events:auto;border:0;overflow:hidden;";
 
 let apiPromise: Promise<void> | null = null;
 
@@ -300,28 +298,59 @@ export function setRate(rate: number): void {
 }
 
 /**
- * Move the player element INTO the given fullscreen container element so the
- * actual YouTube video is visible. Playback continues through the same
- * player — nothing is reloaded. Returns false when the engine isn't ready.
+ * IMPORTANT: re-parenting an iframe in the DOM RELOADS it, which would kill
+ * playback. So "presenting" the video NEVER moves the player element —
+ * instead the off-screen host is fixed-positioned exactly over the fullscreen
+ * video frame's rectangle. Same DOM node, same iframe, playback continues.
  */
-export function presentVideo(container: HTMLElement): boolean {
-  if (!hostEl || !container) return false;
-  if (container.contains(hostEl)) return true;
-  hostEl.style.cssText = ONSCREEN_STYLE;
-  container.appendChild(hostEl);
+const OVERLAY_BASE =
+  // Above the fullscreen player layer (z-[70]) so the video is visible;
+  // it's sized exactly over the video frame, never covering the controls.
+  "position:fixed;z-index:71;pointer-events:auto;border:0;overflow:hidden;opacity:1;border-radius:16px;";
+
+/**
+ * Overlay the live player over the given fullscreen frame element (measured
+ * live from its bounding rect). Returns false while the frame isn't laid out
+ * or the engine isn't ready — callers should retry.
+ */
+export function presentOverlay(frame: HTMLElement): boolean {
+  if (!hostEl || !frame) return false;
+  const r = frame.getBoundingClientRect();
+  if (r.width < 10 || r.height < 10) return false;
+  hostEl.style.cssText =
+    OVERLAY_BASE +
+    `left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;`;
   return true;
 }
 
 /** Return the player to its off-screen parking spot (audio-only mode). */
 export function dismissVideo(): void {
   if (!hostEl) return;
+  // Never touch the parent — only reset the styling. Re-parenting would
+  // reload the iframe and stop playback.
   hostEl.style.cssText = OFFSCREEN_STYLE;
-  document.body.appendChild(hostEl);
 }
 
 /** The engine's player host element, so consumers can check containment. */
 export function getYtHost(): HTMLElement | null {
   return hostEl;
+}
+
+/**
+ * Keep the overlay glued to the frame while it's visible (window resizes,
+ * lyrics panel toggling, etc.). Returns a cleanup function.
+ */
+export function trackFrame(frame: HTMLElement): () => void {
+  let stopped = false;
+  const tick = () => {
+    if (stopped) return;
+    presentOverlay(frame);
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+  return () => {
+    stopped = true;
+  };
 }
 
 /** YT error code → human message (100/101/150 = unusable video). */

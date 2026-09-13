@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { api } from "@/convex/_generated/api";
 import { formatTime } from "@/lib/format";
-import { dismissVideo, getYtHost, presentVideo } from "@/lib/youtubePlayer";
+import { dismissVideo, presentOverlay, trackFrame } from "@/lib/youtubePlayer";
 import { toPlayableYoutube } from "@/lib/playable";
 import { type YtItem } from "@/lib/youtube";
 import { usePlayerStore } from "@/store/player";
@@ -278,41 +278,45 @@ export function FullscreenPlayer() {
   const videoFrameRef = useRef<HTMLDivElement | null>(null);
   const [videoReady, setVideoReady] = useState(false);
 
-  // Present the live YouTube player element inside the video frame whenever
-  // fullscreen + video is on and the current track plays through the YouTube
-  // engine. Retries until the engine is ready (YT API may still be loading).
-  // present/dismiss never reloads the player — playback continues seamlessly.
+  // Overlay the live YouTube player over the video frame whenever fullscreen
+  // + video is on and the current track plays through the YouTube engine.
+  // The player element is NEVER moved in the DOM (that would reload the
+  // iframe and kill playback) — it's fixed-positioned over the frame instead.
   useEffect(() => {
     if (!fullscreen || !current || !videoEnabled) return;
     if (!isYoutube) return;
     setVideoReady(false);
+    let stopTracking: (() => void) | null = null;
     let tries = 0;
     let timer: ReturnType<typeof setTimeout>;
     const attempt = () => {
       const frame = videoFrameRef.current;
-      if (!frame) return; // unmounted — stop
-      const ok = presentVideo(frame);
-      if (ok) {
-        setVideoReady(true);
+      if (!frame || !frame.isConnected) {
+        // Frame not mounted yet — retry briefly while the overlay opens.
+        if (++tries < 40) timer = setTimeout(attempt, 100);
         return;
       }
-      if (++tries < 20) timer = setTimeout(attempt, 250); // ~5s
+      if (presentOverlay(frame)) {
+        setVideoReady(true);
+        stopTracking = trackFrame(frame); // follow resizes every frame
+        return;
+      }
+      if (++tries < 40) timer = setTimeout(attempt, 100); // ~4s
     };
-    // wait for the enter animation before presenting
-    timer = setTimeout(attempt, 350);
+    timer = setTimeout(attempt, 250);
     return () => {
       clearTimeout(timer);
+      stopTracking?.();
       setVideoReady(false);
       dismissVideo();
     };
   }, [fullscreen, current?.id, videoEnabled, isYoutube]);
 
-  // Re-present when the lyrics panel toggles (frame may remount).
+  // Re-sync the overlay when the lyrics panel toggles (frame may move).
   useEffect(() => {
     if (!fullscreen || !videoReady) return;
-    if (videoFrameRef.current && !videoFrameRef.current.contains(getYtHost())) {
-      presentVideo(videoFrameRef.current);
-    }
+    const frame = videoFrameRef.current;
+    if (frame) presentOverlay(frame);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lyricsOpen]);
 
@@ -411,7 +415,7 @@ export function FullscreenPlayer() {
                   className="absolute inset-0 z-[1]"
                   style={{ pointerEvents: "auto", background: "transparent" }}
                 />
-                {/* cover art until the live iframe lands on top of it */}
+                {/* cover art behind the overlaid live player */}
                 <img
                   src={current.coverUrl}
                   alt=""
