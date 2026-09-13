@@ -1,0 +1,306 @@
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
+import { useAuth } from "@/hooks/use-auth";
+import { usePlayerStore } from "@/store/player";
+import { cn } from "@/lib/utils";
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import {
+  Check,
+  Gauge,
+  Keyboard,
+  Loader2,
+  Moon,
+  Pencil,
+  Trash2,
+  UserRound,
+} from "lucide-react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+
+const SHORTCUTS: [string, string][] = [
+  ["Space", "Play / pause"],
+  ["← / →", "Seek ±5s"],
+  ["↑ / ↓", "Volume"],
+  ["N / P", "Next / previous"],
+  ["S", "Shuffle"],
+  ["R", "Repeat"],
+  ["M", "Mute"],
+  ["Q", "Queue"],
+  ["F", "Full-screen player"],
+  ["L", "Like current song"],
+  ["/", "Search"],
+];
+
+export function SettingsDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const { user } = useAuth();
+  const updateName = useMutation(api.users.updateName);
+  const clearHistory = useMutation(api.history.clearHistory);
+
+  const rate = usePlayerStore((s) => s.rate);
+  const setRate = usePlayerStore((s) => s.setRate);
+  const autoplay = usePlayerStore((s) => s.autoplay);
+  const toggleAutoplay = usePlayerStore((s) => s.toggleAutoplay);
+  const videoEnabled = usePlayerStore((s) => s.videoEnabled);
+  const toggleVideo = usePlayerStore((s) => s.toggleVideo);
+  const shuffle = usePlayerStore((s) => s.shuffle);
+  const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
+
+  const [name, setName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [clearing, setClearing] = useState(false);
+
+  // Sync the input whenever the dialog opens (or the user object changes).
+  useEffect(() => {
+    if (open) setName(user?.name ?? "");
+  }, [open, user?.name]);
+
+  const displayName =
+    user?.name ?? (user?.isAnonymous ? "Guest" : "Listener");
+
+  const saveName = async () => {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      toast.error("Name can't be empty");
+      return;
+    }
+    if (trimmed === displayName) return;
+    setSaving(true);
+    try {
+      await updateName({ name: trimmed });
+      toast.success(`You're now known as ${trimmed}`);
+    } catch {
+      toast.error("Couldn't save your name — try again");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleClearHistory = async () => {
+    setClearing(true);
+    try {
+      const n = await clearHistory({});
+      toast.success(`Cleared ${n} ${n === 1 ? "entry" : "entries"} from your history`);
+    } catch {
+      toast.error("Couldn't clear history — try again");
+    } finally {
+      setClearing(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[85vh] max-w-md overflow-y-auto border-white/10 bg-[#0b0c11]/95 backdrop-blur-xl">
+        <DialogHeader>
+          <DialogTitle className="font-display">Settings</DialogTitle>
+          <DialogDescription>
+            Profile, playback and data preferences.
+          </DialogDescription>
+        </DialogHeader>
+
+        {/* profile */}
+        <section className="flex flex-col gap-2.5">
+          <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
+            <UserRound className="size-3.5" />
+            Profile
+          </p>
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Pencil className="absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={displayName}
+                maxLength={40}
+                className="pl-9"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !saving) void saveName();
+                }}
+              />
+            </div>
+            <Button
+              size="icon"
+              onClick={() => void saveName()}
+              disabled={saving || !name.trim() || name.trim() === displayName}
+              aria-label="Save name"
+            >
+              {saving ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Check className="size-4" />
+              )}
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Signed in as{" "}
+            <span className="font-medium text-foreground">{displayName}</span>
+            {user?.email ? ` · ${user.email}` : ""}
+          </p>
+        </section>
+
+        <Separator className="bg-white/[0.07]" />
+
+        {/* playback */}
+        <section className="flex flex-col gap-2.5">
+          <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
+            <Gauge className="size-3.5" />
+            Playback
+          </p>
+
+          <ToggleRow
+            label="Autoplay"
+            description="Keep playing similar music when the queue ends"
+            on={autoplay}
+            onToggle={() => {
+              toggleAutoplay();
+              toast(autoplay ? "Autoplay off" : "Autoplay on");
+            }}
+          />
+          <ToggleRow
+            label="Video in full-screen player"
+            description="Show the music video when maximizing"
+            on={videoEnabled}
+            onToggle={() => {
+              toggleVideo();
+              toast(videoEnabled ? "Video off" : "Video on");
+            }}
+          />
+          <ToggleRow
+            label="Shuffle by default"
+            description="Start queues shuffled"
+            on={shuffle}
+            onToggle={toggleShuffle}
+          />
+
+          {/* default playback speed */}
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
+            <div className="min-w-0">
+              <p className="text-sm font-medium">Default speed</p>
+              <p className="text-xs text-muted-foreground">
+                Applies to new tracks
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-1">
+              {[0.75, 1, 1.25, 1.5].map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setRate(r)}
+                  className={cn(
+                    "rounded-full px-2 py-1 text-[11px] font-semibold tabular-nums transition-colors",
+                    rate === r
+                      ? "bg-[rgb(var(--tint)_/_0.2)] text-[rgb(var(--tint))]"
+                      : "text-muted-foreground hover:bg-white/[0.06] hover:text-foreground",
+                  )}
+                >
+                  {r}×
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <Separator className="bg-white/[0.07]" />
+
+        {/* keyboard shortcuts */}
+        <section className="flex flex-col gap-2">
+          <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
+            <Keyboard className="size-3.5" />
+            Keyboard shortcuts
+          </p>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
+            {SHORTCUTS.map(([key, label]) => (
+              <div key={key} className="flex items-center justify-between gap-2 text-xs">
+                <kbd className="rounded border border-white/10 bg-white/[0.06] px-1.5 py-0.5 font-mono text-[10px] text-foreground">
+                  {key}
+                </kbd>
+                <span className="truncate text-muted-foreground">{label}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <Separator className="bg-white/[0.07]" />
+
+        {/* data */}
+        <section className="flex flex-col gap-2">
+          <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
+            <Moon className="size-3.5" />
+            Your data
+          </p>
+          <button
+            type="button"
+            onClick={() => void handleClearHistory()}
+            disabled={clearing}
+            className="flex items-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5 text-left text-sm transition-colors hover:border-red-500/30 hover:bg-red-500/[0.06] disabled:opacity-50"
+          >
+            {clearing ? (
+              <Loader2 className="size-4 animate-spin text-red-400" />
+            ) : (
+              <Trash2 className="size-4 text-red-400" />
+            )}
+            <span className="min-w-0">
+              <span className="block font-medium">Clear listening history</span>
+              <span className="block text-xs text-muted-foreground">
+                Removes recently played and most-played data. Likes and
+                playlists are kept.
+              </span>
+            </span>
+          </button>
+        </section>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ToggleRow({
+  label,
+  description,
+  on,
+  onToggle,
+}: {
+  label: string;
+  description: string;
+  on: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5 text-left transition-colors hover:bg-white/[0.05]"
+    >
+      <span className="min-w-0">
+        <span className="block text-sm font-medium">{label}</span>
+        <span className="block text-xs text-muted-foreground">{description}</span>
+      </span>
+      <span
+        className={cn(
+          "relative h-5 w-9 shrink-0 rounded-full transition-colors",
+          on ? "bg-[rgb(var(--tint))]" : "bg-white/15",
+        )}
+      >
+        <span
+          className={cn(
+            "absolute top-0.5 size-4 rounded-full bg-white shadow transition-all",
+            on ? "left-[18px]" : "left-0.5",
+          )}
+        />
+      </span>
+    </button>
+  );
+}

@@ -1,5 +1,6 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { query, QueryCtx } from "./_generated/server";
+import { ConvexError, v } from "convex/values";
+import { mutation, query, QueryCtx } from "./_generated/server";
 
 /**
  * Get the current signed in user. Returns null if the user is not signed in.
@@ -31,3 +32,18 @@ export const getCurrentUser = async (ctx: QueryCtx) => {
   }
   return await ctx.db.get(userId);
 };
+
+/**
+ * Update the signed-in user's display name. Used by the Settings dialog.
+ */
+export const updateName = mutation({
+  args: { name: v.string() },
+  handler: async (ctx, { name }) => {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) throw new ConvexError("Sign in first");
+    const trimmed = name.trim().slice(0, 40);
+    if (trimmed.length === 0) throw new ConvexError("Name can't be empty");
+    await ctx.db.patch(userId, { name: trimmed });
+    return trimmed;
+  },
+});

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Logo } from "@/components/brand/Logo";
 import { PlaylistDialog } from "@/components/playlists/PlaylistDialog";
+import { SettingsDialog } from "@/components/settings/SettingsDialog";
 import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
@@ -13,6 +14,7 @@ import {
   LogOut,
   Plus,
   Search,
+  Settings,
   ShieldCheck,
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router";
@@ -29,6 +31,7 @@ export function Sidebar() {
   const navigate = useNavigate();
   const playlists = useQuery(api.playlists.myPlaylists);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const handleSignOut = async () => {
     await signOut();
@@ -165,6 +168,15 @@ export function Sidebar() {
         </div>
         <button
           type="button"
+          aria-label="Settings"
+          title="Settings"
+          onClick={() => setSettingsOpen(true)}
+          className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
+        >
+          <Settings className="size-4" />
+        </button>
+        <button
+          type="button"
           aria-label="Sign out"
           onClick={handleSignOut}
           className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
@@ -174,6 +186,7 @@ export function Sidebar() {
       </div>
 
       <PlaylistDialog open={dialogOpen} onOpenChange={setDialogOpen} />
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
     </aside>
   );
 }

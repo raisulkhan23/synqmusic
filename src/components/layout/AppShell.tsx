@@ -1,15 +1,16 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { FullscreenPlayer } from "@/components/player/FullscreenPlayer";
 import { PlayerBar } from "@/components/player/PlayerBar";
 import { QueuePanel } from "@/components/player/QueuePanel";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { SettingsDialog } from "@/components/settings/SettingsDialog";
 import { Logo } from "@/components/brand/Logo";
 import { api } from "@/convex/_generated/api";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
-import { Heart, House, LibraryBig, Search } from "lucide-react";
+import { Heart, House, LibraryBig, Search, Settings } from "lucide-react";
 import { usePlayerStore, type RemoteLikeSnapshot } from "@/store/player";
 
 const MOBILE_NAV = [
@@ -23,6 +24,7 @@ const DEFAULT_TINT = "203 244 143";
 
 export function AppShell() {
   const navigate = useNavigate();
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const accent = usePlayerStore((s) => s.accent);
   const setLiked = usePlayerStore((s) => s.setLiked);
   const setLikeMutation = usePlayerStore((s) => s.setLikeMutation);
@@ -157,6 +159,14 @@ export function AppShell() {
         <div className="liquid-glass sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between border-b border-white/[0.06] px-4 lg:hidden">
           <Logo to="/home" />
           <nav className="flex items-center gap-1">
+            <button
+              type="button"
+              aria-label="Settings"
+              onClick={() => setSettingsOpen(true)}
+              className="rounded-full p-2 text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <Settings className="size-[18px]" />
+            </button>
             {MOBILE_NAV.map(({ to, label, icon: Icon }) => (
               <NavLink
                 key={to}
@@ -195,6 +205,7 @@ export function AppShell() {
 
       <QueuePanel />
       <FullscreenPlayer />
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
     </div>
   );
 }
