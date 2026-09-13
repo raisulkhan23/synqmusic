@@ -1,0 +1,17 @@
+{
+  "name": "SoundCore",
+  "short_name": "SoundCore",
+  "description": "Play music, uninterrupted. A curated, ad-free streaming experience.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0e0f14",
+  "theme_color": "#0e0f14",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

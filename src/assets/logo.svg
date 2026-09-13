@@ -1,20 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <linearGradient id="scGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="scTile" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#38bdf8"/>
-      <stop offset="45%" stop-color="#3b82f6"/>
-      <stop offset="100%" stop-color="#a855f7"/>
-    </linearGradient>
-    <linearGradient id="scGradText" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#3b82f6"/>
+      <stop offset="50%" stop-color="#3b82f6"/>
       <stop offset="100%" stop-color="#a855f7"/>
     </linearGradient>
   </defs>
-  <rect width="512" height="512" rx="96" fill="#0a0b10"/>
-  <!-- Stylized "S" ribbon wrapping a play/arrow form -->
-  <path d="M358 128c-14-26-46-42-84-42-52 0-92 30-92 72 0 36 28 56 78 68l30 8c30 8 42 18 42 34 0 20-22 34-54 34-30 0-54-12-64-32l-44 22c18 36 58 58 108 58 58 0 100-32 100-78 0-38-28-60-82-74l-28-7c-26-7-38-15-38-29 0-17 19-29 46-29 25 0 44 10 53 27z" fill="url(#scGrad)"/>
-  <!-- Music note cut into the S counter -->
-  <g transform="translate(236,196)">
-    <path d="M24 0v104c-6-4-14-6-22-6-24 0-44 16-44 38s20 38 44 38 44-16 44-38V52l56-20V0z" fill="#0a0b10" opacity="0.92"/>
+  <!-- Gradient tile -->
+  <rect width="512" height="512" rx="110" fill="url(#scTile)"/>
+  <!-- Eighth note: head + stem + flag, knocked out in dark -->
+  <g fill="#0a0b10">
+    <!-- note head -->
+    <ellipse cx="216" cy="368" rx="52" ry="40"/>
+    <!-- stem -->
+    <rect x="252" y="128" width="26" height="244" rx="13"/>
+    <!-- flag -->
+    <path d="M278 128c46 10 82 34 82 82 0 26-12 46-30 60-6-42-24-66-52-78z"/>
   </g>
 </svg>
