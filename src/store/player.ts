@@ -69,6 +69,10 @@ interface PlayerStore {
   autoplay: boolean;
   toggleAutoplay: () => void;
 
+  /** Show the actual video in the fullscreen player (YouTube sources). */
+  videoEnabled: boolean;
+  toggleVideo: () => void;
+
   // liked songs (synced with Convex, optimistic)
   liked: Record<string, number>;
   likedLoaded: boolean;
@@ -82,7 +86,7 @@ interface PlayerStore {
   // actions
   playTrack: (track: Track | Playable, list?: (Track | Playable)[]) => void;
   playIndex: (index: number) => void;
-  replaceCurrentStream: (playable: Playable) => void;
+  replaceCurrentStream: (playable: Playable, startSeconds?: number) => void;
   togglePlay: () => void;
   next: () => void;
   prev: () => void;
@@ -211,6 +215,7 @@ const initialSmartShuffle = readBool("ss.smartShuffle", false);
 const initialRepeat = (localStorage.getItem("ss.repeat") as RepeatMode | null) ?? "off";
 const initialRate = Math.min(2, Math.max(0.5, readNum("ss.rate", 1)));
 const initialAutoplay = readBool("ss.autoplay", true);
+const initialVideoEnabled = readBool("ss.video", true);
 const savedQueue = readSavedQueue();
 
 const readIdSet = (key: string): Record<string, true> => {
@@ -528,7 +533,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
   let lastRemoved: { item: Playable; index: number } | null = null;
 
   /** Route loading/playback to the right engine for the given track. */
-  const loadTrack = (track: Playable) => {
+  const loadTrack = (track: Playable, startSeconds?: number) => {
     const prev = get().current;
 
     // queue history: remember what was playing before this
@@ -548,7 +553,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       }
     }
 
-    const resumeAt = getResumePosition(track.id, track.duration);
+    const resumeAt = startSeconds ?? getResumePosition(track.id, track.duration);
 
     // Route to the YouTube IFrame engine by video id; otherwise use the audio element.
     if (track.youtubeId) {
@@ -599,12 +604,12 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     loadTrack(list2[index]);
   };
 
-  const replaceCurrentStream = (playable: Playable) => {
+  const replaceCurrentStream = (playable: Playable, startSeconds?: number) => {
     const s = get();
     const index = Math.max(0, s.queueIndex);
     const queue = s.queue.map((t, i) => (i === index ? playable : t));
     set({ queue, queueIndex: index });
-    loadTrack(playable);
+    loadTrack(playable, startSeconds);
   };
 
   const playIndex = (index: number) => {
@@ -841,6 +846,14 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       set((state) => {
         localStorage.setItem("ss.autoplay", state.autoplay ? "0" : "1");
         return { autoplay: !state.autoplay };
+      }),
+
+    videoEnabled: initialVideoEnabled,
+    toggleVideo: () =>
+      set((state) => {
+        const next = !state.videoEnabled;
+        localStorage.setItem("ss.video", next ? "1" : "0");
+        return { videoEnabled: next };
       }),
 
     sleepEndsAt: null,

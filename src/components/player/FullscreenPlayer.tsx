@@ -15,10 +15,13 @@ import {
 import { api } from "@/convex/_generated/api";
 import { formatTime } from "@/lib/format";
 import { dismissVideo, getYtHost, presentVideo } from "@/lib/youtubePlayer";
+import { toPlayableYoutube } from "@/lib/playable";
+import { type YtItem } from "@/lib/youtube";
 import { usePlayerStore } from "@/store/player";
 import { toast } from "sonner";
 import {
   ChevronDown,
+  Film,
   Gauge,
   Heart,
   ListMusic,
@@ -261,35 +264,97 @@ export function FullscreenPlayer() {
   const a = accent ?? { r: 196, g: 246, b: 152 };
 
   const [lyricsOpen, setLyricsOpen] = useState(false);
+  const videoEnabled = usePlayerStore((s) => s.videoEnabled);
+  const toggleVideo = usePlayerStore((s) => s.toggleVideo);
+  const searchYt = useAction(api.youtube.searchYoutube);
 
-  // YouTube tracks surface the live video in fullscreen. The engine's iframe
-  // is CSS-positioned over this placeholder (never re-parented), so playback
-  // continues seamlessly while the video is on screen.
+  // A video frame is shown for YouTube tracks directly; catalog tracks get a
+  // matching YouTube video found on demand when video mode is on.
   const isYoutube = current?.source === "youtube" || !!current?.youtubeId;
-  const videoFrameRef = useRef<HTMLDivElement | null>(null);
-  const [videoReady, setVideoReady] = useState(false);
+  const [catalogVideo, setCatalogVideo] = useState<YtItem | null>(null);
+  const [catalogVideoPending, setCatalogVideoPending] = useState(false);
 
   useEffect(() => {
-    if (!fullscreen || !isYoutube) return;
-    setVideoReady(false);
-    // After the enter animation, move the live YouTube player element into
-    // the video frame. Same player instance — playback never interrupts.
-    const t = setTimeout(() => {
-      const ok = videoFrameRef.current
-        ? presentVideo(videoFrameRef.current)
-        : false;
-      setVideoReady(ok);
-    }, 350);
+    setCatalogVideo(null);
+    setCatalogVideoPending(false);
+    if (!current || current.catalogTrack === undefined) return;
+    if (!videoEnabled || !fullscreen) return;
+    let cancelled = false;
+    setCatalogVideoPending(true);
+    searchYt({ query: `${current.title} ${current.artistName} official audio` })
+      .then(({ items }) => {
+        if (cancelled) return;
+        const best = items[0] ?? null;
+        setCatalogVideo(best);
+        // When the user turns video ON for a catalog track, seamlessly swap
+        // the stream to the matched YouTube video at the current position.
+        if (best && fullscreen && current.catalogTrack) {
+          replaceCurrentStream(
+            toPlayableYoutube(
+              {
+                id: current.id,
+                title: current.title,
+                artist: current.artistName,
+                duration: current.duration || best.duration,
+                thumbnail: current.coverUrl || best.thumbnail,
+              },
+              `https://youtu.be/${best.id}`,
+              items.slice(1),
+            ),
+            currentTimeRef.current,
+          );
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setCatalogVideo(null);
+      })
+      .finally(() => {
+        if (!cancelled) setCatalogVideoPending(false);
+      });
     return () => {
-      clearTimeout(t);
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current?.id, videoEnabled, fullscreen]);
+
+  const videoFrameRef = useRef<HTMLDivElement | null>(null);
+  const [videoReady, setVideoReady] = useState(false);
+  const replaceCurrentStream = usePlayerStore((s) => s.replaceCurrentStream);
+  const currentTimeRef = useRef(0);
+  currentTimeRef.current = currentTime;
+
+  // Move the live YouTube player element into the video frame. The engine
+  // owns one player instance — present/dismiss never reloads the video.
+  // presentation retries until the engine is ready (YT API can still be
+  // loading when the fullscreen opens).
+  useEffect(() => {
+    if (!fullscreen || !current || !videoEnabled) return;
+    if (!isYoutube && !catalogVideo) return;
+    setVideoReady(false);
+    let tries = 0;
+    let timer: ReturnType<typeof setTimeout>;
+    const attempt = () => {
+      const frame = videoFrameRef.current;
+      if (!frame) return; // unmounted — stop
+      const ok = presentVideo(frame);
+      if (ok) {
+        setVideoReady(true);
+        return;
+      }
+      if (++tries < 20) timer = setTimeout(attempt, 250); // ~5s
+    };
+    // wait for the enter animation before presenting
+    timer = setTimeout(attempt, 350);
+    return () => {
+      clearTimeout(timer);
       setVideoReady(false);
       dismissVideo();
     };
-  }, [fullscreen, isYoutube, current?.id]);
+  }, [fullscreen, current?.id, videoEnabled, isYoutube, catalogVideo]);
 
   // Re-present when the lyrics panel toggles (frame may remount).
   useEffect(() => {
-    if (!fullscreen || !isYoutube || !videoReady) return;
+    if (!fullscreen || !videoReady) return;
     if (videoFrameRef.current && !videoFrameRef.current.contains(getYtHost())) {
       presentVideo(videoFrameRef.current);
     }
@@ -379,7 +444,7 @@ export function FullscreenPlayer() {
               lyricsOpen && "hidden lg:flex", // lyrics overlay covers on small screens
             )}
           >
-            {isYoutube ? (
+            {isYoutube || (videoEnabled && catalogVideo) ? (
               <div
                 ref={videoFrameRef}
                 className="fade-rise relative aspect-video w-[min(72vh,640px)] max-w-full overflow-hidden rounded-2xl bg-black shadow-[0_30px_80px_rgba(0,0,0,0.6)] ring-1 ring-white/10"
@@ -489,6 +554,22 @@ export function FullscreenPlayer() {
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
+
+              {/* video toggle */}
+              <button
+                type="button"
+                title="Toggle video in fullscreen player"
+                onClick={toggleVideo}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-semibold tracking-wide uppercase transition-colors hover:bg-white/[0.08]",
+                  videoEnabled
+                    ? "border-[rgb(var(--tint)_/_0.5)] text-[rgb(var(--tint))]"
+                    : "text-muted-foreground",
+                )}
+              >
+                <Film className="size-3.5" />
+                Video {videoEnabled ? "on" : "off"}
+              </button>
 
               {/* lyrics toggle */}
               <button
