@@ -1,6 +1,6 @@
 {
-  "name": "SoundCore",
-  "short_name": "SoundCore",
+  "name": "SYNQ",
+  "short_name": "SYNQ",
   "description": "Play music, uninterrupted. A curated, ad-free streaming experience.",
   "start_url": "/",
   "display": "standalone",
