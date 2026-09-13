@@ -195,12 +195,6 @@ export default function Landing() {
               <Play className="size-4 fill-current" />
               Start listening free
             </Link>
-            <a
-              href="#visualizer"
-              className="rounded-full border border-white/12 bg-white/[0.04] px-6 py-3 text-sm font-semibold transition-colors hover:bg-white/[0.08]"
-            >
-              See the visualizer
-            </a>
           </motion.div>
 
           <motion.div
