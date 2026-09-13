@@ -396,17 +396,20 @@ export function FullscreenPlayer() {
             </div>
           </div>
 
-          {/* artwork / live video */}
+          {/* artwork / live video — slides to the left when the lyrics panel
+              is open (desktop) so the lyrics never cover the video */}
           <div
             className={cn(
-              "flex flex-1 items-center justify-center py-6",
+              "flex flex-1 items-center justify-center py-6 transition-all duration-300",
+              lyricsOpen && "justify-start pl-2 sm:pl-6 lg:pl-12", // left-shift on desktop
               lyricsOpen && "hidden lg:flex", // lyrics overlay covers on small screens
             )}
           >
             {isYoutube && videoEnabled ? (
               <div
                 ref={videoFrameRef}
-                className="fade-rise relative aspect-video w-[min(72vh,640px)] max-w-full overflow-hidden rounded-2xl bg-black shadow-[0_30px_80px_rgba(0,0,0,0.6)] ring-1 ring-white/10"
+                className="fade-rise relative aspect-video w-[min(72vh,640px)] max-w-full overflow-hidden rounded-2xl bg-black shadow-[0_30px_80px_rgba(0,0,0,0.6)] ring-1 ring-white/10 transition-all duration-300"
+                style={lyricsOpen ? { width: "min(48vh, 480px)" } : undefined}
               >
                 {/* Shield: absorbs clicks so YouTube's in-frame UI (title bar,
                     watch-later, share, end-screen links) can't be triggered. */}
