@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router";
 import { Logo } from "@/components/brand/Logo";
@@ -24,6 +25,90 @@ const fadeUp = {
   viewport: { once: true, margin: "-80px" },
   transition: { duration: 0.55, ease: "easeOut" as const },
 };
+
+const VIS_BARS = 48;
+
+/**
+ * Animated visualizer demo for the landing page — a dancing bar spectrum
+ * rendered with requestAnimationFrame. Purely decorative (no audio source
+ * on the landing page), it mirrors the live visualizer in the app player.
+ */
+function VisualizerDemo() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const values = new Float32Array(VIS_BARS);
+    let raf = 0;
+    let last = performance.now();
+
+    const resize = () => {
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+      canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    resize();
+    const ro = new ResizeObserver(resize);
+    ro.observe(canvas);
+
+    const draw = (now: number) => {
+      const dt = Math.min(0.1, (now - last) / 1000);
+      last = now;
+      const rect = canvas.getBoundingClientRect();
+      const w = rect.width;
+      const h = rect.height;
+      ctx.clearRect(0, 0, w, h);
+
+      const gap = Math.min(5, w / (VIS_BARS * 2));
+      const bw = Math.max(2, (w - (VIS_BARS - 1) * gap) / VIS_BARS - gap);
+      const maxBarH = h * 0.78;
+      const baseline = h * 0.92;
+
+      for (let i = 0; i < VIS_BARS; i++) {
+        // Layered sines give an organic, music-like motion per bar.
+        const target =
+          0.14 +
+          0.6 * Math.abs(Math.sin(now / 820 + i * 0.55)) * (0.5 + 0.5 * Math.sin(now / 340 + i * 1.15));
+        values[i] += (target - values[i]) * Math.min(1, dt * 8);
+        const bh = Math.max(3, values[i] * maxBarH);
+        const x = (w - (VIS_BARS * bw + (VIS_BARS - 1) * gap)) / 2 + i * (bw + gap);
+        const grad = ctx.createLinearGradient(0, baseline - bh, 0, baseline);
+        grad.addColorStop(0, "rgba(203,244,143,0.85)");
+        grad.addColorStop(1, "rgba(139,92,246,0.35)");
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.roundRect(x, baseline - bh, bw, bh, bw / 2);
+        ctx.fill();
+      }
+      raf = requestAnimationFrame(draw);
+    };
+    raf = requestAnimationFrame(draw);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
+  }, []);
+
+  return (
+    <div className="overflow-hidden rounded-3xl border border-white/10 bg-[#0b0c11]/70 px-6 py-12">
+      <p className="flex items-center justify-center gap-2 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
+        <Activity className="size-4" />
+        Live audio visualizer
+      </p>
+      <canvas ref={canvasRef} className="mt-8 h-56 w-full sm:h-72" />
+      <p className="mt-6 text-center text-sm text-muted-foreground">
+        Every track comes alive with a real-time frequency spectrum in the
+        full-screen player.
+      </p>
+    </div>
+  );
+}
 
 export default function Landing() {
 
@@ -111,10 +196,10 @@ export default function Landing() {
               Start listening free
             </Link>
             <a
-              href="#catalog"
+              href="#visualizer"
               className="rounded-full border border-white/12 bg-white/[0.04] px-6 py-3 text-sm font-semibold transition-colors hover:bg-white/[0.08]"
             >
-              Explore the catalog
+              See the visualizer
             </a>
           </motion.div>
 
@@ -294,8 +379,13 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* CTA band */}
+      {/* visualizer demo — animated audio-bars driven by requestAnimationFrame */}
       <section id="visualizer" className="relative z-10 mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">
+        <VisualizerDemo />
+      </section>
+
+      {/* CTA band */}
+      <section className="relative z-10 mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">
         <motion.div
           {...fadeUp}
           className="relative overflow-hidden rounded-3xl border border-white/10 px-6 py-14 text-center sm:px-12"
