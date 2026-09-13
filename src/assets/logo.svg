@@ -1,38 +1,20 @@
-<svg width="300" height="300" viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <linearGradient id="sGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#5EEAD4"/>
-      <stop offset="42%" stop-color="#38BDF8"/>
-      <stop offset="72%" stop-color="#8B5CF6"/>
-      <stop offset="100%" stop-color="#1D4ED8"/>
+    <linearGradient id="scGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="45%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#a855f7"/>
     </linearGradient>
-    <linearGradient id="noteGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#5EEAD4"/>
-      <stop offset="100%" stop-color="#8B5CF6"/>
+    <linearGradient id="scGradText" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#a855f7"/>
     </linearGradient>
-    <filter id="s3d" x="-25%" y="-25%" width="150%" height="150%">
-      <feDropShadow x="-1" y="2" width="0" height="6" spread="0" stdDeviation="4" flood-color="#000" flood-opacity="0.35"/>
-    </filter>
-    <filter id="soft" x="-25%" y="-25%" width="150%" height="150%">
-      <feDropShadow x="-1" y="1" width="0" height="3" spread="0" stdDeviation="2" flood-color="#000" flood-opacity="0.3"/>
-    </filter>
-    <path id="sShape" d="
-      M150 64 L212 96 L212 186 L150 216 L88 186 L88 96 Z
-      M96 110 L96 46 L150 22 L204 46 L204 110
-      L204 100 L156 82 L90 96 L90 100 Z
-      M96 150 L96 46 L150 22 L204 46 L204 150
-      L200 150 L150 128 L100 150 Z
-      M116 200 L118 152 L238 108 L240 112 L118 156 L116 200 Z
-    "/>
   </defs>
-
-  <g filter="url(#s3d)">      <use href="#sShape" fill="url(#sGrad)"/>
-  </g>
-
-  <g filter="url(#soft)">
-    <g fill="url(#noteGrad)">
-      <circle cx="150" cy="180" r="26"/>
-      <rect x="147" y="132" width="6" height="48"/>
-    </g>
+  <rect width="512" height="512" rx="96" fill="#0a0b10"/>
+  <!-- Stylized "S" ribbon wrapping a play/arrow form -->
+  <path d="M358 128c-14-26-46-42-84-42-52 0-92 30-92 72 0 36 28 56 78 68l30 8c30 8 42 18 42 34 0 20-22 34-54 34-30 0-54-12-64-32l-44 22c18 36 58 58 108 58 58 0 100-32 100-78 0-38-28-60-82-74l-28-7c-26-7-38-15-38-29 0-17 19-29 46-29 25 0 44 10 53 27z" fill="url(#scGrad)"/>
+  <!-- Music note cut into the S counter -->
+  <g transform="translate(236,196)">
+    <path d="M24 0v104c-6-4-14-6-22-6-24 0-44 16-44 38s20 38 44 38 44-16 44-38V52l56-20V0z" fill="#0a0b10" opacity="0.92"/>
   </g>
 </svg>
