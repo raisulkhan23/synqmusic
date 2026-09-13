@@ -30,6 +30,9 @@ interface PlayerStore {
   // playback
   queue: Playable[];
   queueIndex: number;
+  /** Queue order saved when shuffle was enabled, so it can be restored. */
+  unshuffledQueue: Playable[] | null;
+  unshuffledIndex: number;
   current: Playable | null;
   isPlaying: boolean;
   isBuffering: boolean;
@@ -381,11 +384,7 @@ function handleEnded(): void {
     return;
   }
   if (s.queue.length > 0) {
-    if (s.shuffle && s.queue.length > 1) {
-      const idx = s.smartShuffle ? smartIndex(s.queue.length, s.queueIndex) : randomIndex(s.queue.length, s.queueIndex);
-      s.playIndex(idx);
-      return;
-    }
+    // Queue is physically shuffled when shuffle is on — advance in order.
     if (s.queueIndex < s.queue.length - 1) {
       s.playIndex(s.queueIndex + 1);
       return;
@@ -696,10 +695,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
   const next = () => {
     const s = get();
     if (s.queue.length === 0) return;
-    if (s.shuffle && s.queue.length > 1) {
-      playIndex(s.smartShuffle ? smartIndex(s.queue.length, s.queueIndex) : randomIndex(s.queue.length, s.queueIndex));
-      return;
-    }
+    // Queue is physically shuffled when shuffle is on, so just advance.
     if (s.queueIndex < s.queue.length - 1) {
       playIndex(s.queueIndex + 1);
     } else if (s.repeat === "all") {
@@ -714,12 +710,10 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       s.seek(0);
       return;
     }
-    if (s.shuffle && s.queue.length > 1) {
-      playIndex(randomIndex(s.queue.length, s.queueIndex));
-      return;
-    }
     if (s.queueIndex > 0) {
       playIndex(s.queueIndex - 1);
+    } else if (s.repeat === "all") {
+      playIndex(s.queue.length - 1);
     } else {
       s.seek(0);
     }
@@ -760,6 +754,37 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
   const toggleShuffle = () => {
     const next = !get().shuffle;
     localStorage.setItem("ss.shuffle", next ? "1" : "0");
+    // Physically reorder the queue so shuffle takes effect immediately and the
+    // queue panel reflects it. The currently playing track keeps its slot; the
+    // rest are Fisher–Yates shuffled. Turning shuffle off restores the saved
+    // original order.
+    const s = get();
+    if (s.queue.length > 2) {
+      const currentId = s.queueIndex >= 0 ? s.queue[s.queueIndex]?.id : null;
+      if (next) {
+        if (s.unshuffledQueue === null) {
+          set({ unshuffledQueue: [...s.queue], unshuffledIndex: s.queueIndex });
+        }
+        const current = currentId ? s.queue[s.queueIndex] : null;
+        const rest = s.queue.filter((_, i) => i !== s.queueIndex);
+        for (let i = rest.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [rest[i], rest[j]] = [rest[j], rest[i]];
+        }
+        const newQueue = current ? [current, ...rest] : rest;
+        set({ queue: newQueue, queueIndex: current ? 0 : -1 });
+        saveQueue(newQueue, current ? 0 : -1, currentId);
+      } else if (s.unshuffledQueue !== null) {
+        const restored = s.unshuffledQueue;
+        let idx = s.unshuffledIndex;
+        if (currentId) {
+          const found = restored.findIndex((t) => t.id === currentId);
+          if (found >= 0) idx = found;
+        }
+        set({ queue: restored, queueIndex: idx, unshuffledQueue: null, unshuffledIndex: -1 });
+        saveQueue(restored, idx, currentId);
+      }
+    }
     set({ shuffle: next });
   };
 
@@ -887,6 +912,8 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     muted: initialMuted,
     shuffle: initialShuffle,
     smartShuffle: initialSmartShuffle,
+    unshuffledQueue: null,
+    unshuffledIndex: -1,
     repeat: initialRepeat,
     rate: initialRate,
 
