@@ -355,6 +355,80 @@ function saveLastPlayed(track: Playable): void {
   }
 }
 
+// --- full play history (any source) ------------------------------------------
+
+const HISTORY_KEY = "ss.playHistory";
+const HISTORY_MAX = 60;
+
+/** A played track of any source, most recent first. */
+export interface HistoryEntry extends LastPlayedSnapshot {
+  playCount: number;
+}
+
+let historyCache: HistoryEntry[] | null = null;
+
+function loadHistory(): HistoryEntry[] {
+  if (historyCache) return historyCache;
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    historyCache = raw ? (JSON.parse(raw) as HistoryEntry[]) : [];
+  } catch {
+    historyCache = [];
+  }
+  return historyCache!;
+}
+
+/** All played tracks across every source, most recent first. */
+export function readPlayHistory(): HistoryEntry[] {
+  return loadHistory();
+}
+
+function recordHistory(track: Playable): void {
+  const history = loadHistory();
+  const existing = history.find((h) => h.id === track.id);
+  if (existing) {
+    existing.playCount += 1;
+    existing.at = Date.now();
+    const i = history.indexOf(existing);
+    history.splice(i, 1);
+    history.unshift(existing);
+  } else {
+    history.unshift({ ...lastSnapshotOf(track), playCount: 1 });
+  }
+  if (history.length > HISTORY_MAX) history.length = HISTORY_MAX;
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+function lastSnapshotOf(track: Playable): LastPlayedSnapshot {
+  return {
+    id: track.id,
+    title: track.title,
+    artistName: track.artistName,
+    albumName: track.albumName,
+    coverUrl: track.coverUrl,
+    duration: track.duration,
+    source: track.source,
+    youtubeId: track.youtubeId,
+    audioUrl: track.audioUrl,
+    at: Date.now(),
+  };
+}
+
+/** Clear the local cross-source play history (used by Settings). */
+export function clearPlayHistory(): void {
+  historyCache = [];
+  try {
+    localStorage.removeItem(HISTORY_KEY);
+    localStorage.removeItem(LAST_PLAYED_KEY);
+  } catch {
+    /* storage unavailable */
+  }
+}
+
 const randomIndex = (length: number, exclude: number): number => {
   if (length <= 1) return 0;
   let i = Math.floor(Math.random() * length);
@@ -612,6 +686,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     }
     rememberTrack(track.id);
     saveLastPlayed(track);
+    recordHistory(track);
 
     // record catalog plays for history / most-played
     if (track.catalogTrack && historyRecorder) {

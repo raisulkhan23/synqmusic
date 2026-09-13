@@ -29,7 +29,7 @@ import { formatTime, greeting, pluralize } from "@/lib/format";
 import { toPlayableYoutube, type Playable } from "@/lib/playable";
 import type { YtItem } from "@/lib/youtube";
 import { usePlayerStore } from "@/store/player";
-import { readLastPlayed, type LastPlayedSnapshot } from "@/store/player";
+import { readLastPlayed, readPlayHistory, type HistoryEntry, type LastPlayedSnapshot } from "@/store/player";
 import { isPlayable } from "@/lib/playable";
 import { useAction, useQuery } from "convex/react";
 import { cn } from "@/lib/utils";
@@ -226,8 +226,6 @@ export default function Home() {
   const timeOfDay = useMemo(() => timeOfDayTracks(), []);
   const seasonal = useMemo(() => seasonalTracks(), []);
   const artists = useMemo(() => trendingArtists(8), []);
-  const jumpBack = useMemo(() => recentTracks.slice(1, 6), [recentTracks]);
-
   // --- remote (YouTube) discovery fills -------------------------------------
   // Discovery sections prefer LIVE YouTube results matched by section title
   // (not just the 24-track catalog). The catalog lists render instantly and
@@ -238,10 +236,42 @@ export default function Home() {
       ? String(continueTrack.artistName ?? "")
       : artistNameOf(continueTrack);
 
+  // Cross-source play history (YouTube + catalog alike) drives the personal
+  // sections so they reflect real listening, not just catalog plays.
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  useEffect(() => {
+    setHistory(readPlayHistory());
+  }, [lastPlayed]);
+
+  const historyItems: YtItem[] = useMemo(
+    () =>
+      history.map((h) => ({
+        id: h.youtubeId ?? h.id,
+        title: h.title,
+        artist: h.artistName,
+        duration: h.duration,
+        thumbnail: h.coverUrl,
+      })),
+    [history],
+  );
+  const mostPlayedItems: YtItem[] = useMemo(
+    () => [...historyItems].sort((a, b) => {
+      const ca = history.find((h) => (h.youtubeId ?? h.id) === a.id)?.playCount ?? 0;
+      const cb = history.find((h) => (h.youtubeId ?? h.id) === b.id)?.playCount ?? 0;
+      return cb - ca;
+    }),
+    [historyItems, history],
+  );
+  const jumpBackItems = useMemo(() => historyItems.slice(1, 6), [historyItems]);
+
+  // Live YouTube charts power the global sections (top tracks / artists /
+  // new releases) so they come from YouTube, not the catalog.
   const remoteQueries = useMemo(() => {
     const q: Array<{ key: string; query: string }> = [
       { key: "discover", query: "new music this week" },
       { key: "radar", query: "new releases this week" },
+      { key: "topTracks", query: "top hits right now" },
+      { key: "newReleases", query: "new songs just released" },
     ];
     if (continueTrack) {
       q.push({
@@ -249,10 +279,12 @@ export default function Home() {
         query: `songs similar to ${continueTrack.title} ${continueArtistName}`.trim(),
       });
     }
+    const favArtist = mostPlayedItems[0]?.artist;
+    if (favArtist) q.push({ key: "artists", query: `${favArtist} songs` });
     q.push({ key: "timeOfDay", query: `${timeOfDay.label} music hits`.toLowerCase() });
     q.push({ key: "seasonal", query: `${seasonal.label} hits`.toLowerCase() });
     return q;
-  }, [continueTrack?.title, continueArtistName, timeOfDay.label, seasonal.label]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [continueTrack?.title, continueArtistName, timeOfDay.label, seasonal.label, mostPlayedItems]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [remote, setRemote] = useState<Record<string, YtItem[]>>({});
   const fetchedRef = useRef<Set<string>>(new Set());
@@ -425,14 +457,26 @@ export default function Home() {
         </section>
       )}
 
-      <SectionRow title="New releases" subtitle="Fresh from the SYNQ label">
-        {albums.map((album) => (
-          <AlbumCard key={album.id} album={album} />
-        ))}
-      </SectionRow>
+      <section>
+        <div className="mb-3">
+          <h2 className="font-display text-lg font-bold tracking-tight sm:text-xl">
+            New releases
+          </h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Fresh songs just dropped, streamed from YouTube.
+          </p>
+        </div>
+        <SectionTracks
+          remoteItems={remote.newReleases}
+          fallback={[]}
+          onPlayRemote={playRemoteItem}
+          resolvingId={resolvingId}
+          max={6}
+        />
+      </section>
 
-      {/* Jump Back In — quick access to recently played */}
-      {jumpBack.length >= 2 && (
+      {/* Jump Back In — your cross-source history */}
+      {jumpBackItems.length >= 2 && (
         <section>
           <div className="mb-3 flex items-end justify-between gap-4">
             <div>
@@ -440,32 +484,29 @@ export default function Home() {
                 Jump back in
               </h2>
               <p className="mt-0.5 text-sm text-muted-foreground">
-                Pick up where you left off.
+                Pick up where you left off — from any source.
               </p>
             </div>
           </div>
           <div className="stagger grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-            {jumpBack.map((track) => {
-              const artist = artistNameOf(track);
-              return (
-                <button
-                  key={track.id}
-                  type="button"
-                  onClick={() => playTrack(track, jumpBack)}
-                  className="group flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.03] p-2.5 text-left transition-all hover:border-[rgb(var(--tint)_/_0.35)] hover:bg-white/[0.05]"
-                >
-                  <img
-                    src={coverOf(track)}
-                    alt=""
-                    className="size-11 shrink-0 rounded-md object-cover"
-                  />
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-semibold">{track.title}</span>
-                    <span className="block truncate text-xs text-muted-foreground">{artist}</span>
-                  </span>
-                </button>
-              );
-            })}
+            {jumpBackItems.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => playRemoteItem(item, jumpBackItems)}
+                className="group flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.03] p-2.5 text-left transition-all hover:border-[rgb(var(--tint)_/_0.35)] hover:bg-white/[0.05]"
+              >
+                <img
+                  src={item.thumbnail}
+                  alt=""
+                  className="size-11 shrink-0 rounded-md object-cover"
+                />
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-semibold">{item.title}</span>
+                  <span className="block truncate text-xs text-muted-foreground">{item.artist}</span>
+                </span>
+              </button>
+            ))}
           </div>
         </section>
       )}
@@ -578,46 +619,42 @@ export default function Home() {
         </section>
       )}
 
-      {/* Trending artists */}
-      {artists.length >= 4 && (
+      {/* Trending artists — live from your top played + YouTube */}
+      {historyItems.length >= 2 && (
         <section>
           <div className="mb-3">
             <h2 className="font-display text-lg font-bold tracking-tight sm:text-xl">
               Trending artists
             </h2>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              Who&apos;s hot in the catalog right now.
+              Who you&apos;ve been playing the most.
             </p>
           </div>
           <div className="hide-scrollbar -mx-4 flex gap-4 overflow-x-auto px-4 pb-2">
-            {artists.map((artist) => {
-              const top = artistTracks(artist.id).sort((a, b) => b.popularity - a.popularity);
-              const cover = top[0] ? coverOf(top[0]) : "";
-              return (
-                <button
-                  key={artist.id}
-                  type="button"
-                  onClick={() => {
-                    if (top.length > 0) playTrack(top[0], top);
-                  }}
-                  className="group w-28 shrink-0 text-left"
-                >
-                  <img
-                    src={cover}
-                    alt=""
-                    className="aspect-square w-full rounded-full object-cover ring-1 ring-white/10 transition-transform duration-300 group-hover:scale-105"
-                  />
-                  <p className="mt-2 truncate text-sm font-semibold">{artist.name}</p>
-                  <p className="truncate text-xs text-muted-foreground">Artist</p>
-                </button>
-              );
-            })}
+            {artistTrend(historyItems).slice(0, 8).map(({ artist, items }) => (
+              <button
+                key={artist}
+                type="button"
+                onClick={() => {
+                  if (items[0]) playRemoteItem(items[0], items);
+                }}
+                className="group w-28 shrink-0 text-left"
+              >
+                <img
+                  src={items[0]?.thumbnail ?? ""}
+                  alt=""
+                  className="aspect-square w-full rounded-full object-cover ring-1 ring-white/10 transition-transform duration-300 group-hover:scale-105"
+                />
+                <p className="mt-2 truncate text-sm font-semibold">{artist}</p>
+                <p className="truncate text-xs text-muted-foreground">Artist</p>
+              </button>
+            ))}
           </div>
         </section>
       )}
 
-      {/* most played (personal) */}
-      {mostTracks.length >= 2 && (
+      {/* most played (personal, cross-source) */}
+      {mostPlayedItems.length >= 2 && (
         <section>
           <div className="mb-3 flex items-end justify-between gap-4">
             <div>
@@ -625,21 +662,21 @@ export default function Home() {
                 Your most played
               </h2>
               <p className="mt-0.5 text-sm text-muted-foreground">
-                Based on your listening history.
+                Your real listening history — every source.
               </p>
             </div>
-            <PlayHeaderButton list={mostTracks} />
           </div>
-          <div className="stagger mt-1 flex flex-col gap-0.5">
-            {mostTracks.slice(0, 5).map((track, i) => (
-              <TrackRow key={track.id} track={track} list={mostTracks} index={i + 1} />
-            ))}
-          </div>
+          <SectionTracks
+            remoteItems={mostPlayedItems}
+            fallback={[]}
+            onPlayRemote={playRemoteItem}
+            resolvingId={resolvingId}
+          />
         </section>
       )}
 
-      {/* recently played (personal) */}
-      {recentTracks.length >= 2 && (
+      {/* recently played (personal, cross-source) */}
+      {historyItems.length >= 2 && (
         <section>
           <div className="mb-3 flex items-end justify-between gap-4">
             <div>
@@ -647,16 +684,16 @@ export default function Home() {
                 Recently played
               </h2>
               <p className="mt-0.5 text-sm text-muted-foreground">
-                Jump back in where you left off.
+                Jump back in where you left off — any source.
               </p>
             </div>
-            <PlayHeaderButton list={recentTracks} />
           </div>
-          <div className="stagger mt-1 flex flex-col gap-0.5">
-            {recentTracks.slice(0, 5).map((track, i) => (
-              <TrackRow key={track.id} track={track} list={recentTracks} index={i + 1} />
-            ))}
-          </div>
+          <SectionTracks
+            remoteItems={historyItems}
+            fallback={[]}
+            onPlayRemote={playRemoteItem}
+            resolvingId={resolvingId}
+          />
         </section>
       )}
 
@@ -667,16 +704,17 @@ export default function Home() {
               Today&apos;s top tracks
             </h2>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              The most played songs in the catalog right now.
+              The biggest songs right now, streamed from YouTube.
             </p>
           </div>
-          <PlayHeaderButton list={top} />
         </div>
-        <div className="stagger mt-1 flex flex-col gap-0.5">
-          {top.map((track, i) => (
-            <TrackRow key={track.id} track={track} list={top} index={i + 1} />
-          ))}
-        </div>
+        <SectionTracks
+          remoteItems={remote.topTracks}
+          fallback={top}
+          onPlayRemote={playRemoteItem}
+          resolvingId={resolvingId}
+          max={8}
+        />
       </section>
     </div>
   );
@@ -733,6 +771,21 @@ function SectionTracks({
       ))}
     </div>
   );
+}
+
+// Group history items by artist name, sorted by play count (approximated by
+// number of entries), for the "Trending artists" rail.
+function artistTrend(items: YtItem[]): Array<{ artist: string; items: YtItem[] }> {
+  const byArtist = new Map<string, YtItem[]>();
+  for (const item of items) {
+    const key = item.artist || "Unknown artist";
+    const list = byArtist.get(key) ?? [];
+    list.push(item);
+    byArtist.set(key, list);
+  }
+  return [...byArtist.entries()]
+    .map(([artist, list]) => ({ artist, items: list }))
+    .sort((a, b) => b.items.length - a.items.length);
 }
 
 // Helpers to get display metadata from a Track without importing heavy deps.

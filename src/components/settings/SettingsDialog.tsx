@@ -9,7 +9,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/hooks/use-auth";
-import { usePlayerStore } from "@/store/player";
+import { clearPlayHistory, usePlayerStore } from "@/store/player";
 import { cn } from "@/lib/utils";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -109,6 +109,7 @@ export function SettingsDialog({
     setClearing(true);
     try {
       const n = await clearHistory({});
+      clearPlayHistory();
       toast.success(`Cleared ${n} ${n === 1 ? "entry" : "entries"} from your history`);
     } catch {
       toast.error("Couldn't clear history — try again");
