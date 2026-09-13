@@ -21,6 +21,7 @@ interface YtPlayerLike {
   seekTo: (seconds: number, allowSeekAhead: boolean) => void;
   setVolume: (v: number) => void;
   setPlaybackRate: (rate: number) => void;
+  getPlaybackRate: () => number;
   mute: () => void;
   unMute: () => void;
   getCurrentTime: () => number;
@@ -61,6 +62,48 @@ export interface YtEngineHandlers {
 }
 
 let currentRate = 1;
+let rateVerifyTimer: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Apply the requested rate and VERIFY it actually took. YouTube silently
+ * ignores setPlaybackRate while buffering/cued and resets it on state
+ * changes, so a fire-and-forget call doesn't work. We poll getPlaybackRate()
+ * and re-apply until it sticks (max ~5s), and re-apply whenever playback
+ * (re)starts.
+ */
+function applyRate(): void {
+  const target = currentRate;
+  const attempt = () => {
+    try {
+      player?.setPlaybackRate(target);
+    } catch {
+      /* not ready */
+    }
+  };
+  attempt();
+  if (rateVerifyTimer !== null) clearInterval(rateVerifyTimer);
+  let checks = 0;
+  rateVerifyTimer = setInterval(() => {
+    if (!player || rateVerifyTimer === null) {
+      if (rateVerifyTimer !== null) clearInterval(rateVerifyTimer);
+      rateVerifyTimer = null;
+      return;
+    }
+    let actual = 0;
+    try {
+      actual = player.getPlaybackRate?.() ?? 0;
+    } catch {
+      actual = 0;
+    }
+    if (actual === 0 || Math.abs(actual - target) > 0.01) {
+      attempt();
+    }
+    if (++checks > 20) {
+      if (rateVerifyTimer !== null) clearInterval(rateVerifyTimer);
+      rateVerifyTimer = null;
+    }
+  }, 250);
+}
 
 let handlers: YtEngineHandlers = {};
 let player: YtPlayerLike | null = null;
@@ -153,16 +196,18 @@ async function ensurePlayer(): Promise<YtPlayerLike> {
         events: {
           onReady: (e) => {
             clearTimeout(timeout);
-            try {
-              e.target.setPlaybackRate(currentRate);
-            } catch {
-              /* rate applied later on load */
-            }
+            applyRate();
             resolve(e.target);
           },
           onStateChange: (e) => {
             lastState = e.data;
             handlers.onStateChange?.(e.data);
+            // YouTube resets the playback rate on state changes — re-apply
+            // whenever the video (re)starts playing or buffers.
+            if (e.data === 1 || e.data === 3) applyRate();
+            // Hide YouTube's pause overlay (related-videos grid etc.) by
+            // showing our own cover while not actively playing.
+            setPauseCoverVisible(e.data !== 1);
             // State 0 (ended) doesn't fire onTime again — push a final time
             // sample so the store can run A-B repeat / auto-advance logic.
             if (e.data === 0) {
@@ -209,14 +254,8 @@ export async function play(
   }
   lastState = -1;
   p.loadVideoById(videoId, Math.max(0, opts.startSeconds ?? 0));
-  // A fresh load can reset the rate — re-apply once buffering settles.
-  setTimeout(() => {
-    try {
-      player?.setPlaybackRate(currentRate);
-    } catch {
-      /* gone */
-    }
-  }, 800);
+  // A fresh load resets the rate — the verified re-apply loop handles it.
+  applyRate();
   suppressYtOverlays();
 }
 
@@ -225,15 +264,49 @@ export async function play(
  * are rendered inside the iframe, but some sit in a same-origin shell we can
  * style. This injects one suppression stylesheet, once per session.
  */
+/**
+ * YouTube's own stylesheet classes are unreachable (cross-origin iframe), so
+ * instead we hide its UI with OUR OWN elements layered above the player:
+ * 1. an always-on "chrome shield" strip covering the title bar / top-right
+ *    buttons and the bottom-right controls strip, and
+ * 2. a full pause cover (dark + logo) shown whenever the video isn't playing,
+ *    which hides the related-videos grid / pause overlay entirely.
+ * These live in the same stacking context as the iframe, so they work.
+ */
+let shieldEl: HTMLDivElement | null = null;
+let pauseCoverEl: HTMLDivElement | null = null;
+
+function ensureShields(): void {
+  if (!hostEl) return;
+  if (!shieldEl) {
+    shieldEl = document.createElement("div");
+    shieldEl.style.cssText =
+      "position:absolute;inset:0;pointer-events:auto;z-index:5;";
+    hostEl.appendChild(shieldEl);
+  }
+  if (!pauseCoverEl) {
+    pauseCoverEl = document.createElement("div");
+    pauseCoverEl.style.cssText =
+      "position:absolute;inset:0;display:none;align-items:center;justify-content:center;" +
+      "background:#090a0f;z-index:6;pointer-events:none;transition:opacity .2s;";
+    const logo = document.createElement("img");
+    logo.src = "/logo.svg";
+    logo.style.cssText = "width:56px;opacity:.5;";
+    logo.onerror = () => {
+      logo.style.display = "none";
+    };
+    pauseCoverEl.appendChild(logo);
+    hostEl.appendChild(pauseCoverEl);
+  }
+}
+
+/** Toggle our pause cover on top of YouTube's pause UI. */
+function setPauseCoverVisible(visible: boolean): void {
+  if (pauseCoverEl) pauseCoverEl.style.display = visible ? "flex" : "none";
+}
+
 function suppressYtOverlays(): void {
-  const styleId = "ss-yt-overlay-suppression";
-  if (document.getElementById(styleId)) return;
-  const style = document.createElement("style");
-  style.id = styleId;
-  style.textContent = `
-    .ytp-pause-overlay, .ytp-ce-element, .ytp-show-tiles { display: none !important; }
-  `;
-  document.head.appendChild(style);
+  ensureShields();
 }
 
 export function resume(): void {
@@ -285,16 +358,7 @@ export function setMuted(muted: boolean): void {
  */
 export function setRate(rate: number): void {
   currentRate = Math.min(2, Math.max(0.5, rate));
-  const apply = () => {
-    try {
-      player?.setPlaybackRate(currentRate);
-    } catch {
-      /* not ready */
-    }
-  };
-  apply();
-  setTimeout(apply, 300);
-  setTimeout(apply, 1000);
+  applyRate();
 }
 
 /**

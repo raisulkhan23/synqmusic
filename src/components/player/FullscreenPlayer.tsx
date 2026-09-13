@@ -29,10 +29,18 @@ import {
   MicVocal,
   Repeat,
   X,
+  Waves,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const RATES = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+const AUDIO_FILTERS: { id: "off" | "8d" | "bass" | "vocal" | "night"; label: string; icon: string }[] = [
+  { id: "off", label: "None", icon: "🎵" },
+  { id: "8d", label: "8D Audio", icon: "🌀" },
+  { id: "bass", label: "Bass Boost", icon: "🔊" },
+  { id: "vocal", label: "Vocal Boost", icon: "🎤" },
+  { id: "night", label: "Night Mode", icon: "🌙" },
+];
 
 /**
  * YouTube titles/channel names don't match lyrics databases directly — strip
@@ -260,6 +268,8 @@ export function FullscreenPlayer() {
   const setQueueOpen = usePlayerStore((s) => s.setQueueOpen);
   const rate = usePlayerStore((s) => s.rate);
   const setRate = usePlayerStore((s) => s.setRate);
+  const audioFilter = usePlayerStore((s) => s.audioFilter);
+  const setAudioFilter = usePlayerStore((s) => s.setAudioFilter);
 
   const a = accent ?? { r: 196, g: 246, b: 152 };
 
@@ -512,6 +522,41 @@ export function FullscreenPlayer() {
                     >
                       {r === 1 ? "Normal (1×)" : `${r}×`}
                       {r === rate && <span className="ml-auto">●</span>}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* audio effects */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    title="Audio effects"
+                    className={cn(
+                      "flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-semibold tracking-wide uppercase transition-colors hover:bg-white/[0.08]",
+                      audioFilter !== "off"
+                        ? "border-[rgb(var(--tint)_/_0.5)] text-[rgb(var(--tint))]"
+                        : "text-muted-foreground",
+                    )}
+                  >
+                    <Waves className="size-3.5" />
+                    {audioFilter === "off" ? "Effects" : AUDIO_FILTERS.find((f) => f.id === audioFilter)?.label}
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="center">
+                  <DropdownMenuLabel className="text-xs text-muted-foreground">
+                    Audio effects
+                  </DropdownMenuLabel>
+                  {AUDIO_FILTERS.map((f) => (
+                    <DropdownMenuItem
+                      key={f.id}
+                      className={cn("gap-2", f.id === audioFilter && "text-[rgb(var(--tint))]")}
+                      onSelect={() => setAudioFilter(f.id)}
+                    >
+                      <span aria-hidden>{f.icon}</span>
+                      {f.label}
+                      {f.id === audioFilter && <span className="ml-auto">●</span>}
                     </DropdownMenuItem>
                   ))}
                 </DropdownMenuContent>

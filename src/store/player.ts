@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { getAudio } from "@/lib/audio";
+import { getAudio, setAudioFilter, type AudioFilterId } from "@/lib/audio";
 import { trackById, type Track } from "@/lib/catalog";
 import { similarTracks } from "@/lib/catalog";
 import type { RGB } from "@/lib/covers";
@@ -50,6 +50,8 @@ interface PlayerStore {
   repeat: RepeatMode;
   /** Playback speed 0.5–2. */
   rate: number;
+  /** Active audio effect filter (8D, bass boost, …) — catalog playback. */
+  audioFilter: AudioFilterId;
 
   // sleep timer
   /** Epoch ms when playback will pause; null when off. */
@@ -100,6 +102,7 @@ interface PlayerStore {
   toggleSmartShuffle: () => void;
   cycleRepeat: () => void;
   setRate: (rate: number) => void;
+  setAudioFilter: (id: AudioFilterId) => void;
   /** minutes, "end" (after current song) or null to cancel */
   setSleepTimer: (mode: number | "end" | null) => void;
   setAbPoint: (which: "a" | "b", seconds: number | null) => void;
@@ -823,6 +826,11 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     }
   };
 
+  const setAudioFilterAction = (id: AudioFilterId) => {
+    setAudioFilter(id);
+    set({ audioFilter: id });
+  };
+
   const setSleepTimer = (mode: number | "end" | null) => {
     if (sleepCheckInterval) {
       clearInterval(sleepCheckInterval);
@@ -916,6 +924,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     unshuffledIndex: -1,
     repeat: initialRepeat,
     rate: initialRate,
+    audioFilter: "off",
 
     autoplay: initialAutoplay,
     toggleAutoplay: () =>
@@ -972,6 +981,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       }),
 
     playTrack,
+    setAudioFilter: setAudioFilterAction,
     playIndex,
     replaceCurrentStream,
     togglePlay,
