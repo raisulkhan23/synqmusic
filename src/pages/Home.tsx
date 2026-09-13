@@ -26,9 +26,10 @@ import {
 } from "@/lib/catalog";
 import { coverArt } from "@/lib/covers";
 import { formatTime, greeting, pluralize } from "@/lib/format";
-import { toPlayableYoutube } from "@/lib/playable";
+import { toPlayableYoutube, type Playable } from "@/lib/playable";
 import type { YtItem } from "@/lib/youtube";
 import { usePlayerStore } from "@/store/player";
+import { readLastPlayed, type LastPlayedSnapshot } from "@/store/player";
 import { useAction, useQuery } from "convex/react";
 import { cn } from "@/lib/utils";
 import {
@@ -196,8 +197,22 @@ export default function Home() {
     },
   ];
 
-  // the single last-played track, for "Continue listening"
-  const continueTrack = recentTracks[0] ?? null;
+  // the single last-played track, for "Continue listening" — the most recent
+  // song from ANY source (YouTube included), falling back to catalog history.
+  const [lastPlayed, setLastPlayed] = useState<LastPlayedSnapshot | null>(null);
+  useEffect(() => {
+    setLastPlayed(readLastPlayed());
+  }, []);
+  const continueTrack: (Playable | Track) | null = useMemo(() => {
+    const local = lastPlayed;
+    const server = recent?.[0];
+    const serverTrack = server ? trackById(server.trackId) : undefined;
+    if (serverTrack && server && local) {
+      return server.playedAt > local.at ? serverTrack : local;
+    }
+    if (local) return local;
+    return serverTrack ?? null;
+  }, [lastPlayed, recent]);
 
   // --- discovery rails -------------------------------------------------------
   const recentIds = useMemo(() => (recent ?? []).map((r) => r.trackId), [recent]);

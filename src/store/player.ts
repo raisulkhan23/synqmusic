@@ -283,6 +283,54 @@ function rememberTrack(id: string): void {
   if (recentTrackIds.length > 20) recentTrackIds.pop();
 }
 
+// --- last-played memory (any source) ------------------------------------------
+
+const LAST_PLAYED_KEY = "ss.lastPlayed";
+
+export interface LastPlayedSnapshot {
+  id: string;
+  title: string;
+  artistName: string;
+  albumName: string;
+  coverUrl: string;
+  duration: number;
+  source: "catalog" | "youtube";
+  youtubeId?: string;
+  audioUrl: string;
+  at: number;
+}
+
+export function readLastPlayed(): LastPlayedSnapshot | null {
+  try {
+    const raw = localStorage.getItem(LAST_PLAYED_KEY);
+    if (!raw) return null;
+    const snap = JSON.parse(raw) as LastPlayedSnapshot;
+    return snap && snap.id ? snap : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveLastPlayed(track: Playable): void {
+  try {
+    const snap: LastPlayedSnapshot = {
+      id: track.id,
+      title: track.title,
+      artistName: track.artistName,
+      albumName: track.albumName,
+      coverUrl: track.coverUrl,
+      duration: track.duration,
+      source: track.source,
+      youtubeId: track.youtubeId,
+      audioUrl: track.audioUrl,
+      at: Date.now(),
+    };
+    localStorage.setItem(LAST_PLAYED_KEY, JSON.stringify(snap));
+  } catch {
+    /* storage unavailable */
+  }
+}
+
 const randomIndex = (length: number, exclude: number): number => {
   if (length <= 1) return 0;
   let i = Math.floor(Math.random() * length);
@@ -543,6 +591,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       }));
     }
     rememberTrack(track.id);
+    saveLastPlayed(track);
 
     // record catalog plays for history / most-played
     if (track.catalogTrack && historyRecorder) {
