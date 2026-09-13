@@ -514,7 +514,7 @@ export function FullscreenPlayer() {
                     {rate}×
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="center">
+                <DropdownMenuContent align="center" className="z-[80]">
                   <DropdownMenuLabel className="text-xs text-muted-foreground">
                     Playback speed
                   </DropdownMenuLabel>
@@ -548,7 +548,7 @@ export function FullscreenPlayer() {
                     {audioFilter === "off" ? "Effects" : AUDIO_FILTERS.find((f) => f.id === audioFilter)?.label}
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="center">
+                <DropdownMenuContent align="center" className="z-[80]">
                   <DropdownMenuLabel className="text-xs text-muted-foreground">
                     Audio effects
                   </DropdownMenuLabel>
