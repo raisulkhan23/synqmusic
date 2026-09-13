@@ -130,7 +130,7 @@ function LyricsPanel({ onClose }: { onClose: () => void }) {
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: 24 }}
       transition={{ duration: 0.22 }}
-      className="absolute inset-y-0 right-0 z-20 flex w-full max-w-md flex-col border-l border-white/[0.07] bg-[#0b0c11]/95 backdrop-blur-xl"
+      className="fixed inset-y-0 right-0 z-20 flex w-full max-w-md flex-col border-l border-white/[0.07] bg-[#0b0c11]/95 backdrop-blur-xl"
     >
       <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4">
         <p className="flex items-center gap-2 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
@@ -457,11 +457,15 @@ export function FullscreenPlayer() {
             )}
           </div>
 
-          {/* metadata + controls */}
+          {/* metadata + controls — slide left alongside the video when the
+              lyrics panel is open on desktop */}
           <div
             className={cn(
-              "mx-auto flex w-full max-w-2xl flex-col items-center gap-3",
-              lyricsOpen && "opacity-0 lg:opacity-100",
+              "flex w-full max-w-2xl flex-col items-center gap-3 transition-all duration-300",
+              lyricsOpen
+                ? "lg:mr-[30rem] lg:ml-0 lg:items-start lg:px-6" // left-shift on desktop
+                : "mx-auto",
+              lyricsOpen && "opacity-0 lg:opacity-100", // lyrics overlay covers on small screens
             )}
           >
             <div className="w-full text-center">

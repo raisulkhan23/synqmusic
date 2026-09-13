@@ -1,12 +1,11 @@
-import { useState } from "react";
 import { useNavigate } from "react-router";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import { albumById, artistById, radioFor, type Track } from "@/lib/catalog";
 import { usePlayerStore } from "@/store/player";
 import { toast } from "sonner";
@@ -33,7 +32,6 @@ export function TrackContextMenu({
   track: Track;
   children: React.ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const addToQueue = usePlayerStore((s) => s.addToQueue);
   const liked = usePlayerStore((s) => s.liked);
@@ -91,32 +89,25 @@ export function TrackContextMenu({
   };
 
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
-      <DropdownMenuTrigger asChild>
-        <span
-          className="contents"
-          onContextMenu={(e) => {
-            e.preventDefault();
-            setOpen(true);
-          }}
-        >
-          {children}
-        </span>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-56">
-        <DropdownMenuItem className="gap-2" onSelect={() => playNext()}>
+    <ContextMenu>
+      <ContextMenuTrigger className="contents">
+        {children}
+      </ContextMenuTrigger>
+      <ContextMenuContent className="w-56">
+        <ContextMenuItem className="gap-2" onSelect={() => playNext()}>
           <ListStart className="size-4" />
           Play next
-        </DropdownMenuItem>
-        <DropdownMenuItem className="gap-2" onSelect={() => startRadio()}>
+        </ContextMenuItem>
+        <ContextMenuItem className="gap-2" onSelect={() => startRadio()}>
           <Radio className="size-4" />
           Start song radio
-        </DropdownMenuItem>
-        <DropdownMenuItem className="gap-2" onSelect={() => add()}>
+        </ContextMenuItem>
+        <ContextMenuItem className="gap-2" onSelect={() => add()}>
           <ListEnd className="size-4" />
           Add to queue
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />        <DropdownMenuItem
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem
           className="gap-2"
           onSelect={() => toggleLike(track.id)}
         >
@@ -124,33 +115,33 @@ export function TrackContextMenu({
             className={`size-4 ${isLiked ? "fill-current text-[rgb(var(--tint))]" : ""}`}
           />
           {isLiked ? "Remove from Liked" : "Add to Liked"}
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem
           className="gap-2"
           onSelect={() => navigate(`/album/${album.id}`)}
         >
           <ExternalLink className="size-4" />
           Go to album
-        </DropdownMenuItem>
-        <DropdownMenuItem
+        </ContextMenuItem>
+        <ContextMenuItem
           className="gap-2"
           onSelect={() => navigate(`/artist/${artist.id}`)}
         >
           <Link2 className="size-4" />
           Go to artist
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem className="gap-2" onSelect={() => copyLink()}>
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem className="gap-2" onSelect={() => copyLink()}>
           <Link2 className="size-4" />
           Copy song link
-        </DropdownMenuItem>
-        <DropdownMenuItem className="gap-2" onSelect={() => void share()}>
+        </ContextMenuItem>
+        <ContextMenuItem className="gap-2" onSelect={() => void share()}>
           <Share2 className="size-4" />
           Share…
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
 
