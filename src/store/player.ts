@@ -5,6 +5,24 @@ import { similarTracks } from "@/lib/catalog";
 import type { RGB } from "@/lib/covers";
 import { isPlayable, toPlayable, type Playable } from "@/lib/playable";
 import * as ytEngine from "@/lib/youtubePlayer";
+import { api } from "@/convex/_generated/api";
+import { ConvexClient } from "convex/browser";
+
+/**
+ * Resolve a direct audio stream URL for a YouTube video via the Convex
+ * backend (vanilla client — usable outside React). Used only when an audio
+ * effect needs the stream on the <audio> element. Returns null on failure.
+ */
+let ytResolveClient: ConvexClient | null = null;
+const ytResolve = async (videoId: string): Promise<string | null> => {
+  try {
+    ytResolveClient = ytResolveClient ?? new ConvexClient(import.meta.env.VITE_CONVEX_URL as string);
+    const res = await ytResolveClient.action(api.youtube.resolveStream, { videoId });
+    return res?.url ?? null;
+  } catch {
+    return null;
+  }
+};
 
 export type RepeatMode = "off" | "all" | "one";
 
@@ -607,7 +625,15 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     const resumeAt = startSeconds ?? getResumePosition(track.id, track.duration);
 
     // Route to the YouTube IFrame engine by video id; otherwise use the audio element.
+    // EXCEPTION: when an audio effect is active, YouTube tracks play through
+    // the <audio> element with a resolved direct stream instead — the IFrame
+    // engine can't be tapped by Web Audio, so effects would be silent no-ops.
     if (track.youtubeId) {
+      const wantFilter = get().audioFilter !== "off";
+      if (wantFilter && track.youtubeId) {
+        void resolveAndPlayWithFilter(track, resumeAt);
+        return;
+      }
       getAudio().pause();
       ytEngine
         .play(track.youtubeId, { volume: get().volume, muted: get().muted, startSeconds: resumeAt || undefined })
@@ -829,6 +855,61 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
   const setAudioFilterAction = (id: AudioFilterId) => {
     setAudioFilter(id);
     set({ audioFilter: id });
+    // If a YouTube track is currently playing via the IFrame engine and an
+    // effect was just activated, hot-swap it onto the filtered audio path.
+    const s = get();
+    if (id !== "off" && s.current?.youtubeId && !s.current.audioUrl.includes("googlevideo")) {
+      const resumeAt = s.currentTime;
+      void resolveAndPlayWithFilter(s.current, resumeAt);
+    }
+    // If the effect was turned off while a YouTube track is on the audio
+    // element, swap back to the IFrame engine (better quality/reliability).
+    if (id === "off" && s.current?.youtubeId && s.current.audioUrl.includes("googlevideo")) {
+      const resumeAt = s.currentTime;
+      getAudio().pause();
+      void ytEngine
+        .play(s.current.youtubeId, { volume: s.volume, muted: s.muted, startSeconds: resumeAt })
+        .catch(() => undefined);
+    }
+  };
+
+  /**
+   * Resolve a direct audio URL for a YouTube track and play it through the
+   * audio element so the Web Audio effect chain applies. Falls back to the
+   * IFrame engine when resolution fails.
+   */
+  const resolveAndPlayWithFilter = (track: Playable, resumeAt: number) => {
+    const videoId = track.youtubeId;
+    if (!videoId) return;
+    set({ isBuffering: true });
+    ytResolve(videoId)
+      .then((url) => {
+        if (!url) throw new Error("no stream");
+        const audio = getAudio();
+        ytEngine.pause();
+        audio.src = url;
+        audio.playbackRate = get().rate;
+        audio.load();
+        if (resumeAt > 0) {
+          const applyResume = () => {
+            audio.currentTime = resumeAt;
+            usePlayerStore.setState({ currentTime: resumeAt });
+          };
+          if (audio.readyState >= 1) applyResume();
+          else audio.addEventListener("loadedmetadata", applyResume, { once: true });
+        }
+        void audio.play().catch(() => undefined);
+        set({ current: { ...track, audioUrl: url }, currentTime: resumeAt });
+      })
+      .catch(() => {
+        // Fall back to the unfiltered IFrame engine so playback never dies.
+        getAudio().pause();
+        ytEngine
+          .play(videoId, { volume: get().volume, muted: get().muted, startSeconds: resumeAt || undefined })
+          .catch(() => {
+            set({ isPlaying: false, isBuffering: false, errorNonce: get().errorNonce + 1 });
+          });
+      });
   };
 
   const setSleepTimer = (mode: number | "end" | null) => {

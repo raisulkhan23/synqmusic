@@ -121,10 +121,13 @@ function startRotation(): void {
   stopRotation();
   const ctx = audioCtx;
   if (!ctx || !panner) return;
+  const start = ctx.currentTime;
   const tick = () => {
     if (!ctx || !panner) return;
-    // Full L/R sweep roughly every 8 seconds — classic "8D" feel.
-    panner.pan.value = Math.sin(ctx.currentTime * (2 * Math.PI / 8));
+    // Full L/R sweep every 4 seconds with a 0.35Hz wobble — clearly audible
+    // "8D" motion (slow 8s pans read as stereo drift, not 8D).
+    const t = ctx.currentTime - start;
+    panner.pan.value = Math.sin(t * (2 * Math.PI / 4)) * (0.7 + 0.3 * Math.sin(t * 2 * Math.PI * 0.35));
     rotateRaf = requestAnimationFrame(tick);
   };
   rotateRaf = requestAnimationFrame(tick);
@@ -157,16 +160,23 @@ export function setAudioFilter(id: AudioFilterId): boolean {
   switch (id) {
     case "8d":
       startRotation();
+      // A little reverb-like wideness via a high-shelf tilt.
+      vocalFilter!.gain.value = 2;
       break;
     case "bass":
-      bassFilter!.gain.value = 9;
+      // +14dB low-shelf at 120Hz — unmissable low-end punch.
+      bassFilter!.gain.value = 14;
+      bassFilter!.frequency.value = 120;
       break;
     case "vocal":
-      vocalFilter!.gain.value = 6;
+      // Presence + a 200Hz mud cut so voices really pop forward.
+      vocalFilter!.gain.value = 10;
+      bassFilter!.gain.value = -6;
       break;
     case "night":
-      nightLow!.frequency.value = 3500;
-      gainOut!.gain.value = 0.7;
+      nightLow!.frequency.value = 3200;
+      gainOut!.gain.value = 0.55;
+      bassFilter!.gain.value = 3;
       break;
   }
   return true;
