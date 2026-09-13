@@ -220,9 +220,9 @@ async function musicSearch(query: string): Promise<YtItem[]> {
         },
       },
       query,
-      // No shelf filter — search ALL of YouTube Music so both "Songs" and
-      // "Videos" shelves (official music videos!) come back. The Songs-only
-      // param used here previously excluded official music videos entirely.
+      // Songs-shelf filter: restricts results to YouTube Music's "Songs"
+      // shelf — proper studio tracks/album versions, not random videos.
+      params: "Eg-KAQwIARAAGAAgACgAMABqChAEEAMQBBApEAU",
     }),
   });
   if (!res.ok) throw new ConvexError(`YouTube Music API returned ${res.status}`);
@@ -261,8 +261,7 @@ function extractMusicResults(data: Record<string, unknown>): YtItem[] {
       if (!renderer) continue;
 
       // Only real, playable songs (videoId + playlistItemData implies a track).
-      // Accept BOTH playlistItemData (songs shelf) and overlayvideoId
-      // (videos shelf — the official music videos).
+      // Songs shelf items carry playlistItemData.videoId.
       const videoId =
         (get(renderer, ["playlistItemData", "videoId"]) as string | undefined) ??
         (get(renderer, ["overlay", "musicItemThumbnailOverlayRenderer", "content", "musicPlayButtonRenderer", "playNavigationEndpoint", "watchEndpoint", "videoId"]) as string | undefined);
@@ -314,10 +313,8 @@ export const searchYoutube = action({
   handler: async (_ctx, { query }): Promise<{ items: YtItem[] }> => {
     if (!query.trim()) return { items: [] };
 
-    // Preferred: YouTube Music — returns songs and official music videos.
-    // No marker gate: requiring "Official Video"/VEVO in the title hid
-    // perfectly good artist uploads, so we only apply the basic
-    // non-music heuristics.
+    // Preferred: YouTube Music — returns real studio tracks (Songs shelf),
+    // never random YouTube videos.
     try {
       const items = await musicSearch(query);
       if (items.length > 0) return { items };

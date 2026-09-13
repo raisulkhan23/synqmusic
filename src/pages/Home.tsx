@@ -48,7 +48,7 @@ import {
   Sun,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 export default function Home() {
   const playTrack = usePlayerStore((s) => s.playTrack);
@@ -227,6 +227,62 @@ export default function Home() {
   const seasonal = useMemo(() => seasonalTracks(), []);
   const artists = useMemo(() => trendingArtists(8), []);
   const jumpBack = useMemo(() => recentTracks.slice(1, 6), [recentTracks]);
+
+  // --- remote (YouTube) discovery fills -------------------------------------
+  // Discovery sections prefer LIVE YouTube results matched by section title
+  // (not just the 24-track catalog). The catalog lists render instantly and
+  // are replaced once the YouTube rows for each section arrive.
+  const continueArtistName = !continueTrack
+    ? ""
+    : "artistName" in continueTrack
+      ? String(continueTrack.artistName ?? "")
+      : artistNameOf(continueTrack);
+
+  const remoteQueries = useMemo(() => {
+    const q: Array<{ key: string; query: string }> = [
+      { key: "discover", query: "new music this week" },
+      { key: "radar", query: "new releases this week" },
+    ];
+    if (continueTrack) {
+      q.push({
+        key: "because",
+        query: `songs similar to ${continueTrack.title} ${continueArtistName}`.trim(),
+      });
+    }
+    q.push({ key: "timeOfDay", query: `${timeOfDay.label} music hits`.toLowerCase() });
+    q.push({ key: "seasonal", query: `${seasonal.label} hits`.toLowerCase() });
+    return q;
+  }, [continueTrack?.title, continueArtistName, timeOfDay.label, seasonal.label]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const [remote, setRemote] = useState<Record<string, YtItem[]>>({});
+  const fetchedRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      for (const { key, query } of remoteQueries) {
+        if (cancelled || fetchedRef.current.has(key)) continue;
+        fetchedRef.current.add(key);
+        try {
+          const { items } = await searchYt({ query });
+          if (!cancelled && items.length > 0) {
+            setRemote((prev) => ({ ...prev, [key]: items.slice(0, 6) }));
+          }
+        } catch {
+          // keep the catalog fallback in place on failure
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [remoteQueries, searchYt]);
+
+  const playRemoteItem = (item: YtItem, rest: YtItem[]) => {
+    playTrack(
+      toPlayableYoutube(item, `https://youtu.be/${item.id}`, rest.filter((r) => r.id !== item.id)),
+    );
+  };
 
   return (
     <div className="flex flex-col gap-10">
@@ -427,13 +483,15 @@ export default function Home() {
                 A fresh mix every week, tuned to what you haven&apos;t heard yet.
               </p>
             </div>
-            <PlayHeaderButton list={discover} label="Play mix" />
+            <PlayHeaderButton list={remote.discover?.length ? [] : discover} label="Play mix" />
           </div>
-          <div className="stagger mt-1 flex flex-col gap-0.5">
-            {discover.slice(0, 6).map((track, i) => (
-              <TrackRow key={track.id} track={track} list={discover} index={i + 1} />
-            ))}
-          </div>
+          <SectionTracks
+            remoteItems={remote.discover}
+            fallback={discover}
+            onPlayRemote={playRemoteItem}
+            resolvingId={resolvingId}
+            max={6}
+          />
         </section>
       )}
 
@@ -450,13 +508,14 @@ export default function Home() {
                 Newest tracks from artists you follow.
               </p>
             </div>
-            <PlayHeaderButton list={radar} label="Play radar" />
+            <PlayHeaderButton list={remote.radar?.length ? [] : radar} label="Play radar" />
           </div>
-          <div className="stagger mt-1 flex flex-col gap-0.5">
-            {radar.slice(0, 5).map((track, i) => (
-              <TrackRow key={track.id} track={track} list={radar} index={i + 1} />
-            ))}
-          </div>
+          <SectionTracks
+            remoteItems={remote.radar}
+            fallback={radar}
+            onPlayRemote={playRemoteItem}
+            resolvingId={resolvingId}
+          />
         </section>
       )}
 
@@ -469,14 +528,15 @@ export default function Home() {
               Because you listened to {continueTrack.title}
             </h2>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              More like this, picked from the catalog.
+              More like this, matched from YouTube live.
             </p>
           </div>
-          <div className="stagger mt-1 flex flex-col gap-0.5">
-            {because.slice(0, 5).map((track, i) => (
-              <TrackRow key={track.id} track={track} list={because} index={i + 1} />
-            ))}
-          </div>
+          <SectionTracks
+            remoteItems={remote.because}
+            fallback={because}
+            onPlayRemote={playRemoteItem}
+            resolvingId={resolvingId}
+          />
         </section>
       )}
 
@@ -489,11 +549,14 @@ export default function Home() {
                 <Sun className="size-4 text-[rgb(var(--tint))]" />
                 {timeOfDay.label}
               </h3>
-              <div className="mt-2 flex flex-col gap-0.5">
-                {timeOfDay.tracks.slice(0, 4).map((track, i) => (
-                  <TrackRow key={track.id} track={track} list={timeOfDay.tracks} index={i + 1} />
-                ))}
-              </div>
+              <SectionTracks
+                remoteItems={remote.timeOfDay}
+                fallback={timeOfDay.tracks}
+                onPlayRemote={playRemoteItem}
+                resolvingId={resolvingId}
+                max={4}
+                className="mt-2"
+              />
             </div>
           )}
           {seasonal.tracks.length >= 3 && (
@@ -502,11 +565,14 @@ export default function Home() {
                 <Disc3 className="size-4 text-[rgb(var(--tint))]" />
                 Sounds of {seasonal.label}
               </h3>
-              <div className="mt-2 flex flex-col gap-0.5">
-                {seasonal.tracks.slice(0, 4).map((track, i) => (
-                  <TrackRow key={track.id} track={track} list={seasonal.tracks} index={i + 1} />
-                ))}
-              </div>
+              <SectionTracks
+                remoteItems={remote.seasonal}
+                fallback={seasonal.tracks}
+                onPlayRemote={playRemoteItem}
+                resolvingId={resolvingId}
+                max={4}
+                className="mt-2"
+              />
             </div>
           )}
         </section>
@@ -621,6 +687,51 @@ function PlayIcon() {
     <svg viewBox="0 0 24 24" fill="currentColor" className="size-4">
       <path d="M8 5.14v13.72a1 1 0 0 0 1.5.86l11-6.86a1 1 0 0 0 0-1.72l-11-6.86a1 1 0 0 0-1.5.86Z" />
     </svg>
+  );
+}
+
+/**
+ * Renders one discovery section: live YouTube rows when they've arrived,
+ * otherwise the catalog fallback rows. Keeps the section populated at all
+ * times (catalog renders instantly; YouTube swaps in when ready).
+ */
+function SectionTracks({
+  remoteItems,
+  fallback,
+  onPlayRemote,
+  resolvingId,
+  max = 5,
+  className = "stagger mt-1 flex flex-col gap-0.5",
+}: {
+  remoteItems: YtItem[] | undefined;
+  fallback: Track[];
+  onPlayRemote: (item: YtItem, rest: YtItem[]) => void;
+  resolvingId: string | null;
+  max?: number;
+  className?: string;
+}) {
+  if (remoteItems && remoteItems.length > 0) {
+    return (
+      <div className={className}>
+        {remoteItems.slice(0, max).map((item, i) => (
+          <RemoteTrackRow
+            key={item.id}
+            item={item}
+            index={i + 1}
+            onPlay={(item) => onPlayRemote(item, remoteItems)}
+            resolving={resolvingId === item.id}
+            source="youtube"
+          />
+        ))}
+      </div>
+    );
+  }
+  return (
+    <div className={className}>
+      {fallback.slice(0, max).map((track, i) => (
+        <TrackRow key={track.id} track={track} list={fallback} index={i + 1} />
+      ))}
+    </div>
   );
 }
 
