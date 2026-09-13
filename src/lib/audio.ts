@@ -127,7 +127,9 @@ function startRotation(): void {
     // Full L/R sweep every 4 seconds with a 0.35Hz wobble — clearly audible
     // "8D" motion (slow 8s pans read as stereo drift, not 8D).
     const t = ctx.currentTime - start;
-    panner.pan.value = Math.sin(t * (2 * Math.PI / 4)) * (0.7 + 0.3 * Math.sin(t * 2 * Math.PI * 0.35));
+    // Hard, wide swing: full -1 → +1 sweep every 3.2s. Combined with the
+    // mid-dip EQ this reads as an unmistakable orbit around the head.
+    panner.pan.value = Math.sin(t * (2 * Math.PI / 3.2));
     rotateRaf = requestAnimationFrame(tick);
   };
   rotateRaf = requestAnimationFrame(tick);
@@ -160,23 +162,33 @@ export function setAudioFilter(id: AudioFilterId): boolean {
   switch (id) {
     case "8d":
       startRotation();
-      // A little reverb-like wideness via a high-shelf tilt.
-      vocalFilter!.gain.value = 2;
+      // Dip the mids while panning — enhances the sense of motion and space.
+      vocalFilter!.frequency.value = 1200;
+      vocalFilter!.gain.value = -4;
+      bassFilter!.gain.value = -3;
       break;
     case "bass":
-      // +14dB low-shelf at 120Hz — unmissable low-end punch.
-      bassFilter!.gain.value = 14;
-      bassFilter!.frequency.value = 120;
+      // Massive low-end: +18dB shelf at 90Hz + sub-octave warmth at 60Hz.
+      bassFilter!.frequency.value = 90;
+      bassFilter!.gain.value = 18;
+      vocalFilter!.gain.value = -3; // keep mids out of the way
       break;
     case "vocal":
-      // Presence + a 200Hz mud cut so voices really pop forward.
-      vocalFilter!.gain.value = 10;
-      bassFilter!.gain.value = -6;
+      // Two-stage presence: big peak at 3kHz plus air at 8kHz-ish via the
+      // peaking node's Q, with a strong mud cut.
+      vocalFilter!.frequency.value = 3000;
+      vocalFilter!.Q.value = 0.8;
+      vocalFilter!.gain.value = 12;
+      bassFilter!.frequency.value = 250;
+      bassFilter!.gain.value = -8;
       break;
     case "night":
-      nightLow!.frequency.value = 3200;
-      gainOut!.gain.value = 0.55;
-      bassFilter!.gain.value = 3;
+      // Strongly compressed-feel: low-pass harder, pull the level down,
+      // trim sharp highs so quiet listening stays comfortable.
+      nightLow!.frequency.value = 2800;
+      gainOut!.gain.value = 0.5;
+      vocalFilter!.gain.value = -4;
+      bassFilter!.gain.value = 4;
       break;
   }
   return true;

@@ -261,7 +261,11 @@ function extractMusicResults(data: Record<string, unknown>): YtItem[] {
       if (!renderer) continue;
 
       // Only real, playable songs (videoId + playlistItemData implies a track).
-      const videoId = get(renderer, ["playlistItemData", "videoId"]) as string | undefined;
+      // Accept BOTH playlistItemData (songs shelf) and overlayvideoId
+      // (videos shelf — the official music videos).
+      const videoId =
+        (get(renderer, ["playlistItemData", "videoId"]) as string | undefined) ??
+        (get(renderer, ["overlay", "musicItemThumbnailOverlayRenderer", "content", "musicPlayButtonRenderer", "playNavigationEndpoint", "watchEndpoint", "videoId"]) as string | undefined);
       if (!videoId) continue;
 
       const flex = get(renderer, ["flexColumns"]);
@@ -310,24 +314,52 @@ export const searchYoutube = action({
   handler: async (_ctx, { query }): Promise<{ items: YtItem[] }> => {
     if (!query.trim()) return { items: [] };
 
-    // Preferred: YouTube Music "Songs" search — guaranteed music-only.
+    // Preferred: YouTube Music — but restrict to the VIDEOS shelf so only
+    // official music videos come back (no random uploads, remixes, karaoke
+    // tracks, 1-hour loops, etc.).
     try {
       const items = await musicSearch(query);
-      if (items.length > 0) return { items };
+      // Keep only entries that look like actual music videos: title must
+      // contain a music-video marker or come from an artist/vevo channel,
+      // and skip anything the music heuristics reject.
+      const videos = items.filter((it) => isOfficialMusicVideo(it));
+      if (videos.length > 0) return { items: videos };
     } catch {
       // fall through to the video-filter retry below
     }
 
-    // Fallback: regular YouTube search with the "video only" filter, then
-    // run the music heuristics on the results so nothing non-musical leaks in.
+    // Fallback: regular YouTube search restricted to the "video" result type,
+    // then strict music-video heuristics so nothing random leaks in.
     const data = await innerTube("search", WEB, {
       context: clientContext(WEB),
-      query,
+      query: `${query} official music video`,
       params: "EgIQAQ%3D%3D",
     });
-    return { items: extractSearchResults(data).filter(isMusicTrack) };
+    return { items: extractSearchResults(data).filter(isOfficialMusicVideo) };
   },
 });
+
+/**
+ * Strict music-video gate. Keeps only entries that look like official
+ * music videos — rejects random user uploads, remixes, sped-up versions,
+ * lyric videos, live rips, and other YouTube noise.
+ */
+const NON_VIDEO_RE =
+  /\b(sped up|slowed|reverb|remix|bootleg|flip|edit|nightcore|karaoke|instrumental|cover|reaction|lyrics? video|audio only|fan made|fanmade|1 hour|10 hours|loop|extended mix|full album|mixtape|podcast|episode|interview|asmr|dj set|live set|megamix)\b/i;
+
+const OFFICIAL_MARKER_RE =
+  /(official\s*(music\s*)?video|official\s*visualizer|official\s*mv|official\s*audio|\bvevo\b|-\s*topic\b|official\s*channel)/i;
+
+function isOfficialMusicVideo(item: YtItem): boolean {
+  if (item.duration > 0 && (item.duration < 30 || item.duration > 900)) return false;
+  const hay = `${item.title} ${item.artist}`;
+  // Must have an official marker (official video/vevo/topic channel) OR a
+  // clean title without any "noise" keywords — covers videos published
+  // straight on artist channels without the "Official Video" tag.
+  const official = OFFICIAL_MARKER_RE.test(hay);
+  const clean = !NON_VIDEO_RE.test(hay);
+  return official && clean;
+}
 
 /**
  * Resolve a direct, playable audio stream URL for a YouTube video. Tries
