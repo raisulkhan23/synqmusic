@@ -37,6 +37,8 @@ export interface Track {
   /** 0-100, drives "top tracks" sorting */
   popularity: number;
   moods: string[];
+  /** explicit-content flag (drives the E badge in track rows) */
+  explicit?: boolean;
 }
 
 export interface Mix {
@@ -222,6 +224,7 @@ const T = (
   song: number,
   popularity: number,
   moods: string[],
+  explicit = false,
 ): Track => ({
   id,
   title,
@@ -231,6 +234,7 @@ const T = (
   duration: DUR[song],
   popularity,
   moods,
+  ...(explicit ? { explicit: true } : {}),
 });
 
 export const TRACKS: Track[] = [
@@ -241,14 +245,14 @@ export const TRACKS: Track[] = [
   T("prism-velvet-static", "Velvet Static", "vera-lumen", "prism", 4, 74, ["synth", "dance"]),
   // Afterglow — Neon Fields
   T("afterglow-night-drive", "Night Drive Electric", "neon-fields", "afterglow", 5, 90, ["night", "dance"]),
-  T("afterglow-afterglow", "Afterglow", "neon-fields", "afterglow", 6, 95, ["chill", "golden"]),
+  T("afterglow-afterglow", "Afterglow", "neon-fields", "afterglow", 6, 95, ["chill", "golden"], true),
   T("afterglow-golden-hour", "Golden Hour Avenue", "neon-fields", "afterglow", 7, 82, ["golden", "chill"]),
   T("afterglow-palm-chrome", "Palm & Chrome", "neon-fields", "afterglow", 8, 71, ["dance", "night"]),
   // Midnight Meridian — Sable & Ash
   T("mm-meridian", "Meridian", "sable-ash", "midnight-meridian", 9, 85, ["indie", "night"]),
   T("mm-borrowed-light", "Borrowed Light", "sable-ash", "midnight-meridian", 10, 88, ["indie", "dream"]),
   T("mm-cinder-stone", "Cinder & Stone", "sable-ash", "midnight-meridian", 11, 66, ["indie", "rock"]),
-  T("mm-long-way-home", "The Long Way Home", "sable-ash", "midnight-meridian", 12, 79, ["indie", "chill"]),
+  T("mm-long-way-home", "The Long Way Home", "sable-ash", "midnight-meridian", 12, 79, ["indie", "chill"], true),
   // Tidal — The Glass Harbor
   T("tidal-tidekeeper", "Tidekeeper", "glass-harbor", "tidal", 13, 76, ["ambient", "chill"]),
   T("tidal-glass-harbor", "Glass Harbor", "glass-harbor", "tidal", 14, 84, ["ambient", "dream"]),
@@ -256,14 +260,14 @@ export const TRACKS: Track[] = [
   T("tidal-harbor-lights", "Harbor Lights", "glass-harbor", "tidal", 16, 81, ["ambient", "night"]),
   // Summer Static — Cassette Coast
   T("ss-polaroid-rain", "Polaroid Rain", "cassette-coast", "summer-static", 1, 83, ["dream", "golden"]),
-  T("ss-peach-soda", "Peach Soda", "cassette-coast", "summer-static", 2, 77, ["golden", "chill"]),
+  T("ss-peach-soda", "Peach Soda", "cassette-coast", "summer-static", 2, 77, ["golden", "chill"], true),
   T("ss-boardwalk-echo", "Boardwalk Echo", "cassette-coast", "summer-static", 3, 72, ["dream", "dance"]),
   T("ss-sunburn-heart", "Sunburn Heart", "cassette-coast", "summer-static", 4, 80, ["dream", "chill"]),
   // Streetlights — Nocturne City
   T("sl-neon-rain", "Neon Rain", "nocturne-city", "streetlights", 5, 86, ["lo-fi", "night"]),
   T("sl-paper-lanterns", "Paper Lanterns", "nocturne-city", "streetlights", 6, 73, ["lo-fi", "chill"]),
   T("sl-midnight-courier", "Midnight Courier", "nocturne-city", "streetlights", 7, 89, ["lo-fi", "night"]),
-  T("sl-streetlight-static", "Streetlight Static", "nocturne-city", "streetlights", 8, 75, ["lo-fi", "dream"]),
+  T("sl-streetlight-static", "Streetlight Static", "nocturne-city", "streetlights", 8, 75, ["lo-fi", "dream"], true),
   // Polarize — Aurora Motive
   T("aur-polarize", "Polarize", "aurora-motive", "polarize", 2, 96, ["synth", "dance"]),
   T("aur-glass-cathedral", "Glass Cathedral", "aurora-motive", "polarize", 7, 88, ["synth", "night"]),
@@ -271,14 +275,14 @@ export const TRACKS: Track[] = [
   T("aur-northern-wire", "Northern Wire", "aurora-motive", "polarize", 14, 79, ["electronic", "chill"]),
   // Gold Wiring — Velvet Antenna
   T("va-gold-wiring", "Gold Wiring", "velvet-antenna", "gold-wiring", 3, 93, ["funk", "groove"]),
-  T("va-pocket-funk", "Pocket Funk", "velvet-antenna", "gold-wiring", 8, 86, ["funk", "dance"]),
+  T("va-pocket-funk", "Pocket Funk", "velvet-antenna", "gold-wiring", 8, 86, ["funk", "dance"], true),
   T("va-brass-knuckles", "Brass Knuckles", "velvet-antenna", "gold-wiring", 12, 80, ["funk", "energy"]),
   T("va-slow-tremble", "Slow Tremble", "velvet-antenna", "gold-wiring", 15, 72, ["groove", "chill"]),
   // Cartography — Paper Jupiter
   T("pj-cartography", "Cartography", "paper-jupiter", "cartography", 4, 87, ["folk", "dream"]),
   T("pj-map-of-june", "Map of June", "paper-jupiter", "cartography", 9, 83, ["folk", "golden"]),
   T("pj-papercuts", "Papercuts", "paper-jupiter", "cartography", 13, 77, ["folk", "chill"]),
-  T("pj-cedar-lines", "Cedar Lines", "paper-jupiter", "cartography", 16, 74, ["folk", "dream"]),
+  T("pj-cedar-lines", "Cedar Lines", "paper-jupiter", "cartography", 16, 74, ["folk", "dream"], true),
   // Fault Lines — Iron Meridian
   T("im-fault-lines", "Fault Lines", "iron-meridian", "fault-lines", 5, 91, ["rock", "energy"]),
   T("im-wolf-hour", "The Wolf Hour", "iron-meridian", "fault-lines", 10, 85, ["rock", "night"]),
@@ -286,14 +290,14 @@ export const TRACKS: Track[] = [
   T("im-quiet-ammunition", "Quiet Ammunition", "iron-meridian", "fault-lines", 6, 70, ["rock", "indie"]),
   // Halo Signal — Lumen Vale
   T("lv-halo-signal", "Halo Signal", "lumen-vale", "halo-signal", 6, 90, ["electronic", "ethereal"]),
-  T("lv-slow-glow", "Slow Glow", "lumen-vale", "halo-signal", 2, 82, ["electronic", "dream"]),
+  T("lv-slow-glow", "Slow Glow", "lumen-vale", "halo-signal", 2, 82, ["electronic", "dream"], true),
   T("lv-glass-tide", "Glass Tide", "lumen-vale", "halo-signal", 10, 76, ["ambient", "dream"]),
   T("lv-lullaby-circuit", "Lullaby Circuit", "lumen-vale", "halo-signal", 13, 71, ["electronic", "chill"]),
   // Low Light Theory — Sundial Theory
   T("slt-blue-hour", "Blue Hour", "sundial-theory", "low-light-theory", 8, 89, ["soul", "jazz"]),
   T("slt-brass-rain", "Brass Rain", "sundial-theory", "low-light-theory", 3, 81, ["soul", "groove"]),
   T("slt-monsoon-swing", "Monsoon Swing", "sundial-theory", "low-light-theory", 11, 75, ["jazz", "dance"]),
-  T("slt-sunfall-studies", "Sunfall Studies", "sundial-theory", "low-light-theory", 16, 73, ["soul", "chill"]),
+  T("slt-sunfall-studies", "Sunfall Studies", "sundial-theory", "low-light-theory", 16, 73, ["soul", "chill"], true),
 ];
 
 // --- curated mixes ----------------------------------------------------------
@@ -414,3 +418,164 @@ export function searchCatalog(query: string): SearchResults {
 
 export const totalCatalogDuration = (): number =>
   TRACKS.reduce((sum, t) => sum + t.duration, 0);
+
+// --- recommendation / radio helpers ------------------------------------------
+
+const seededShuffle = <T,>(items: T[], seed: number): T[] => {
+  const arr = [...items];
+  // mulberry32 — deterministic per seed so "weekly" playlists are stable
+  let a = seed >>> 0;
+  const rand = () => {
+    a |= 0; a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+};
+
+/** ISO week number — used to rotate Discover Weekly / Release Radar weekly. */
+export const isoWeek = (): number => {
+  const d = new Date();
+  const target = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = (target.getUTCDay() + 6) % 7;
+  target.setUTCDate(target.getUTCDate() - dayNum + 3);
+  const firstThursday = new Date(Date.UTC(target.getUTCFullYear(), 0, 4));
+  return 1 + Math.round(
+    (target.getTime() - firstThursday.getTime()) / (7 * 24 * 3600 * 1000),
+  );
+};
+
+/**
+ * Discover Weekly — a fresh, stable-per-week mix seeded from the week number,
+ * biased toward tracks the listener hasn't played recently.
+ */
+export function discoverWeekly(recentIds: string[] = [], n = 8): Track[] {
+  const seed = isoWeek() * 7919;
+  const fresh = TRACKS.filter((t) => !recentIds.includes(t.id));
+  const pool = fresh.length >= n ? fresh : TRACKS;
+  return seededShuffle(
+    [...pool].sort((a, b) => b.popularity - a.popularity).slice(0, 24),
+    seed,
+  ).slice(0, n);
+}
+
+/**
+ * Release Radar — newest tracks from a given set of "followed" artists
+ * (falls back to the two newest albums' artists when nothing is followed).
+ */
+export function releaseRadar(followedArtistIds: string[] = [], n = 6): Track[] {
+  const artistIds = followedArtistIds.length > 0
+    ? followedArtistIds
+    : [...new Set(albumsByNewest().slice(0, 2).map((a) => a.artistId))];
+  return TRACKS.filter((t) => artistIds.includes(t.artistId))
+    .sort((a, b) => {
+      const ya = albumById(a.albumId).year;
+      const yb = albumById(b.albumId).year;
+      return yb - ya || b.popularity - a.popularity;
+    })
+    .slice(0, n);
+}
+
+/** Songs similar to a seed track: shares mood tags or the same artist. */
+export function similarTracks(seedId: string, n = 10): Track[] {
+  const seed = trackById(seedId);
+  if (!seed) return topTracks(n);
+  return TRACKS.filter((t) => t.id !== seedId)
+    .map((t) => ({
+      t,
+      score:
+        t.moods.filter((m) => seed.moods.includes(m)).length * 2 +
+        (t.artistId === seed.artistId ? 3 : 0) +
+        t.popularity / 100,
+    }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, n)
+    .map(({ t }) => t);
+}
+
+/** "Song Radio" / artist radio — an endless-feeling mix around a seed. */
+export function radioFor(seedId: string, n = 20): Track[] {
+  const similar = similarTracks(seedId, n - 1);
+  const seed = trackById(seedId);
+  return seed ? [seed, ...similar] : similar;
+}
+
+/** "Because you listened to X" — 6 close matches, excluding the seed. */
+export function becauseYouListened(seedId: string, n = 6): Track[] {
+  return similarTracks(seedId, n + 1).filter((t) => t.id !== seedId).slice(0, n);
+}
+
+/** Trending artists: ranked by total popularity of their tracks. */
+export function trendingArtists(n = 8): Artist[] {
+  const score = new Map<string, number>();
+  for (const t of TRACKS) {
+    score.set(t.artistId, (score.get(t.artistId) ?? 0) + t.popularity);
+  }
+  return [...score.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, n)
+    .map(([id]) => artistById(id));
+}
+
+/** Tracks matching a mood tag, most popular first. */
+export const tracksByMood = (mood: string, n = 8): Track[] =>
+  TRACKS.filter((t) => t.moods.includes(mood))
+    .sort((a, b) => b.popularity - a.popularity)
+    .slice(0, n);
+
+/** All mood tags in the catalog, by frequency. */
+export const allMoods = (): string[] => {
+  const count = new Map<string, number>();
+  for (const t of TRACKS) for (const m of t.moods) count.set(m, (count.get(m) ?? 0) + 1);
+  return [...count.entries()].sort((a, b) => b[1] - a[1]).map(([m]) => m);
+};
+
+/** Time-of-day recommendation: mood profile for morning / day / evening / night. */
+export function timeOfDayTracks(): { label: string; tracks: Track[] } {
+  const h = new Date().getHours();
+  const profile =
+    h < 6 ? ["lo-fi", "chill", "night"] :
+    h < 11 ? ["golden", "chill", "dream"] :
+    h < 17 ? ["dance", "synth", "rock"] :
+    h < 21 ? ["golden", "indie", "dream"] :
+    ["night", "lo-fi", "ambient"];
+  const label =
+    h < 6 ? "For the late night" :
+    h < 11 ? "For your morning" :
+    h < 17 ? "For the afternoon" :
+    h < 21 ? "For the evening wind-down" :
+    "After midnight";
+  const seen = new Set<string>();
+  const tracks: Track[] = [];
+  for (const mood of profile) {
+    for (const t of tracksByMood(mood, 6)) {
+      if (!seen.has(t.id)) { seen.add(t.id); tracks.push(t); }
+      if (tracks.length >= 8) return { label, tracks };
+    }
+  }
+  return { label, tracks };
+}
+
+/** Seasonal recommendation by calendar month (northern-hemisphere seasons). */
+export function seasonalTracks(): { label: string; tracks: Track[] } {
+  const m = new Date().getMonth();
+  const { label, moods } =
+    m < 2 || m === 11 ? { label: "Winter", moods: ["ambient", "night", "lo-fi"] } :
+    m < 5 ? { label: "Spring", moods: ["dream", "golden", "chill"] } :
+    m < 8 ? { label: "Summer", moods: ["golden", "dance", "dream"] } :
+    { label: "Autumn", moods: ["indie", "chill", "rock"] };
+  const seen = new Set<string>();
+  const tracks: Track[] = [];
+  for (const mood of moods) {
+    for (const t of tracksByMood(mood, 6)) {
+      if (!seen.has(t.id)) { seen.add(t.id); tracks.push(t); }
+      if (tracks.length >= 8) return { label, tracks };
+    }
+  }
+  return { label, tracks };
+}

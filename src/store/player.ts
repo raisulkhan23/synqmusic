@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { getAudio } from "@/lib/audio";
-import type { Track } from "@/lib/catalog";
+import { trackById, type Track } from "@/lib/catalog";
+import { similarTracks } from "@/lib/catalog";
 import type { RGB } from "@/lib/covers";
 import { isPlayable, toPlayable, type Playable } from "@/lib/playable";
 import * as ytEngine from "@/lib/youtubePlayer";
@@ -64,10 +65,19 @@ interface PlayerStore {
 
   // queue history (previously played, most recent first)
   history: Playable[];
+  /** When the queue runs dry, automatically continue with similar music. */
+  autoplay: boolean;
+  toggleAutoplay: () => void;
 
   // liked songs (synced with Convex, optimistic)
   liked: Record<string, number>;
   likedLoaded: boolean;
+
+  // liked albums + followed artists (local, persisted)
+  likedAlbums: Record<string, true>;
+  followedArtists: Record<string, true>;
+  toggleLikedAlbum: (albumId: string) => void;
+  toggleFollowArtist: (artistId: string) => void;
 
   // actions
   playTrack: (track: Track | Playable, list?: (Track | Playable)[]) => void;
@@ -104,6 +114,84 @@ interface PlayerStore {
   toggleLike: (trackId: string, remote?: RemoteLikeSnapshot) => void;
 }
 
+// --- queue persistence (survives refresh) -----------------------------------
+
+interface PersistedPlayable {
+  id: string;
+  catalogId?: string;
+  youtubeId?: string;
+  title?: string;
+  artistName?: string;
+  coverUrl?: string;
+  duration?: number;
+}
+
+const QUEUE_KEY = "ss.queue";
+
+/** Shrink a Playable to its storable essence. */
+const persistPlayable = (p: Playable): PersistedPlayable => ({
+  id: p.id,
+  catalogId: p.catalogTrack?.id,
+  youtubeId: p.youtubeId,
+  title: p.title,
+  artistName: p.artistName,
+  coverUrl: p.coverUrl,
+  duration: p.duration,
+});
+
+function saveQueue(queue: Playable[], queueIndex: number, currentId: string | null): void {
+  try {
+    localStorage.setItem(
+      QUEUE_KEY,
+      JSON.stringify({
+        items: queue.slice(0, 60).map(persistPlayable),
+        queueIndex,
+        currentId,
+      }),
+    );
+  } catch {
+    /* storage full / unavailable */
+  }
+}
+
+function readSavedQueue(): { items: Playable[]; queueIndex: number } | null {
+  try {
+    const raw = localStorage.getItem(QUEUE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as {
+      items: PersistedPlayable[];
+      queueIndex: number;
+    };
+    const items: Playable[] = [];
+    for (const p of parsed.items ?? []) {
+      if (p.catalogId) {
+        const t = trackById(p.catalogId);
+        if (t) { items.push(toPlayable(t)); continue; }
+      }
+      if (p.youtubeId && p.title) {
+        items.push({
+          id: p.id,
+          source: "youtube",
+          youtubeId: p.youtubeId,
+          title: p.title,
+          artistName: p.artistName ?? "Unknown artist",
+          albumName: "",
+          coverUrl: p.coverUrl ?? "",
+          duration: p.duration ?? 0,
+          audioUrl: `https://youtu.be/${p.youtubeId}`,
+        } as Playable);
+      }
+    }
+    if (items.length === 0) return null;
+    return {
+      items,
+      queueIndex: Math.min(Math.max(0, parsed.queueIndex), items.length - 1),
+    };
+  } catch {
+    return null;
+  }
+}
+
 // --- persistence helpers ----------------------------------------------------
 
 const readNum = (key: string, fallback: number): number => {
@@ -122,6 +210,29 @@ const initialShuffle = readBool("ss.shuffle", false);
 const initialSmartShuffle = readBool("ss.smartShuffle", false);
 const initialRepeat = (localStorage.getItem("ss.repeat") as RepeatMode | null) ?? "off";
 const initialRate = Math.min(2, Math.max(0.5, readNum("ss.rate", 1)));
+const initialAutoplay = readBool("ss.autoplay", true);
+const savedQueue = readSavedQueue();
+
+const readIdSet = (key: string): Record<string, true> => {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return {};
+    const arr = JSON.parse(raw) as string[];
+    return Object.fromEntries(arr.map((id) => [id, true as const]));
+  } catch {
+    return {};
+  }
+};
+const writeIdSet = (key: string, set: Record<string, true>): void => {
+  try {
+    localStorage.setItem(key, JSON.stringify(Object.keys(set)));
+  } catch {
+    /* ignore */
+  }
+};
+
+const initialLikedAlbums = readIdSet("ss.likedAlbums");
+const initialFollowedArtists = readIdSet("ss.followedArtists");
 
 // --- resume-position memory ---------------------------------------------------
 // Long tracks remember where you stopped so you can resume exactly there.
@@ -231,7 +342,22 @@ function handleEnded(): void {
       return;
     }
   }
-  // end of queue, repeat off
+  // End of queue, repeat off — autoplay similar music when enabled.
+  if (s.autoplay && s.current) {
+    const seed = s.current.catalogTrack?.id;
+    if (seed) {
+      const similar = similarTracks(seed, 10)
+        .filter((t) => !s.queue.some((q) => q.catalogTrack?.id === t.id))
+        .slice(0, 5);
+      if (similar.length > 0) {
+        usePlayerStore.setState((state) => ({
+          queue: [...state.queue, ...similar.map(toPlayable)],
+        }));
+        s.playIndex(s.queue.length);
+        return;
+      }
+    }
+  }
   getAudio().pause();
   ytEngine.pause();
   s.seek(0);
@@ -484,6 +610,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
   const playIndex = (index: number) => {
     const s = get();
     if (index < 0 || index >= s.queue.length) return;
+    saveQueue(s.queue, index, s.queue[index]?.id ?? null);
     set({ queueIndex: index });
     loadTrack(s.queue[index]);
   };
@@ -709,6 +836,13 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     repeat: initialRepeat,
     rate: initialRate,
 
+    autoplay: initialAutoplay,
+    toggleAutoplay: () =>
+      set((state) => {
+        localStorage.setItem("ss.autoplay", state.autoplay ? "0" : "1");
+        return { autoplay: !state.autoplay };
+      }),
+
     sleepEndsAt: null,
     sleepAtSongEnd: false,
 
@@ -719,10 +853,34 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     fullscreen: false,
     accent: null,
 
+    // restore queue from the last session (does not autoplay — user resumes)
+    ...(savedQueue
+      ? { queue: savedQueue.items, queueIndex: savedQueue.queueIndex }
+      : {}),
+
     history: [],
 
     liked: {},
     likedLoaded: false,
+
+    likedAlbums: initialLikedAlbums,
+    followedArtists: initialFollowedArtists,
+    toggleLikedAlbum: (albumId) =>
+      set((state) => {
+        const next = { ...state.likedAlbums };
+        if (next[albumId]) delete next[albumId];
+        else next[albumId] = true;
+        writeIdSet("ss.likedAlbums", next);
+        return { likedAlbums: next };
+      }),
+    toggleFollowArtist: (artistId) =>
+      set((state) => {
+        const next = { ...state.followedArtists };
+        if (next[artistId]) delete next[artistId];
+        else next[artistId] = true;
+        writeIdSet("ss.followedArtists", next);
+        return { followedArtists: next };
+      }),
 
     playTrack,
     playIndex,
@@ -751,6 +909,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
         const queue = state.queue.filter((_, i) => i !== index);
         const queueIndex2 = index < state.queueIndex ? state.queueIndex - 1 : state.queueIndex;
         lastRemoved = { item, index };
+        saveQueue(queue, queueIndex2, state.current?.id ?? null);
         return { queue, queueIndex: queueIndex2 };
       }),
     undoRemoveFromQueue: () => {
@@ -770,12 +929,17 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
         const i = Math.max(0, Math.min(index, state.queue.length));
         const queue = [...state.queue.slice(0, i), item, ...state.queue.slice(i)];
         const queueIndex = i <= state.queueIndex ? state.queueIndex + 1 : state.queueIndex;
+        saveQueue(queue, queueIndex, state.current?.id ?? null);
         return { queue, queueIndex };
       });
     },
     addToQueue: (track) => {
       const item = norm(track);
-      set((state) => ({ queue: [...state.queue, item] }));
+      set((state) => {
+        const queue = [...state.queue, item];
+        saveQueue(queue, state.queueIndex, state.current?.id ?? null);
+        return { queue };
+      });
     },
     playFromHistory: (index) => {
       const s = get();
@@ -793,14 +957,15 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       set((state) => {
         const current = state.queue[state.queueIndex] ?? null;
         const queue = current ? [current, ...upcoming] : [...upcoming];
-        return { queue, queueIndex: 0, current };
+        saveQueue(queue, current ? 0 : -1, current?.id ?? null);
+        return { queue, queueIndex: current ? 0 : -1, current };
       }),
     clearQueue: () =>
-      set((s2) => ({
-        queue: s2.current ? [s2.current] : [],
-        queueIndex: s2.current ? 0 : -1,
-        current: s2.current,
-      })),
+      set((s2) => {
+        const queue = s2.current ? [s2.current] : [];
+        saveQueue(queue, s2.current ? 0 : -1, s2.current?.id ?? null);
+        return { queue, queueIndex: s2.current ? 0 : -1, current: s2.current };
+      }),
     setHistoryRecorder: (fn) => {
       historyRecorder = fn;
     },

@@ -96,11 +96,19 @@ export function TrackRow({ track, list, index, showAlbum = true, onRemove }: Tra
         <div className="min-w-0">
           <p
             className={cn(
-              "truncate text-sm font-medium",
+              "flex items-center gap-1.5 truncate text-sm font-medium",
               isCurrent && "text-[rgb(var(--tint))]",
             )}
           >
-            {track.title}
+            <span className="truncate">{track.title}</span>
+            {track.explicit && (
+              <span
+                title="Explicit"
+                className="shrink-0 rounded bg-white/15 px-1 text-[9px] font-bold leading-4 text-foreground/80"
+              >
+                E
+              </span>
+            )}
           </p>
           <Link
             to={`/album/${album.id}`}

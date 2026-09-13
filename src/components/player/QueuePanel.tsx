@@ -1,4 +1,5 @@
 import { Reorder } from "framer-motion";
+import { useMutation } from "convex/react";
 import {
   Sheet,
   SheetContent,
@@ -12,7 +13,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Equalizer } from "@/components/player/Equalizer";
+import { api } from "@/convex/_generated/api";
 import { formatTime } from "@/lib/format";
+import { albumById, similarTracks } from "@/lib/catalog";
+import { coverArt } from "@/lib/covers";
 import { toPlayableYoutube } from "@/lib/playable";
 import { usePlayerStore } from "@/store/player";
 import {
@@ -20,7 +24,9 @@ import {
   Clock3,
   GripVertical,
   ListMusic,
+  Plus,
   RefreshCw,
+  Save,
   Sparkles,
   Trash2,
   Undo2,
@@ -48,9 +54,43 @@ export function QueuePanel() {
   const smartShuffle = usePlayerStore((s) => s.smartShuffle);
   const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
   const toggleSmartShuffle = usePlayerStore((s) => s.toggleSmartShuffle);
+  const autoplay = usePlayerStore((s) => s.autoplay);
+  const toggleAutoplay = usePlayerStore((s) => s.toggleAutoplay);
+  const addToQueue = usePlayerStore((s) => s.addToQueue);
+  const createPlaylist = useMutation(api.playlists.create);
+  const addPlaylistTrack = useMutation(api.playlists.addTrack);
 
   const upcoming = queueIndex >= 0 ? queue.slice(queueIndex + 1) : queue;
   const upcomingIds = upcoming.map((t) => t.id);
+
+  // Queue suggestions: similar to what's playing, not already queued.
+  const suggestions = (() => {
+    const seed = current?.catalogTrack?.id;
+    if (!seed || upcoming.length >= 15) return [];
+    return similarTracks(seed, 12)
+      .filter((t) => !queue.some((q) => q.catalogTrack?.id === t.id))
+      .slice(0, 3);
+  })();
+
+  const saveQueueAsPlaylist = async () => {
+    const ids = queue
+      .map((t) => t.catalogTrack?.id)
+      .filter((id): id is string => !!id);
+    if (ids.length === 0) {
+      toast.error("Queue has no catalog songs to save");
+      return;
+    }
+    try {
+      const name = `Queue · ${new Date().toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+      const playlistId = await createPlaylist({ name, description: "Saved from your queue" });
+      for (const trackId of ids) {
+        await addPlaylistTrack({ playlistId, trackId });
+      }
+      toast.success(`Saved ${ids.length} songs as "${name}"`);
+    } catch {
+      toast.error("Couldn't save the queue as a playlist");
+    }
+  };
 
   const handleReorder = (ids: string[]) => {
     const byId = new Map(upcoming.map((t) => [t.id, t]));
@@ -120,6 +160,38 @@ export function QueuePanel() {
             >
               <ArrowLeftRight className="size-3.5" />
             </button>
+            {/* autoplay similar music */}
+            <button
+              type="button"
+              aria-label="Autoplay similar music"
+              title={autoplay ? "Autoplay on — similar music plays when the queue ends" : "Autoplay off"}
+              onClick={() => {
+                toggleAutoplay();
+                toast(autoplay ? "Autoplay off" : "Autoplay on — similar music when queue ends");
+              }}
+              className={cn(
+                "flex items-center gap-1 rounded-full px-2 py-1 text-xs transition-colors",
+                autoplay
+                  ? "bg-[rgb(var(--tint)_/_0.15)] text-[rgb(var(--tint))]"
+                  : "text-muted-foreground hover:bg-white/5 hover:text-foreground",
+              )}
+            >
+              <Sparkles className="size-3.5" />
+              Auto
+            </button>
+            {/* save queue as playlist */}
+            {queue.length > 1 && (
+              <button
+                type="button"
+                aria-label="Save queue as playlist"
+                title="Save queue as playlist"
+                onClick={() => void saveQueueAsPlaylist()}
+                className="flex items-center gap-1 rounded-full px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+              >
+                <Save className="size-3.5" />
+                Save
+              </button>
+            )}
             {queue.length > 1 && (
               <button
                 type="button"
@@ -259,6 +331,47 @@ export function QueuePanel() {
                   </Reorder.Item>
                 ))}
               </Reorder.Group>
+            </section>
+          )}
+
+          {/* queue suggestions — "we think you'll like these next" */}
+          {suggestions.length > 0 && (
+            <section>
+              <p className="flex items-center gap-1.5 px-1 pb-2 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
+                <Sparkles className="size-3" />
+                Suggested for the queue
+              </p>
+              <div className="space-y-1">
+                {suggestions.map((track) => (
+                  <div
+                    key={track.id}
+                    className="group flex items-center gap-2 rounded-lg px-1 py-1.5 transition-colors hover:bg-white/[0.05]"
+                  >
+                    <img
+                      src={coverArt(albumById(track.albumId))}
+                      alt=""
+                      className="size-10 shrink-0 rounded-md object-cover opacity-80"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{track.title}</p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        Because it&apos;s playing now
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      aria-label={`Add ${track.title} to queue`}
+                      onClick={() => {
+                        addToQueue(track);
+                        toast.success(`Added "${track.title}" to queue`);
+                      }}
+                      className="shrink-0 rounded-full p-1.5 text-muted-foreground/60 transition-colors hover:bg-white/10 hover:text-foreground"
+                    >
+                      <Plus className="size-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
             </section>
           )}
 

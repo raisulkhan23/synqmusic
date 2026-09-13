@@ -7,15 +7,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { albumById, artistById, type Track } from "@/lib/catalog";
+import { albumById, artistById, radioFor, type Track } from "@/lib/catalog";
 import { usePlayerStore } from "@/store/player";
 import { toast } from "sonner";
 import {
+  Disc3,
   ExternalLink,
   Heart,
   Link2,
   ListEnd,
   ListStart,
+  Radio,
   Share2,
 } from "lucide-react";
 
@@ -40,6 +42,15 @@ export function TrackContextMenu({
   const album = albumById(track.albumId);
   const artist = artistById(track.artistId);
   const isLiked = liked[track.id] !== undefined;
+  const playTrack = usePlayerStore((s) => s.playTrack);
+
+  const startRadio = () => {
+    const mix = radioFor(track.id, 20);
+    if (mix.length > 0) {
+      playTrack(mix[0], mix);
+      toast.success(`Starting ${track.title} radio`);
+    }
+  };
 
   const playNext = () => {
     const s = usePlayerStore.getState();
@@ -96,6 +107,10 @@ export function TrackContextMenu({
         <DropdownMenuItem className="gap-2" onSelect={() => playNext()}>
           <ListStart className="size-4" />
           Play next
+        </DropdownMenuItem>
+        <DropdownMenuItem className="gap-2" onSelect={() => startRadio()}>
+          <Radio className="size-4" />
+          Start song radio
         </DropdownMenuItem>
         <DropdownMenuItem className="gap-2" onSelect={() => add()}>
           <ListEnd className="size-4" />

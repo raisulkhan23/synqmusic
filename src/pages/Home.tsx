@@ -10,25 +10,39 @@ import { api } from "@/convex/_generated/api";
 import {
   albumsByNewest,
   ALBUMS,
+  artistById,
+  artistTracks,
+  becauseYouListened,
+  discoverWeekly,
   MIXES,
+  releaseRadar,
+  seasonalTracks,
+  timeOfDayTracks,
   topTracks,
   trackById,
   tracksByIds,
+  trendingArtists,
   type Track,
 } from "@/lib/catalog";
+import { coverArt } from "@/lib/covers";
 import { formatTime, greeting, pluralize } from "@/lib/format";
 import { toPlayableYoutube } from "@/lib/playable";
 import type { YtItem } from "@/lib/youtube";
 import { usePlayerStore } from "@/store/player";
 import { useAction, useQuery } from "convex/react";
 import {
+  Compass,
   Dices,
+  Disc3,
   Flame,
   Heart,
   LibraryBig,
   ListMusic,
   Play,
+  Radio,
   Search,
+  Sparkles,
+  Sun,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useEffect, useMemo, useState } from "react";
@@ -147,6 +161,19 @@ export default function Home() {
 
   // the single last-played track, for "Continue listening"
   const continueTrack = recentTracks[0] ?? null;
+
+  // --- discovery rails -------------------------------------------------------
+  const recentIds = useMemo(() => (recent ?? []).map((r) => r.trackId), [recent]);
+  const discover = useMemo(() => discoverWeekly(recentIds), [recentIds.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
+  const radar = useMemo(() => releaseRadar([], 6), []);
+  const because = useMemo(
+    () => (continueTrack ? becauseYouListened(continueTrack.id, 6) : []),
+    [continueTrack?.id], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const timeOfDay = useMemo(() => timeOfDayTracks(), []);
+  const seasonal = useMemo(() => seasonalTracks(), []);
+  const artists = useMemo(() => trendingArtists(8), []);
+  const jumpBack = useMemo(() => recentTracks.slice(1, 6), [recentTracks]);
 
   return (
     <div className="flex flex-col gap-10">
@@ -287,6 +314,181 @@ export default function Home() {
         ))}
       </SectionRow>
 
+      {/* Jump Back In — quick access to recently played */}
+      {jumpBack.length >= 2 && (
+        <section>
+          <div className="mb-3 flex items-end justify-between gap-4">
+            <div>
+              <h2 className="font-display text-lg font-bold tracking-tight sm:text-xl">
+                Jump back in
+              </h2>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                Pick up where you left off.
+              </p>
+            </div>
+          </div>
+          <div className="stagger grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            {jumpBack.map((track) => {
+              const artist = artistNameOf(track);
+              return (
+                <button
+                  key={track.id}
+                  type="button"
+                  onClick={() => playTrack(track, jumpBack)}
+                  className="group flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.03] p-2.5 text-left transition-all hover:border-[rgb(var(--tint)_/_0.35)] hover:bg-white/[0.05]"
+                >
+                  <img
+                    src={coverOf(track)}
+                    alt=""
+                    className="size-11 shrink-0 rounded-md object-cover"
+                  />
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-semibold">{track.title}</span>
+                    <span className="block truncate text-xs text-muted-foreground">{artist}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* Discover Weekly */}
+      {discover.length >= 4 && (
+        <section>
+          <div className="mb-3 flex items-end justify-between gap-4">
+            <div>
+              <h2 className="font-display flex items-center gap-2 text-lg font-bold tracking-tight sm:text-xl">
+                <Compass className="size-5 text-[rgb(var(--tint))]" />
+                Discover Weekly
+              </h2>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                A fresh mix every week, tuned to what you haven&apos;t heard yet.
+              </p>
+            </div>
+            <PlayHeaderButton list={discover} label="Play mix" />
+          </div>
+          <div className="stagger mt-1 flex flex-col gap-0.5">
+            {discover.slice(0, 6).map((track, i) => (
+              <TrackRow key={track.id} track={track} list={discover} index={i + 1} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Release Radar */}
+      {radar.length >= 3 && (
+        <section>
+          <div className="mb-3 flex items-end justify-between gap-4">
+            <div>
+              <h2 className="font-display flex items-center gap-2 text-lg font-bold tracking-tight sm:text-xl">
+                <Radio className="size-5 text-[rgb(var(--tint))]" />
+                Release Radar
+              </h2>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                Newest tracks from artists you follow.
+              </p>
+            </div>
+            <PlayHeaderButton list={radar} label="Play radar" />
+          </div>
+          <div className="stagger mt-1 flex flex-col gap-0.5">
+            {radar.slice(0, 5).map((track, i) => (
+              <TrackRow key={track.id} track={track} list={radar} index={i + 1} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Because you listened to... */}
+      {because.length >= 4 && continueTrack && (
+        <section>
+          <div className="mb-3">
+            <h2 className="font-display flex items-center gap-2 text-lg font-bold tracking-tight sm:text-xl">
+              <Sparkles className="size-5 text-[rgb(var(--tint))]" />
+              Because you listened to {continueTrack.title}
+            </h2>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              More like this, picked from the catalog.
+            </p>
+          </div>
+          <div className="stagger mt-1 flex flex-col gap-0.5">
+            {because.slice(0, 5).map((track, i) => (
+              <TrackRow key={track.id} track={track} list={because} index={i + 1} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Time of day + seasonal side-by-side */}
+      {(timeOfDay.tracks.length >= 3 || seasonal.tracks.length >= 3) && (
+        <section className="grid gap-4 lg:grid-cols-2">
+          {timeOfDay.tracks.length >= 3 && (
+            <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-4">
+              <h3 className="font-display flex items-center gap-2 text-base font-bold tracking-tight">
+                <Sun className="size-4 text-[rgb(var(--tint))]" />
+                {timeOfDay.label}
+              </h3>
+              <div className="mt-2 flex flex-col gap-0.5">
+                {timeOfDay.tracks.slice(0, 4).map((track, i) => (
+                  <TrackRow key={track.id} track={track} list={timeOfDay.tracks} index={i + 1} />
+                ))}
+              </div>
+            </div>
+          )}
+          {seasonal.tracks.length >= 3 && (
+            <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-4">
+              <h3 className="font-display flex items-center gap-2 text-base font-bold tracking-tight">
+                <Disc3 className="size-4 text-[rgb(var(--tint))]" />
+                Sounds of {seasonal.label}
+              </h3>
+              <div className="mt-2 flex flex-col gap-0.5">
+                {seasonal.tracks.slice(0, 4).map((track, i) => (
+                  <TrackRow key={track.id} track={track} list={seasonal.tracks} index={i + 1} />
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Trending artists */}
+      {artists.length >= 4 && (
+        <section>
+          <div className="mb-3">
+            <h2 className="font-display text-lg font-bold tracking-tight sm:text-xl">
+              Trending artists
+            </h2>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              Who&apos;s hot in the catalog right now.
+            </p>
+          </div>
+          <div className="hide-scrollbar -mx-4 flex gap-4 overflow-x-auto px-4 pb-2">
+            {artists.map((artist) => {
+              const top = artistTracks(artist.id).sort((a, b) => b.popularity - a.popularity);
+              const cover = top[0] ? coverOf(top[0]) : "";
+              return (
+                <button
+                  key={artist.id}
+                  type="button"
+                  onClick={() => {
+                    if (top.length > 0) playTrack(top[0], top);
+                  }}
+                  className="group w-28 shrink-0 text-left"
+                >
+                  <img
+                    src={cover}
+                    alt=""
+                    className="aspect-square w-full rounded-full object-cover ring-1 ring-white/10 transition-transform duration-300 group-hover:scale-105"
+                  />
+                  <p className="mt-2 truncate text-sm font-semibold">{artist.name}</p>
+                  <p className="truncate text-xs text-muted-foreground">Artist</p>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       {/* most played (personal) */}
       {mostTracks.length >= 2 && (
         <section>
@@ -359,4 +561,14 @@ function PlayIcon() {
       <path d="M8 5.14v13.72a1 1 0 0 0 1.5.86l11-6.86a1 1 0 0 0 0-1.72l-11-6.86a1 1 0 0 0-1.5.86Z" />
     </svg>
   );
+}
+
+// Helpers to get display metadata from a Track without importing heavy deps.
+function artistNameOf(track: Track): string {
+  return artistById(track.artistId).name;
+}
+
+function coverOf(track: Track): string {
+  const album = albumsByNewest().find((a) => a.id === track.albumId);
+  return album ? coverArt(album) : "";
 }
