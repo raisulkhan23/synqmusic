@@ -21,7 +21,9 @@ document.documentElement.classList.add("dark");
 // Lazy load route components for better code splitting
 const Landing = lazy(() => import("./pages/Landing.tsx"));
 const AuthPage = lazy(() => import("./pages/Auth.tsx"));
-const AppShell = lazy(() => import("./components/layout/AppShell.tsx"));
+// AppShell (which owns PlayerBar / QueuePanel / FullscreenPlayer) is imported
+// eagerly so the player UI is NEVER unmounted during lazy page-chunk loads.
+import AppShell from "./components/layout/AppShell.tsx";
 const Home = lazy(() => import("./pages/Home.tsx"));
 const Search = lazy(() => import("./pages/Search.tsx"));
 const Library = lazy(() => import("./pages/Library.tsx"));
@@ -35,10 +37,16 @@ const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 // Simple loading fallback for route transitions
 function RouteLoading() {
   return (
-    <div className="min-h-screen flex items-center justify-center">
+    <div className="flex h-full min-h-[40vh] w-full items-center justify-center">
       <div className="animate-pulse text-muted-foreground">Loading...</div>
     </div>
   );
+}
+
+/** Page-level Suspense boundary: lazy page chunks suspend HERE instead of
+ *  bubbling up and unmounting AppShell + PlayerBar during navigation. */
+function PageSuspense({ children }: { children: React.ReactNode }) {
+  return <Suspense fallback={<RouteLoading />}>{children}</Suspense>;
 }
 
 /** Silent error boundary — if VlyToolbar crashes it renders nothing instead of
@@ -156,14 +164,70 @@ createRoot(document.getElementById("root")!).render(
                   </RequireAuth>
                 }
               >
-                <Route path="/home" element={<Home />} />
-                <Route path="/search" element={<Search />} />
-                <Route path="/library" element={<Library />} />
-                <Route path="/liked" element={<Liked />} />
-                <Route path="/playlists" element={<Playlists />} />
-                <Route path="/playlist/:id" element={<PlaylistDetail />} />
-                <Route path="/album/:id" element={<Album />} />
-                <Route path="/admin" element={<Admin />} />
+                <Route
+                  path="/home"
+                  element={
+                    <PageSuspense>
+                      <Home />
+                    </PageSuspense>
+                  }
+                />
+                <Route
+                  path="/search"
+                  element={
+                    <PageSuspense>
+                      <Search />
+                    </PageSuspense>
+                  }
+                />
+                <Route
+                  path="/library"
+                  element={
+                    <PageSuspense>
+                      <Library />
+                    </PageSuspense>
+                  }
+                />
+                <Route
+                  path="/liked"
+                  element={
+                    <PageSuspense>
+                      <Liked />
+                    </PageSuspense>
+                  }
+                />
+                <Route
+                  path="/playlists"
+                  element={
+                    <PageSuspense>
+                      <Playlists />
+                    </PageSuspense>
+                  }
+                />
+                <Route
+                  path="/playlist/:id"
+                  element={
+                    <PageSuspense>
+                      <PlaylistDetail />
+                    </PageSuspense>
+                  }
+                />
+                <Route
+                  path="/album/:id"
+                  element={
+                    <PageSuspense>
+                      <Album />
+                    </PageSuspense>
+                  }
+                />
+                <Route
+                  path="/admin"
+                  element={
+                    <PageSuspense>
+                      <Admin />
+                    </PageSuspense>
+                  }
+                />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>
