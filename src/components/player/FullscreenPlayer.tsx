@@ -266,70 +266,25 @@ export function FullscreenPlayer() {
   const [lyricsOpen, setLyricsOpen] = useState(false);
   const videoEnabled = usePlayerStore((s) => s.videoEnabled);
   const toggleVideo = usePlayerStore((s) => s.toggleVideo);
-  const searchYt = useAction(api.youtube.searchYoutube);
 
-  // A video frame is shown for YouTube tracks directly; catalog tracks get a
-  // matching YouTube video found on demand when video mode is on.
+  // True when the current track plays through the YouTube IFrame engine.
   const isYoutube = current?.source === "youtube" || !!current?.youtubeId;
-  const [catalogVideo, setCatalogVideo] = useState<YtItem | null>(null);
-  const [catalogVideoPending, setCatalogVideoPending] = useState(false);
 
-  useEffect(() => {
-    setCatalogVideo(null);
-    setCatalogVideoPending(false);
-    if (!current || current.catalogTrack === undefined) return;
-    if (!videoEnabled || !fullscreen) return;
-    let cancelled = false;
-    setCatalogVideoPending(true);
-    searchYt({ query: `${current.title} ${current.artistName} official audio` })
-      .then(({ items }) => {
-        if (cancelled) return;
-        const best = items[0] ?? null;
-        setCatalogVideo(best);
-        // When the user turns video ON for a catalog track, seamlessly swap
-        // the stream to the matched YouTube video at the current position.
-        if (best && fullscreen && current.catalogTrack) {
-          replaceCurrentStream(
-            toPlayableYoutube(
-              {
-                id: current.id,
-                title: current.title,
-                artist: current.artistName,
-                duration: current.duration || best.duration,
-                thumbnail: current.coverUrl || best.thumbnail,
-              },
-              `https://youtu.be/${best.id}`,
-              items.slice(1),
-            ),
-            currentTimeRef.current,
-          );
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setCatalogVideo(null);
-      })
-      .finally(() => {
-        if (!cancelled) setCatalogVideoPending(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current?.id, videoEnabled, fullscreen]);
+  // The video frame is shown ONLY for tracks that already play through the
+  // YouTube engine. The toggle never swaps the audio stream — turning it off
+  // just parks the iframe off-screen (audio keeps playing); turning it on
+  // re-presents the same live player. Catalog tracks keep their artwork.
 
   const videoFrameRef = useRef<HTMLDivElement | null>(null);
   const [videoReady, setVideoReady] = useState(false);
-  const replaceCurrentStream = usePlayerStore((s) => s.replaceCurrentStream);
-  const currentTimeRef = useRef(0);
-  currentTimeRef.current = currentTime;
 
-  // Move the live YouTube player element into the video frame. The engine
-  // owns one player instance — present/dismiss never reloads the video.
-  // presentation retries until the engine is ready (YT API can still be
-  // loading when the fullscreen opens).
+  // Present the live YouTube player element inside the video frame whenever
+  // fullscreen + video is on and the current track plays through the YouTube
+  // engine. Retries until the engine is ready (YT API may still be loading).
+  // present/dismiss never reloads the player — playback continues seamlessly.
   useEffect(() => {
     if (!fullscreen || !current || !videoEnabled) return;
-    if (!isYoutube && !catalogVideo) return;
+    if (!isYoutube) return;
     setVideoReady(false);
     let tries = 0;
     let timer: ReturnType<typeof setTimeout>;
@@ -350,7 +305,7 @@ export function FullscreenPlayer() {
       setVideoReady(false);
       dismissVideo();
     };
-  }, [fullscreen, current?.id, videoEnabled, isYoutube, catalogVideo]);
+  }, [fullscreen, current?.id, videoEnabled, isYoutube]);
 
   // Re-present when the lyrics panel toggles (frame may remount).
   useEffect(() => {
@@ -444,7 +399,7 @@ export function FullscreenPlayer() {
               lyricsOpen && "hidden lg:flex", // lyrics overlay covers on small screens
             )}
           >
-            {isYoutube || (videoEnabled && catalogVideo) ? (
+            {isYoutube && videoEnabled ? (
               <div
                 ref={videoFrameRef}
                 className="fade-rise relative aspect-video w-[min(72vh,640px)] max-w-full overflow-hidden rounded-2xl bg-black shadow-[0_30px_80px_rgba(0,0,0,0.6)] ring-1 ring-white/10"
