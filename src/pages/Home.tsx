@@ -30,6 +30,7 @@ import { toPlayableYoutube } from "@/lib/playable";
 import type { YtItem } from "@/lib/youtube";
 import { usePlayerStore } from "@/store/player";
 import { useAction, useQuery } from "convex/react";
+import { cn } from "@/lib/utils";
 import {
   Compass,
   Dices,
@@ -123,8 +124,44 @@ export default function Home() {
     [mostPlayed],
   );
 
-  // "Play something random" across the whole catalog.
+  // "Play something random" across ALL sources — a random seed query is
+  // searched on YouTube (via YouTube Music, music-only results) and a random
+  // result plays. Falls back to a random catalog track when YouTube is
+  // unreachable.
+  const surpriseSeeds = [
+    "indie pop", "synthwave", "lo-fi beats", "alternative rock", "dream pop",
+    "electronic", "jazz", "funk", "soul", "ambient", "hip hop", "reggae",
+    "classic rock", "house", "techno", "r&b", "folk", "punk", "k-pop",
+    "afrobeats", "latin", "country", "metal", "disco", "blues",
+  ];
+  const [surprising, setSurprising] = useState(false);
+
   const surpriseMe = () => {
+    if (surprising) return;
+    setSurprising(true);
+    const seed = surpriseSeeds[Math.floor(Math.random() * surpriseSeeds.length)];
+    searchYt({ query: seed })
+      .then(({ items }) => {
+        const pool = items.filter((i) => i.duration > 0);
+        if (pool.length > 0) {
+          const pick = pool[Math.floor(Math.random() * pool.length)];
+          playTrack(
+            toPlayableYoutube(pick, `https://youtu.be/${pick.id}`, pool.filter((p) => p.id !== pick.id)),
+          );
+          toast.success(`🎲 Now playing: ${pick.title} — ${pick.artist}`);
+        } else {
+          surpriseCatalog();
+        }
+      })
+      .catch(() => {
+        surpriseCatalog();
+      })
+      .finally(() => {
+        setSurprising(false);
+      });
+  };
+
+  const surpriseCatalog = () => {
     const all = topTracks(999);
     if (all.length === 0) return;
     const pick = all[Math.floor(Math.random() * all.length)];
@@ -213,7 +250,7 @@ export default function Home() {
             onClick={surpriseMe}
             className="flex items-center gap-2 rounded-2xl border border-white/[0.07] bg-white/[0.03] px-5 py-3 text-sm font-semibold transition-all hover:border-[rgb(var(--tint)_/_0.35)] hover:bg-white/[0.05]"
           >
-            <Dices className="size-4 text-[rgb(var(--tint))]" />
+            <Dices className={cn("size-4 text-[rgb(var(--tint))]", surprising && "animate-pulse")} />
             Play something random
           </button>
         </section>
