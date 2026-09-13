@@ -18,6 +18,7 @@ import {
   Gauge,
   Keyboard,
   Loader2,
+  LogOut,
   Moon,
   Pencil,
   Trash2,
@@ -43,9 +44,12 @@ const SHORTCUTS: [string, string][] = [
 export function SettingsDialog({
   open,
   onOpenChange,
+  onSignOut,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Called after the user signs out (navigates away from the app). */
+  onSignOut?: () => void | Promise<void>;
 }) {
   const { user } = useAuth();
   const updateName = useMutation(api.users.updateName);
@@ -63,6 +67,7 @@ export function SettingsDialog({
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
 
   // Sync the input whenever the dialog opens (or the user object changes).
   useEffect(() => {
@@ -87,6 +92,16 @@ export function SettingsDialog({
       toast.error("Couldn't save your name — try again");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    if (!onSignOut) return;
+    setSigningOut(true);
+    try {
+      await onSignOut();
+    } finally {
+      setSigningOut(false);
     }
   };
 
@@ -150,6 +165,21 @@ export function SettingsDialog({
             <span className="font-medium text-foreground">{displayName}</span>
             {user?.email ? ` · ${user.email}` : ""}
           </p>
+          {onSignOut && (
+            <button
+              type="button"
+              onClick={() => void handleSignOut()}
+              disabled={signingOut}
+              className="flex items-center gap-2 self-start rounded-full border border-white/10 px-3.5 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-red-500/40 hover:bg-red-500/[0.08] hover:text-red-400 disabled:opacity-50"
+            >
+              {signingOut ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <LogOut className="size-3.5" />
+              )}
+              Sign out
+            </button>
+          )}
         </section>
 
         <Separator className="bg-white/[0.07]" />

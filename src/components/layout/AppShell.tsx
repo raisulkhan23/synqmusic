@@ -10,6 +10,7 @@ import { Logo } from "@/components/brand/Logo";
 import { api } from "@/convex/_generated/api";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
+import { useAuth } from "@/hooks/use-auth";
 import { Heart, House, LibraryBig, Search, Settings } from "lucide-react";
 import { usePlayerStore, type RemoteLikeSnapshot } from "@/store/player";
 
@@ -24,6 +25,7 @@ const DEFAULT_TINT = "203 244 143";
 
 export function AppShell() {
   const navigate = useNavigate();
+  const { signOut } = useAuth();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const accent = usePlayerStore((s) => s.accent);
   const setLiked = usePlayerStore((s) => s.setLiked);
@@ -205,7 +207,14 @@ export function AppShell() {
 
       <QueuePanel />
       <FullscreenPlayer />
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <SettingsDialog
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        onSignOut={async () => {
+          await signOut();
+          navigate("/");
+        }}
+      />
     </div>
   );
 }

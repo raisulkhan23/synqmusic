@@ -11,7 +11,6 @@ import {
   House,
   LibraryBig,
   ListMusic,
-  LogOut,
   Plus,
   Search,
   Settings,
@@ -37,6 +36,7 @@ export function Sidebar() {
     await signOut();
     navigate("/");
   };
+
 
   const initials =
     user?.name
@@ -175,18 +175,14 @@ export function Sidebar() {
         >
           <Settings className="size-4" />
         </button>
-        <button
-          type="button"
-          aria-label="Sign out"
-          onClick={handleSignOut}
-          className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
-        >
-          <LogOut className="size-4" />
-        </button>
       </div>
 
       <PlaylistDialog open={dialogOpen} onOpenChange={setDialogOpen} />
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <SettingsDialog
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        onSignOut={handleSignOut}
+      />
     </aside>
   );
 }
