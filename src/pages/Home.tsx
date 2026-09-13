@@ -30,6 +30,7 @@ import { toPlayableYoutube, type Playable } from "@/lib/playable";
 import type { YtItem } from "@/lib/youtube";
 import { usePlayerStore } from "@/store/player";
 import { readLastPlayed, type LastPlayedSnapshot } from "@/store/player";
+import { isPlayable } from "@/lib/playable";
 import { useAction, useQuery } from "convex/react";
 import { cn } from "@/lib/utils";
 import {
@@ -244,7 +245,15 @@ export default function Home() {
           {continueTrack && (
             <button
               type="button"
-              onClick={() => playTrack(continueTrack, recentTracks)}
+              onClick={() =>
+                // YouTube snapshots aren't in the catalog history list —
+                // passing recentTracks as the queue would make playTrack()
+                // fall back to index 0 and play a catalog song instead.
+                // Play the exact track, with the recent list queued after it.
+                isPlayable(continueTrack)
+                  ? playTrack(continueTrack)
+                  : playTrack(continueTrack, recentTracks)
+              }
               className="group flex min-w-0 flex-1 items-center gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.03] p-3 text-left transition-all hover:border-[rgb(var(--tint)_/_0.35)] hover:bg-white/[0.05]"
             >
               <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[rgb(var(--tint)_/_0.14)] text-[rgb(var(--tint))] transition-transform group-hover:scale-105">
