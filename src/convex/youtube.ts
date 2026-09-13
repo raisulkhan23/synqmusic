@@ -220,8 +220,9 @@ async function musicSearch(query: string): Promise<YtItem[]> {
         },
       },
       query,
-      // "Songs" filter — only actual music tracks.
-      params: "Eg-KAQwIARAAGAAgACgAMABqChAEEAMQBBApEAU%3D",
+      // No shelf filter — search ALL of YouTube Music so both "Songs" and
+      // "Videos" shelves (official music videos!) come back. The Songs-only
+      // param used here previously excluded official music videos entirely.
     }),
   });
   if (!res.ok) throw new ConvexError(`YouTube Music API returned ${res.status}`);
@@ -245,6 +246,7 @@ function isMusicTrack(item: YtItem): boolean {
 
 function extractMusicResults(data: Record<string, unknown>): YtItem[] {
   const out: YtItem[] = [];
+  const seen = new Set<string>();
   const sections = get(data, ["contents", "tabbedSearchResultsRenderer", "tabs", "0", "tabRenderer", "content", "sectionListRenderer", "contents"]);
   const flat = Array.isArray(sections)
     ? sections
@@ -289,7 +291,10 @@ function extractMusicResults(data: Record<string, unknown>): YtItem[] {
         duration: parseLength(durationRaw),
         thumbnail,
       };
-      if (isMusicTrack(entry)) out.push(entry);
+      if (isMusicTrack(entry) && !seen.has(videoId)) {
+        seen.add(videoId);
+        out.push(entry);
+      }
       if (out.length >= 10) return out;
     }
   }
