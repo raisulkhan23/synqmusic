@@ -7,7 +7,7 @@ export interface LyricLine {
   text: string;
 }
 
-const UA = { "User-Agent": "SoundCore/1.0 (web player)" };
+const UA = { "User-Agent": "SYNQ/1.0 (web player)" };
 
 /** Parse LRC-format text into timed lines. */
 function parseLrc(lrc: string): LyricLine[] {

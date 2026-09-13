@@ -63,7 +63,7 @@ export default function Liked() {
       .finally(() => setResolvingRemoteId(null));
   };
 
-  // (Liked Songs header copy will be re-branded once SoundCore copy is in place.)
+  // (Liked Songs header copy will be re-branded once SYNQ copy is in place.)
 
 
   const total = totalSeconds;

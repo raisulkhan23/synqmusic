@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// SoundCore demo catalog
+// SYNQ demo catalog
 // A fixed catalog of tracks mapped to reliable, streamable demo audio files
 // (SoundHelix sample MP3s). Metadata is fictional but fully searchable, and
 // every album ships a generated cover so the whole app feels alive.
@@ -334,7 +334,7 @@ export const MIXES: Mix[] = [
   {
     id: "mix-top",
     title: "This Week's Top Tracks",
-    description: "The most played songs across the SoundCore catalog.",
+    description: "The most played songs across the SYNQ catalog.",
     gradient: ["#e11d48", "#7c3aed"],
     trackIds: [
       "aur-polarize", "afterglow-afterglow", "prism-chromatic", "va-gold-wiring",
@@ -352,7 +352,7 @@ export const MIXES: Mix[] = [
   {
     id: "mix-fresh",
     title: "Fresh Finds",
-    description: "New releases lighting up the SoundCore catalog.",
+    description: "New releases lighting up the SYNQ catalog.",
     gradient: ["#a21caf", "#312e81"],
     trackIds: [
       "aur-polarize", "va-gold-wiring", "im-fault-lines", "lv-halo-signal",

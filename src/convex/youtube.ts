@@ -2,7 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { action } from "./_generated/server";
 
 // ---------------------------------------------------------------------------
-// SoundCore audio source resolver.
+// SYNQ audio source resolver.
 // Talks to YouTube InnerTube / YouTube Music to search for music and to
 // resolve a direct, playable audio stream for a video. No external keys
 // required — the public INNERTUBE key below is embedded in every YouTube

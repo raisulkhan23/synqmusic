@@ -369,7 +369,7 @@ export default function Home() {
         </section>
       )}
 
-      <SectionRow title="New releases" subtitle="Fresh from the SoundCore label">
+      <SectionRow title="New releases" subtitle="Fresh from the SYNQ label">
         {albums.map((album) => (
           <AlbumCard key={album.id} album={album} />
         ))}

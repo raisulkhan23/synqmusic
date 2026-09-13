@@ -158,7 +158,7 @@ export default function Landing() {
             className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-1.5 text-xs font-medium text-muted-foreground"
           >
             <span className="size-1.5 rounded-full bg-brand" />
-            SoundCore · ad-free · 320 kbps
+            SYNQ · ad-free · 320 kbps
           </motion.div>
 
           <motion.h1
@@ -178,7 +178,7 @@ export default function Landing() {
             transition={{ duration: 0.55, delay: 0.16 }}
             className="mt-5 max-w-md text-base leading-7 text-muted-foreground sm:text-lg"
           >
-            SoundCore streams a carefully curated catalog in crisp 320 kbps — with
+            SYNQ streams a carefully curated catalog in crisp 320 kbps — with
             a live visualizer, a queue you can rearrange, and absolutely no ads.
           </motion.p>
 
@@ -411,7 +411,7 @@ export default function Landing() {
         <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-6 px-4 py-10 sm:flex-row sm:px-6">
           <Logo to="/" />
           <p className="text-xs text-muted-foreground">
-            © 2026 SoundCore · Currently in beta
+            © 2026 SYNQ · Currently in beta
           </p>
           <nav className="flex items-center gap-5 text-xs font-medium text-muted-foreground">
             <a href="#features" className="transition-colors hover:text-foreground">

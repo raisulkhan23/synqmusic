@@ -57,7 +57,7 @@ export default function Album() {
 
       <p className="flex items-center gap-1.5 px-2 text-xs text-muted-foreground/60">
         <Disc3 className="size-3.5" />
-        Demo catalog — every track streams from SoundCore&apos;s curated library
+        Demo catalog — every track streams from SYNQ&apos;s curated library
       </p>
     </div>
   );

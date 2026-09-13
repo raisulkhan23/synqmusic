@@ -375,7 +375,7 @@ export function FullscreenPlayer() {
                 {current.albumName}
               </p>
               <p className="text-xs text-muted-foreground">
-                {current.source === "catalog" ? "SoundCore catalog" : "Streamed from YouTube"}
+                {current.source === "catalog" ? "SYNQ catalog" : "Streamed from YouTube"}
               </p>
             </div>
             <div className="flex items-center gap-1">

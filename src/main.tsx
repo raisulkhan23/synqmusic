@@ -15,7 +15,7 @@ import {
 } from "react-router";
 import "./index.css";
 
-// SoundCore is a dark-only experience — default the theme before first paint.
+// SYNQ is a dark-only experience — default the theme before first paint.
 document.documentElement.classList.add("dark");
 
 // Lazy load route components for better code splitting

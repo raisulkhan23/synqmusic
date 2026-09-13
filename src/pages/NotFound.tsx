@@ -26,7 +26,7 @@ export default function NotFound() {
           className="mt-8 inline-flex items-center gap-2 rounded-full bg-brand px-6 py-3 text-sm font-semibold text-brand-foreground shadow-[0_10px_36px_rgb(203_244_143/0.35)] transition-transform hover:scale-105"
         >
           <AudioLines className="size-4" />
-          Back to SoundCore
+          Back to SYNQ
         </Link>
       </div>
     </motion.div>

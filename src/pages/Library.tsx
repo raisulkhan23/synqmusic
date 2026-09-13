@@ -214,7 +214,7 @@ export default function Library() {
               Albums
             </h2>
             <p className="-mt-2 mt-0.5 text-sm text-muted-foreground">
-              {albumFilter === "liked" ? "Your liked albums" : "The complete SoundCore catalog"} ·{" "}
+              {albumFilter === "liked" ? "Your liked albums" : "The complete SYNQ catalog"} ·{" "}
               {albums.length} {albums.length === 1 ? "album" : "albums"}
             </p>
           </div>
