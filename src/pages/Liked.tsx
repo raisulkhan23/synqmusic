@@ -1,16 +1,17 @@
 import { useNavigate } from "react-router";
 import { RemoteTrackRow } from "@/components/tracks/RemoteTrackRow";
-import { PlayHeaderButton } from "@/components/tracks/PlayHeaderButton";
 import { TrackRow } from "@/components/tracks/TrackRow";
 import { api } from "@/convex/_generated/api";
+import { toPlayable } from "@/lib/playable";
 import { trackById } from "@/lib/catalog";
 import { formatTime } from "@/lib/format";
 import { toPlayableYoutube } from "@/lib/playable";
+import type { Playable } from "@/lib/playable";
 import type { YtItem } from "@/lib/youtube";
 import { toast } from "sonner";
 import { usePlayerStore } from "@/store/player";
 import { useAction, useQuery } from "convex/react";
-import { Heart } from "lucide-react";
+import { Heart, Loader2, Play, Shuffle } from "lucide-react";
 import { useState } from "react";
 
 export default function Liked() {
@@ -57,10 +58,74 @@ export default function Liked() {
           ...toPlayableYoutube(item, `https://youtu.be/${best.id}`, items.slice(1)),
           youtubeId: best.id,
         };
-        playTrack(playable);
+        playTrack(playable, buildLikedQueue(playable));
       })
       .catch(() => toast.error("Playback failed — try again in a moment"))
       .finally(() => setResolvingRemoteId(null));
+  };
+
+  /**
+   * Resolve the full Liked Songs list into a playable queue: catalog tracks
+   * are instant, remote likes are matched through a live search. Used by both
+   * Play All and Shuffle All so the ENTIRE playlist lands in the queue.
+   */
+  const buildLikedQueue = (firstPlayable: Playable, firstIsRemote?: string): Playable[] => {
+    const out: Playable[] = [];
+    const remoteById = new Map(remoteLikes.map((r) => [r.trackId, r]));
+    let firstInserted = false;
+    for (const row of remoteLikes) {
+      if (firstIsRemote === row.trackId) {
+        out.push(firstPlayable);
+        firstInserted = true;
+        continue;
+      }
+      // Unresolved remote likes get a placeholder stream entry — the player's
+      // auto-rescue handles them when they come up in the queue.
+      const item: YtItem = {
+        id: row.trackId,
+        title: row.title,
+        artist: row.artistName,
+        thumbnail: row.coverUrl,
+        duration: row.duration,
+      };
+      out.push({
+        ...toPlayableYoutube(item, row.youtubeId ?? item.id),
+        youtubeId: row.youtubeId ?? undefined,
+      });
+    }
+    for (const t of likedTracks) out.push(toPlayable(t));
+    void firstInserted;
+    return out;
+  };
+
+  const playAll = () => {
+    if (totalCount === 0) return;
+    // Catalog tracks play directly with the full list in the queue.
+    if (remoteLikes.length === 0) {
+      playTrack(likedTracks[0], likedTracks);
+      return;
+    }
+    // Mixed/remote list: resolve the first remote like, queue everything.
+    const first = remoteLikes[0];
+    playRemoteLike(first);
+  };
+
+  const shuffleAll = () => {
+    if (totalCount === 0) return;
+    // Catalog-only: use the player's built-in shuffle queue.
+    if (remoteLikes.length === 0) {
+      const shuffled = [...likedTracks].sort(() => Math.random() - 0.5);
+      usePlayerStore.getState().playTrack(shuffled[0], shuffled);
+      // Enable shuffle so subsequent skips stay shuffled.
+      if (!usePlayerStore.getState().shuffle) usePlayerStore.getState().toggleShuffle();
+      toast.success(`Shuffling ${shuffled.length} liked songs`);
+      return;
+    }
+    // Remote list: pick a random remote like and let the queue play through.
+    const row = remoteLikes[Math.floor(Math.random() * remoteLikes.length)];
+    playRemoteLike(row);
+    if (!usePlayerStore.getState().shuffle) usePlayerStore.getState().toggleShuffle();
+    toast.success("Shuffling your liked songs");
   };
 
   // (Liked Songs header copy will be re-branded once SYNQ copy is in place.)
@@ -99,7 +164,24 @@ export default function Liked() {
       {totalCount > 0 ? (
         <>
           <div className="flex items-center gap-3 px-2">
-            <PlayHeaderButton list={likedTracks} />
+            <button
+              type="button"
+              onClick={playAll}
+              disabled={resolvingRemoteId !== null}
+              className="flex shrink-0 items-center gap-2 rounded-full bg-[rgb(var(--tint))] px-5 py-2.5 text-sm font-semibold text-black shadow-[0_8px_30px_rgb(var(--tint)/0.35)] transition-all hover:scale-[1.03] active:scale-95 disabled:opacity-60"
+            >
+              <Play className="size-4 fill-current" />
+              Play all
+            </button>
+            <button
+              type="button"
+              onClick={shuffleAll}
+              disabled={resolvingRemoteId !== null}
+              className="flex shrink-0 items-center gap-2 rounded-full border border-white/15 bg-white/[0.05] px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-white/[0.1] disabled:opacity-60"
+            >
+              {resolvingRemoteId !== null ? <Loader2 className="size-4 animate-spin" /> : <Shuffle className="size-4" />}
+              Shuffle
+            </button>
           </div>
           <div className="flex flex-col gap-0.5">
             {remoteLikes.map((row, i) => (

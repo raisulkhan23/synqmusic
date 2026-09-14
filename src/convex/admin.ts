@@ -174,3 +174,93 @@ export const deletePlaylist = mutation({
     await ctx.db.delete(playlistId);
   },
 });
+
+/**
+ * Every user's liked songs — both catalog likes and remote (streamed) likes
+ * with their metadata snapshots (admin only).
+ */
+export const listAllLikes = query({
+  args: {},
+  handler: async (ctx) => {
+    await getAdminUser(ctx);
+    const [likes, remotes, users] = await Promise.all([
+      ctx.db.query("likedSongs").collect(),
+      ctx.db.query("likedRemote").collect(),
+      ctx.db.query("users").collect(),
+    ]);
+    const owners = new Map(users.map((u) => [u._id, u]));
+    const remoteByUserTrack = new Map(
+      remotes.map((r) => [`${r.userId}:${r.trackId}`, r]),
+    );
+    return likes
+      .map((like) => {
+        const owner = owners.get(like.userId);
+        const remote = remoteByUserTrack.get(`${like.userId}:${like.trackId}`);
+        return {
+          _id: like._id,
+          trackId: like.trackId,
+          createdAt: like.createdAt,
+          ownerName: owner?.name ?? null,
+          ownerEmail: owner?.email ?? null,
+          title: remote?.title ?? like.trackId,
+          artistName: remote?.artistName ?? "SYNQ catalog",
+          coverUrl: remote?.coverUrl ?? "",
+          duration: remote?.duration ?? 0,
+        };
+      })
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(0, 500);
+  },
+});
+
+/**
+ * Global listening stats: most played tracks across the whole deployment
+ * (admin only).
+ */
+export const globalTopTracks = query({
+  args: {},
+  handler: async (ctx) => {
+    await getAdminUser(ctx);
+    const history = await ctx.db.query("playHistory").collect();
+    const byTrack = new Map<string, { plays: number; listeners: Set<string> }>();
+    for (const h of history) {
+      const entry = byTrack.get(h.trackId) ?? { plays: 0, listeners: new Set<string>() };
+      entry.plays += h.playCount;
+      entry.listeners.add(h.userId);
+      byTrack.set(h.trackId, entry);
+    }
+    return [...byTrack.entries()]
+      .map(([trackId, v]) => ({ trackId, plays: v.plays, listeners: v.listeners.size }))
+      .sort((a, b) => b.plays - a.plays)
+      .slice(0, 25);
+  },
+});
+
+/** Per-user activity rollup: likes, playlists, plays (admin only). */
+export const userActivity = query({
+  args: {},
+  handler: async (ctx) => {
+    await getAdminUser(ctx);
+    const [users, likes, playlists, history] = await Promise.all([
+      ctx.db.query("users").collect(),
+      ctx.db.query("likedSongs").collect(),
+      ctx.db.query("playlists").collect(),
+      ctx.db.query("playHistory").collect(),
+    ]);
+    return users
+      .map((u) => ({
+        _id: u._id,
+        name: u.name ?? null,
+        email: u.email ?? null,
+        likes: likes.filter((l) => l.userId === u._id).length,
+        playlists: playlists.filter((p) => p.userId === u._id).length,
+        plays: history
+          .filter((h) => h.userId === u._id)
+          .reduce((sum, h) => sum + h.playCount, 0),
+        lastPlayedAt: history
+          .filter((h) => h.userId === u._id)
+          .reduce((max, h) => Math.max(max, h.playedAt), 0),
+      }))
+      .sort((a, b) => b.plays - a.plays);
+  },
+});

@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { useAction } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { Link } from "react-router";
 import { SeekBar } from "@/components/player/SeekBar";
 import { TransportControls } from "@/components/player/TransportControls";
@@ -132,6 +134,7 @@ export function PlayerBar() {
   const errorNonce = usePlayerStore((s) => s.errorNonce);
   const replaceCurrentStream = usePlayerStore((s) => s.replaceCurrentStream);
   const playViaStream = usePlayerStore((s) => s.playViaStream);
+  const searchSameSong = useAction(api.youtube.searchYoutube);
 
   // Sample the current artwork and tint the whole app with its dominant color.
   // Remote (YouTube) art can't be sampled cross-origin, so derive a stable,
@@ -179,24 +182,55 @@ export function PlayerBar() {
       toast.error("No more sources available for this track");
       return;
     }
-    const next = alternatives[attempts.current];
-    attempts.current += 1;
-
     // First failure for this track: try to rescue the SAME song through the
     // resolved direct stream (the proxy path) — this covers videos that are
     // embed-restricted or region-blocked in the iframe but still streamable.
-    // Only if that also fails do we move on to an alternative result.
-    if (!track.audioUrl && attempts.current === 0) {
-      attempts.current = 1;
+    if (!track.audioUrl) {
       toast.loading(`Finding a way to play "${track.title}"…`, { id: "yt-fallback" });
       playViaStream(track);
       return;
     }
+
+    // Stream also failed (e.g. YouTube's bot-check blocked this upload).
+    // Before abandoning the song, re-search for the SAME song title and try a
+    // different upload of it. Only when every upload fails do we give up.
+    if (attempts.current === 0) {
+      attempts.current = 1;
+      toast.loading(`Looking for another upload of "${track.title}"…`, { id: "yt-fallback" });
+      const artist = track.artistName.split(",")[0]?.trim() ?? "";
+      void searchSameSong({ query: `${track.title} ${artist}`.trim() })
+        .then(({ items }) => {
+          const candidate = items.find(
+            (it) =>
+              it.id !== track.id &&
+              it.id !== track.youtubeId &&
+              !(track.alternatives ?? []).some((a) => a.id === it.id) &&
+              (it.duration === 0 || (it.duration >= 30 && it.duration <= 900)),
+          );
+          if (!candidate) {
+            toast.error(`"${track.title}" couldn't be played`, { id: "yt-fallback" });
+            return;
+          }
+          replaceCurrentStream(
+            toPlayableYoutube(candidate, candidate.id, items.filter((i) => i.id !== candidate.id)),
+          );
+          toast.success(`Playing "${track.title}"`, { id: "yt-fallback" });
+        })
+        .catch(() => toast.error("Playback failed — try another song", { id: "yt-fallback" }));
+      return;
+    }
+
+    const next = alternatives[attempts.current - 1];
+    if (!next) {
+      toast.error(`"${track.title}" couldn't be played`, { id: "yt-fallback" });
+      return;
+    }
+    attempts.current += 1;
     toast.loading(`Finding another way to play "${track.title}"…`, { id: "yt-fallback" });
     // The IFrame engine plays by video id — just swap the current track.
     replaceCurrentStream(toPlayableYoutube(next, next.id, alternatives));
     toast.success("Playing a matching version", { id: "yt-fallback" });
-  }, [errorNonce, replaceCurrentStream, playViaStream]);
+  }, [errorNonce, replaceCurrentStream, playViaStream, searchSameSong]);
 
   if (!current) return null;
 

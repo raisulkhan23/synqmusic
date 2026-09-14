@@ -490,6 +490,9 @@ function similarTracksFor(seed: Playable): Playable[] {
 /** In-flight related-mix fetch, deduped per seed so track-end doesn't double-fire. */
 let relatedMixInFlight: { seedId: string; promise: Promise<Playable[]> } | null = null;
 
+/** Tracks already played in this session — related mixes must never repeat them. */
+const playedSessionIds = new Set<string>();
+
 /**
  * Fetch a related-mix from YouTube Music based on the seed track's title +
  * artist. Returns Playables ready for the queue (empty on failure).
@@ -502,10 +505,16 @@ async function fetchRelatedMix(seed: Playable, existingQueue: Playable[], count:
       const query = `${seed.title} ${seed.artistName.split(",")[0]?.trim() ?? ""} similar songs`.trim();
       const res = await ytSearchClient.action(api.youtube.searchYoutube, { query });
       const items = res?.items ?? [];
+      // Never include: the seed, anything queued, anything played this
+      // session, or an alternate upload of the seed (same normalized title).
       const existing = new Set(existingQueue.map((t) => t.id));
       existing.add(seed.id);
+      for (const id of playedSessionIds) existing.add(id);
+      const normTitle = (s: string) => s.toLowerCase().replace(/\([^)]*\)|\[[^\]]*\]/g, "").replace(/[^a-z0-9]/g, "");
+      const seedTitle = normTitle(seed.title);
       return items
         .filter((it: YtItem) => !existing.has(it.id))
+        .filter((it: YtItem) => normTitle(it.title) !== seedTitle || normTitle(it.artist ?? "") !== normTitle(seed.artistName))
         .slice(0, count)
         .map((it: YtItem) => toPlayableYoutube(it, ""));
     } catch {
@@ -751,6 +760,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
   const loadTrack = (track: Playable, startSeconds?: number) => {
     const seq = ++loadSeq;
     const prev = get().current;
+    playedSessionIds.add(track.id);
 
     // queue history: remember what was playing before this
     if (prev && prev.id !== track.id) {

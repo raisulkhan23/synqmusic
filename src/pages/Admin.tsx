@@ -14,6 +14,7 @@ import {
   Loader2,
   Shield,
   ShieldCheck,
+  TrendingUp,
   Trash2,
   Users,
 } from "lucide-react";
@@ -73,6 +74,9 @@ export default function Admin() {
   const status = useQuery(api.admin.status);
   const users = useQuery(api.admin.listUsers);
   const playlists = useQuery(api.admin.listAllPlaylists);
+  const allLikes = useQuery(api.admin.listAllLikes);
+  const topTracks = useQuery(api.admin.globalTopTracks);
+  const activity = useQuery(api.admin.userActivity);
   const me = useQuery(api.users.currentUser);
 
   const setRole = useMutation(api.admin.setRole);
@@ -164,7 +168,7 @@ export default function Admin() {
               Admin
             </h1>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              Manage accounts and content across the deployment.
+              Manage accounts, content, and listening activity across the deployment.
             </p>
           </div>
         </div>
@@ -174,6 +178,7 @@ export default function Admin() {
         <TabsList className="bg-white/[0.05]">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="users">Users</TabsTrigger>
+          <TabsTrigger value="likes">Liked songs</TabsTrigger>
           <TabsTrigger value="playlists">Playlists</TabsTrigger>
         </TabsList>
 
@@ -291,6 +296,121 @@ export default function Admin() {
                 })}
               </tbody>
             </table>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="likes" className="mt-6 flex flex-col gap-6">
+          {/* per-user activity rollup */}
+          <div className="overflow-hidden rounded-2xl border border-white/[0.07]">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-white/[0.07] bg-white/[0.03] text-[11px] tracking-widest text-muted-foreground uppercase">
+                  <th className="px-4 py-3 font-semibold">Listener</th>
+                  <th className="px-4 py-3 font-semibold">Likes</th>
+                  <th className="hidden px-4 py-3 font-semibold sm:table-cell">Playlists</th>
+                  <th className="px-4 py-3 font-semibold">Plays</th>
+                  <th className="hidden px-4 py-3 font-semibold md:table-cell">Last played</th>
+                </tr>
+              </thead>
+              <tbody>
+                {activity === undefined &&
+                  [0, 1, 2].map((i) => (
+                    <tr key={i}>
+                      <td colSpan={5} className="px-4 py-3">
+                        <div className="h-6 animate-pulse rounded bg-white/[0.05]" />
+                      </td>
+                    </tr>
+                  ))}
+                {activity?.map((row) => (
+                  <tr key={row._id} className="border-b border-white/[0.04] last:border-0">
+                    <td className="px-4 py-3 font-medium">{row.name ?? row.email ?? "Anonymous"}</td>
+                    <td className="px-4 py-3 text-muted-foreground tabular-nums">{row.likes}</td>
+                    <td className="hidden px-4 py-3 text-muted-foreground tabular-nums sm:table-cell">{row.playlists}</td>
+                    <td className="px-4 py-3 text-muted-foreground tabular-nums">{row.plays}</td>
+                    <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">
+                      {row.lastPlayedAt ? formatDate(row.lastPlayedAt) : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* every liked song across the deployment */}
+          <div className="overflow-hidden rounded-2xl border border-white/[0.07]">
+            <div className="flex items-center gap-2 border-b border-white/[0.07] bg-white/[0.03] px-4 py-3">
+              <Heart className="size-4 text-[rgb(var(--tint))]" />
+              <p className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
+                All liked songs · {allLikes?.length ?? "…"}
+              </p>
+            </div>
+            <div className="max-h-[420px] overflow-y-auto">
+              <table className="w-full text-left text-sm">
+                <tbody>
+                  {allLikes === undefined &&
+                    [0, 1, 2, 3].map((i) => (
+                      <tr key={i}>
+                        <td colSpan={4} className="px-4 py-3">
+                          <div className="h-10 animate-pulse rounded bg-white/[0.05]" />
+                        </td>
+                      </tr>
+                    ))}
+                  {allLikes?.map((like) => (
+                    <tr key={like._id} className="border-b border-white/[0.04] last:border-0">
+                      <td className="w-12 px-4 py-2">
+                        {like.coverUrl ? (
+                          <img src={like.coverUrl} alt="" className="size-10 rounded-md object-cover" />
+                        ) : (
+                          <span className="flex size-10 items-center justify-center rounded-md bg-white/[0.06]">
+                            <Heart className="size-4 text-muted-foreground/50" />
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-2 py-2">
+                        <p className="truncate font-medium">{like.title}</p>
+                        <p className="truncate text-xs text-muted-foreground">{like.artistName}</p>
+                      </td>
+                      <td className="px-4 py-2 text-xs text-muted-foreground">
+                        {like.ownerName ?? like.ownerEmail ?? "Unknown"}
+                      </td>
+                      <td className="hidden px-4 py-2 text-xs text-muted-foreground md:table-cell">
+                        {formatDate(like.createdAt)}
+                      </td>
+                    </tr>
+                  ))}
+                  {allLikes !== undefined && allLikes.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                        No liked songs yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* deployment-wide most played */}
+          <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-5">
+            <p className="flex items-center gap-2 text-sm font-semibold">
+              <TrendingUp className="size-4 text-[rgb(var(--tint))]" />
+              Most played across the deployment
+            </p>
+            <div className="mt-3 flex flex-col gap-1.5">
+              {topTracks === undefined && <div className="h-16 animate-pulse rounded bg-white/[0.05]" />}
+              {topTracks?.map((t, i) => (
+                <div key={t.trackId} className="flex items-center gap-3 text-sm">
+                  <span className="w-6 text-right text-xs tabular-nums text-muted-foreground">{i + 1}</span>
+                  <span className="min-w-0 flex-1 truncate">{t.trackId}</span>
+                  <span className="text-xs tabular-nums text-muted-foreground">
+                    {t.plays} plays · {t.listeners} listener{t.listeners === 1 ? "" : "s"}
+                  </span>
+                </div>
+              ))}
+              {topTracks !== undefined && topTracks.length === 0 && (
+                <p className="text-sm text-muted-foreground">No listening history yet.</p>
+              )}
+            </div>
           </div>
         </TabsContent>
 
