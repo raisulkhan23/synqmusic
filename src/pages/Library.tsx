@@ -183,7 +183,7 @@ export default function Library() {
             You&apos;re not following anyone yet. Hit the bell on an artist below.
           </p>
         ) : (
-          <div className="hide-scrollbar -mx-4 flex gap-4 overflow-x-auto px-4 pb-2">
+          <div className="slider-rail -mx-4 flex gap-4 overflow-x-auto px-4 pb-2">
             {likedArtists.map((artist: Artist) => {
               const top = artistTracks(artist.id).sort((a, b) => b.popularity - a.popularity);
               return (
@@ -271,7 +271,7 @@ export default function Library() {
             </button>
           </div>
         ) : (
-          <div className="hide-scrollbar -mx-4 flex gap-4 overflow-x-auto px-4 pb-2">
+          <div className="slider-rail -mx-4 flex gap-4 overflow-x-auto px-4 pb-2">
             {playlists?.map((p) => (
               <PlaylistCard key={p._id} playlist={p} />
             ))}
@@ -335,7 +335,7 @@ export default function Library() {
             No albums match this filter yet. Tap the heart on an album to save it here.
           </p>
         ) : (
-          <div className="hide-scrollbar -mx-4 flex gap-4 overflow-x-auto px-4 pb-2">
+          <div className="slider-rail -mx-4 flex gap-4 overflow-x-auto px-4 pb-2">
             {albums.map((album) => (
               <div key={album.id} className="relative">
                 <AlbumCard album={album} />

@@ -205,7 +205,7 @@ export function QueuePanel() {
           </div>
         </SheetHeader>
 
-        <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-3 py-4">
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-3 py-4">
           {current ? (
             <section className="rounded-xl bg-white/[0.04] p-3">
               <p className="px-1 pb-2 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
@@ -286,6 +286,7 @@ export function QueuePanel() {
                 axis="y"
                 values={upcomingIds}
                 onReorder={handleReorder}
+                layoutScroll
                 className="space-y-1"
               >
                 {upcoming.map((track) => (
@@ -377,7 +378,7 @@ export function QueuePanel() {
 
           {/* queue history — what you previously played */}
           {history.length > 0 && (
-            <section className="min-h-0">
+            <section className="min-h-0 border-t border-white/[0.07] pt-4">
               <p className="flex items-center gap-1.5 px-1 pb-2 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
                 <Undo2 className="size-3" />
                 Recently played · {history.length}

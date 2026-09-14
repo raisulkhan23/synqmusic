@@ -274,14 +274,14 @@ export default function Search() {
                 </div>
               )}
               {results.albums.length > 0 && (
-                <div className="hide-scrollbar -mx-4 mt-4 flex gap-4 overflow-x-auto px-4 pb-2">
+                <div className="slider-rail -mx-4 mt-4 flex gap-4 overflow-x-auto px-4 pb-2">
                   {results.albums.map((album) => (
                     <AlbumCard key={album.id} album={album} />
                   ))}
                 </div>
               )}
               {results.artists.length > 0 && (
-                <div className="hide-scrollbar -mx-4 mt-4 flex gap-4 overflow-x-auto px-4 pb-2">
+                <div className="slider-rail -mx-4 mt-4 flex gap-4 overflow-x-auto px-4 pb-2">
                   {results.artists.map((artist) => {
                     const album = ALBUMS.find(
                       (a) => a.artistId === artist.id,
@@ -344,7 +344,7 @@ function BrowseView({
         <h2 className="mb-3 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
           Popular mixes
         </h2>
-        <div className="hide-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4 pb-2">
+        <div className="slider-rail -mx-4 flex gap-3 overflow-x-auto px-4 pb-2">
           {POPULAR_MIXES.map((mix) => (
             <MixCard key={mix.id} mix={mix} />
           ))}
@@ -373,7 +373,7 @@ function BrowseView({
         <h2 className="mb-3 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
           All albums
         </h2>
-        <div className="hide-scrollbar -mx-4 flex gap-4 overflow-x-auto px-4 pb-2">
+        <div className="slider-rail -mx-4 flex gap-4 overflow-x-auto px-4 pb-2">
           {ALBUMS.map((album) => (
             <AlbumCard key={album.id} album={album} />
           ))}
@@ -384,7 +384,7 @@ function BrowseView({
         <h2 className="mb-3 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
           All artists
         </h2>
-        <div className="hide-scrollbar -mx-4 flex gap-4 overflow-x-auto px-4 pb-2">
+        <div className="slider-rail -mx-4 flex gap-4 overflow-x-auto px-4 pb-2">
           {ARTISTS.map((artist) => {
             const album = ALBUMS.find((a) => a.artistId === artist.id);
             const tracks = artistTracks(artist.id);

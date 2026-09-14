@@ -232,6 +232,27 @@
   .hide-scrollbar::-webkit-scrollbar {
     display: none;
   }
+
+  /* Visible horizontal slider rails for card carousels (playlists, mixes,
+     album rows) — thin track with a rounded thumb that brightens on hover. */
+  .slider-rail {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(255 255 255 / 0.18) transparent;
+  }
+  .slider-rail::-webkit-scrollbar {
+    height: 8px;
+  }
+  .slider-rail::-webkit-scrollbar-track {
+    background: rgb(255 255 255 / 0.05);
+    border-radius: 999px;
+  }
+  .slider-rail::-webkit-scrollbar-thumb {
+    background: rgb(255 255 255 / 0.2);
+    border-radius: 999px;
+  }
+  .slider-rail:hover::-webkit-scrollbar-thumb {
+    background: rgb(255 255 255 / 0.35);
+  }
   /* animated equalizer bars (playing indicator) */
   .eq-bar {
     transform-origin: center bottom;

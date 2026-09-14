@@ -454,7 +454,7 @@ export default function Home() {
               Who you&apos;ve been playing the most.
             </p>
           </div>
-          <div className="hide-scrollbar -mx-4 flex gap-4 overflow-x-auto px-4 pb-2">
+          <div className="slider-rail -mx-4 flex gap-4 overflow-x-auto px-4 pb-2">
             {artistTrendList.slice(0, 8).map(({ artist, items }) => (
               <button
                 key={artist}
