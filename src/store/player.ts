@@ -12,15 +12,23 @@ import { ConvexClient } from "convex/browser";
 /**
  * Resolve a direct audio stream URL for a YouTube video via the Convex
  * backend (vanilla client — usable outside React). Used only when an audio
- * effect needs the stream on the <audio> element. Returns null on failure.
+ * effect needs the stream on the <audio> element.
+ *
+ * The URL is routed through our CORS proxy (/audio-proxy on the Convex
+ * site): stream hosts send no CORS headers, so without the proxy the
+ * <audio crossOrigin="anonymous"> element can't load them and every effect
+ * silently becomes a no-op. Returns null on failure.
  */
 let ytResolveClient: ConvexClient | null = null;
 let ytSearchClient: ConvexClient | null = null;
+const convexSiteUrl = ((import.meta.env.VITE_CONVEX_URL as string) ?? "").replace(".cloud", ".site");
+const audioProxyBase = `${convexSiteUrl}/audio-proxy`;
 const ytResolve = async (videoId: string): Promise<string | null> => {
   try {
     ytResolveClient = ytResolveClient ?? new ConvexClient(import.meta.env.VITE_CONVEX_URL as string);
     const res = await ytResolveClient.action(api.youtube.resolveStream, { videoId });
-    return res?.url ?? null;
+    if (!res?.url) return null;
+    return `${audioProxyBase}?u=${encodeURIComponent(res.url)}`;
   } catch {
     return null;
   }
