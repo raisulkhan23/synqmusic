@@ -77,6 +77,23 @@ const schema = defineSchema(
       .index("by_user_track", ["userId", "trackId"])
       .index("by_user_playedAt", ["userId", "playedAt"])
       .index("by_user", ["userId"]),
+
+    // playlists imported from other music services. Tracks are stored as
+    // snapshots (title + artist) and resolved to playable YouTube tracks at
+    // play time — so a CSV export from any provider works without OAuth.
+    importedPlaylists: defineTable({
+      userId: v.id("users"),
+      name: v.string(),
+      origin: v.string(), // e.g. "YouTube Music", "Spotify", "Other"
+      tracks: v.array(
+        v.object({
+          title: v.string(),
+          artist: v.string(),
+          duration: v.optional(v.number()),
+        }),
+      ),
+      createdAt: v.number(),
+    }).index("by_user", ["userId"]),
   },
   {
     schemaValidation: false,

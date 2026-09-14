@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { ImportSection } from "@/components/settings/ImportSection";
 import {
   Dialog,
   DialogContent,
@@ -264,6 +265,11 @@ export function SettingsDialog({
             ))}
           </div>
         </section>
+
+        <Separator className="bg-white/[0.07]" />
+
+        {/* import */}
+        <ImportSection open={open} />
 
         <Separator className="bg-white/[0.07]" />
 

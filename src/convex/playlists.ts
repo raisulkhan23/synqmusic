@@ -102,6 +102,69 @@ export const removeTrack = mutation({
 });
 
 /**
+ * Save a playlist imported from another music service (CSV/text export).
+ * Tracks are snapshots — resolved to playable streams at play time.
+ */
+export const saveImported = mutation({
+  args: {
+    name: v.string(),
+    origin: v.string(),
+    tracks: v.array(
+      v.object({
+        title: v.string(),
+        artist: v.string(),
+        duration: v.optional(v.number()),
+      }),
+    ),
+  },
+  handler: async (ctx, { name, origin, tracks }) => {
+    const userId = await requireUser(ctx);
+    if (tracks.length === 0) {
+      throw new ConvexError("No tracks found in the import");
+    }
+    const id = await ctx.db.insert("importedPlaylists", {
+      userId,
+      name: name.trim() || "Imported playlist",
+      origin,
+      tracks,
+      createdAt: Date.now(),
+    });
+    return id;
+  },
+});
+
+/**
+ * Replace all tracks of an imported playlist (used to cache resolved plays).
+ */
+export const removeImported = mutation({
+  args: { playlistId: v.id("importedPlaylists") },
+  handler: async (ctx, { playlistId }) => {
+    const userId = await requireUser(ctx);
+    const playlist = await ctx.db.get(playlistId);
+    if (playlist === null || playlist.userId !== userId) {
+      throw new ConvexError("Playlist not found");
+    }
+    await ctx.db.delete(playlistId);
+  },
+});
+
+/**
+ * The signed-in user's imported playlists, newest first.
+ */
+export const myImportedPlaylists = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) return [];
+    return await ctx.db
+      .query("importedPlaylists")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .order("desc")
+      .collect();
+  },
+});
+
+/**
  * The signed-in user's playlists, most recently updated first.
  */
 export const myPlaylists = query({

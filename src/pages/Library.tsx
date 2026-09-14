@@ -17,8 +17,8 @@ import {
 } from "@/lib/catalog";
 import { usePlayerStore } from "@/store/player";
 import { coverArt } from "@/lib/covers";
-import { useQuery, useAction } from "convex/react";
-import { Heart, ListMusic, Plus, Play, Loader2 } from "lucide-react";
+import { useQuery, useAction, useMutation } from "convex/react";
+import { Heart, ListMusic, Plus, Play, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { toPlayableYoutube } from "@/lib/playable";
 import type { YtItem } from "@/lib/youtube";
@@ -167,6 +167,9 @@ export default function Library() {
           </span>
         </button>
       </section>
+
+      {/* imported playlists from other services */}
+      <ImportedPlaylists />
 
       {/* followed artists */}
       <section>
@@ -360,5 +363,116 @@ export default function Library() {
 
       <PlaylistDialog open={dialogOpen} onOpenChange={setDialogOpen} />
     </div>
+  );
+}
+
+/**
+ * Playlists imported from other music services (Settings → Import). Each
+ * track is a title/artist snapshot, resolved to a playable track via a live
+ * search when the playlist starts.
+ */
+function ImportedPlaylists() {
+  const imported = useQuery(api.playlists.myImportedPlaylists);
+  const searchYt = useAction(api.youtube.searchYoutube);
+  const removeImported = useMutation(api.playlists.removeImported);
+  const playTrack = usePlayerStore((s) => s.playTrack);
+  const [playingId, setPlayingId] = useState<string | null>(null);
+
+  if (imported !== undefined && imported.length === 0) return null;
+
+  const play = async (pl: { _id: string; name: string; tracks: { title: string; artist: string; duration?: number }[] }) => {
+    if (playingId) return;
+    setPlayingId(pl._id);
+    try {
+      // Resolve the first few tracks concurrently, then queue them in order.
+      const resolved = await Promise.all(
+        pl.tracks.slice(0, 25).map(async (t) => {
+          try {
+            const { items } = await searchYt({
+              query: `${t.title} ${t.artist}`.trim(),
+            });
+            return items[0] ?? null;
+          } catch {
+            return null;
+          }
+        }),
+      );
+      const found = resolved.filter((it): it is YtItem => it !== null);
+      if (found.length === 0) {
+        toast.error(`Couldn't find playable tracks for "${pl.name}"`);
+        return;
+      }
+      const queue = found.map((it, i) =>
+        toPlayableYoutube(it, it.id, found.slice(i + 1)),
+      );
+      playTrack(queue[0], queue);
+      toast.success(
+        `Playing "${pl.name}" — ${found.length} of ${pl.tracks.length} songs found`,
+      );
+    } catch {
+      toast.error("Couldn't play this playlist — try again");
+    } finally {
+      setPlayingId(null);
+    }
+  };
+
+  return (
+    <section>
+      <div className="mb-3 flex items-center justify-between gap-4">
+        <div>
+          <h2 className="font-display text-lg font-bold tracking-tight sm:text-xl">
+            Imported playlists
+          </h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Brought over from your other music services.
+          </p>
+        </div>
+      </div>
+      {imported === undefined ? (
+        <div className="flex items-center gap-2 px-1 py-4 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" /> Loading…
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {imported.map((pl) => (
+            <div
+              key={pl._id}
+              className="group flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5 transition-colors hover:bg-white/[0.05]"
+            >
+              <button
+                type="button"
+                aria-label={`Play ${pl.name}`}
+                onClick={() => void play(pl)}
+                disabled={playingId !== null}
+                className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[rgb(var(--tint)/0.8)] to-purple-500/70 text-white disabled:opacity-60"
+              >
+                {playingId === pl._id ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Play className="size-5 fill-current" />
+                )}
+              </button>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold">{pl.name}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {pl.tracks.length} {pl.tracks.length === 1 ? "song" : "songs"}
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label={`Remove ${pl.name}`}
+                onClick={() => {
+                  void removeImported({ playlistId: pl._id });
+                  toast.success(`Removed "${pl.name}"`);
+                }}
+                className="shrink-0 rounded-full p-2 text-muted-foreground/60 opacity-0 transition-all hover:bg-white/10 hover:text-red-400 group-hover:opacity-100"
+              >
+                <Trash2 className="size-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
