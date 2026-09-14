@@ -411,8 +411,10 @@ export function FullscreenPlayer() {
           <div
             className={cn(
               "flex flex-1 items-center justify-center py-6 transition-all duration-300",
-              lyricsOpen && "justify-start pl-2 sm:pl-6 lg:pl-12", // left-shift on desktop
               lyricsOpen && "hidden lg:flex", // lyrics overlay covers on small screens
+              // Center inside the space left of the lyrics panel so the
+              // video stays visually centered with the title below it.
+              lyricsOpen && "lg:pr-[30rem]",
             )}
           >
             {isYoutube && videoEnabled ? (
@@ -462,9 +464,8 @@ export function FullscreenPlayer() {
           <div
             className={cn(
               "flex w-full max-w-2xl flex-col items-center gap-3 transition-all duration-300",
-              lyricsOpen
-                ? "lg:mr-[30rem] lg:ml-0 lg:items-start lg:px-6" // left-shift on desktop
-                : "mx-auto",
+              // Center in the same area as the video — aligned with the lyrics panel.
+              lyricsOpen ? "lg:pr-[30rem]" : "mx-auto",
               lyricsOpen && "opacity-0 lg:opacity-100", // lyrics overlay covers on small screens
             )}
           >

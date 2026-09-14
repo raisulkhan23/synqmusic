@@ -106,6 +106,7 @@ export default function Search() {
 
   const navigate = useNavigate();
   const playTrack = usePlayerStore((s) => s.playTrack);
+  const startRadio = usePlayerStore((s) => s.startRadio);
   const searchYt = useAction(api.youtube.searchYoutube);
 
   const debouncedQuery = useDebounced(query, 450);
@@ -147,13 +148,13 @@ export default function Search() {
 
   const playRemote = useCallback(
     (item: YtItem) => {
-      // Playback goes through the hidden YouTube IFrame player, so no stream
-      // resolution is needed — the video id is all the engine requires.
-      const alternatives = ytResults?.filter((r) => r.id !== item.id) ?? [];
-      playTrack(toPlayableYoutube(item, item.id, alternatives));
-      toast.success("Now playing");
+      // Start the clicked song, then fill the queue with RELATED songs from
+      // across our sources — never the raw search results (those contain
+      // duplicates and near-identical uploads of the same track).
+      void startRadio(toPlayableYoutube(item, item.id));
+      toast.success("Now playing — similar songs queued up");
     },
-    [playTrack, ytResults],
+    [startRadio],
   );
 
   const results = useMemo(() => searchCatalog(query), [query]);
