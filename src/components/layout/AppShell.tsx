@@ -28,6 +28,9 @@ export function AppShell() {
   const { signOut } = useAuth();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const accent = usePlayerStore((s) => s.accent);
+  const accentTheme = usePlayerStore((s) => s.accentTheme);
+  const compactMode = usePlayerStore((s) => s.compactMode);
+  const ambientGlow = usePlayerStore((s) => s.ambientGlow);
   const setLiked = usePlayerStore((s) => s.setLiked);
   const setLikeMutation = usePlayerStore((s) => s.setLikeMutation);
   const setHistoryRecorder = usePlayerStore((s) => s.setHistoryRecorder);
@@ -147,7 +150,22 @@ export function AppShell() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  const tint = accent ? `${accent.r} ${accent.g} ${accent.b}` : DEFAULT_TINT;
+  // Fixed accent themes override the album-art-following tint.
+  const FIXED_TINTS: Record<string, string> = {
+    lime: "203 244 143",
+    violet: "167 139 250",
+    blue: "96 165 250",
+    rose: "251 113 133",
+    amber: "251 191 36",
+    teal: "45 212 191",
+    orange: "251 146 60",
+  };
+  const tint =
+    accentTheme !== "auto" && FIXED_TINTS[accentTheme]
+      ? FIXED_TINTS[accentTheme]
+      : accent
+        ? `${accent.r} ${accent.g} ${accent.b}`
+        : DEFAULT_TINT;
 
   return (
     <div
@@ -191,18 +209,25 @@ export function AppShell() {
 
         <main className="relative min-h-0 flex-1 overflow-y-auto">
           {/* ambient accent glow follows the current album art */}
+          {ambientGlow && (
+            <div
+              className="pointer-events-none absolute inset-x-0 top-0 h-[380px] opacity-60"
+              style={{
+                background: `radial-gradient(60% 100% at 50% 0%, rgb(${tint} / 0.14), transparent 70%)`,
+              }}
+            />
+          )}
           <div
-            className="pointer-events-none absolute inset-x-0 top-0 h-[380px] opacity-60"
-            style={{
-              background: `radial-gradient(60% 100% at 50% 0%, rgb(${tint} / 0.14), transparent 70%)`,
-            }}
-          />
-          <div className="relative mx-auto w-full max-w-6xl px-4 pt-6 pb-10 sm:px-6 lg:px-8 lg:pt-8">
+            className={cn(
+              "relative mx-auto w-full max-w-6xl px-4 pt-6 pb-10 sm:px-6 lg:px-8 lg:pt-8",
+              compactMode && "max-w-7xl",
+            )}
+          >
             <Outlet />
           </div>
         </main>
 
-        <PlayerBar />
+        <PlayerBar compact={compactMode} />
       </div>
 
       <QueuePanel />

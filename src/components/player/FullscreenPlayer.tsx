@@ -412,9 +412,10 @@ export function FullscreenPlayer() {
             className={cn(
               "flex flex-1 items-center justify-center py-6 transition-all duration-300",
               lyricsOpen && "hidden lg:flex", // lyrics overlay covers on small screens
-              // Center inside the space left of the lyrics panel so the
-              // video stays visually centered with the title below it.
-              lyricsOpen && "lg:pr-[30rem]",
+              // Lyrics panel is 28rem wide — reserve exactly that so the
+              // video stays centered in the remaining space (a touch right
+              // of center overall, aligned with the title below).
+              lyricsOpen && "lg:pr-[28rem]",
             )}
           >
             {isYoutube && videoEnabled ? (
@@ -463,9 +464,9 @@ export function FullscreenPlayer() {
               lyrics panel is open on desktop */}
           <div
             className={cn(
-              "flex w-full max-w-2xl flex-col items-center gap-3 transition-all duration-300",
-              // Center in the same area as the video — aligned with the lyrics panel.
-              lyricsOpen ? "lg:pr-[30rem]" : "mx-auto",
+              "flex w-full flex-col items-center gap-3 transition-all duration-300",
+              // Match the video's reserved space so title/controls center on it.
+              lyricsOpen ? "lg:pr-[28rem]" : "mx-auto max-w-2xl",
               lyricsOpen && "opacity-0 lg:opacity-100", // lyrics overlay covers on small screens
             )}
           >

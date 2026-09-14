@@ -128,11 +128,11 @@ export default function Home() {
   const favArtist = mostPlayedItems[0]?.artist.split(",")[0]?.trim();
 
   const remoteQueries = useMemo(() => {
-    const q: Array<{ key: string; query: string }> = [
-      { key: "discover", query: "new music this week" },
-      { key: "radar", query: "new releases this week" },
-      { key: "topTracks", query: "top hits right now" },
-      { key: "newReleases", query: "new songs just released" },
+    const q: Array<{ key: string; query: string; fallback?: string }> = [
+      { key: "discover", query: "new music friday", fallback: "fresh music this week" },
+      { key: "radar", query: "new releases this week", fallback: "new songs this week" },
+      { key: "topTracks", query: "top hits right now", fallback: "top hits" },
+      { key: "newReleases", query: "new songs just released", fallback: "latest hits" },
     ];
     if (continueTrack) {
       q.push({
@@ -151,19 +151,28 @@ export default function Home() {
 
   useEffect(() => {
     let cancelled = false;
+    // Fetch all sections in parallel; each falls back to a second query when
+    // the first returns nothing, so sections never sit empty.
     (async () => {
-      for (const { key, query } of remoteQueries) {
-        if (cancelled || fetchedRef.current.has(key)) continue;
-        fetchedRef.current.add(key);
-        try {
-          const { items } = await searchYt({ query });
-          if (!cancelled && items.length > 0) {
-            setRemote((prev) => ({ ...prev, [key]: items.slice(0, 6) }));
+      await Promise.all(
+        remoteQueries.map(async ({ key, query, fallback }) => {
+          if (cancelled || fetchedRef.current.has(key)) return;
+          fetchedRef.current.add(key);
+          for (const q of [query, fallback]) {
+            if (!q) continue;
+            try {
+              const { items } = await searchYt({ query: q });
+              if (cancelled) return;
+              if (items.length > 0) {
+                setRemote((prev) => ({ ...prev, [key]: items.slice(0, 6) }));
+                return;
+              }
+            } catch {
+              // try the fallback, then leave the section empty
+            }
           }
-        } catch {
-          // section simply stays empty on failure
-        }
-      }
+        }),
+      );
     })();
     return () => {
       cancelled = true;

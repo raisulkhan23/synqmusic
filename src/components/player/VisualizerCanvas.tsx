@@ -55,6 +55,7 @@ export function VisualizerCanvas({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const accent = usePlayerStore((s) => s.accent);
   const trackId = usePlayerStore((s) => s.current?.id);
+  const visualizerEnabled = usePlayerStore((s) => s.visualizerEnabled);
   const analyserRef = useRef<AnalyserNode | null>(null);
 
   // Create the analyser on mount — the parent overlay is opened by a user
@@ -65,7 +66,7 @@ export function VisualizerCanvas({
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || !visualizerEnabled) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
@@ -162,7 +163,8 @@ export function VisualizerCanvas({
       ro.disconnect();
       unsubTrack();
     };
-  }, [accent, trackId]);
+  }, [accent, trackId, visualizerEnabled]);
 
+  if (!visualizerEnabled) return null;
   return <canvas ref={canvasRef} className={cn("block", className)} />;
 }

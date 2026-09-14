@@ -96,6 +96,21 @@ interface PlayerStore {
   fullscreen: boolean;
   accent: RGB | null;
 
+  // appearance preferences (persisted locally)
+  /** Accent theme: "auto" follows album art, or a fixed color id. */
+  accentTheme: string;
+  /** Fixed accent colors offered in Settings. */
+  setAccentTheme: (id: string) => void;
+  /** UI density: comfortable (default) or compact. */
+  compactMode: boolean;
+  toggleCompactMode: () => void;
+  /** Ambient background glow on/off. */
+  ambientGlow: boolean;
+  toggleAmbientGlow: () => void;
+  /** Visualizer animation on/off. */
+  visualizerEnabled: boolean;
+  toggleVisualizer: () => void;
+
   // queue history (previously played, most recent first)
   history: Playable[];
   /** When the queue runs dry, automatically continue with similar music. */
@@ -254,6 +269,10 @@ const initialRepeat = (localStorage.getItem("ss.repeat") as RepeatMode | null) ?
 const initialRate = Math.min(2, Math.max(0.5, readNum("ss.rate", 1)));
 const initialAutoplay = readBool("ss.autoplay", true);
 const initialVideoEnabled = readBool("ss.video", true);
+const initialAccentTheme = localStorage.getItem("ss.accentTheme") ?? "auto";
+const initialCompact = readBool("ss.compact", false);
+const initialGlow = readBool("ss.ambientGlow", true);
+const initialVisualizer = readBool("ss.visualizer", true);
 const savedQueue = readSavedQueue();
 
 const readIdSet = (key: string): Record<string, true> => {
@@ -1248,6 +1267,31 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     queueOpen: false,
     fullscreen: false,
     accent: null,
+
+    accentTheme: initialAccentTheme,
+    setAccentTheme: (id) =>
+      set(() => {
+        localStorage.setItem("ss.accentTheme", id);
+        return { accentTheme: id };
+      }),
+    compactMode: initialCompact,
+    toggleCompactMode: () =>
+      set((state) => {
+        localStorage.setItem("ss.compact", state.compactMode ? "0" : "1");
+        return { compactMode: !state.compactMode };
+      }),
+    ambientGlow: initialGlow,
+    toggleAmbientGlow: () =>
+      set((state) => {
+        localStorage.setItem("ss.ambientGlow", state.ambientGlow ? "0" : "1");
+        return { ambientGlow: !state.ambientGlow };
+      }),
+    visualizerEnabled: initialVisualizer,
+    toggleVisualizer: () =>
+      set((state) => {
+        localStorage.setItem("ss.visualizer", state.visualizerEnabled ? "0" : "1");
+        return { visualizerEnabled: !state.visualizerEnabled };
+      }),
 
     // restore queue from the last session (does not autoplay — user resumes)
     ...(savedQueue

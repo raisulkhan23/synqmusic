@@ -21,7 +21,9 @@ import {
   Loader2,
   LogOut,
   Moon,
+  Palette,
   Pencil,
+  Sparkles,
   Trash2,
   UserRound,
 } from "lucide-react";
@@ -64,6 +66,14 @@ export function SettingsDialog({
   const toggleVideo = usePlayerStore((s) => s.toggleVideo);
   const shuffle = usePlayerStore((s) => s.shuffle);
   const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
+  const accentTheme = usePlayerStore((s) => s.accentTheme);
+  const setAccentTheme = usePlayerStore((s) => s.setAccentTheme);
+  const compactMode = usePlayerStore((s) => s.compactMode);
+  const toggleCompactMode = usePlayerStore((s) => s.toggleCompactMode);
+  const ambientGlow = usePlayerStore((s) => s.ambientGlow);
+  const toggleAmbientGlow = usePlayerStore((s) => s.toggleAmbientGlow);
+  const visualizerEnabled = usePlayerStore((s) => s.visualizerEnabled);
+  const toggleVisualizer = usePlayerStore((s) => s.toggleVisualizer);
 
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
@@ -194,15 +204,6 @@ export function SettingsDialog({
           </p>
 
           <ToggleRow
-            label="Autoplay"
-            description="Keep playing similar music when the queue ends"
-            on={autoplay}
-            onToggle={() => {
-              toggleAutoplay();
-              toast(autoplay ? "Autoplay off" : "Autoplay on");
-            }}
-          />
-          <ToggleRow
             label="Video in full-screen player"
             description="Show the music video when maximizing"
             on={videoEnabled}
@@ -244,6 +245,113 @@ export function SettingsDialog({
               ))}
             </div>
           </div>
+        </section>
+
+        <Separator className="bg-white/[0.07]" />
+
+        {/* appearance */}
+        <section className="flex flex-col gap-2.5">
+          <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
+            <Palette className="size-3.5" />
+            Appearance
+          </p>
+
+          {/* accent color */}
+          <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">Accent color</p>
+                <p className="text-xs text-muted-foreground">
+                  Tints buttons, highlights and the ambient glow
+                </p>
+              </div>
+            </div>
+            <div className="mt-2.5 flex flex-wrap items-center gap-2">
+              {(
+                [
+                  { id: "auto", label: "Auto", swatch: "linear-gradient(135deg,#f472b6,#60a5fa,#a3e635)" },
+                  { id: "lime", label: "Lime", swatch: "rgb(203 244 143)" },
+                  { id: "violet", label: "Violet", swatch: "rgb(167 139 250)" },
+                  { id: "blue", label: "Blue", swatch: "rgb(96 165 250)" },
+                  { id: "rose", label: "Rose", swatch: "rgb(251 113 133)" },
+                  { id: "amber", label: "Amber", swatch: "rgb(251 191 36)" },
+                  { id: "teal", label: "Teal", swatch: "rgb(45 212 191)" },
+                  { id: "orange", label: "Orange", swatch: "rgb(251 146 60)" },
+                ] as const
+              ).map(({ id, label, swatch }) => (
+                <button
+                  key={id}
+                  type="button"
+                  title={label}
+                  onClick={() => setAccentTheme(id)}
+                  className={cn(
+                    "flex h-8 items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-semibold transition-all",
+                    accentTheme === id
+                      ? "border-white/60 bg-white/[0.1] text-foreground"
+                      : "border-white/10 text-muted-foreground hover:border-white/30",
+                  )}
+                >
+                  <span
+                    className="size-4 rounded-full ring-1 ring-white/20"
+                    style={{ background: swatch }}
+                  />
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <ToggleRow
+            label="Compact mode"
+            description="Tighter player bar, wider content layout"
+            on={compactMode}
+            onToggle={() => {
+              toggleCompactMode();
+              toast(compactMode ? "Compact mode off" : "Compact mode on");
+            }}
+          />
+          <ToggleRow
+            label="Ambient glow"
+            description="Soft colored glow at the top of the page"
+            on={ambientGlow}
+            onToggle={() => {
+              toggleAmbientGlow();
+              toast(ambientGlow ? "Ambient glow off" : "Ambient glow on");
+            }}
+          />
+          <ToggleRow
+            label="Visualizer"
+            description="Animated bars that vibe with the song"
+            on={visualizerEnabled}
+            onToggle={() => {
+              toggleVisualizer();
+              toast(visualizerEnabled ? "Visualizer off" : "Visualizer on");
+            }}
+          />
+        </section>
+
+        <Separator className="bg-white/[0.07]" />
+
+        {/* personalization */}
+        <section className="flex flex-col gap-2">
+          <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
+            <Sparkles className="size-3.5" />
+            Personalization
+          </p>
+          <ToggleRow
+            label="Autoplay"
+            description="Keep playing similar music when the queue ends"
+            on={autoplay}
+            onToggle={() => {
+              toggleAutoplay();
+              toast(autoplay ? "Autoplay off" : "Autoplay on");
+            }}
+          />
+          <p className="px-1 text-xs leading-5 text-muted-foreground">
+            Home adapts to what you play: your most-heard artists shape
+            recommendations, recently played fills Continue Listening, and
+            Discover Weekly refreshes with a new mix for you every week.
+          </p>
         </section>
 
         <Separator className="bg-white/[0.07]" />

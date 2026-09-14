@@ -119,7 +119,7 @@ function SleepTimerButton() {
   );
 }
 
-export function PlayerBar() {
+export function PlayerBar({ compact = false }: { compact?: boolean }) {
   const current = usePlayerStore((s) => s.current);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const isBuffering = usePlayerStore((s) => s.isBuffering);
@@ -238,7 +238,12 @@ export function PlayerBar() {
   const catalogTrack = current.source === "catalog" ? current.catalogTrack : undefined;
 
   return (
-    <footer className="liquid-glass z-30 flex h-[76px] shrink-0 items-center gap-3 border-t border-white/[0.07] px-3 sm:px-4">
+    <footer
+      className={cn(
+        "liquid-glass z-30 flex shrink-0 items-center gap-3 border-t border-white/[0.07] px-3 sm:px-4",
+        compact ? "h-[60px]" : "h-[76px]",
+      )}
+    >
       {/* now playing */}
       <div className="flex min-w-0 w-[26%] items-center gap-3 sm:w-[30%]">
         <div className="relative size-12 shrink-0 overflow-hidden rounded-md shadow-lg ring-1 ring-white/10">
