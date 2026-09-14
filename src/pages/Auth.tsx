@@ -82,8 +82,10 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     setIsLoading(true);
     setError(null);
     try {
-      // Convex Auth OAuth — redirects to the provider, then back to the app.
-      await signIn(provider, { redirectTo: window.location.origin + redirect });
+      // Convex Auth OAuth — pass a RELATIVE path; the server-side redirect
+      // callback rewrites it to the trusted frontend origin. Absolute URLs
+      // here get rejected when SITE_URL points at the convex.site host.
+      await signIn(provider, { redirectTo: redirect });
     } catch (error) {
       console.error(`${provider} sign-in error:`, error);
       setError(
