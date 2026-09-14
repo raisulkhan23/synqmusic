@@ -21,7 +21,9 @@ import {
   Search as SearchIcon,
   SearchX,
   Globe,
+  Play,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 const MOOD_CHIPS = [
@@ -35,6 +37,65 @@ const MOOD_CHIPS = [
   "golden",
   "indie",
 ];
+
+/**
+ * Curated mixes shown on the empty-search browse view. Each plays a live
+ * queue built from a search across our music sources — one tap, no setup.
+ */
+const POPULAR_MIXES = [
+  { id: "top-hits", title: "Today's Top Hits", desc: "The biggest songs on the planet right now.", query: "top hits today", gradient: "from-sky-500/30 via-blue-500/15 to-transparent" },
+  { id: "rap-caviar", title: "RapCaviar", desc: "The hottest hip-hop and rap, updated constantly.", query: "hip hop rap hits", gradient: "from-red-500/30 via-orange-500/15 to-transparent" },
+  { id: "chill", title: "Chill Vibes", desc: "Relaxed tracks to unwind, study, and drift to.", query: "chill relaxing songs", gradient: "from-teal-500/30 via-emerald-500/15 to-transparent" },
+  { id: "party", title: "Party Starters", desc: "Certified bangers to get the room moving.", query: "party dance hits", gradient: "from-fuchsia-500/30 via-purple-500/15 to-transparent" },
+  { id: "throwback", title: "All Out Throwbacks", desc: "Greatest hits of the 2000s and 2010s.", query: "2000s 2010s greatest hits", gradient: "from-amber-500/30 via-yellow-500/15 to-transparent" },
+  { id: "indie", title: "Indie Pulse", desc: "Fresh indie sounds from rising voices.", query: "indie hits", gradient: "from-rose-500/30 via-pink-500/15 to-transparent" },
+  { id: "lofi", title: "Late Night Lo-fi", desc: "Mellow beats for late nights and deep focus.", query: "lo-fi beats late night", gradient: "from-indigo-500/30 via-slate-500/15 to-transparent" },
+  { id: "workout", title: "Beast Mode", desc: "High-energy tracks built for the gym.", query: "workout energy hits", gradient: "from-lime-500/30 via-green-500/15 to-transparent" },
+] as const;
+
+function MixCard({ mix }: { mix: (typeof POPULAR_MIXES)[number] }) {
+  const searchYt = useAction(api.youtube.searchYoutube);
+  const playTrack = usePlayerStore((s) => s.playTrack);
+  const [loading, setLoading] = useState(false);
+
+  const play = async () => {
+    if (loading) return;
+    setLoading(true);
+    try {
+      const { items } = await searchYt({ query: mix.query });
+      if (items.length === 0) {
+        toast.error("Couldn't load this mix — try again");
+        return;
+      }
+      const queue = items.slice(0, 15).map((it, i) =>
+        toPlayableYoutube(it, it.id, items.slice(i + 1)),
+      );
+      playTrack(queue[0], queue);
+      toast.success(`Playing ${mix.title}`);
+    } catch {
+      toast.error("Couldn't load this mix — try again");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={() => void play()}
+      className={cn(
+        "group relative flex h-36 w-36 shrink-0 flex-col justify-end overflow-hidden rounded-2xl bg-gradient-to-br p-3.5 text-left ring-1 ring-white/10 transition-transform hover:scale-[1.03] sm:w-44",
+        mix.gradient,
+      )}
+    >
+      <span className="absolute top-3 right-3 flex size-8 items-center justify-center rounded-full bg-black/50 text-foreground opacity-0 backdrop-blur transition-opacity group-hover:opacity-100">
+        {loading ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4 fill-current" />}
+      </span>
+      <span className="font-display text-sm font-bold tracking-tight sm:text-base">{mix.title}</span>
+      <span className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{mix.desc}</span>
+    </button>
+  );
+}
 
 export default function Search() {
   const [query, setQuery] = useState("");
@@ -279,6 +340,17 @@ function BrowseView({
 }) {
   return (
     <div className="flex flex-col gap-10">
+      <section>
+        <h2 className="mb-3 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
+          Popular mixes
+        </h2>
+        <div className="hide-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4 pb-2">
+          {POPULAR_MIXES.map((mix) => (
+            <MixCard key={mix.id} mix={mix} />
+          ))}
+        </div>
+      </section>
+
       <section>
         <h2 className="mb-3 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
           Browse by mood
