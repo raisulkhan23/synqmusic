@@ -22,7 +22,6 @@ import {
   Loader2,
   Maximize2,
   Moon,
-  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -227,22 +226,6 @@ export function PlayerBar() {
             </p>
           )}
         </div>
-        {current.source === "youtube" && (
-          <button
-            type="button"
-            aria-label="Try another source"
-            title="Try another source"
-            onClick={() => {
-              const s = usePlayerStore.getState();
-              if (s.current) {
-                usePlayerStore.setState({ errorNonce: s.errorNonce + 1 });
-              }
-            }}
-            className="hidden shrink-0 rounded-full p-1.5 text-muted-foreground/70 transition-colors hover:bg-white/[0.06] hover:text-foreground sm:block"
-          >
-            <RefreshCw className="size-3.5" />
-          </button>
-        )}
         <button
           type="button"
           aria-label={isLiked ? "Remove from liked songs" : "Add to liked songs"}

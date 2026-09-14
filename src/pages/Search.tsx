@@ -20,8 +20,7 @@ import {
   RefreshCw,
   Search as SearchIcon,
   SearchX,
-  Youtube,
-  ExternalLink,
+  Globe,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -71,7 +70,7 @@ export default function Search() {
           if (!cancelled) {
             setYtResults([]);
             setSearchError(
-              "YouTube is unreachable right now. Try searching on YouTube directly, or browse the catalog below.",
+              "Couldn't reach our music sources right now. Try again, or browse the catalog below.",
             );
           }
         })
@@ -106,7 +105,8 @@ export default function Search() {
           Search
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Find any song — search YouTube and stream it instantly, or browse the
+          Find any song — search across all our music sources and stream it
+          instantly, or browse the
           SYNQ catalog.
         </p>
       </header>
@@ -134,12 +134,12 @@ export default function Search() {
         <BrowseView onPick={setQuery} onAlbum={(id) => navigate(`/album/${id}`)} />
       ) : (
         <div className="flex flex-col gap-10">
-          {/* YouTube results */}
+          {/* Related results */}
           <section>
             <div className="mb-2 flex items-center gap-2">
-              <Youtube className="size-4 text-[rgb(var(--tint))]" />
+              <Globe className="size-4 text-[rgb(var(--tint))]" />
               <h2 className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
-                Results from YouTube
+                Related results
               </h2>
             </div>
 
@@ -164,15 +164,6 @@ export default function Search() {
                 <p className="max-w-sm text-sm text-muted-foreground">
                   {searchError}
                 </p>
-                <a
-                  href={`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-1 flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium transition-colors hover:bg-white/[0.08]"
-                >
-                  <ExternalLink className="size-3.5" />
-                  Open on YouTube
-                </a>
                 <button
                   type="button"
                   onClick={() => setRetryKey((k) => k + 1)}
@@ -184,7 +175,7 @@ export default function Search() {
               </div>
             ) : ytResults !== null && ytResults.length === 0 ? (
               <p className="rounded-2xl border border-dashed border-white/10 py-10 text-center text-sm text-muted-foreground">
-                No YouTube results for "{query}". Try a different spelling or
+                No related results for "{query}". Try a different spelling or
                 an artist name.
               </p>
             ) : (

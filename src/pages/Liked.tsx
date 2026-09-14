@@ -43,7 +43,7 @@ export default function Liked() {
       .then(({ items }) => {
         const best = items[0];
         if (!best) {
-          toast.error(`Couldn't find "${row.title}" on YouTube`);
+          toast.error(`Couldn't load "${row.title}" — try another song`);
           return;
         }
         const item: YtItem = {

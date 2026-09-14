@@ -17,12 +17,75 @@ import {
 } from "@/lib/catalog";
 import { usePlayerStore } from "@/store/player";
 import { coverArt } from "@/lib/covers";
-import { useQuery } from "convex/react";
-import { Heart, ListMusic, Plus } from "lucide-react";
+import { useQuery, useAction } from "convex/react";
+import { Heart, ListMusic, Plus, Play, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import { toPlayableYoutube } from "@/lib/playable";
+import type { YtItem } from "@/lib/youtube";
 import { cn } from "@/lib/utils";
 
 type SortMode = "recent" | "alpha" | "creator";
 type FilterMode = "all" | "liked";
+
+/**
+ * Curated editorial mixes shown in the Library. Each one is backed by a live
+ * search across our music sources when played — the entries themselves are
+ * provider-agnostic.
+ */
+const POPULAR_MIXES = [
+  { id: "today-top", title: "Today's Top Hits", desc: "The biggest songs on the planet right now.", query: "top hits today", gradient: "from-sky-500/30 via-blue-500/15 to-transparent" },
+  { id: "chill-vibes", title: "Chill Vibes", desc: "Relaxed tracks to unwind, study, and drift to.", query: "chill relaxing songs", gradient: "from-teal-500/30 via-emerald-500/15 to-transparent" },
+  { id: "workout", title: "Beast Mode", desc: "High-energy bangers built for the gym.", query: "workout energy hits", gradient: "from-orange-500/30 via-red-500/15 to-transparent" },
+  { id: "throwbacks", title: "All Out Throwbacks", desc: "The greatest hits of the 2000s and 2010s.", query: "2000s 2010s greatest hits", gradient: "from-fuchsia-500/30 via-purple-500/15 to-transparent" },
+  { id: "indie", title: "Indie Pulse", desc: "Fresh indie sounds from rising voices.", query: "indie hits", gradient: "from-rose-500/30 via-pink-500/15 to-transparent" },
+  { id: "lofi", title: "Late Night Lo-fi", desc: "Mellow beats for late nights and deep focus.", query: "lo-fi beats late night", gradient: "from-indigo-500/30 via-slate-500/15 to-transparent" },
+] as const;
+
+function PopularMixCard({ mix }: { mix: (typeof POPULAR_MIXES)[number] }) {
+  const searchYt = useAction(api.youtube.searchYoutube);
+  const playTrack = usePlayerStore((s) => s.playTrack);
+  const [loading, setLoading] = useState(false);
+
+  const play = async () => {
+    if (loading) return;
+    setLoading(true);
+    try {
+      const { items } = await searchYt({ query: mix.query });
+      if (items.length === 0) {
+        toast.error("Couldn't load this mix — try again");
+        return;
+      }
+      const [first, ...rest] = items;
+      const playable = items.slice(0, 10).map((it: YtItem, i: number) =>
+        toPlayableYoutube(it, it.id, i === 0 ? rest : items.slice(i + 1)),
+      );
+      playTrack(playable[0], playable);
+      toast.success(`Playing ${mix.title}`);
+      void first;
+    } catch {
+      toast.error("Couldn't load this mix — try again");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={() => void play()}
+      className={cn(
+        "group relative flex h-36 flex-col justify-end overflow-hidden rounded-2xl bg-gradient-to-br p-4 text-left ring-1 ring-white/10 transition-transform hover:scale-[1.02]",
+        mix.gradient,
+      )}
+    >
+      <span className="absolute top-3 right-3 flex size-8 items-center justify-center rounded-full bg-black/50 text-foreground opacity-0 backdrop-blur transition-opacity group-hover:opacity-100">
+        {loading ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4 fill-current" />}
+      </span>
+      <span className="font-display text-base font-bold tracking-tight">{mix.title}</span>
+      <span className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{mix.desc}</span>
+    </button>
+  );
+}
 
 export default function Library() {
   const navigate = useNavigate();
@@ -154,6 +217,23 @@ export default function Library() {
             })}
           </div>
         )}
+      </section>
+
+      {/* playlists */}
+      <section>
+        <div className="mb-3">
+          <h2 className="font-display text-lg font-bold tracking-tight sm:text-xl">
+            Popular playlists
+          </h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Curated mixes the world is listening to — one tap to play.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {POPULAR_MIXES.map((mix) => (
+            <PopularMixCard key={mix.id} mix={mix} />
+          ))}
+        </div>
       </section>
 
       {/* playlists */}

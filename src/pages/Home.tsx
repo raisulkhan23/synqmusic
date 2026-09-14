@@ -43,7 +43,7 @@ export default function Home() {
 
   const [resolvingId, setResolvingId] = useState<string | null>(null);
 
-  // Songs of the week — Spotify's public chart, playable via YouTube.
+  // Songs of the week — global chart, streamed live.
   const [trending, setTrending] = useState<YtItem[] | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -66,7 +66,7 @@ export default function Home() {
       .then(({ items }) => {
         const best = items[0];
         if (!best) {
-          toast.error(`Couldn't find "${item.title}" on YouTube`);
+          toast.error(`Couldn't load "${item.title}" — try another song`);
           return;
         }
         const playable = {
@@ -93,7 +93,7 @@ export default function Home() {
     [lastPlayed],
   );
 
-  // Cross-source play history (YouTube + catalog alike).
+  // Cross-source play history (all sources alike).
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   useEffect(() => {
     setHistory(readPlayHistory());
@@ -121,7 +121,7 @@ export default function Home() {
   );
   const jumpBackItems = useMemo(() => historyItems.slice(1, 6), [historyItems]);
 
-  // --- live YouTube fills for every section ---------------------------------
+  // --- live remote fills for every section -----------------------------------
   const timeLabel = timeOfDayLabel();
   const season = seasonLabel();
   const continueArtistName = lastPlayed?.artistName.split(",")[0]?.trim() ?? "";
@@ -176,7 +176,7 @@ export default function Home() {
     );
   };
 
-  // "Play something random" — random seed searched on YouTube, random pick.
+  // "Play something random" — random seed, random pick.
   const surpriseSeeds = [
     "indie pop", "synthwave", "lo-fi beats", "alternative rock", "dream pop",
     "electronic", "jazz", "funk", "soul", "ambient", "hip hop", "reggae",
@@ -202,7 +202,7 @@ export default function Home() {
         }
       })
       .catch(() => {
-        toast.error("Couldn't reach YouTube — try again");
+        toast.error("Couldn't reach our music sources — try again");
       })
       .finally(() => {
         setSurprising(false);
@@ -225,7 +225,7 @@ export default function Home() {
     {
       to: "/search",
       label: "Search",
-      detail: "Find any song on YouTube",
+      detail: "Find any song across our sources",
       icon: Search,
     },
   ];
@@ -239,7 +239,7 @@ export default function Home() {
           {greeting()}
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Everything the world is listening to — streamed live from YouTube & Spotify.
+          Everything the world is listening to — streamed live from our global music sources.
         </p>
       </header>
 
@@ -293,10 +293,10 @@ export default function Home() {
         ))}
       </section>
 
-      {/* Songs of the week — Spotify chart */}
+      {/* Songs of the week — global chart */}
       <RemoteSection
         title="Songs of the week"
-        subtitle="Spotify's most-played songs right now, playable via YouTube."
+        subtitle="The most-played songs across the globe right now."
         icon={<Flame className="size-5 text-[rgb(var(--tint))]" />}
         items={trending ?? undefined}
       >
@@ -316,7 +316,7 @@ export default function Home() {
 
       <RemoteSection
         title="Today's top tracks"
-        subtitle="The biggest songs right now, streamed from YouTube."
+        subtitle="The biggest songs right now, streamed live."
         items={remote.topTracks}
       >
         {(items) =>
@@ -335,7 +335,7 @@ export default function Home() {
 
       <RemoteSection
         title="New releases"
-        subtitle="Fresh songs just dropped, streamed from YouTube."
+        subtitle="Fresh songs just dropped, streamed live."
         items={remote.newReleases}
       >
         {(items) => <RemoteRows items={items} max={6} onPlay={playRemoteItem} resolvingId={resolvingId} />}
@@ -379,7 +379,7 @@ export default function Home() {
 
       <RemoteSection
         title="Discover Weekly"
-        subtitle="A fresh mix every week, matched from YouTube."
+        subtitle="A fresh mix every week, matched just for you."
         icon={<Compass className="size-5 text-[rgb(var(--tint))]" />}
         items={remote.discover}
       >
@@ -388,7 +388,7 @@ export default function Home() {
 
       <RemoteSection
         title="Release Radar"
-        subtitle="The newest releases, matched from YouTube."
+        subtitle="The newest releases, matched to your taste."
         icon={<Radio className="size-5 text-[rgb(var(--tint))]" />}
         items={remote.radar}
       >
@@ -399,7 +399,7 @@ export default function Home() {
       {continueTrack && (
         <RemoteSection
           title={`Because you listened to ${continueTrack.title}`}
-          subtitle="More like this, matched from YouTube live."
+          subtitle="More like this, matched live to what you love."
           icon={<Sparkles className="size-5 text-[rgb(var(--tint))]" />}
           items={remote.because}
         >
@@ -443,7 +443,7 @@ export default function Home() {
         </section>
       )}
 
-      {/* Trending artists — from your plays + YouTube */}
+      {/* Trending artists — from your plays, live */}
       {artistTrendList.length >= 2 && (
         <section>
           <div className="mb-3">
@@ -517,7 +517,7 @@ export default function Home() {
 // --- section shell -----------------------------------------------------------
 
 /**
- * A section that renders only remote (YouTube/Spotify) rows. Shows a skeleton
+ * A section that renders only remote rows. Shows a skeleton
  * while loading and hides itself entirely when there's nothing to show —
  * no catalog fallback anywhere.
  */
