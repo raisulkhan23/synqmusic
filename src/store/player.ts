@@ -734,9 +734,12 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
   const norm = (t: Track | Playable): Playable => (isPlayable(t) ? t : toPlayable(t));
 
   let lastRemoved: { item: Playable; index: number } | null = null;
+  /** Increments on every track load; stale async results are discarded. */
+  let loadSeq = 0;
 
   /** Route loading/playback to the right engine for the given track. */
   const loadTrack = (track: Playable, startSeconds?: number) => {
+    const seq = ++loadSeq;
     const prev = get().current;
 
     // queue history: remember what was playing before this
@@ -773,7 +776,13 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       getAudio().pause();
       ytEngine
         .play(track.youtubeId, { volume: get().volume, muted: get().muted, startSeconds: resumeAt || undefined })
+        .then(() => {
+          // The engine init is async — if the user picked another song while
+          // this one was initializing, make sure this load never wins.
+          if (seq !== loadSeq) ytEngine.pause();
+        })
         .catch(() => {
+          if (seq !== loadSeq) return;
           set({ isPlaying: false, isBuffering: false, errorNonce: get().errorNonce + 1 });
         });
     } else {
@@ -1040,9 +1049,22 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
   const resolveAndPlayWithFilter = (track: Playable, resumeAt: number) => {
     const videoId = track.youtubeId;
     if (!videoId) return;
-    set({ isBuffering: true });
+    // Update UI immediately — resolution can take seconds (or fail), and the
+    // player must never show the previous song while the new one plays.
+    set({
+      current: track,
+      currentTime: resumeAt,
+      duration: track.duration,
+      bufferedEnd: 0,
+      isBuffering: true,
+      abA: null,
+      abB: null,
+    });
+    syncMediaSession(track, true);
+    const seq = ++loadSeq;
     ytResolve(videoId)
       .then((url) => {
+        if (seq !== loadSeq) return; // a newer track was loaded meanwhile
         if (!url) throw new Error("no stream");
         const audio = getAudio();
         ytEngine.pause();
@@ -1061,6 +1083,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
         set({ current: { ...track, audioUrl: url }, currentTime: resumeAt });
       })
       .catch(() => {
+        if (seq !== loadSeq) return; // stale
         // Fall back to the unfiltered IFrame engine so playback never dies.
         getAudio().pause();
         ytEngine
