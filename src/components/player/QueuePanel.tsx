@@ -6,18 +6,11 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Equalizer } from "@/components/player/Equalizer";
 import { api } from "@/convex/_generated/api";
 import { formatTime } from "@/lib/format";
 import { albumById, similarTracks } from "@/lib/catalog";
 import { coverArt } from "@/lib/covers";
-import { toPlayableYoutube } from "@/lib/playable";
 import { usePlayerStore } from "@/store/player";
 import {
   ArrowLeftRight,
@@ -25,7 +18,6 @@ import {
   GripVertical,
   ListMusic,
   Plus,
-  RefreshCw,
   Save,
   Sparkles,
   Trash2,
@@ -47,7 +39,6 @@ export function QueuePanel() {
   const undoRemoveFromQueue = usePlayerStore((s) => s.undoRemoveFromQueue);
   const replaceUpcoming = usePlayerStore((s) => s.replaceUpcoming);
   const clearQueue = usePlayerStore((s) => s.clearQueue);
-  const replaceCurrentStream = usePlayerStore((s) => s.replaceCurrentStream);
   const history = usePlayerStore((s) => s.history);
   const playFromHistory = usePlayerStore((s) => s.playFromHistory);
   const shuffle = usePlayerStore((s) => s.shuffle);
@@ -61,7 +52,11 @@ export function QueuePanel() {
   const addPlaylistTrack = useMutation(api.playlists.addTrack);
 
   const upcoming = queueIndex >= 0 ? queue.slice(queueIndex + 1) : queue;
-  const upcomingIds = upcoming.map((t) => t.id);
+  // Reorder needs UNIQUE values — the queue can legitimately contain the same
+  // track twice, and duplicate values make Framer Motion stack rows on top of
+  // each other. Composite "id#index" values keep every row distinct.
+  const upcomingKeys = upcoming.map((t, i) => `${t.id}#${i}`);
+  const keyToIndex = new Map(upcomingKeys.map((k, i) => [k, i]));
 
   // Queue suggestions: similar to what's playing, not already queued.
   const suggestions = (() => {
@@ -92,23 +87,12 @@ export function QueuePanel() {
     }
   };
 
-  const handleReorder = (ids: string[]) => {
-    const byId = new Map(upcoming.map((t) => [t.id, t]));
-    const reordered = ids
-      .map((id) => byId.get(id))
+  const handleReorder = (keys: string[]) => {
+    const byKey = new Map(upcoming.map((t, i) => [upcomingKeys[i], t]));
+    const reordered = keys
+      .map((k) => byKey.get(k))
       .filter((t): t is NonNullable<typeof t> => t !== undefined);
     replaceUpcoming(reordered);
-  };
-
-  // Sources play through the YouTube IFrame engine, so switching is just a
-  // matter of loading a different video id — no stream resolution needed.
-  const switchSource = (videoId: string) => {
-    const track = usePlayerStore.getState().current;
-    if (!track || track.source !== "youtube") return;
-    const alternatives = track.alternatives ?? [];
-    const alt = alternatives.find((a) => a.id === videoId);
-    if (!alt) return;
-    replaceCurrentStream(toPlayableYoutube(alt, alt.id, alternatives));
   };
 
   return (
@@ -223,45 +207,6 @@ export function QueuePanel() {
                     {current.artistName}
                   </p>
                 </div>
-                {current.source === "youtube" &&
-                  (current.alternatives?.length ?? 0) > 0 && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button
-                          type="button"
-                          aria-label="Switch source"
-                          title="Switch source"
-                          className="flex shrink-0 items-center gap-1 rounded-full border border-white/10 px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
-                        >
-                          <RefreshCw className="size-3" />
-                          Source
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-64">
-                        {current.alternatives?.map((alt) => (
-                          <DropdownMenuItem
-                            key={alt.id}
-                            onSelect={() => switchSource(alt.id)}
-                            className="gap-2"
-                          >
-                            <img
-                              src={alt.thumbnail}
-                              alt=""
-                              className="size-8 shrink-0 rounded object-cover"
-                            />
-                            <span className="min-w-0">
-                              <span className="block truncate text-xs font-medium">
-                                {alt.title}
-                              </span>
-                              <span className="block truncate text-[11px] text-muted-foreground">
-                                {alt.artist} · {formatTime(alt.duration)}
-                              </span>
-                            </span>
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
                 {isPlaying && <Equalizer className="shrink-0" />}
               </div>
             </section>
@@ -284,15 +229,15 @@ export function QueuePanel() {
               </p>
               <Reorder.Group
                 axis="y"
-                values={upcomingIds}
+                values={upcomingKeys}
                 onReorder={handleReorder}
                 layoutScroll
                 className="space-y-1"
               >
-                {upcoming.map((track) => (
+                {upcoming.map((track, rowIndex) => (
                   <Reorder.Item
-                    key={track.id}
-                    value={track.id}
+                    key={`${track.id}#${rowIndex}`}
+                    value={upcomingKeys[rowIndex]}
                     className="group flex cursor-grab items-center gap-2 rounded-lg px-1 py-1.5 transition-colors hover:bg-white/[0.05] active:cursor-grabbing"
                   >
                     <GripVertical className="size-4 shrink-0 text-muted-foreground/50 group-hover:text-muted-foreground" />
@@ -303,7 +248,7 @@ export function QueuePanel() {
                     />
                     <div
                       className="min-w-0 flex-1"
-                      onClick={() => playIndex(queueIndex + 1 + upcoming.indexOf(track))}
+                      onClick={() => playIndex(queueIndex + 1 + rowIndex)}
                     >
                       <p className="truncate text-sm font-medium">{track.title}</p>
                       <p className="truncate text-xs text-muted-foreground">
@@ -317,7 +262,7 @@ export function QueuePanel() {
                       type="button"
                       aria-label={`Remove ${track.title} from queue`}
                       onClick={() => {
-                        removeFromQueue(queueIndex + 1 + upcoming.indexOf(track));
+                        removeFromQueue(queueIndex + 1 + rowIndex);
                         toast("Removed from queue", {
                           action: {
                             label: "Undo",

@@ -192,10 +192,10 @@ export function PlayerBar() {
       playViaStream(track);
       return;
     }
-    toast.loading(`Trying another source for "${track.title}"…`, { id: "yt-fallback" });
+    toast.loading(`Finding another way to play "${track.title}"…`, { id: "yt-fallback" });
     // The IFrame engine plays by video id — just swap the current track.
     replaceCurrentStream(toPlayableYoutube(next, next.id, alternatives));
-    toast.success("Switched to an alternative source", { id: "yt-fallback" });
+    toast.success("Playing a matching version", { id: "yt-fallback" });
   }, [errorNonce, replaceCurrentStream, playViaStream]);
 
   if (!current) return null;
