@@ -112,6 +112,14 @@ let mountEl: HTMLDivElement | null = null;
 let lastState = -1;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 
+/**
+ * Slave mode: the engine plays a video MUTED purely as visuals while the
+ * <audio> element (with Web Audio effects) supplies the sound. In this mode
+ * the engine's events must NOT reach the store — the audio element drives
+ * playback state — so all handler forwarding is suppressed.
+ */
+let slaveMode = false;
+
 const OFFSCREEN_STYLE =
   "position:fixed;left:-9999px;top:0;width:640px;height:360px;opacity:0;pointer-events:none;border:0;overflow:hidden;z-index:-1;";
 
@@ -143,6 +151,7 @@ function startPolling() {
   if (pollTimer) return;
   pollTimer = setInterval(() => {
     if (!player) return;
+    if (slaveMode) return; // audio element reports time in slave mode
     if (lastState !== 1 && lastState !== 3) return;
     let t = 0;
     let d = 0;
@@ -201,6 +210,7 @@ async function ensurePlayer(): Promise<YtPlayerLike> {
           },
           onStateChange: (e) => {
             lastState = e.data;
+            if (slaveMode) return; // muted visual slave — store never hears this
             handlers.onStateChange?.(e.data);
             // YouTube resets the playback rate on state changes — re-apply
             // whenever the video (re)starts playing or buffers.
@@ -220,6 +230,7 @@ async function ensurePlayer(): Promise<YtPlayerLike> {
             }
           },
           onError: (e) => {
+            if (slaveMode) return;
             handlers.onError?.(e.data);
           },
         },
@@ -281,7 +292,11 @@ function ensureShields(): void {
   if (!shieldEl) {
     shieldEl = document.createElement("div");
     shieldEl.style.cssText =
-      "position:absolute;inset:0;pointer-events:auto;z-index:5;";
+      // Dark gradient strips mask YouTube's own title bar (top) and control
+      // strip (bottom) so they're never visible, while the middle of the
+      // video stays fully clear.
+      "position:absolute;inset:0;pointer-events:auto;z-index:5;" +
+      "background:linear-gradient(180deg, rgba(5,6,10,0.92) 0%, rgba(5,6,10,0) 16%, rgba(5,6,10,0) 74%, rgba(5,6,10,0.92) 100%);";
     hostEl.appendChild(shieldEl);
   }
   if (!pauseCoverEl) {
@@ -420,4 +435,41 @@ export function trackFrame(frame: HTMLElement): () => void {
 /** YT error code → human message (100/101/150 = unusable video). */
 export function isFatalError(code: number): boolean {
   return code === 2 || code === 5 || code === 100 || code === 101 || code === 150;
+}
+
+// --- slave (visual-only) mode -------------------------------------------------
+
+/**
+ * Start the engine as a MUTED visual slave: the video shows fullscreen while
+ * the <audio> element (Web Audio effects chain) supplies the sound. All
+ * engine events are suppressed while in this mode.
+ */
+export function startSlave(videoId: string, startSeconds: number): Promise<void> {
+  slaveMode = true;
+  return play(videoId, { volume: 0, muted: true, startSeconds: Math.max(0, startSeconds) });
+}
+
+/** Exit slave mode: events resume, video pauses. */
+export function stopSlave(): void {
+  if (!slaveMode) return;
+  slaveMode = false;
+  try {
+    player?.pauseVideo();
+  } catch {
+    /* not ready */
+  }
+}
+
+/** Whether the engine is currently a muted visual slave. */
+export function isSlaveMode(): boolean {
+  return slaveMode;
+}
+
+/** Current playback position of the engine (for drift resync). */
+export function getEngineTime(): number {
+  try {
+    return player?.getCurrentTime() ?? 0;
+  } catch {
+    return 0;
+  }
 }

@@ -162,33 +162,34 @@ export function setAudioFilter(id: AudioFilterId): boolean {
   switch (id) {
     case "8d":
       startRotation();
-      // Dip the mids while panning — enhances the sense of motion and space.
-      vocalFilter!.frequency.value = 1200;
-      vocalFilter!.gain.value = -4;
-      bassFilter!.gain.value = -3;
+      // Aggressive spatialization: dip mids hard while the fast full-sweep
+      // panning orbits the sound — unmistakably different from the original.
+      vocalFilter!.frequency.value = 1000;
+      vocalFilter!.gain.value = -7;
+      bassFilter!.gain.value = -5;
       break;
     case "bass":
-      // Massive low-end: +18dB shelf at 90Hz + sub-octave warmth at 60Hz.
-      bassFilter!.frequency.value = 90;
-      bassFilter!.gain.value = 18;
-      vocalFilter!.gain.value = -3; // keep mids out of the way
+      // Extreme low-end: +24dB shelf at 70Hz — walls will shake.
+      bassFilter!.frequency.value = 70;
+      bassFilter!.gain.value = 24;
+      vocalFilter!.frequency.value = 400;
+      vocalFilter!.gain.value = -4; // clear room for the sub-bass
       break;
     case "vocal":
-      // Two-stage presence: big peak at 3kHz plus air at 8kHz-ish via the
-      // peaking node's Q, with a strong mud cut.
-      vocalFilter!.frequency.value = 3000;
-      vocalFilter!.Q.value = 0.8;
-      vocalFilter!.gain.value = 12;
-      bassFilter!.frequency.value = 250;
-      bassFilter!.gain.value = -8;
+      // Hard presence lift at 3.2kHz + big mud cut — vocals jump way forward.
+      vocalFilter!.frequency.value = 3200;
+      vocalFilter!.Q.value = 0.7;
+      vocalFilter!.gain.value = 16;
+      bassFilter!.frequency.value = 300;
+      bassFilter!.gain.value = -11;
       break;
     case "night":
-      // Strongly compressed-feel: low-pass harder, pull the level down,
-      // trim sharp highs so quiet listening stays comfortable.
-      nightLow!.frequency.value = 2800;
-      gainOut!.gain.value = 0.5;
-      vocalFilter!.gain.value = -4;
-      bassFilter!.gain.value = 4;
+      // Night mode: hard low-pass, tamed level, gentle bass warmth — very
+      // obviously softer/darker than the original mix.
+      nightLow!.frequency.value = 2400;
+      gainOut!.gain.value = 0.45;
+      vocalFilter!.gain.value = -5;
+      bassFilter!.gain.value = 5;
       break;
   }
   return true;

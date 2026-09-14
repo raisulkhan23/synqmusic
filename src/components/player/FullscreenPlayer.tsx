@@ -15,6 +15,7 @@ import {
 import { api } from "@/convex/_generated/api";
 import { formatTime } from "@/lib/format";
 import { dismissVideo, presentOverlay, trackFrame } from "@/lib/youtubePlayer";
+import { AUDIO_FILTERS as FILTER_DEFS } from "@/lib/audio";
 import { toPlayableYoutube } from "@/lib/playable";
 import { type YtItem } from "@/lib/youtube";
 import { usePlayerStore } from "@/store/player";
@@ -32,15 +33,10 @@ import {
   Waves,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-
 const RATES = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
-const AUDIO_FILTERS: { id: "off" | "8d" | "bass" | "vocal" | "night"; label: string; icon: string }[] = [
-  { id: "off", label: "None", icon: "🎵" },
-  { id: "8d", label: "8D Audio", icon: "🌀" },
-  { id: "bass", label: "Bass Boost", icon: "🔊" },
-  { id: "vocal", label: "Vocal Boost", icon: "🎤" },
-  { id: "night", label: "Night Mode", icon: "🌙" },
-];
+
+
+
 
 /**
  * YouTube titles/channel names don't match lyrics databases directly — strip
@@ -279,6 +275,10 @@ export function FullscreenPlayer() {
 
   // True when the current track plays through the YouTube IFrame engine.
   const isYoutube = current?.source === "youtube" || !!current?.youtubeId;
+  // When an effect is active the sound comes from the filtered audio element
+  // and the engine runs as a muted visual slave — the store hides the iframe
+  // overlay in that case, so show artwork + effects badge instead.
+  const engineOwnsVideo = isYoutube && audioFilter === "off";
 
   // The video frame is shown ONLY for tracks that already play through the
   // YouTube engine. The toggle never swaps the audio stream — turning it off
@@ -295,6 +295,12 @@ export function FullscreenPlayer() {
   useEffect(() => {
     if (!fullscreen || !current || !videoEnabled) return;
     if (!isYoutube) return;
+    if (audioFilter !== "off") {
+      // Effects active: the muted slave video is positioned by the store —
+      // make sure no stale overlay is parked here.
+      setVideoReady(false);
+      return;
+    }
     setVideoReady(false);
     let stopTracking: (() => void) | null = null;
     let tries = 0;
@@ -320,7 +326,7 @@ export function FullscreenPlayer() {
       setVideoReady(false);
       dismissVideo();
     };
-  }, [fullscreen, current?.id, videoEnabled, isYoutube]);
+  }, [fullscreen, current?.id, videoEnabled, isYoutube, audioFilter]);
 
   // Re-sync the overlay when the lyrics panel toggles (frame may move).
   useEffect(() => {
@@ -437,8 +443,16 @@ export function FullscreenPlayer() {
                   alt=""
                   className="absolute inset-0 size-full object-cover"
                 />
+                {/* Effect-active badge: in slave mode the iframe is parked, so
+                    make it obvious the video is still "on" with sound processed. */}
+                {audioFilter !== "off" && (
+                  <span className="absolute top-3 left-3 z-[2] flex items-center gap-1.5 rounded-full bg-black/70 px-2.5 py-1 text-[11px] font-semibold text-[rgb(var(--tint))] backdrop-blur">
+                    <Waves className="size-3.5" />
+                    {FILTER_DEFS.find((f) => f.id === audioFilter)?.label}
+                  </span>
+                )}
                 <AnimatePresence>
-                  {!videoReady && (
+                  {!videoReady && audioFilter === "off" && (
                     <motion.div
                       initial={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
@@ -493,27 +507,55 @@ export function FullscreenPlayer() {
               <TransportControls />
               <div className="mx-3 h-5 w-px bg-white/10" />
               <VolumeControl />
+              <div className="mx-1 h-5 w-px bg-white/10" />
+              {/* like + queue, right beside the transport controls */}
+              <button
+                type="button"
+                aria-label={liked[current.id] ? "Remove from liked songs" : "Add to liked songs"}
+                title={liked[current.id] ? "Unlike" : "Like"}
+                onClick={() => toggleLike(current.id)}
+                className={cn(
+                  "rounded-full p-2 transition-all hover:scale-110",
+                  liked[current.id]
+                    ? "text-[rgb(var(--tint))]"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <Heart className={cn("size-5", liked[current.id] && "fill-current")} />
+              </button>
+              <button
+                type="button"
+                aria-label="Open queue"
+                title="Queue"
+                onClick={() => {
+                  setFullscreen(false);
+                  setQueueOpen(true);
+                }}
+                className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
+              >
+                <ListMusic className="size-5" />
+              </button>
             </div>
 
             {/* extra playback tools */}
             <div className="flex flex-wrap items-center justify-center gap-2">
               <AbRepeatControls />
 
-              {/* speed */}
+              {/* speed — icon only until a non-1× speed is active */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    title="Playback speed"
+                    title={rate !== 1 ? `Playback speed ${rate}×` : "Playback speed"}
                     className={cn(
-                      "flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-semibold tracking-wide uppercase transition-colors hover:bg-white/[0.08]",
+                      "flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[11px] font-semibold tabular-nums transition-colors hover:bg-white/[0.08]",
                       rate !== 1
                         ? "border-[rgb(var(--tint)_/_0.5)] text-[rgb(var(--tint))]"
                         : "text-muted-foreground",
                     )}
                   >
-                    <Gauge className="size-3.5" />
-                    {rate}×
+                    <Gauge className="size-4" />
+                    {rate !== 1 && `${rate}×`}
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="center" className="z-[80]">
@@ -533,28 +575,28 @@ export function FullscreenPlayer() {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {/* audio effects */}
+              {/* audio effects — waves icon; label shown only when one is active */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    title="Audio effects"
+                    title={audioFilter !== "off" ? `Effect: ${FILTER_DEFS.find((f) => f.id === audioFilter)?.label}` : "Audio effects"}
                     className={cn(
-                      "flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-semibold tracking-wide uppercase transition-colors hover:bg-white/[0.08]",
+                      "flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[11px] font-semibold transition-colors hover:bg-white/[0.08]",
                       audioFilter !== "off"
                         ? "border-[rgb(var(--tint)_/_0.5)] text-[rgb(var(--tint))]"
                         : "text-muted-foreground",
                     )}
                   >
-                    <Waves className="size-3.5" />
-                    {audioFilter === "off" ? "Effects" : AUDIO_FILTERS.find((f) => f.id === audioFilter)?.label}
+                    <Waves className="size-4" />
+                    {audioFilter !== "off" && FILTER_DEFS.find((f) => f.id === audioFilter)?.label}
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="center" className="z-[80]">
                   <DropdownMenuLabel className="text-xs text-muted-foreground">
                     Audio effects
                   </DropdownMenuLabel>
-                  {AUDIO_FILTERS.map((f) => (
+                  {FILTER_DEFS.map((f) => (
                     <DropdownMenuItem
                       key={f.id}
                       className={cn("gap-2", f.id === audioFilter && "text-[rgb(var(--tint))]")}

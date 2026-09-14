@@ -1093,7 +1093,36 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
         .play(s.current.youtubeId, { volume: s.volume, muted: s.muted, startSeconds: resumeAt })
         .catch(() => undefined);
     }
+    // When video is enabled and an effect activates, the sound now comes from
+    // the filtered <audio> element — sync the muted video slave to it.
+    syncVideoSlave();
   };
+
+  /**
+   * Keep the muted video slave in lockstep with the filtered audio element:
+   * start it when needed, pause it when video is off / effect off / not a
+   * YouTube track, and re-sync position every few seconds.
+   */
+  const syncVideoSlave = () => {
+    const s = get();
+    const wantSlave =
+      s.fullscreen && s.videoEnabled && !!s.current?.youtubeId && s.audioFilter !== "off";
+    if (wantSlave && s.current?.youtubeId) {
+      void ytEngine.startSlave(s.current.youtubeId, s.currentTime);
+    } else if (ytEngine.isSlaveMode()) {
+      ytEngine.stopSlave();
+    }
+  };
+
+  // Periodic drift resync between the audio element and the video slave.
+  setInterval(() => {
+    const s = usePlayerStore.getState();
+    if (!ytEngine.isSlaveMode()) return;
+    const engineT = ytEngine.getEngineTime();
+    if (Math.abs(engineT - s.currentTime) > 1.5 && s.isPlaying) {
+      ytEngine.seek(s.currentTime);
+    }
+  }, 3000);
 
   /**
    * Resolve a direct audio URL for a YouTube track and play it through the
@@ -1342,7 +1371,17 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     setAbPoint,
     clearAb,
     setQueueOpen: (queueOpen) => set({ queueOpen }),
-    setFullscreen: (fullscreen) => set({ fullscreen }),
+    setFullscreen: (fullscreen) => {
+      set({ fullscreen });
+      // Entering/leaving fullscreen with an active effect changes whether the
+      // muted video slave should be visible.
+      if (fullscreen) {
+        // let the video frame mount first
+        setTimeout(() => syncVideoSlave(), 400);
+      } else if (ytEngine.isSlaveMode()) {
+        ytEngine.stopSlave();
+      }
+    },
     setAccent: (accent) => set({ accent }),
     removeFromQueue: (index) =>
       set((state) => {
