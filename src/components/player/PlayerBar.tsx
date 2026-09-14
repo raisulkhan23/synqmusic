@@ -131,6 +131,7 @@ export function PlayerBar() {
   const setAccent = usePlayerStore((s) => s.setAccent);
   const errorNonce = usePlayerStore((s) => s.errorNonce);
   const replaceCurrentStream = usePlayerStore((s) => s.replaceCurrentStream);
+  const playViaStream = usePlayerStore((s) => s.playViaStream);
 
   // Sample the current artwork and tint the whole app with its dominant color.
   // Remote (YouTube) art can't be sampled cross-origin, so derive a stable,
@@ -181,11 +182,21 @@ export function PlayerBar() {
     const next = alternatives[attempts.current];
     attempts.current += 1;
 
+    // First failure for this track: try to rescue the SAME song through the
+    // resolved direct stream (the proxy path) — this covers videos that are
+    // embed-restricted or region-blocked in the iframe but still streamable.
+    // Only if that also fails do we move on to an alternative result.
+    if (!track.audioUrl && attempts.current === 0) {
+      attempts.current = 1;
+      toast.loading(`Finding a way to play "${track.title}"…`, { id: "yt-fallback" });
+      playViaStream(track);
+      return;
+    }
     toast.loading(`Trying another source for "${track.title}"…`, { id: "yt-fallback" });
     // The IFrame engine plays by video id — just swap the current track.
     replaceCurrentStream(toPlayableYoutube(next, next.id, alternatives));
     toast.success("Switched to an alternative source", { id: "yt-fallback" });
-  }, [errorNonce, replaceCurrentStream]);
+  }, [errorNonce, replaceCurrentStream, playViaStream]);
 
   if (!current) return null;
 

@@ -120,6 +120,8 @@ interface PlayerStore {
   playTrack: (track: Track | Playable, list?: (Track | Playable)[]) => void;
   /** Start an endless related-mix radio from any track (any source). */
   startRadio: (track: Track | Playable) => void;
+  /** Play a YouTube track through the proxy/audio path (rescues non-embeddable videos). */
+  playViaStream: (track: Playable, startSeconds?: number) => void;
   playIndex: (index: number) => void;
   replaceCurrentStream: (playable: Playable, startSeconds?: number) => void;
   togglePlay: () => void;
@@ -796,6 +798,13 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     } else {
       ytEngine.pause();
       const audio = getAudio();
+      // "stream" marks a rescue-load: a YouTube track that failed to embed
+      // (embed-restricted video), played through the resolved direct stream
+      // + CORS proxy instead so it still plays.
+      if (track.audioUrl === "stream") {
+        void resolveAndPlayWithFilter(track, resumeAt);
+        return;
+      }
       audio.src = track.audioUrl;
       audio.playbackRate = get().rate;
       audio.load();
@@ -855,6 +864,14 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
         );
       });
     }
+  };
+
+  const playViaStream = (track: Playable, startSeconds?: number) => {
+    // Mark the track as stream-loaded so loadTrack takes the audio path even
+    // with no filter active — this is how non-embeddable videos get rescued.
+    const marked = { ...track, audioUrl: track.audioUrl || "stream" };
+    set({ queue: get().queue.map((t) => (t.id === marked.id ? marked : t)) });
+    loadTrack(marked, startSeconds);
   };
 
   const replaceCurrentStream = (playable: Playable, startSeconds?: number) => {
@@ -1253,6 +1270,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
 
     playTrack,
     startRadio,
+    playViaStream,
     setAudioFilter: setAudioFilterAction,
     playIndex,
     replaceCurrentStream,
