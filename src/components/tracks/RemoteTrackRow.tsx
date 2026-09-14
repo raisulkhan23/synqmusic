@@ -1,7 +1,7 @@
 import type { YtItem } from "@/lib/youtube";
 import { formatTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { Heart, Loader2, Pause, Play } from "lucide-react";
+import { Heart, Loader2, Pause, Play, Radio } from "lucide-react";
 import { usePlayerStore } from "@/store/player";
 
 export function RemoteTrackRow({
@@ -22,6 +22,7 @@ export function RemoteTrackRow({
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const liked = usePlayerStore((s) => s.liked);
   const toggleLike = usePlayerStore((s) => s.toggleLike);
+  const startRadio = usePlayerStore((s) => s.startRadio);
   const isCurrent = currentId === item.id;
   const isLiked = liked[item.id] !== undefined;
 
@@ -102,6 +103,28 @@ export function RemoteTrackRow({
       </div>
 
       <div className="ml-auto flex shrink-0 items-center gap-2">
+        <button
+          type="button"
+          aria-label={`Start ${item.title} radio`}
+          title="Start radio — endless related mix"
+          onClick={(e) => {
+            e.stopPropagation();
+            startRadio({
+              id: item.id,
+              title: item.title,
+              artistName: item.artist,
+              albumName: "YouTube",
+              coverUrl: item.thumbnail,
+              audioUrl: "",
+              duration: item.duration,
+              source: "youtube",
+              youtubeId: item.id,
+            });
+          }}
+          className="rounded-full p-1.5 text-muted-foreground/70 transition-colors hover:bg-white/10 hover:text-foreground"
+        >
+          <Radio className="size-4" />
+        </button>
         <button
           type="button"
           aria-label={isLiked ? "Remove from liked songs" : "Add to liked songs"}

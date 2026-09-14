@@ -3,8 +3,9 @@ import { getAudio, setAudioFilter, type AudioFilterId } from "@/lib/audio";
 import { trackById, type Track } from "@/lib/catalog";
 import { similarTracks } from "@/lib/catalog";
 import type { RGB } from "@/lib/covers";
-import { isPlayable, toPlayable, type Playable } from "@/lib/playable";
+import { isPlayable, toPlayable, toPlayableYoutube, type Playable } from "@/lib/playable";
 import * as ytEngine from "@/lib/youtubePlayer";
+import type { YtItem } from "@/lib/youtube";
 import { api } from "@/convex/_generated/api";
 import { ConvexClient } from "convex/browser";
 
@@ -14,6 +15,7 @@ import { ConvexClient } from "convex/browser";
  * effect needs the stream on the <audio> element. Returns null on failure.
  */
 let ytResolveClient: ConvexClient | null = null;
+let ytSearchClient: ConvexClient | null = null;
 const ytResolve = async (videoId: string): Promise<string | null> => {
   try {
     ytResolveClient = ytResolveClient ?? new ConvexClient(import.meta.env.VITE_CONVEX_URL as string);
@@ -108,6 +110,8 @@ interface PlayerStore {
 
   // actions
   playTrack: (track: Track | Playable, list?: (Track | Playable)[]) => void;
+  /** Start an endless related-mix radio from any track (any source). */
+  startRadio: (track: Track | Playable) => void;
   playIndex: (index: number) => void;
   replaceCurrentStream: (playable: Playable, startSeconds?: number) => void;
   togglePlay: () => void;
@@ -462,6 +466,46 @@ function restartCurrent(): void {
   else void getAudio().play().catch(() => undefined);
 }
 
+/**
+ * Local similar tracks for a seed (catalog-aware; empty for YouTube seeds).
+ * Returned as Playables ready for the queue.
+ */
+function similarTracksFor(seed: Playable): Playable[] {
+  if (seed.catalogTrack) {
+    return similarTracks(seed.catalogTrack.id, 10).map(toPlayable);
+  }
+  return [];
+}
+
+/** In-flight related-mix fetch, deduped per seed so track-end doesn't double-fire. */
+let relatedMixInFlight: { seedId: string; promise: Promise<Playable[]> } | null = null;
+
+/**
+ * Fetch a related-mix from YouTube Music based on the seed track's title +
+ * artist. Returns Playables ready for the queue (empty on failure).
+ */
+async function fetchRelatedMix(seed: Playable, existingQueue: Playable[], count: number): Promise<Playable[]> {
+  if (relatedMixInFlight?.seedId === seed.id) return relatedMixInFlight.promise;
+  const promise = (async () => {
+    try {
+      ytSearchClient = ytSearchClient ?? new ConvexClient(import.meta.env.VITE_CONVEX_URL as string);
+      const query = `${seed.title} ${seed.artistName.split(",")[0]?.trim() ?? ""} similar songs`.trim();
+      const res = await ytSearchClient.action(api.youtube.searchYoutube, { query });
+      const items = res?.items ?? [];
+      const existing = new Set(existingQueue.map((t) => t.id));
+      existing.add(seed.id);
+      return items
+        .filter((it: YtItem) => !existing.has(it.id))
+        .slice(0, count)
+        .map((it: YtItem) => toPlayableYoutube(it, ""));
+    } catch {
+      return [];
+    }
+  })();
+  relatedMixInFlight = { seedId: seed.id, promise };
+  return promise;
+}
+
 /** Shared auto-advance logic for both engines. */
 function handleEnded(): void {
   const s = usePlayerStore.getState();
@@ -489,21 +533,38 @@ function handleEnded(): void {
       return;
     }
   }
-  // End of queue, repeat off — autoplay similar music when enabled.
+  // End of queue, repeat off — autoplay related music when enabled.
+  // Works for ANY source: catalog tracks use the local similarity index,
+  // YouTube tracks (and the catalog fallback) fetch a related mix from
+  // YouTube Music so the music never stops.
   if (s.autoplay && s.current) {
-    const seed = s.current.catalogTrack?.id;
-    if (seed) {
-      const similar = similarTracks(seed, 10)
-        .filter((t) => !s.queue.some((q) => q.catalogTrack?.id === t.id))
-        .slice(0, 5);
-      if (similar.length > 0) {
-        usePlayerStore.setState((state) => ({
-          queue: [...state.queue, ...similar.map(toPlayable)],
-        }));
-        s.playIndex(s.queue.length);
-        return;
-      }
+    const seed = s.current;
+    const known = similarTracksFor(seed)
+      .filter((t) => !s.queue.some((q) => q.id === t.id) && t.id !== seed.id)
+      .slice(0, 5);
+    if (known.length > 0) {
+      usePlayerStore.setState((state) => ({
+        queue: [...state.queue, ...known],
+      }));
+      s.playIndex(s.queue.length);
+      return;
     }
+    // No local candidates (e.g. a YouTube track) — fetch related tracks
+    // from YouTube Music, then keep playing without user interaction.
+    void fetchRelatedMix(seed, s.queue, 5).then((related) => {
+      const state = usePlayerStore.getState();
+      const fresh = related.filter((t) => !state.queue.some((q) => q.id === t.id));
+      if (fresh.length === 0) return;
+      usePlayerStore.setState((st) => ({
+        queue: [...st.queue, ...fresh],
+      }));
+      // Only auto-advance if nothing else started playing meanwhile.
+      const after = usePlayerStore.getState();
+      if (after.current?.id === seed.id && !after.isPlaying) {
+        after.playIndex(after.queue.length - fresh.length);
+      }
+    });
+    return;
   }
   getAudio().pause();
   ytEngine.pause();
@@ -754,6 +815,29 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     const index = idx >= 0 ? idx : 0;
     set({ queue: list2, queueIndex: index });
     loadTrack(list2[index]);
+  };
+
+  const startRadio = (track: Track | Playable) => {
+    const seed = norm(track);
+    const local = similarTracksFor(seed).filter((t) => t.id !== seed.id).slice(0, 15);
+    // Build a queue immediately: seed first, local mix if available; if the
+    // seed is a YouTube track (or the local mix is empty), fetch the related
+    // mix from YouTube Music in the background and append as it arrives.
+    const initial: Playable[] = [seed, ...local];
+    set({ queue: initial, queueIndex: 0 });
+    loadTrack(seed);
+    if (local.length < 5) {
+      void fetchRelatedMix(seed, initial, 15).then((related) => {
+        const fresh = related.filter((t) => !get().queue.some((q) => q.id === t.id));
+        if (fresh.length === 0) return;
+        usePlayerStore.setState((st) => ({ queue: [...st.queue, ...fresh] }));
+        saveQueue(
+          usePlayerStore.getState().queue,
+          usePlayerStore.getState().queueIndex,
+          usePlayerStore.getState().current?.id ?? null,
+        );
+      });
+    }
   };
 
   const replaceCurrentStream = (playable: Playable, startSeconds?: number) => {
@@ -1137,6 +1221,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       }),
 
     playTrack,
+    startRadio,
     setAudioFilter: setAudioFilterAction,
     playIndex,
     replaceCurrentStream,
