@@ -48,7 +48,7 @@ export function toPlayableYoutube(
     id: item.id,
     title: item.title,
     artistName: item.artist,
-    albumName: "YouTube",
+    albumName: "Single",
     coverUrl: item.thumbnail,
     audioUrl,
     duration: item.duration,

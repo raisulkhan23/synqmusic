@@ -231,6 +231,7 @@ export default function Library() {
                     <img
                       src={top[0] ? coverArt(albumById(top[0].albumId)) : ""}
                       alt=""
+                      loading="lazy"
                       className="aspect-square w-full rounded-full object-cover ring-1 ring-white/10"
                     />
                     <p className="mt-2 truncate text-sm font-semibold">{artist.name}</p>

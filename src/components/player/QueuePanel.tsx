@@ -178,8 +178,11 @@ export function QueuePanel() {
             {queue.length > 1 && (
               <button
                 type="button"
-                onClick={clearQueue}
-                className="flex items-center gap-1 rounded-full px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+                onClick={() => {
+                  clearQueue();
+                  toast.success("Queue cleared");
+                }}
+                className="flex items-center gap-1 rounded-full px-2 py-1 text-xs text-red-400/80 transition-colors hover:bg-red-500/10 hover:text-red-400"
               >
                 <Trash2 className="size-3.5" />
                 Clear

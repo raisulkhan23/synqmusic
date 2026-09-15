@@ -420,6 +420,7 @@ export default function Home() {
                 <img
                   src={item.thumbnail}
                   alt=""
+                  loading="lazy"
                   className="size-11 shrink-0 rounded-md object-cover"
                 />
                 <span className="min-w-0">
@@ -522,6 +523,7 @@ export default function Home() {
                 <img
                   src={items[0]?.thumbnail ?? ""}
                   alt=""
+                  loading="lazy"
                   className="aspect-square w-full rounded-full object-cover ring-1 ring-white/10 transition-transform duration-300 group-hover:scale-105"
                 />
                 <p className="mt-2 truncate text-sm font-semibold">{artist}</p>

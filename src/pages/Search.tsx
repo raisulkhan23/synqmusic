@@ -398,6 +398,7 @@ export default function Search() {
                             <img
                               src={coverArt(album)}
                               alt=""
+                              loading="lazy"
                               className="size-full object-cover"
                             />
                           )}
@@ -518,6 +519,7 @@ function BrowseView({
                     <img
                       src={coverArt(album)}
                       alt=""
+                      loading="lazy"
                       className="size-full object-cover"
                     />
                   )}

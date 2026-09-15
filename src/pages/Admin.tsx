@@ -397,7 +397,7 @@ export default function Admin() {
                     <tr key={like._id} className="border-b border-white/[0.04] last:border-0">
                       <td className="w-12 px-4 py-2">
                         {like.coverUrl ? (
-                          <img src={like.coverUrl} alt="" className="size-10 rounded-md object-cover" />
+                          <img src={like.coverUrl} alt="" loading="lazy" className="size-10 rounded-md object-cover" />
                         ) : (
                           <span className="flex size-10 items-center justify-center rounded-md bg-white/[0.06]">
                             <Heart className="size-4 text-muted-foreground/50" />

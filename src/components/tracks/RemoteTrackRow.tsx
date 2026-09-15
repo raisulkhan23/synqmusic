@@ -135,7 +135,7 @@ export function RemoteTrackRow({
               id: item.id,
               title: item.title,
               artistName: item.artist,
-              albumName: "YouTube",
+              albumName: "",
               coverUrl: item.thumbnail,
               audioUrl: "",
               duration: item.duration,

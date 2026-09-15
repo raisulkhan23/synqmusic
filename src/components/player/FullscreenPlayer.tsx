@@ -372,9 +372,11 @@ export function FullscreenPlayer() {
               <span className="hidden sm:inline">Minimize</span>
             </button>
             <div className="hidden text-center sm:block">
-              <p className="font-display text-sm font-semibold tracking-tight">
-                {current.albumName}
-              </p>
+              {current.albumName && (
+                <p className="font-display text-sm font-semibold tracking-tight">
+                  {current.albumName}
+                </p>
+              )}
               <p className="text-xs text-muted-foreground">
                 {current.source === "catalog" ? "SYNQ catalog" : "Live session"}
               </p>
@@ -397,7 +399,6 @@ export function FullscreenPlayer() {
                 type="button"
                 aria-label="Open queue"
                 onClick={() => {
-                  setFullscreen(false);
                   setQueueOpen(true);
                 }}
                 className="rounded-full p-2.5 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
@@ -507,7 +508,7 @@ export function FullscreenPlayer() {
                 {current.title}
               </h2>
               <p className="mt-1 truncate text-sm text-muted-foreground">
-                {current.artistName} · {current.albumName}
+                {current.albumName ? `${current.artistName} · ${current.albumName}` : current.artistName}
               </p>
             </div>
 
@@ -546,7 +547,6 @@ export function FullscreenPlayer() {
                 aria-label="Open queue"
                 title="Queue"
                 onClick={() => {
-                  setFullscreen(false);
                   setQueueOpen(true);
                 }}
                 className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
