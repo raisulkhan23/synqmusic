@@ -341,9 +341,11 @@ export const searchYoutube = action({
  */
 export const resolveStream = action({
   args: {
-    videoId: v.string()
+    videoId: v.string(),
+    /** "high" (default) picks the best bitrate; "low" prefers ≤ 96kbps for slow connections. */
+    quality: v.optional(v.union(v.literal("high"), v.literal("low")))
   },
-  handler: async (_ctx, { videoId }): Promise<{ url: string | null; title: string; reason?: string; youtubeUrl?: string }> => {
+  handler: async (_ctx, { videoId, quality = "high" }): Promise<{ url: string | null; title: string; reason?: string; youtubeUrl?: string }> => {
     let lastError: string | undefined;
     let lastTitle: string | undefined;
     let lastYoutubeUrl: string | undefined;
@@ -390,9 +392,14 @@ export const resolveStream = action({
             ((f as Record<string, unknown>).mimeType as string).startsWith("audio/"),
         );
 
-        const best = formats.sort(
+        const sorted = formats.sort(
           (a, b) => (b.bitrate as number) - (a.bitrate as number),
-        )[0] as Record<string, unknown> | undefined;
+        ) as Array<Record<string, unknown>>;
+        // Network-aware: on "low", take the smallest stream that's still ≥ 48kbps.
+        const best =
+          quality === "low"
+            ? [...sorted].reverse().find((f) => (f.bitrate as number) >= 48000) ?? sorted[sorted.length - 1]
+            : sorted[0];
 
         if (best?.url) {
           return {

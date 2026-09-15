@@ -5,7 +5,7 @@ import { api } from "@/convex/_generated/api";
 import { greeting } from "@/lib/format";
 import { toPlayableYoutube, type Playable } from "@/lib/playable";
 import type { YtItem } from "@/lib/youtube";
-import { usePlayerStore } from "@/store/player";
+import { usePlayerStore, peekResumePosition } from "@/store/player";
 import {
   readLastPlayed,
   readPlayHistory,
@@ -98,6 +98,12 @@ export default function Home() {
   useEffect(() => {
     setHistory(readPlayHistory());
   }, [lastPlayed]);
+
+  // Saved position for the continue-listening card (resume exactly where stopped).
+  const continueResume = useMemo(
+    () => (continueTrack ? peekResumePosition(continueTrack.id, continueTrack.duration) : 0),
+    [continueTrack, lastPlayed],
+  );
 
   const historyItems: YtItem[] = useMemo(
     () =>
@@ -271,6 +277,11 @@ export default function Home() {
                 <span className="block truncate font-display text-[15px] font-semibold">
                   {continueTrack.title}
                 </span>
+                {continueResume > 0 && (
+                  <span className="block text-xs text-muted-foreground">
+                    Resume from {Math.floor(continueResume / 60)}:{String(Math.floor(continueResume % 60)).padStart(2, "0")}
+                  </span>
+                )}
               </span>
             </button>
           )}

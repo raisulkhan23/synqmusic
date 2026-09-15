@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 
 type SortMode = "recent" | "alpha" | "creator";
 type FilterMode = "all" | "liked";
+type SectionFilter = "all" | "albums" | "artists" | "playlists";
 
 /**
  * Curated editorial mixes shown in the Library. Each one is backed by a live
@@ -102,6 +103,8 @@ export default function Library() {
   // Sort + filter state for the albums grid.
   const [albumSort, setAlbumSort] = useState<SortMode>("recent");
   const [albumFilter, setAlbumFilter] = useState<FilterMode>("all");
+  // Quick filters: All | Albums | Artists | Playlists.
+  const [sectionFilter, setSectionFilter] = useState<SectionFilter>("all");
 
   const albums = useMemo(() => {
     let list: Album[] = [...ALBUMS];
@@ -129,10 +132,34 @@ export default function Library() {
         <p className="mt-1 text-sm text-muted-foreground">
           Everything you collect, in one place.
         </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {(
+            [
+              ["all", "All"],
+              ["albums", "Albums"],
+              ["artists", "Artists"],
+              ["playlists", "Playlists"],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setSectionFilter(id)}
+              className={cn(
+                "rounded-full border px-4 py-1.5 text-sm font-medium transition-colors",
+                sectionFilter === id
+                  ? "border-transparent bg-[rgb(var(--tint))] text-black"
+                  : "border-white/10 bg-white/[0.04] text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </header>
 
       {/* quick links */}
-      <section className="grid gap-3 sm:grid-cols-2">
+      <section className={cn("grid gap-3 sm:grid-cols-2", sectionFilter !== "all" && "hidden")}>
         <button
           type="button"
           onClick={() => navigate("/liked")}
@@ -169,10 +196,10 @@ export default function Library() {
       </section>
 
       {/* imported playlists from other services */}
-      <ImportedPlaylists />
+      {sectionFilter === "all" && <ImportedPlaylists />}
 
       {/* followed artists */}
-      <section>
+      <section className={cn(sectionFilter !== "all" && sectionFilter !== "artists" && "hidden")}>
         <div className="mb-3">
           <h2 className="font-display text-lg font-bold tracking-tight sm:text-xl">
             Following
@@ -222,8 +249,8 @@ export default function Library() {
         )}
       </section>
 
-      {/* playlists */}
-      <section>
+      {/* popular playlists */}
+      <section className={cn(sectionFilter !== "all" && sectionFilter !== "playlists" && "hidden")}>
         <div className="mb-3">
           <h2 className="font-display text-lg font-bold tracking-tight sm:text-xl">
             Popular playlists
@@ -239,8 +266,8 @@ export default function Library() {
         </div>
       </section>
 
-      {/* playlists */}
-      <section>
+      {/* user playlists */}
+      <section className={cn(sectionFilter !== "all" && sectionFilter !== "playlists" && "hidden")}>
         <div className="mb-3 flex items-center justify-between gap-4">
           <div>
             <h2 className="font-display text-lg font-bold tracking-tight sm:text-xl">
@@ -290,7 +317,7 @@ export default function Library() {
       </section>
 
       {/* albums with sort + filter */}
-      <section>
+      <section className={cn(sectionFilter !== "all" && sectionFilter !== "albums" && "hidden")}>
         <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="font-display text-lg font-bold tracking-tight sm:text-xl">

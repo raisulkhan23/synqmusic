@@ -26,6 +26,7 @@ import {
   Gauge,
   Heart,
   ListMusic,
+  Share2,
   Loader2,
   MicVocal,
   Repeat,
@@ -381,7 +382,7 @@ export function FullscreenPlayer() {
                 {current.albumName}
               </p>
               <p className="text-xs text-muted-foreground">
-                {current.source === "catalog" ? "SYNQ catalog" : "Streamed live"}
+                {current.source === "catalog" ? "SYNQ catalog" : "Live session"}
               </p>
             </div>
             <div className="flex items-center gap-1">
@@ -408,6 +409,29 @@ export function FullscreenPlayer() {
                 className="rounded-full p-2.5 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
               >
                 <ListMusic className="size-5" />
+              </button>
+              <button
+                type="button"
+                aria-label="Share current song"
+                onClick={() => {
+                  if (!current) return;
+                  const url = `${window.location.origin}/search?q=${encodeURIComponent(
+                    `${current.title} ${current.artistName.split(",")[0]?.trim() ?? ""}`.trim(),
+                  )}`;
+                  const data = {
+                    title: `${current.title} — ${current.artistName}`,
+                    text: `Listen to ${current.title} on SYNQ`,
+                    url,
+                  };
+                  if (navigator.share) {
+                    void navigator.share(data).catch(() => undefined);
+                  } else {
+                    void navigator.clipboard.writeText(url).then(() => toast.success("Song link copied"));
+                  }
+                }}
+                className="rounded-full p-2.5 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
+              >
+                <Share2 className="size-5" />
               </button>
             </div>
           </div>

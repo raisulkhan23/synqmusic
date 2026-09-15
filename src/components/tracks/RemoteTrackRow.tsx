@@ -1,8 +1,16 @@
 import type { YtItem } from "@/lib/youtube";
 import { formatTime } from "@/lib/format";
+import { toPlayableYoutube } from "@/lib/playable";
 import { cn } from "@/lib/utils";
-import { Heart, Loader2, Pause, Play, Radio } from "lucide-react";
+import { Heart, ListEnd, ListMusic, ListStart, Loader2, MoreVertical, Pause, Play, Radio } from "lucide-react";
 import { usePlayerStore } from "@/store/player";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { toast } from "sonner";
 
 export function RemoteTrackRow({
   item,
@@ -35,6 +43,20 @@ export function RemoteTrackRow({
       youtubeId: item.id,
       source,
     });
+
+  const asPlayable = () => toPlayableYoutube(item, "");
+
+  const playNext = () => {
+    const s = usePlayerStore.getState();
+    const at = s.queueIndex >= 0 ? s.queueIndex + 1 : s.queue.length;
+    s.insertInQueue(asPlayable(), at);
+    toast.success(`Playing "${item.title}" next`);
+  };
+
+  const addQueued = () => {
+    usePlayerStore.getState().addToQueue(asPlayable());
+    toast.success("Added to queue");
+  };
 
   return (
     <div
@@ -125,6 +147,39 @@ export function RemoteTrackRow({
         >
           <Radio className="size-4" />
         </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label={`More options for ${item.title}`}
+              onClick={(e) => e.stopPropagation()}
+              className="rounded-full p-1.5 text-muted-foreground/70 opacity-0 transition-all group-hover:opacity-100 hover:bg-white/10 hover:text-foreground focus:opacity-100"
+            >
+              <MoreVertical className="size-4" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-52">
+            <DropdownMenuItem className="gap-2" onSelect={playNext}>
+              <ListStart className="size-4" />
+              Play next
+            </DropdownMenuItem>
+            <DropdownMenuItem className="gap-2" onSelect={addQueued}>
+              <ListEnd className="size-4" />
+              Add to queue
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="gap-2"
+              onSelect={() => {
+                void navigator.clipboard
+                  .writeText(`${window.location.origin}/search?q=${encodeURIComponent(`${item.title} ${item.artist}`)}`)
+                  .then(() => toast.success("Song link copied"));
+              }}
+            >
+              <ListMusic className="size-4" />
+              Copy song link
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <button
           type="button"
           aria-label={isLiked ? "Remove from liked songs" : "Add to liked songs"}

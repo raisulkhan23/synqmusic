@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { AlbumCard } from "@/components/tracks/AlbumCard";
 import { RemoteTrackRow } from "@/components/tracks/RemoteTrackRow";
 import { TrackRow } from "@/components/tracks/TrackRow";
@@ -105,11 +105,47 @@ export default function Search() {
   const [retryKey, setRetryKey] = useState(0);
 
   const navigate = useNavigate();
+  // Shared links open with ?q=… pre-filled — share → open → play.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const sharedQuery = searchParams.get("q");
+  useEffect(() => {
+    if (sharedQuery && !query) {
+      setQuery(sharedQuery);
+      setSearchParams({}, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sharedQuery]);
   const playTrack = usePlayerStore((s) => s.playTrack);
   const startRadio = usePlayerStore((s) => s.startRadio);
   const searchYt = useAction(api.youtube.searchYoutube);
 
   const debouncedQuery = useDebounced(query, 450);
+
+  // Search history — persisted locally, capped at 8 entries.
+  const [searchHistory, setSearchHistory] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("ss.searchHistory") ?? "[]") as string[];
+    } catch {
+      return [];
+    }
+  });
+  useEffect(() => {
+    const q = debouncedQuery.trim();
+    if (q.length < 2) return;
+    setSearchHistory((prev) => {
+      const next = [q, ...prev.filter((h) => h !== q)].slice(0, 8);
+      try {
+        localStorage.setItem("ss.searchHistory", JSON.stringify(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }, [debouncedQuery]);
+  const clearSearchHistory = () => {
+    setSearchHistory([]);
+    localStorage.removeItem("ss.searchHistory");
+  };
 
   // Live YouTube search, debounced.
   useEffect(() => {
@@ -193,7 +229,37 @@ export default function Search() {
       </div>
 
       {!hasQuery ? (
-        <BrowseView onPick={setQuery} onAlbum={(id) => navigate(`/album/${id}`)} />
+        <>
+          {searchHistory.length > 0 && (
+            <section>
+              <div className="mb-2 flex items-center justify-between">
+                <h2 className="font-display text-sm font-semibold tracking-widest text-muted-foreground uppercase">
+                  Recent searches
+                </h2>
+                <button
+                  type="button"
+                  onClick={clearSearchHistory}
+                  className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  Clear
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {searchHistory.map((h) => (
+                  <button
+                    key={h}
+                    type="button"
+                    onClick={() => setQuery(h)}
+                    className="rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-1.5 text-sm text-muted-foreground transition-colors hover:border-[rgb(var(--tint)_/_0.4)] hover:text-foreground"
+                  >
+                    {h}
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+          <BrowseView onPick={setQuery} onAlbum={(id) => navigate(`/album/${id}`)} />
+        </>
       ) : (
         <div className="flex flex-col gap-10">
           {/* Related results */}

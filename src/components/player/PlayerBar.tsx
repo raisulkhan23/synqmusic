@@ -165,6 +165,7 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
   // etc.), automatically try the next search result. Manual switching is also
   // available in the queue panel.
   const attempts = useRef(0);
+  const rescueExhausted = useRef(false);
   const lastErrorTrack = useRef<string | null>(null);
 
   useEffect(() => {
@@ -176,9 +177,13 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
     if (lastErrorTrack.current !== track.id) {
       lastErrorTrack.current = track.id;
       attempts.current = 0;
+      rescueExhausted.current = false;
     }
     const alternatives = track.alternatives ?? [];
-    if (attempts.current >= alternatives.length) {
+    // NOTE: don't bail out just because `alternatives` is empty — the rescue
+    // (stream) and re-search paths below don't need alternatives. Only give
+    // up once we've already exhausted both rescue attempts AND alternatives.
+    if (attempts.current >= alternatives.length && track.audioUrl && attempts.current > 0 && rescueExhausted.current) {
       toast.error("No more sources available for this track");
       return;
     }
@@ -186,6 +191,7 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
     // resolved direct stream (the proxy path) — this covers videos that are
     // embed-restricted or region-blocked in the iframe but still streamable.
     if (!track.audioUrl) {
+      rescueExhausted.current = true;
       toast.loading(`Finding a way to play "${track.title}"…`, { id: "yt-fallback" });
       playViaStream(track);
       return;

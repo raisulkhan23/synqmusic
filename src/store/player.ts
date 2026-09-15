@@ -26,7 +26,11 @@ const audioProxyBase = `${convexSiteUrl}/audio-proxy`;
 const ytResolve = async (videoId: string): Promise<string | null> => {
   try {
     ytResolveClient = ytResolveClient ?? new ConvexClient(import.meta.env.VITE_CONVEX_URL as string);
-    const res = await ytResolveClient.action(api.youtube.resolveStream, { videoId });
+    // Network-aware quality: prefer a lighter stream when the connection is poor.
+    type NetInfo = { effectiveType?: string };
+    const net = (navigator as Navigator & { connection?: NetInfo }).connection;
+    const slow = net?.effectiveType === "2g" || net?.effectiveType === "slow-2g" || net?.effectiveType === "3g";
+    const res = await ytResolveClient.action(api.youtube.resolveStream, { videoId, quality: slow ? "low" : "high" });
     if (!res?.url) return null;
     return `${audioProxyBase}?u=${encodeURIComponent(res.url)}`;
   } catch {
@@ -301,6 +305,19 @@ const initialFollowedArtists = readIdSet("ss.followedArtists");
 
 const RESUME_KEY = "ss.resume";
 const RESUME_MIN_DURATION = 300; // only tracks ≥ 5 min
+
+/** Latest saved position for a track (for the Continue Listening UI). */
+export function peekResumePosition(id: string, duration: number): number {
+  try {
+    const map = JSON.parse(localStorage.getItem(RESUME_KEY) ?? "{}") as Record<string, { t: number; at: number }>;
+    const hit = map[id];
+    if (!hit) return 0;
+    if (hit.t < 10 || (duration > 0 && hit.t > duration - 20)) return 0;
+    return hit.t;
+  } catch {
+    return 0;
+  }
+}
 
 type ResumeMap = Record<string, { t: number; at: number }>;
 

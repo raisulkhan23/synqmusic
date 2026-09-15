@@ -28,6 +28,12 @@ export function AddToPlaylistMenu({
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const handleAdd = (playlistId: Id<"playlists">, name: string) => {
+    // Duplicate detection: warn if the song is already in this playlist.
+    const target = playlists?.find((p) => p._id === playlistId);
+    if (target?.trackIds.includes(track.id)) {
+      toast.warning(`"${track.title}" is already in ${name}`);
+      return;
+    }
     void addTrack({ playlistId, trackId: track.id });
     toast.success(`Added to ${name}`);
   };

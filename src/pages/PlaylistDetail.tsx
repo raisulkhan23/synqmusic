@@ -3,11 +3,12 @@ import { PlayHeaderButton } from "@/components/tracks/PlayHeaderButton";
 import { TrackRow } from "@/components/tracks/TrackRow";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { albumById, trackById } from "@/lib/catalog";
+import { albumById, artistById, trackById } from "@/lib/catalog";
 import { coverArt } from "@/lib/covers";
 import { formatTime } from "@/lib/format";
 import { useMutation, useQuery } from "convex/react";
-import { ListMusic, Trash2 } from "lucide-react";
+import { ListMusic, Search as SearchIcon, Trash2 } from "lucide-react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 export default function PlaylistDetail() {
@@ -55,6 +56,20 @@ export default function PlaylistDetail() {
   const total = tracks.reduce((sum, t) => sum + t.duration, 0);
   const firstTrack = tracks[0];
   const cover = firstTrack ? coverArt(albumById(firstTrack.albumId)) : null;
+
+  // In-playlist search — no scrolling through 500 songs.
+  const [filter, setFilter] = useState("");
+  const visibleTracks = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    if (!q) return tracks.map((track, i) => ({ track, i }));
+    return tracks
+      .map((track, i) => ({ track, i }))
+      .filter(
+        ({ track }) =>
+          track.title.toLowerCase().includes(q) ||
+          artistById(track.artistId).name.toLowerCase().includes(q),
+      );
+  }, [tracks, filter]);
 
   const handleDelete = async () => {
     try {
@@ -111,15 +126,32 @@ export default function PlaylistDetail() {
       {/* tracks */}
       {tracks.length > 0 ? (
         <div className="flex flex-col gap-0.5">
-          {tracks.map((track, i) => (
-            <TrackRow
-              key={`${track.id}-${i}`}
-              track={track}
-              list={tracks}
-              index={i + 1}
-              onRemove={() => removeTrack({ playlistId: playlist._id, trackId: track.id })}
-            />
-          ))}
+          {tracks.length > 20 && (
+            <div className="relative mb-3 max-w-sm">
+              <SearchIcon className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+              <input
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                placeholder="Search in playlist…"
+                className="h-10 w-full rounded-full border border-white/10 bg-white/[0.05] pr-4 pl-9 text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-[rgb(var(--tint)_/_0.6)] focus:outline-none"
+              />
+            </div>
+          )}
+          {visibleTracks.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              No songs in this playlist match "{filter}".
+            </p>
+          ) : (
+            visibleTracks.map(({ track, i }) => (
+              <TrackRow
+                key={`${track.id}-${i}`}
+                track={track}
+                list={tracks}
+                index={i + 1}
+                onRemove={() => removeTrack({ playlistId: playlist._id, trackId: track.id })}
+              />
+            ))
+          )}
         </div>
       ) : (
         <div className="flex flex-col items-center gap-3 rounded-3xl border border-dashed border-white/10 py-16 text-center">
