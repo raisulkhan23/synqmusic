@@ -75,14 +75,33 @@ export const listUsers = query({
   handler: async (ctx) => {
     await getAdminUser(ctx);
     const users = await ctx.db.query("users").collect();
+    // Enrich with the auth provider(s) each account signed up with —
+    // Convex Auth keeps one authAccounts row per linked credential
+    // ("github", "google", "email-otp", "anonymous", …).
+    const accounts = await ctx.db.query("authAccounts").collect();
+    const byUser = new Map<string, { provider: string; accountId: string | null }[]>();
+    for (const acc of accounts) {
+      const arr = byUser.get(acc.userId) ?? [];
+      // tokenIdentifier embeds the provider prefix, e.g. "github:123456" —
+      // extract a readable provider + external account id when present.
+      const raw = (acc as unknown as { tokenIdentifier?: string }).tokenIdentifier ?? "";
+      const providerMatch = raw.match(/^(github|google|email-otp|anonymous)/);
+      const provider = providerMatch?.[1] ?? "credentials";
+      const externalId = raw.includes(":") ? raw.split(":").slice(1).join(":") : null;
+      arr.push({ provider, accountId: externalId });
+      byUser.set(acc.userId, arr);
+    }
     return users
       .map((u) => ({
         _id: u._id,
         _creationTime: u._creationTime,
         name: u.name ?? null,
         email: u.email ?? null,
+        image: u.image ?? null,
         isAnonymous: u.isAnonymous ?? false,
         role: u.role ?? null,
+        providers: (byUser.get(u._id) ?? []).map((a) => a.provider),
+        githubId: (byUser.get(u._id) ?? []).find((a) => a.provider === "github")?.accountId ?? null,
       }))
       .sort((a, b) => a._creationTime - b._creationTime);
   },

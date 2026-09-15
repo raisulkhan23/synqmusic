@@ -1,5 +1,13 @@
 import { create } from "zustand";
-import { getAudio, setAudioFilter, type AudioFilterId } from "@/lib/audio";
+import {
+  getAudio,
+  setAudioFilter,
+  setEqBass as setEqBassLib,
+  setEqTreble as setEqTrebleLib,
+  setEqBalance as setEqBalanceLib,
+  setEqMono as setEqMonoLib,
+  type AudioFilterId,
+} from "@/lib/audio";
 import { trackById, type Track } from "@/lib/catalog";
 import { similarTracks } from "@/lib/catalog";
 import type { RGB } from "@/lib/covers";
@@ -114,6 +122,12 @@ interface PlayerStore {
   /** Visualizer animation on/off. */
   visualizerEnabled: boolean;
   toggleVisualizer: () => void;
+  /** UI theme: "dark" (default) | "light" | "amoled" */
+  themeMode: string;
+  setThemeMode: (mode: string) => void;
+  /** hide tracks flagged explicit */
+  hideExplicit: boolean;
+  toggleHideExplicit: () => void;
 
   // queue history (previously played, most recent first)
   history: Playable[];
@@ -654,6 +668,27 @@ function wireAudio() {
   audio.volume = initialVolume;
   audio.muted = initialMuted;
   audio.playbackRate = initialRate;
+
+  // Restore persisted audio settings (EQ / balance / mono / sound filter).
+  try {
+    const eq = JSON.parse(localStorage.getItem("ss.eq") ?? "{}") as {
+      bass?: number;
+      treble?: number;
+      balance?: number;
+      mono?: boolean;
+      filter?: string;
+    };
+    if (typeof eq.bass === "number") setEqBassLib(eq.bass);
+    if (typeof eq.treble === "number") setEqTrebleLib(eq.treble);
+    if (typeof eq.balance === "number") setEqBalanceLib(eq.balance);
+    if (eq.mono) setEqMonoLib(true);
+    if (eq.filter && eq.filter !== "off") {
+      // Applied lazily — the Web Audio graph only exists after a user gesture.
+      setTimeout(() => setAudioFilter(eq.filter as AudioFilterId), 800);
+    }
+  } catch {
+    /* ignore */
+  }
 
   audio.addEventListener("timeupdate", () => {
     const duration = audio.duration && Number.isFinite(audio.duration) ? audio.duration : 0;
@@ -1337,6 +1372,23 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       set((state) => {
         localStorage.setItem("ss.visualizer", state.visualizerEnabled ? "0" : "1");
         return { visualizerEnabled: !state.visualizerEnabled };
+      }),
+
+    themeMode: localStorage.getItem("ss.themeMode") ?? "dark",
+    setThemeMode: (mode) =>
+      set(() => {
+        localStorage.setItem("ss.themeMode", mode);
+        const root = document.documentElement;
+        root.classList.toggle("light", mode === "light");
+        root.classList.toggle("amoled", mode === "amoled");
+        return { themeMode: mode };
+      }),
+
+    hideExplicit: localStorage.getItem("ss.hideExplicit") === "1",
+    toggleHideExplicit: () =>
+      set((state) => {
+        localStorage.setItem("ss.hideExplicit", state.hideExplicit ? "0" : "1");
+        return { hideExplicit: !state.hideExplicit };
       }),
 
     // restore queue from the last session (does not autoplay — user resumes)

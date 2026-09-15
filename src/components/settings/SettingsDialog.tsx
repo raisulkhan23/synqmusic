@@ -9,6 +9,17 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { Slider } from "@/components/ui/slider";
+import {
+  applyEqPreset,
+  setAudioFilter,
+  setEqBalance,
+  setEqBass,
+  setEqMono,
+  setEqTreble,
+  type AudioFilterId,
+  AUDIO_FILTERS,
+} from "@/lib/audio";
 import { useAuth } from "@/hooks/use-auth";
 import { clearPlayHistory, usePlayerStore } from "@/store/player";
 import { cn } from "@/lib/utils";
@@ -23,6 +34,7 @@ import {
   Moon,
   Palette,
   Pencil,
+  SlidersHorizontal,
   Sparkles,
   Trash2,
   UserRound,
@@ -74,11 +86,38 @@ export function SettingsDialog({
   const toggleAmbientGlow = usePlayerStore((s) => s.toggleAmbientGlow);
   const visualizerEnabled = usePlayerStore((s) => s.visualizerEnabled);
   const toggleVisualizer = usePlayerStore((s) => s.toggleVisualizer);
+  const themeMode = usePlayerStore((s) => s.themeMode);
+  const setThemeMode = usePlayerStore((s) => s.setThemeMode);
+  const hideExplicit = usePlayerStore((s) => s.hideExplicit);
+  const toggleHideExplicit = usePlayerStore((s) => s.toggleHideExplicit);
 
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+
+  // Audio settings — persisted locally, applied live to the Web Audio graph.
+  const [eq, setEq] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("ss.eq") ?? "{}") as {
+        bass?: number;
+        treble?: number;
+        balance?: number;
+        mono?: boolean;
+        filter?: AudioFilterId;
+      };
+    } catch {
+      return {};
+    }
+  });
+  const persistEq = (next: typeof eq) => {
+    setEq(next);
+    try {
+      localStorage.setItem("ss.eq", JSON.stringify(next));
+    } catch {
+      /* ignore */
+    }
+  };
 
   // Sync the input whenever the dialog opens (or the user object changes).
   useEffect(() => {
@@ -249,6 +288,116 @@ export function SettingsDialog({
 
         <Separator className="bg-white/[0.07]" />
 
+        {/* audio */}
+        <section className="flex flex-col gap-2.5">
+          <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
+            <SlidersHorizontal className="size-3.5" />
+            Audio
+          </p>
+
+          {/* presets */}
+          <div className="flex flex-wrap gap-1.5">
+            {[
+              { label: "Flat", bass: 0, treble: 0 },
+              { label: "Bass Boost", bass: 10, treble: 0 },
+              { label: "Treble Boost", bass: 0, treble: 8 },
+              { label: "Vocal", bass: -3, treble: 5 },
+              { label: "Rock", bass: 5, treble: 4 },
+              { label: "Pop", bass: 3, treble: 3 },
+              { label: "Classical", bass: 1, treble: 2 },
+              { label: "Electronic", bass: 8, treble: 3 },
+            ].map((p) => (
+              <button
+                key={p.label}
+                type="button"
+                onClick={() => {
+                  applyEqPreset({ bass: p.bass, treble: p.treble });
+                  persistEq({ ...eq, bass: p.bass, treble: p.treble });
+                  toast(`EQ preset: ${p.label}`);
+                }}
+                className={cn(
+                  "rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
+                  eq.bass === p.bass && eq.treble === p.treble
+                    ? "border-transparent bg-[rgb(var(--tint)_/_0.2)] text-[rgb(var(--tint))]"
+                    : "border-white/10 text-muted-foreground hover:border-white/30 hover:text-foreground",
+                )}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+
+          {/* bass */}
+          <EqSlider
+            label="Bass"
+            value={eq.bass ?? 0}
+            onChange={(v) => {
+              setEqBass(v);
+              persistEq({ ...eq, bass: v });
+            }}
+          />
+          <EqSlider
+            label="Treble"
+            value={eq.treble ?? 0}
+            onChange={(v) => {
+              setEqTreble(v);
+              persistEq({ ...eq, treble: v });
+            }}
+          />
+          <EqSlider
+            label="Balance"
+            min={-1}
+            max={1}
+            step={0.1}
+            value={eq.balance ?? 0}
+            format={(v) => (v === 0 ? "Center" : v < 0 ? `L ${Math.round(-v * 100)}%` : `R ${Math.round(v * 100)}%`)}
+            onChange={(v) => {
+              setEqBalance(v);
+              persistEq({ ...eq, balance: v });
+            }}
+          />
+
+          <ToggleRow
+            label="Mono audio"
+            description="Same signal in both ears — good for single-ear listening"
+            on={eq.mono ?? false}
+            onToggle={() => {
+              const next = !(eq.mono ?? false);
+              setEqMono(next);
+              persistEq({ ...eq, mono: next });
+            }}
+          />
+
+          {/* live sound filters (8D etc.) */}
+          <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
+            <p className="text-sm font-medium">Sound effects</p>
+            <p className="text-xs text-muted-foreground">Applies to what's playing right now</p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {AUDIO_FILTERS.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => {
+                    if (setAudioFilter(f.id)) persistEq({ ...eq, filter: f.id });
+                    else toast.error("Effects need a browser with Web Audio");
+                  }}
+                  className={cn(
+                    "flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors",
+                    (eq.filter ?? "off") === f.id
+                      ? "border-transparent bg-[rgb(var(--tint)_/_0.2)] text-[rgb(var(--tint))]"
+                      : "border-white/10 text-muted-foreground hover:border-white/30 hover:text-foreground",
+                  )}
+                >
+                  <span>{f.icon}</span>
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <Separator className="bg-white/[0.07]" />
+
         {/* appearance */}
         <section className="flex flex-col gap-2.5">
           <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
@@ -301,6 +450,41 @@ export function SettingsDialog({
             </div>
           </div>
 
+          {/* theme mode */}
+          <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
+            <p className="text-sm font-medium">Theme</p>
+            <div className="mt-2 grid grid-cols-3 gap-1.5">
+              {([
+                { id: "dark", label: "Dark" },
+                { id: "light", label: "Light" },
+                { id: "amoled", label: "AMOLED" },
+              ] as const).map(({ id, label }) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setThemeMode(id)}
+                  className={cn(
+                    "rounded-lg border px-2 py-1.5 text-xs font-semibold transition-colors",
+                    themeMode === id
+                      ? "border-[rgb(var(--tint))] bg-[rgb(var(--tint)_/_0.14)] text-[rgb(var(--tint))]"
+                      : "border-white/10 text-muted-foreground hover:border-white/30 hover:text-foreground",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <ToggleRow
+            label="Hide explicit content"
+            description="Filter out tracks flagged explicit"
+            on={hideExplicit}
+            onToggle={() => {
+              toggleHideExplicit();
+              toast(hideExplicit ? "Explicit content shown" : "Explicit content hidden");
+            }}
+          />
           <ToggleRow
             label="Compact mode"
             description="Tighter player bar, wider content layout"
@@ -409,6 +593,45 @@ export function SettingsDialog({
         </section>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Labeled dB/balance slider for the audio panel. */
+function EqSlider({
+  label,
+  value,
+  onChange,
+  min = -12,
+  max = 12,
+  step = 1,
+  format,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  format?: (v: number) => string;
+}) {
+  return (
+    <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium">{label}</p>
+        <span className="text-xs tabular-nums text-muted-foreground">
+          {format ? format(value) : `${value > 0 ? "+" : ""}${value} dB`}
+        </span>
+      </div>
+      <Slider
+        value={[value]}
+        min={min}
+        max={max}
+        step={step}
+        onValueChange={([v]) => onChange(v)}
+        className="mt-2"
+        aria-label={label}
+      />
+    </div>
   );
 }
 

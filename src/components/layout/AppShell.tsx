@@ -11,7 +11,7 @@ import { api } from "@/convex/_generated/api";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { useAuth } from "@/hooks/use-auth";
-import { Heart, House, LibraryBig, Search, Settings } from "lucide-react";
+import { Heart, House, LibraryBig, Search, Settings, WifiOff } from "lucide-react";
 import { usePlayerStore, type RemoteLikeSnapshot } from "@/store/player";
 
 const MOBILE_NAV = [
@@ -27,6 +27,22 @@ export function AppShell() {
   const navigate = useNavigate();
   const { signOut } = useAuth();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [offline, setOffline] = useState(!navigator.onLine);
+
+  // Offline mode banner — react to connectivity changes live.
+  useEffect(() => {
+    const on = () => setOffline(false);
+    const off = () => {
+      setOffline(true);
+      toast.error("You're offline — playback may be interrupted");
+    };
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => {
+      window.removeEventListener("online", on);
+      window.removeEventListener("offline", off);
+    };
+  }, []);
   const accent = usePlayerStore((s) => s.accent);
   const accentTheme = usePlayerStore((s) => s.accentTheme);
   const compactMode = usePlayerStore((s) => s.compactMode);
@@ -175,6 +191,12 @@ export function AppShell() {
       <Sidebar />
 
       <div className="flex min-w-0 flex-1 flex-col">
+        {offline && (
+          <div className="z-50 flex items-center justify-center gap-2 bg-amber-500/90 py-1 text-xs font-semibold text-black">
+            <WifiOff className="size-3.5" />
+            You're offline — check your connection
+          </div>
+        )}
         {/* mobile top bar */}
         <div className="liquid-glass sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between border-b border-white/[0.06] px-4 lg:hidden">
           <Logo to="/home" />

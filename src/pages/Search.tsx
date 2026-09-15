@@ -27,17 +27,50 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 const MOOD_CHIPS = [
-  "night",
-  "chill",
-  "dance",
-  "synth",
-  "ambient",
-  "lo-fi",
-  "dream",
-  "golden",
-  "indie",
+  "Chill",
+  "Happy",
+  "Sad",
+  "Energetic",
+  "Focus",
+  "Workout",
+  "Party",
+  "Sleep",
+  "Romantic",
+  "Nostalgic",
 ];
 
+const GENRE_CHIPS = [
+  "Pop",
+  "Hip-hop",
+  "Rock",
+  "R&B",
+  "Electronic",
+  "Indie",
+  "Jazz",
+  "Classical",
+  "Lo-fi",
+  "Metal",
+  "Country",
+  "Reggaeton",
+  "Afrobeats",
+  "K-pop",
+  "Ambient",
+  "Funk",
+];
+
+/** Map a mood chip to a search query that surfaces matching music. */
+const MOOD_QUERIES: Record<string, string> = {
+  Chill: "chill relaxing songs",
+  Happy: "happy upbeat feel-good songs",
+  Sad: "sad emotional songs",
+  Energetic: "high energy songs",
+  Focus: "focus concentration music",
+  Workout: "workout gym motivation songs",
+  Party: "party dance hits",
+  Sleep: "sleep calm ambient music",
+  Romantic: "romantic love songs",
+  Nostalgic: "nostalgic throwback hits",
+};
 /**
  * Curated mixes shown on the empty-search browse view. Each plays a live
  * queue built from a search across our music sources — one tap, no setup.
@@ -427,10 +460,28 @@ function BrowseView({
             <button
               key={mood}
               type="button"
-              onClick={() => onPick(mood)}
+              onClick={() => onPick(MOOD_QUERIES[mood] ?? mood)}
               className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-1.5 text-sm font-medium text-foreground/90 transition-all hover:border-[rgb(var(--tint)_/_0.5)] hover:bg-[rgb(var(--tint)_/_0.1)]"
             >
               {mood}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <h2 className="mb-3 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
+          Explore genres
+        </h2>
+        <div className="flex flex-wrap gap-2">
+          {GENRE_CHIPS.map((genre) => (
+            <button
+              key={genre}
+              type="button"
+              onClick={() => onPick(`${genre} music hits`)}
+              className="rounded-full border border-white/10 bg-gradient-to-br from-white/[0.07] to-white/[0.02] px-4 py-1.5 text-sm font-medium text-foreground/90 transition-all hover:border-[rgb(var(--tint)_/_0.5)] hover:from-[rgb(var(--tint)_/_0.12)]"
+            >
+              {genre}
             </button>
           ))}
         </div>

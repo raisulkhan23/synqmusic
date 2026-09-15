@@ -7,11 +7,15 @@ import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import {
+  BarChart3,
+  Compass,
   Heart,
+  History,
   House,
   LibraryBig,
   ListMusic,
   Plus,
+  Radio,
   Search,
   Settings,
   ShieldCheck,
@@ -21,8 +25,17 @@ import { NavLink, useNavigate } from "react-router";
 const NAV = [
   { to: "/home", label: "Home", icon: House },
   { to: "/search", label: "Search", icon: Search },
-  { to: "/library", label: "Library", icon: LibraryBig },
+];
+
+const LIBRARY_NAV = [
+  { to: "/library", label: "Your Library", icon: LibraryBig },
   { to: "/liked", label: "Liked Songs", icon: Heart },
+  { to: "/playlists", label: "Playlists", icon: ListMusic },
+];
+
+const MIX_NAV = [
+  { to: "/search", label: "Discover", icon: Compass },
+  { to: "/stats", label: "Your Stats", icon: BarChart3 },
 ];
 
 export function Sidebar() {
@@ -70,6 +83,49 @@ export function Sidebar() {
             {label}
           </NavLink>
         ))}
+
+        <p className="mt-4 px-3 text-[10px] font-semibold tracking-widest text-muted-foreground/60 uppercase">
+          Your Library
+        </p>
+        {LIBRARY_NAV.map(({ to, label, icon: Icon }) => (
+          <NavLink
+            key={to}
+            to={to}
+            className={({ isActive }) =>
+              cn(
+                "flex items-center gap-3 rounded-lg px-3 py-1.5 text-sm transition-colors",
+                isActive
+                  ? "bg-white/[0.07] font-medium text-foreground"
+                  : "text-muted-foreground hover:bg-white/[0.04] hover:text-foreground",
+              )
+            }
+          >
+            <Icon className="size-[17px]" />
+            {label}
+          </NavLink>
+        ))}
+
+        <p className="mt-4 px-3 text-[10px] font-semibold tracking-widest text-muted-foreground/60 uppercase">
+          Your Mixes
+        </p>
+        {MIX_NAV.map(({ to, label, icon: Icon }) => (
+          <NavLink
+            key={to}
+            to={to}
+            className={({ isActive }) =>
+              cn(
+                "flex items-center gap-3 rounded-lg px-3 py-1.5 text-sm transition-colors",
+                isActive
+                  ? "bg-white/[0.07] font-medium text-foreground"
+                  : "text-muted-foreground hover:bg-white/[0.04] hover:text-foreground",
+              )
+            }
+          >
+            <Icon className="size-[17px]" />
+            {label}
+          </NavLink>
+        ))}
+
         {user?.role === "admin" && (
           <NavLink
             to="/admin"

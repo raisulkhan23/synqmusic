@@ -15,8 +15,15 @@ import {
 } from "react-router";
 import "./index.css";
 
-// SYNQ is a dark-only experience — default the theme before first paint.
+// SYNQ defaults to dark; restore the user's theme mode before first paint.
 document.documentElement.classList.add("dark");
+const savedTheme = localStorage.getItem("ss.themeMode");
+if (savedTheme === "light") {
+  document.documentElement.classList.remove("dark");
+  document.documentElement.classList.add("light");
+} else if (savedTheme === "amoled") {
+  document.documentElement.classList.add("amoled");
+}
 
 // Lazy load route components for better code splitting
 const Landing = lazy(() => import("./pages/Landing.tsx"));
@@ -32,6 +39,7 @@ const Playlists = lazy(() => import("./pages/Playlists.tsx"));
 const PlaylistDetail = lazy(() => import("./pages/PlaylistDetail.tsx"));
 const Album = lazy(() => import("./pages/Album.tsx"));
 const Admin = lazy(() => import("./pages/Admin.tsx"));
+const Stats = lazy(() => import("./pages/Stats.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
 // Simple loading fallback for route transitions
@@ -217,6 +225,14 @@ createRoot(document.getElementById("root")!).render(
                   element={
                     <PageSuspense>
                       <Album />
+                    </PageSuspense>
+                  }
+                />
+                <Route
+                  path="/stats"
+                  element={
+                    <PageSuspense>
+                      <Stats />
                     </PageSuspense>
                   }
                 />

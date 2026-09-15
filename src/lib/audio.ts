@@ -42,8 +42,15 @@ let analyser: AnalyserNode | null = null;
 let bassFilter: BiquadFilterNode | null = null;
 let vocalFilter: BiquadFilterNode | null = null;
 let nightLow: BiquadFilterNode | null = null;
+let trebleFilter: BiquadFilterNode | null = null;
 let panner: StereoPannerNode | null = null;
 let gainOut: GainNode | null = null;
+
+// User EQ state (persisted by the settings store; applied whenever the graph exists)
+let eqBass = 0; // dB, low shelf @150Hz
+let eqTreble = 0; // dB, high shelf @6kHz
+let eqBalance = 0; // -1 (left) → +1 (right)
+let eqMono = false;
 
 let activeFilter: AudioFilterId = "off";
 let rotateRaf = 0;
@@ -82,13 +89,19 @@ function ensureGraph(): boolean {
     nightLow.frequency.value = 20000;
     nightLow.Q.value = 0.5;
 
+    trebleFilter = audioCtx.createBiquadFilter();
+    trebleFilter.type = "highshelf";
+    trebleFilter.frequency.value = 6000;
+    trebleFilter.gain.value = 0;
+
     panner = audioCtx.createStereoPanner();
     gainOut = audioCtx.createGain();
 
     filterSource.connect(bassFilter);
     bassFilter.connect(vocalFilter);
     vocalFilter.connect(nightLow);
-    nightLow.connect(panner);
+    nightLow.connect(trebleFilter);
+    trebleFilter.connect(panner);
     panner.connect(gainOut);
 
     analyser = audioCtx.createAnalyser();
@@ -96,11 +109,22 @@ function ensureGraph(): boolean {
     gainOut.connect(analyser);
     analyser.connect(audioCtx.destination);
 
+    // Apply any persisted user EQ right away.
+    applyUserEq();
+
     if (audioCtx.state === "suspended") void audioCtx.resume();
     return true;
   } catch {
     return false;
   }
+}
+
+/** Apply the user EQ/balance/mono settings to the graph (safe pre-init). */
+function applyUserEq(): void {
+  if (!audioCtx || !bassFilter || !trebleFilter || !panner) return;
+  bassFilter.gain.value = bassFilter.gain.value === 0 ? eqBass : bassFilter.gain.value + eqBass;
+  trebleFilter.gain.value = eqTreble;
+  panner.pan.value = eqMono ? 0 : eqBalance;
 }
 
 /** Analyser for the visualizer (now part of the filter graph). */
@@ -114,13 +138,14 @@ function stopRotation(): void {
     cancelAnimationFrame(rotateRaf);
     rotateRaf = 0;
   }
-  if (panner) panner.pan.value = 0;
+  if (panner) panner.pan.value = eqMono ? 0 : eqBalance;
 }
 
 function startRotation(): void {
   stopRotation();
   const ctx = audioCtx;
   if (!ctx || !panner) return;
+  if (eqMono) return; // mono pins the pan — skip the orbit
   const start = ctx.currentTime;
   const tick = () => {
     if (!ctx || !panner) return;
@@ -197,6 +222,34 @@ export function setAudioFilter(id: AudioFilterId): boolean {
 
 export function getActiveAudioFilter(): AudioFilterId {
   return activeFilter;
+}
+
+// --- user EQ (audio settings panel) -------------------------------------------
+
+export function setEqBass(db: number): void {
+  eqBass = db;
+  if (bassFilter) bassFilter.gain.value = db;
+}
+
+export function setEqTreble(db: number): void {
+  eqTreble = db;
+  if (trebleFilter) trebleFilter.gain.value = db;
+}
+
+export function setEqBalance(v: number): void {
+  eqBalance = Math.min(1, Math.max(-1, v));
+  if (panner && !eqMono) panner.pan.value = eqBalance;
+}
+
+export function setEqMono(mono: boolean): void {
+  eqMono = mono;
+  if (panner) panner.pan.value = mono ? 0 : eqBalance;
+}
+
+/** One-shot EQ presets (additive with the active filter is avoided — resets first). */
+export function applyEqPreset(preset: { bass: number; treble: number }): void {
+  setEqBass(preset.bass);
+  setEqTreble(preset.treble);
 }
 
 /** Copy the current frequency magnitudes into `out` (0-255 per bin). */

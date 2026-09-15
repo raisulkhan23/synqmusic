@@ -91,6 +91,51 @@
   --tint: 203 244 143;
 }
 
+/* AMOLED mode: true-black variant of dark (set alongside .dark) */
+html.amoled.dark {
+  --background: oklch(0 0 0);
+  --card: oklch(0.09 0.005 262);
+  --popover: oklch(0.1 0.005 262);
+  --sidebar: oklch(0.06 0.004 262);
+  --secondary: oklch(0.17 0.01 262);
+  --accent: oklch(0.18 0.01 262);
+  --muted: oklch(0.15 0.008 262);
+  --border: oklch(1 0 0 / 7%);
+}
+
+/* Light mode (opts out of the default dark class tokens) */
+html.light {
+  --background: oklch(0.975 0.004 106);
+  --foreground: oklch(0.18 0.02 262);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0.02 262);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0.02 262);
+  --primary: oklch(0.55 0.2 130);
+  --primary-foreground: oklch(0.98 0.01 106);
+  --secondary: oklch(0.93 0.008 106);
+  --secondary-foreground: oklch(0.25 0.02 262);
+  --muted: oklch(0.94 0.006 106);
+  --muted-foreground: oklch(0.45 0.015 262);
+  --accent: oklch(0.92 0.01 106);
+  --accent-foreground: oklch(0.25 0.02 262);
+  --border: oklch(0.2 0.02 262 / 12%);
+  --input: oklch(0.2 0.02 262 / 15%);
+  --ring: oklch(0.55 0.2 130 / 50%);
+  --sidebar: oklch(0.965 0.005 106);
+  --sidebar-foreground: oklch(0.2 0.02 262);
+  --sidebar-border: oklch(0.2 0.02 262 / 8%);
+  --tint: 76 143 43;
+}
+
+/* In light mode, panels built with white-on-dark assumptions flip. */
+html.light .liquid-glass {
+  background: rgba(255, 255, 255, 0.72);
+}
+html.light img {
+  filter: none;
+}
+
 .dark {
   --background: oklch(0.135 0.012 262);
   --foreground: oklch(0.965 0.004 262);
@@ -231,6 +276,16 @@
   }
   .hide-scrollbar::-webkit-scrollbar {
     display: none;
+  }
+
+  /* One-shot like pulse (heart pop when a song is liked). */
+  @keyframes ping-once {
+    0% { transform: scale(0.7); }
+    55% { transform: scale(1.45); }
+    100% { transform: scale(1); }
+  }
+  .animate-ping-once {
+    animation: ping-once 0.4s ease-out;
   }
 
   /* Visible horizontal slider rails for card carousels (playlists, mixes,

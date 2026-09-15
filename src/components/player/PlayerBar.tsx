@@ -241,6 +241,7 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
   if (!current) return null;
 
   const isLiked = liked[current.id] !== undefined;
+  const [likePulse, setLikePulse] = useState(false);
   const catalogTrack = current.source === "catalog" ? current.catalogTrack : undefined;
 
   return (
@@ -285,13 +286,23 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
         <button
           type="button"
           aria-label={isLiked ? "Remove from liked songs" : "Add to liked songs"}
-          onClick={() => toggleLike(current.id)}
+          onClick={() => {
+            toggleLike(current.id);
+            setLikePulse(true);
+            setTimeout(() => setLikePulse(false), 400);
+          }}
           className={cn(
             "shrink-0 rounded-full p-1.5 transition-all hover:scale-110",
             isLiked ? "text-[rgb(var(--tint))]" : "text-muted-foreground hover:text-foreground",
           )}
         >
-          <Heart className={cn("size-4", isLiked && "fill-current")} />
+          <Heart
+            className={cn(
+              "size-4 transition-transform duration-300",
+              isLiked && "fill-current scale-110",
+              likePulse && "animate-ping-once",
+            )}
+          />
         </button>
       </div>
 
