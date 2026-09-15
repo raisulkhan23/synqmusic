@@ -10,6 +10,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { api } from "@/convex/_generated/api";
@@ -33,14 +34,7 @@ import {
   Waves,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+
 const SLEEP_OPTIONS: { label: string; value: number | "end" }[] = [
   { label: "5 minutes", value: 5 },
   { label: "10 minutes", value: 10 },
@@ -130,6 +124,7 @@ function SleepTimerButton() {
       </DropdownMenuContent>
     </DropdownMenu>
   );
+}
 
 const RATES = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
