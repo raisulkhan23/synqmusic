@@ -8,9 +8,7 @@ import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import {
   BarChart3,
-  Clock,
   Compass,
-  Disc3,
   Heart,
   History,
   House,
@@ -21,7 +19,6 @@ import {
   Search,
   Settings,
   ShieldCheck,
-  Sparkles,
   UserRound,
   Users,
 } from "lucide-react";
@@ -37,16 +34,7 @@ const LIBRARY_NAV = [
   { to: "/library", label: "Your Library", icon: LibraryBig },
   { to: "/liked", label: "Liked Songs", icon: Heart },
   { to: "/recent", label: "Recently Played", icon: History },
-  { to: "/library?tab=albums", label: "Albums", icon: Disc3 },
-  { to: "/library?tab=artists", label: "Artists", icon: Sparkles },
   { to: "/playlists", label: "Playlists", icon: ListMusic },
-];
-
-const MIX_NAV = [
-  { to: "/home#discover", label: "Daily Mix", icon: Sparkles },
-  { to: "/home#discover", label: "Discover", icon: Compass },
-  { to: "/home#radar", label: "Release Radar", icon: Radio },
-  { to: "/recent", label: "Listening History", icon: Clock },
 ];
 
 const SOCIAL_NAV = [
@@ -104,27 +92,6 @@ export function Sidebar() {
           Your Library
         </p>
         {LIBRARY_NAV.map(({ to, label, icon: Icon }) => (
-          <NavLink
-            key={to}
-            to={to}
-            className={({ isActive }) =>
-              cn(
-                "flex items-center gap-3 rounded-lg px-3 py-1.5 text-sm transition-colors",
-                isActive
-                  ? "bg-white/[0.07] font-medium text-foreground"
-                  : "text-muted-foreground hover:bg-white/[0.04] hover:text-foreground",
-              )
-            }
-          >
-            <Icon className="size-[17px]" />
-            {label}
-          </NavLink>
-        ))}
-
-        <p className="mt-4 px-3 text-[10px] font-semibold tracking-widest text-muted-foreground/60 uppercase">
-          Your Mixes
-        </p>
-        {MIX_NAV.map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}
             to={to}
