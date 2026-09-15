@@ -255,8 +255,8 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
       )}
     >
       {/* now playing */}
-      <div className="flex min-w-0 w-[26%] items-center gap-3 sm:w-[30%]">
-        <div className="relative size-12 shrink-0 overflow-hidden rounded-md shadow-lg ring-1 ring-white/10">
+      <div className="flex min-w-0 w-[40%] items-center gap-2 sm:w-[30%] sm:gap-3">
+        <div className="relative size-10 shrink-0 overflow-hidden rounded-md shadow-lg ring-1 ring-white/10 sm:size-12">
           <img src={current.coverUrl} alt="" className="size-full object-cover" />
           {isBuffering && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/40">
@@ -324,7 +324,7 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
       </div>
 
       {/* right cluster */}
-      <div className="flex w-[26%] items-center justify-end gap-0.5 sm:w-[30%]">
+      <div className="flex w-auto items-center justify-end gap-0.5 sm:w-[30%]">
         <SleepTimerButton />
         <button
           type="button"

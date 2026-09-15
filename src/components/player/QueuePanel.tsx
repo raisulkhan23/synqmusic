@@ -100,12 +100,12 @@ export function QueuePanel() {
         side="right"
         className="w-full border-l border-white/[0.08] bg-[#0e0f15]/95 p-0 backdrop-blur-2xl sm:max-w-md"
       >
-        <SheetHeader className="flex flex-row items-center justify-between border-b border-white/[0.06] py-4 pr-12 pl-5">
+        <SheetHeader className="flex flex-row flex-wrap items-center justify-between gap-y-2 border-b border-white/[0.06] py-3 pr-12 pl-4 sm:py-4 sm:pl-5">
           <SheetTitle className="flex items-center gap-2 font-display text-base">
             <ListMusic className="size-4 text-[rgb(var(--tint))]" />
             Queue
           </SheetTitle>
-          <div className="flex items-center gap-1">
+          <div className="flex flex-wrap items-center gap-1">
             {/* smart shuffle */}
             <button
               type="button"

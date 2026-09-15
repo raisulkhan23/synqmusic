@@ -125,7 +125,7 @@ function LyricsPanel({ onClose }: { onClose: () => void }) {
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: 24 }}
       transition={{ duration: 0.22 }}
-      className="fixed inset-y-0 right-0 z-20 flex w-full max-w-md flex-col border-l border-white/[0.07] bg-[#0b0c11]/95 backdrop-blur-xl"
+      className="fixed inset-y-0 right-0 z-20 flex w-full max-w-md flex-col border-l border-white/[0.07] bg-[#0b0c11]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl"
     >
       <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4">
         <p className="flex items-center gap-2 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
@@ -359,7 +359,7 @@ export function FullscreenPlayer() {
 
         <VisualizerCanvas className="absolute inset-x-0 bottom-0 h-[44vh] w-full opacity-70" />
 
-        <div className="relative z-10 flex h-full flex-col px-5 pt-4 pb-5 sm:px-10">
+        <div className="relative z-10 flex h-full flex-col px-4 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-10 sm:pt-4 sm:pb-5">
           {/* top row */}
           <div className="flex items-center justify-between">
             <button
@@ -386,8 +386,16 @@ export function FullscreenPlayer() {
                 type="button"
                 aria-label={liked[current.id] ? "Remove from liked songs" : "Add to liked songs"}
                 onClick={() => toggleLike(current.id)}
+                className="rounded-full p-2 transition-all hover:scale-110 sm:hidden"
+              >
+                <Heart className={cn("size-5", liked[current.id] && "fill-current", liked[current.id] ? "text-[rgb(var(--tint))]" : "text-muted-foreground")} />
+              </button>
+              <button
+                type="button"
+                aria-label={liked[current.id] ? "Remove from liked songs" : "Add to liked songs"}
+                onClick={() => toggleLike(current.id)}
                 className={cn(
-                  "rounded-full p-2.5 transition-all hover:scale-110",
+                  "hidden rounded-full p-2.5 transition-all hover:scale-110 sm:block",
                   liked[current.id]
                     ? "text-[rgb(var(--tint))]"
                     : "text-muted-foreground hover:text-foreground",
@@ -401,7 +409,7 @@ export function FullscreenPlayer() {
                 onClick={() => {
                   setQueueOpen(true);
                 }}
-                className="rounded-full p-2.5 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
+                className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground sm:p-2.5"
               >
                 <ListMusic className="size-5" />
               </button>
@@ -424,7 +432,7 @@ export function FullscreenPlayer() {
                     void navigator.clipboard.writeText(url).then(() => toast.success("Song link copied"));
                   }
                 }}
-                className="rounded-full p-2.5 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
+                className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground sm:p-2.5"
               >
                 <Share2 className="size-5" />
               </button>
@@ -435,7 +443,7 @@ export function FullscreenPlayer() {
               is open (desktop) so the lyrics never cover the video */}
           <div
             className={cn(
-              "flex flex-1 items-center justify-center py-6 transition-all duration-300",
+              "flex min-h-0 flex-1 items-center justify-center py-3 transition-all duration-300 sm:py-6",
               lyricsOpen && "hidden lg:flex", // lyrics overlay covers on small screens
               // Lyrics panel is 28rem wide — reserve exactly that so the
               // video stays centered in the remaining space (a touch right
@@ -504,29 +512,29 @@ export function FullscreenPlayer() {
             )}
           >
             <div className="w-full text-center">
-              <h2 className="truncate font-display text-2xl font-bold tracking-tight sm:text-3xl">
+              <h2 className="truncate font-display text-lg font-bold tracking-tight sm:text-2xl lg:text-3xl">
                 {current.title}
               </h2>
-              <p className="mt-1 truncate text-sm text-muted-foreground">
+              <p className="mt-0.5 truncate text-xs text-muted-foreground sm:mt-1 sm:text-sm">
                 {current.albumName ? `${current.artistName} · ${current.albumName}` : current.artistName}
               </p>
             </div>
 
             <div className="flex w-full items-center gap-2">
-              <span className="w-11 shrink-0 text-right text-[11px] font-medium tabular-nums text-muted-foreground">
+              <span className="w-9 shrink-0 text-right text-[10px] font-medium tabular-nums text-muted-foreground sm:w-11 sm:text-[11px]">
                 {formatTime(currentTime)}
               </span>
               <SeekBar className="min-w-0 flex-1" />
-              <span className="w-11 shrink-0 text-[11px] font-medium tabular-nums text-muted-foreground">
+              <span className="w-9 shrink-0 text-[10px] font-medium tabular-nums text-muted-foreground sm:w-11 sm:text-[11px]">
                 {formatTime(duration || current.duration)}
               </span>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 sm:gap-2">
               <TransportControls />
-              <div className="mx-3 h-5 w-px bg-white/10" />
-              <VolumeControl />
-              <div className="mx-1 h-5 w-px bg-white/10" />
+              <div className="mx-1 hidden h-5 w-px bg-white/10 sm:mx-3 sm:block" />
+              <VolumeControl className="hidden sm:flex" />
+              <div className="mx-1 hidden h-5 w-px bg-white/10 sm:block" />
               {/* like + queue, right beside the transport controls */}
               <button
                 type="button"
@@ -534,7 +542,7 @@ export function FullscreenPlayer() {
                 title={liked[current.id] ? "Unlike" : "Like"}
                 onClick={() => toggleLike(current.id)}
                 className={cn(
-                  "rounded-full p-2 transition-all hover:scale-110",
+                  "hidden rounded-full p-2 transition-all hover:scale-110 sm:block",
                   liked[current.id]
                     ? "text-[rgb(var(--tint))]"
                     : "text-muted-foreground hover:text-foreground",
@@ -634,14 +642,14 @@ export function FullscreenPlayer() {
                 title="Toggle video in fullscreen player"
                 onClick={toggleVideo}
                 className={cn(
-                  "flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-semibold tracking-wide uppercase transition-colors hover:bg-white/[0.08]",
+                  "flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[11px] font-semibold transition-colors hover:bg-white/[0.08] sm:px-3 sm:py-1 sm:tracking-wide sm:uppercase",
                   videoEnabled
                     ? "border-[rgb(var(--tint)_/_0.5)] text-[rgb(var(--tint))]"
                     : "text-muted-foreground",
                 )}
               >
                 <Film className="size-3.5" />
-                Video {videoEnabled ? "on" : "off"}
+                <span className="hidden sm:inline">Video</span> {videoEnabled ? "on" : "off"}
               </button>
 
               {/* lyrics toggle */}
@@ -650,7 +658,7 @@ export function FullscreenPlayer() {
                 title="Lyrics"
                 onClick={() => setLyricsOpen((v) => !v)}
                 className={cn(
-                  "flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-semibold tracking-wide uppercase transition-colors hover:bg-white/[0.08]",
+                  "flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[11px] font-semibold transition-colors hover:bg-white/[0.08] sm:px-3 sm:py-1 sm:tracking-wide sm:uppercase",
                   lyricsOpen
                     ? "border-[rgb(var(--tint)_/_0.5)] text-[rgb(var(--tint))]"
                     : "text-muted-foreground",
