@@ -126,6 +126,10 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
   const currentTime = usePlayerStore((s) => s.currentTime);
   const duration = usePlayerStore((s) => s.duration);
   const liked = usePlayerStore((s) => s.liked);
+  // Animated like heart — declared with the other hooks so the hook order
+  // never changes (it used to live after an early return, which broke React's
+  // rules of hooks and could crash the player bar).
+  const [likePulse, setLikePulse] = useState(false);
   const toggleLike = usePlayerStore((s) => s.toggleLike);
   const queueOpen = usePlayerStore((s) => s.queueOpen);
   const setQueueOpen = usePlayerStore((s) => s.setQueueOpen);
@@ -241,7 +245,6 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
   if (!current) return null;
 
   const isLiked = liked[current.id] !== undefined;
-  const [likePulse, setLikePulse] = useState(false);
   const catalogTrack = current.source === "catalog" ? current.catalogTrack : undefined;
 
   return (

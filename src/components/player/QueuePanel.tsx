@@ -56,7 +56,6 @@ export function QueuePanel() {
   // track twice, and duplicate values make Framer Motion stack rows on top of
   // each other. Composite "id#index" values keep every row distinct.
   const upcomingKeys = upcoming.map((t, i) => `${t.id}#${i}`);
-  const keyToIndex = new Map(upcomingKeys.map((k, i) => [k, i]));
 
   // Queue suggestions: similar to what's playing, not already queued.
   const suggestions = (() => {

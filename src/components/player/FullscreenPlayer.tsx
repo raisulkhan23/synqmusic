@@ -16,8 +16,6 @@ import { api } from "@/convex/_generated/api";
 import { formatTime } from "@/lib/format";
 import { dismissVideo, presentOverlay, trackFrame } from "@/lib/youtubePlayer";
 import { AUDIO_FILTERS as FILTER_DEFS } from "@/lib/audio";
-import { toPlayableYoutube } from "@/lib/playable";
-import { type YtItem } from "@/lib/youtube";
 import { usePlayerStore } from "@/store/player";
 import { toast } from "sonner";
 import {
@@ -276,10 +274,6 @@ export function FullscreenPlayer() {
 
   // True when the current track plays through the YouTube IFrame engine.
   const isYoutube = current?.source === "youtube" || !!current?.youtubeId;
-  // When an effect is active the sound comes from the filtered audio element
-  // and the engine runs as a muted visual slave — the store hides the iframe
-  // overlay in that case, so show artwork + effects badge instead.
-  const engineOwnsVideo = isYoutube && audioFilter === "off";
 
   // The video frame is shown ONLY for tracks that already play through the
   // YouTube engine. The toggle never swaps the audio stream — turning it off

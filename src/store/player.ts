@@ -1259,7 +1259,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
   };
 
   const setAbPoint = (which: "a" | "b", seconds: number | null) => {
-    set((s) => (which === "a" ? { abA: seconds } : { abB: seconds }));
+    set(which === "a" ? { abA: seconds } : { abB: seconds });
   };
 
   const clearAb = () => set({ abA: null, abB: null });
