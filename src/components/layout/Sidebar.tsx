@@ -20,7 +20,6 @@ import {
   Settings,
   ShieldCheck,
   UserRound,
-  Users,
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router";
 
@@ -38,7 +37,6 @@ const LIBRARY_NAV = [
 ];
 
 const SOCIAL_NAV = [
-  { to: "/social", label: "Friends", icon: Users },
   { to: "/social", label: "Listening Rooms", icon: Radio },
 ];
 
@@ -110,7 +108,7 @@ export function Sidebar() {
         ))}
 
         <p className="mt-4 px-3 text-[10px] font-semibold tracking-widest text-muted-foreground/60 uppercase">
-          Social
+          Listen Together
         </p>
         {SOCIAL_NAV.map(({ to, label, icon: Icon }) => (
           <NavLink

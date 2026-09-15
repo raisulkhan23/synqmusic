@@ -3,45 +3,9 @@ import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
 /**
- * Social backend: follow other listeners + listening rooms (shared queues).
- * Following is stored on the follower's `following` array — one document read
- * returns the whole graph for a user.
+ * Social backend: listening rooms (shared queues). Room membership is live —
+ * everyone who joined sees the host's now-playing.
  */
-
-/** All signed-up listeners (excluding anonymous), for the Friends tab. */
-export const allListeners = query({
-  args: {},
-  handler: async (ctx) => {
-    const users = await ctx.db.query("users").collect();
-    return users
-      .filter((u) => !u.isAnonymous)
-      .map((u) => ({
-        _id: u._id,
-        name: u.name ?? null,
-        image: u.image ?? null,
-        isAnonymous: u.isAnonymous ?? false,
-      }));
-  },
-});
-
-/** Follow / unfollow another listener (toggle). */
-export const toggleFollow = mutation({
-  args: { targetId: v.id("users") },
-  handler: async (ctx, { targetId }) => {
-    const userId = await getAuthUserId(ctx);
-    if (userId === null) throw new ConvexError("Sign in first");
-    if (userId === targetId) throw new ConvexError("You can't follow yourself");
-
-    const me = await ctx.db.get(userId);
-    if (me === null) throw new ConvexError("Sign in first");
-
-    const current = me.following ?? [];
-    const next = current.includes(targetId)
-      ? current.filter((id) => id !== targetId)
-      : [...current, targetId];
-    await ctx.db.patch(userId, { following: next });
-  },
-});
 
 /** Rooms list for the Listening Rooms tab (live membership counts). */
 export const listRooms = query({
