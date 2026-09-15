@@ -10,6 +10,24 @@ const requireUser = async (ctx: MutationCtx) => {
   return userId;
 };
 
+async function logEvent(
+  ctx: MutationCtx,
+  userId: any,
+  playlistId: any,
+  playlistName: string,
+  kind: string,
+  detail?: string,
+) {
+  await ctx.db.insert("playlistEvents", {
+    userId,
+    playlistId,
+    playlistName,
+    kind,
+    detail,
+    at: Date.now(),
+  });
+}
+
 /**
  * Create a playlist for the signed-in user. Returns the new playlist id.
  */
@@ -26,6 +44,7 @@ export const create = mutation({
       createdAt: now,
       updatedAt: now,
     });
+    await logEvent(ctx, userId, id, name.trim() || "New playlist", "created");
     return id;
   },
 });
@@ -41,7 +60,9 @@ export const remove = mutation({
     if (playlist === null || playlist.userId !== userId) {
       throw new ConvexError("Playlist not found");
     }
+    const name = playlist.name;
     await ctx.db.delete(playlistId);
+    await logEvent(ctx, userId, playlistId, name, "deleted");
   },
 });
 
@@ -60,6 +81,7 @@ export const rename = mutation({
       name: name.trim() || playlist.name,
       updatedAt: Date.now(),
     });
+    await logEvent(ctx, userId, playlistId, name.trim() || playlist.name, "renamed", playlist.name);
   },
 });
 
@@ -67,8 +89,12 @@ export const rename = mutation({
  * Add a catalog track to a playlist (no duplicates).
  */
 export const addTrack = mutation({
-  args: { playlistId: v.id("playlists"), trackId: v.string() },
-  handler: async (ctx, { playlistId, trackId }) => {
+  args: {
+    playlistId: v.id("playlists"),
+    trackId: v.string(),
+    detail: v.optional(v.string()),
+  },
+  handler: async (ctx, { playlistId, trackId, detail }) => {
     const userId = await requireUser(ctx);
     const playlist = await ctx.db.get(playlistId);
     if (playlist === null || playlist.userId !== userId) {
@@ -79,6 +105,7 @@ export const addTrack = mutation({
         trackIds: [...playlist.trackIds, trackId],
         updatedAt: Date.now(),
       });
+      await logEvent(ctx, userId, playlistId, playlist.name, "added", detail);
     }
   },
 });
@@ -87,17 +114,38 @@ export const addTrack = mutation({
  * Remove a catalog track from a playlist.
  */
 export const removeTrack = mutation({
-  args: { playlistId: v.id("playlists"), trackId: v.string() },
-  handler: async (ctx, { playlistId, trackId }) => {
+  args: {
+    playlistId: v.id("playlists"),
+    trackId: v.string(),
+    detail: v.optional(v.string()),
+  },
+  handler: async (ctx, { playlistId, trackId, detail }) => {
     const userId = await requireUser(ctx);
     const playlist = await ctx.db.get(playlistId);
     if (playlist === null || playlist.userId !== userId) {
       throw new ConvexError("Playlist not found");
     }
+    const removed = playlist.trackIds.includes(trackId);
     await ctx.db.patch(playlistId, {
       trackIds: playlist.trackIds.filter((id) => id !== trackId),
       updatedAt: Date.now(),
     });
+    if (removed) await logEvent(ctx, userId, playlistId, playlist.name, "removed", detail);
+  },
+});
+
+/** Change history for one playlist (newest first, capped). */
+export const changeHistory = query({
+  args: { playlistId: v.id("playlists") },
+  handler: async (ctx, { playlistId }) => {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) return [];
+    const events = await ctx.db
+      .query("playlistEvents")
+      .withIndex("by_playlist", (q) => q.eq("playlistId", playlistId))
+      .order("desc")
+      .take(30);
+    return events.filter((e) => e.userId === userId);
   },
 });
 

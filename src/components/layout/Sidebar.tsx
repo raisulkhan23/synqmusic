@@ -8,7 +8,9 @@ import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import {
   BarChart3,
+  Clock,
   Compass,
+  Disc3,
   Heart,
   History,
   House,
@@ -19,23 +21,31 @@ import {
   Search,
   Settings,
   ShieldCheck,
+  Sparkles,
+  UserRound,
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router";
 
 const NAV = [
   { to: "/home", label: "Home", icon: House },
+  { to: "/search", label: "Explore", icon: Compass },
   { to: "/search", label: "Search", icon: Search },
 ];
 
 const LIBRARY_NAV = [
   { to: "/library", label: "Your Library", icon: LibraryBig },
   { to: "/liked", label: "Liked Songs", icon: Heart },
+  { to: "/recent", label: "Recently Played", icon: History },
+  { to: "/library?tab=albums", label: "Albums", icon: Disc3 },
+  { to: "/library?tab=artists", label: "Artists", icon: Sparkles },
   { to: "/playlists", label: "Playlists", icon: ListMusic },
 ];
 
 const MIX_NAV = [
-  { to: "/search", label: "Discover", icon: Compass },
-  { to: "/stats", label: "Your Stats", icon: BarChart3 },
+  { to: "/home#discover", label: "Daily Mix", icon: Sparkles },
+  { to: "/home#discover", label: "Discover", icon: Compass },
+  { to: "/home#radar", label: "Release Radar", icon: Radio },
+  { to: "/recent", label: "Listening History", icon: Clock },
 ];
 
 export function Sidebar() {
@@ -231,6 +241,32 @@ export function Sidebar() {
         >
           <Settings className="size-4" />
         </button>
+        <NavLink
+          to="/profile"
+          aria-label="Profile"
+          title="Profile"
+          className={({ isActive }) =>
+            cn(
+              "rounded-full p-2 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground",
+              isActive && "text-[rgb(var(--tint))]",
+            )
+          }
+        >
+          <UserRound className="size-4" />
+        </NavLink>
+        <NavLink
+          to="/stats"
+          aria-label="Your stats"
+          title="Your stats"
+          className={({ isActive }) =>
+            cn(
+              "rounded-full p-2 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground",
+              isActive && "text-[rgb(var(--tint))]",
+            )
+          }
+        >
+          <BarChart3 className="size-4" />
+        </NavLink>
       </div>
 
       <PlaylistDialog open={dialogOpen} onOpenChange={setDialogOpen} />

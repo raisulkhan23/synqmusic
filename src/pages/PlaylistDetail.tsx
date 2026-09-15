@@ -9,6 +9,7 @@ import { formatTime } from "@/lib/format";
 import { useMutation, useQuery } from "convex/react";
 import { ListMusic, Search as SearchIcon, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 export default function PlaylistDetail() {
@@ -148,7 +149,13 @@ export default function PlaylistDetail() {
                 track={track}
                 list={tracks}
                 index={i + 1}
-                onRemove={() => removeTrack({ playlistId: playlist._id, trackId: track.id })}
+                onRemove={() =>
+                  removeTrack({
+                    playlistId: playlist._id,
+                    trackId: track.id,
+                    detail: track.title,
+                  })
+                }
               />
             ))
           )}
@@ -167,6 +174,64 @@ export default function PlaylistDetail() {
           </Link>
         </div>
       )}
+
+      <ChangeHistory playlistId={playlist._id} />
     </div>
+  );
+}
+
+const KIND_LABELS: Record<string, { text: string; className: string }> = {
+  created: { text: "created", className: "text-[rgb(var(--tint))]" },
+  renamed: { text: "renamed", className: "text-amber-400" },
+  added: { text: "added", className: "text-emerald-400" },
+  removed: { text: "removed", className: "text-rose-400" },
+  deleted: { text: "deleted", className: "text-red-500" },
+};
+
+function ChangeHistory({ playlistId }: { playlistId: Id<"playlists"> }) {
+  const events = useQuery(api.playlists.changeHistory, { playlistId });
+  const [open, setOpen] = useState(false);
+  if (!events || events.length === 0) return null;
+  const shown = open ? events : events.slice(0, 3);
+  return (
+    <section className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-4">
+      <div className="flex items-center justify-between">
+        <h2 className="font-display text-sm font-bold tracking-tight">
+          Recent activity
+        </h2>
+        {events.length > 3 && (
+          <button
+            type="button"
+            onClick={() => setOpen(!open)}
+            className="text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
+          >
+            {open ? "Show less" : `Show all (${events.length})`}
+          </button>
+        )}
+      </div>
+      <ul className="mt-2 space-y-1.5">
+        {shown.map((e) => {
+          const kind = KIND_LABELS[e.kind] ?? {
+            text: e.kind,
+            className: "text-muted-foreground",
+          };
+          return (
+            <li key={e._id} className="text-xs text-muted-foreground">
+              <span className={cn("font-semibold", kind.className)}>{kind.text}</span>{" "}
+              {e.detail ? <span className="text-foreground">{e.detail}</span> : null}
+              {e.kind === "renamed" && e.detail ? ` (was "${e.detail}")` : null}
+              <span className="ml-2 opacity-60">
+                {new Date(e.at).toLocaleString(undefined, {
+                  month: "short",
+                  day: "numeric",
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }

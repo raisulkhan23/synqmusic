@@ -34,7 +34,7 @@ export function AddToPlaylistMenu({
       toast.warning(`"${track.title}" is already in ${name}`);
       return;
     }
-    void addTrack({ playlistId, trackId: track.id });
+    void addTrack({ playlistId, trackId: track.id, detail: track.title });
     toast.success(`Added to ${name}`);
   };
 

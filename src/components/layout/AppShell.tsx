@@ -11,14 +11,14 @@ import { api } from "@/convex/_generated/api";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { useAuth } from "@/hooks/use-auth";
-import { Heart, House, LibraryBig, Search, Settings, WifiOff } from "lucide-react";
+import { Heart, House, LibraryBig, Search, Settings, UserRound, WifiOff } from "lucide-react";
 import { usePlayerStore, type RemoteLikeSnapshot } from "@/store/player";
 
 const MOBILE_NAV = [
   { to: "/home", label: "Home", icon: House },
   { to: "/search", label: "Search", icon: Search },
   { to: "/library", label: "Library", icon: LibraryBig },
-  { to: "/liked", label: "Liked", icon: Heart },
+  { to: "/profile", label: "Profile", icon: UserRound },
 ];
 
 const DEFAULT_TINT = "203 244 143";
@@ -200,33 +200,14 @@ export function AppShell() {
         {/* mobile top bar */}
         <div className="liquid-glass sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between border-b border-white/[0.06] px-4 lg:hidden">
           <Logo to="/home" />
-          <nav className="flex items-center gap-1">
-            <button
-              type="button"
-              aria-label="Settings"
-              onClick={() => setSettingsOpen(true)}
-              className="rounded-full p-2 text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <Settings className="size-[18px]" />
-            </button>
-            {MOBILE_NAV.map(({ to, label, icon: Icon }) => (
-              <NavLink
-                key={to}
-                to={to}
-                aria-label={label}
-                className={({ isActive }) =>
-                  cn(
-                    "rounded-full p-2 transition-colors",
-                    isActive
-                      ? "bg-white/[0.08] text-[rgb(var(--tint))]"
-                      : "text-muted-foreground hover:text-foreground",
-                  )
-                }
-              >
-                <Icon className="size-[18px]" />
-              </NavLink>
-            ))}
-          </nav>
+          <button
+            type="button"
+            aria-label="Settings"
+            onClick={() => setSettingsOpen(true)}
+            className="rounded-full p-2 text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <Settings className="size-[18px]" />
+          </button>
         </div>
 
         <main className="relative min-h-0 flex-1 overflow-y-auto">
@@ -250,6 +231,28 @@ export function AppShell() {
         </main>
 
         <PlayerBar compact={compactMode} />
+
+        {/* mobile bottom nav */}
+        <nav className="liquid-glass z-30 flex h-14 shrink-0 items-center justify-around border-t border-white/[0.06] pb-[env(safe-area-inset-bottom)] lg:hidden">
+          {MOBILE_NAV.map(({ to, label, icon: Icon }) => (
+            <NavLink
+              key={to}
+              to={to}
+              aria-label={label}
+              className={({ isActive }) =>
+                cn(
+                  "flex flex-col items-center gap-0.5 px-3 py-1.5 text-[10px] font-medium transition-colors",
+                  isActive
+                    ? "text-[rgb(var(--tint))]"
+                    : "text-muted-foreground hover:text-foreground",
+                )
+              }
+            >
+              <Icon className="size-[20px]" />
+              {label}
+            </NavLink>
+          ))}
+        </nav>
       </div>
 
       <QueuePanel />

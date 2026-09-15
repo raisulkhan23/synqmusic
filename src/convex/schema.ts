@@ -81,6 +81,16 @@ const schema = defineSchema(
     // playlists imported from other music services. Tracks are stored as
     // snapshots (title + artist) and resolved to playable YouTube tracks at
     // play time — so a CSV export from any provider works without OAuth.
+    // audit trail of playlist changes (rename, add/remove tracks, delete)
+    playlistEvents: defineTable({
+      userId: v.id("users"),
+      playlistId: v.id("playlists"),
+      playlistName: v.string(),
+      kind: v.string(), // "created" | "renamed" | "added" | "removed" | "deleted"
+      detail: v.optional(v.string()), // e.g. track title
+      at: v.number(),
+    }).index("by_playlist", ["playlistId"]),
+
     importedPlaylists: defineTable({
       userId: v.id("users"),
       name: v.string(),

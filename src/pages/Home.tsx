@@ -224,6 +224,33 @@ export default function Home() {
       });
   };
 
+  // "I'm feeling lucky" — plays a hit matching the current time of day,
+  // with shuffle-on so the whole queue becomes a lucky mix.
+  const [luckyBusy, setLuckyBusy] = useState(false);
+  const feelingLucky = () => {
+    if (luckyBusy) return;
+    setLuckyBusy(true);
+    const seeds = [
+      " Feel good hit", "guaranteed banger", "feel-good anthem", "crowd favorite",
+      "legendary song", "timeless classic",
+    ];
+    const pick = seeds[Math.floor(Math.random() * seeds.length)];
+    searchYt({ query: pick })
+      .then(({ items }) => {
+        const pool = items.filter((i) => i.duration > 0);
+        const song = pool[Math.floor(Math.random() * pool.length)];
+        if (!song) {
+          toast.error("No luck this time — try again");
+          return;
+        }
+        const rest = pool.filter((p) => p.id !== song.id);
+        playTrack(toPlayableYoutube(song, `https://youtu.be/${song.id}`, rest));
+        toast.success(`🍀 Your luck: ${song.title} — ${song.artist}`);
+      })
+      .catch(() => toast.error("Couldn't reach our music sources — try again"))
+      .finally(() => setLuckyBusy(false));
+  };
+
   const quickLinks = [
     {
       to: "/liked",
@@ -292,6 +319,14 @@ export default function Home() {
           >
             <Dices className={cn("size-4 text-[rgb(var(--tint))]", surprising && "animate-pulse")} />
             Play something random
+          </button>
+          <button
+            type="button"
+            onClick={feelingLucky}
+            className="flex items-center gap-2 rounded-2xl border border-white/[0.07] bg-white/[0.03] px-5 py-3 text-sm font-semibold transition-all hover:border-[rgb(var(--tint)_/_0.35)] hover:bg-white/[0.05]"
+          >
+            <Sparkles className={cn("size-4 text-[rgb(var(--tint))]", luckyBusy && "animate-pulse")} />
+            I'm feeling lucky
           </button>
         </section>
       )}
