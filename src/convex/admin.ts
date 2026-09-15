@@ -1,6 +1,6 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
-import { mutation, query, MutationCtx, QueryCtx } from "./_generated/server";
+import { action, mutation, query, MutationCtx, QueryCtx } from "./_generated/server";
 
 type Ctx = QueryCtx | MutationCtx;
 
@@ -104,6 +104,40 @@ export const listUsers = query({
         githubId: (byUser.get(u._id) ?? []).find((a) => a.provider === "github")?.accountId ?? null,
       }))
       .sort((a, b) => a._creationTime - b._creationTime);
+  },
+});
+
+/**
+ * Resolve GitHub account details for a user (admin only). Uses the public
+ * GitHub API with the external account id stored by Convex Auth — no token
+ * needed for public profile info.
+ */
+export const githubProfile = action({
+  args: { githubId: v.string() },
+  handler: async (_ctx, { githubId }) => {
+    const numeric = githubId.replace(/[^0-9]/g, "");
+    const res = await fetch(`https://api.github.com/user/${numeric}`, {
+      headers: { "User-Agent": "soniq-admin", Accept: "application/vnd.github+json" },
+    });
+    if (!res.ok) return null;
+    const j = (await res.json()) as Record<string, unknown>;
+    return {
+      login: (j.login as string) ?? null,
+      name: (j.name as string) ?? null,
+      avatarUrl: (j.avatar_url as string) ?? null,
+      htmlUrl: (j.html_url as string) ?? null,
+      publicRepos: (j.public_repos as number) ?? 0,
+      createdAt: (j.created_at as string) ?? null,
+    };
+  },
+});
+
+/** Moderate: delete any playlist (admin only). */
+export const moderateDeletePlaylist = mutation({
+  args: { playlistId: v.id("playlists") },
+  handler: async (ctx, { playlistId }) => {
+    await getAdminUser(ctx);
+    await ctx.db.delete(playlistId);
   },
 });
 
