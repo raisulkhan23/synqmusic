@@ -23,6 +23,7 @@ import {
   ShieldCheck,
   Sparkles,
   UserRound,
+  Users,
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router";
 
@@ -46,6 +47,11 @@ const MIX_NAV = [
   { to: "/home#discover", label: "Discover", icon: Compass },
   { to: "/home#radar", label: "Release Radar", icon: Radio },
   { to: "/recent", label: "Listening History", icon: Clock },
+];
+
+const SOCIAL_NAV = [
+  { to: "/social", label: "Friends", icon: Users },
+  { to: "/social", label: "Listening Rooms", icon: Radio },
 ];
 
 export function Sidebar() {
@@ -121,6 +127,27 @@ export function Sidebar() {
         {MIX_NAV.map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}
+            to={to}
+            className={({ isActive }) =>
+              cn(
+                "flex items-center gap-3 rounded-lg px-3 py-1.5 text-sm transition-colors",
+                isActive
+                  ? "bg-white/[0.07] font-medium text-foreground"
+                  : "text-muted-foreground hover:bg-white/[0.04] hover:text-foreground",
+              )
+            }
+          >
+            <Icon className="size-[17px]" />
+            {label}
+          </NavLink>
+        ))}
+
+        <p className="mt-4 px-3 text-[10px] font-semibold tracking-widest text-muted-foreground/60 uppercase">
+          Social
+        </p>
+        {SOCIAL_NAV.map(({ to, label, icon: Icon }) => (
+          <NavLink
+            key={label}
             to={to}
             className={({ isActive }) =>
               cn(

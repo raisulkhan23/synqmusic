@@ -3,7 +3,7 @@ import { RemoteTrackRow } from "@/components/tracks/RemoteTrackRow";
 import { toPlayableYoutube, type Playable } from "@/lib/playable";
 import type { YtItem } from "@/lib/youtube";
 import { readPlayHistory, usePlayerStore, type HistoryEntry } from "@/store/player";
-import { Dices, History } from "lucide-react";
+import { Dices, History, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useAction } from "convex/react";
@@ -86,22 +86,32 @@ export default function Recent() {
       .finally(() => setResolvingId(null));
   };
 
-  // "I'm feeling lucky" — random pick from this history.
+  // "I'm feeling lucky" — random pick from this history, resolves via live search.
   const feelingLucky = () => {
-    const playable = history.filter((h) => h.audioUrl || h.youtubeId);
-    if (playable.length === 0) {
+    if (history.length === 0) {
       toast.error("Play a few songs first — then try your luck");
       return;
     }
-    const pick = playable[Math.floor(Math.random() * playable.length)];
+    const pick = history[Math.floor(Math.random() * history.length)];
     if (pick.audioUrl) {
       playTrack(snapshotToPlayable(pick));
-    } else {
-      playTrack(
-        toPlayableYoutube(entryToItem(pick), `https://youtu.be/${pick.youtubeId}`, []),
-      );
+      toast.success(`🎲 ${pick.title}`);
+      return;
     }
-    toast.success(`🎲 ${pick.title}`);
+    setResolvingId(pick.youtubeId ?? pick.id);
+    const primaryArtist = pick.artistName.split(",")[0]?.trim() ?? pick.artistName;
+    searchYt({ query: `${pick.title} ${primaryArtist}` })
+      .then(({ items: found }) => {
+        const best = found.find((f) => f.id === pick.youtubeId) ?? found[0];
+        if (!best) {
+          toast.error("Couldn't find a playable version");
+          return;
+        }
+        playTrack(toPlayableYoutube(best, `https://youtu.be/${best.id}`, []));
+        toast.success(`🎲 ${best.title}`);
+      })
+      .catch(() => toast.error("Playback failed — try again"))
+      .finally(() => setResolvingId(null));
   };
 
   return (
@@ -123,6 +133,7 @@ export default function Recent() {
         >
           <Dices className="size-4 text-[rgb(var(--tint))]" />
           I'm feeling lucky
+          {resolvingId && <Loader2 className="size-3.5 animate-spin text-muted-foreground" />}
         </button>
       </header>
 

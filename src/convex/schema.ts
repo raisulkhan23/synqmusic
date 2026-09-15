@@ -30,6 +30,7 @@ const schema = defineSchema(
       isAnonymous: v.optional(v.boolean()), // is the user anonymous. do not remove
 
       role: v.optional(roleValidator), // role of the user. do not remove
+      following: v.optional(v.array(v.id("users"))), // social follows
     }).index("email", ["email"]), // index for the email. do not remove or modify
 
     // catalog track ids liked by a user (ordered by when they were liked)
@@ -90,6 +91,22 @@ const schema = defineSchema(
       detail: v.optional(v.string()), // e.g. track title
       at: v.number(),
     }).index("by_playlist", ["playlistId"]),
+
+    // social: who follows whom (stored on the follower for cheap reads)
+    listeningRooms: defineTable({
+      name: v.string(),
+      hostId: v.id("users"),
+      hostName: v.optional(v.string()),
+      members: v.array(
+        v.object({
+          userId: v.id("users"),
+          name: v.optional(v.string()),
+          joinedAt: v.number(),
+        }),
+      ),
+      nowPlaying: v.optional(v.string()),
+      updatedAt: v.number(),
+    }).index("by_host", ["hostId"]),
 
     importedPlaylists: defineTable({
       userId: v.id("users"),

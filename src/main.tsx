@@ -41,6 +41,7 @@ const Album = lazy(() => import("./pages/Album.tsx"));
 const Admin = lazy(() => import("./pages/Admin.tsx"));
 const Stats = lazy(() => import("./pages/Stats.tsx"));
 const Recent = lazy(() => import("./pages/Recent.tsx"));
+const Social = lazy(() => import("./pages/Social.tsx"));
 const Profile = lazy(() => import("./pages/Profile.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
@@ -243,6 +244,14 @@ createRoot(document.getElementById("root")!).render(
                   element={
                     <PageSuspense>
                       <Recent />
+                    </PageSuspense>
+                  }
+                />
+                <Route
+                  path="/social"
+                  element={
+                    <PageSuspense>
+                      <Social />
                     </PageSuspense>
                   }
                 />
