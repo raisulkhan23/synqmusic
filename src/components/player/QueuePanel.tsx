@@ -21,7 +21,6 @@ import {
   Save,
   Sparkles,
   Trash2,
-  Undo2,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -39,8 +38,6 @@ export function QueuePanel() {
   const undoRemoveFromQueue = usePlayerStore((s) => s.undoRemoveFromQueue);
   const replaceUpcoming = usePlayerStore((s) => s.replaceUpcoming);
   const clearQueue = usePlayerStore((s) => s.clearQueue);
-  const history = usePlayerStore((s) => s.history);
-  const playFromHistory = usePlayerStore((s) => s.playFromHistory);
   const shuffle = usePlayerStore((s) => s.shuffle);
   const smartShuffle = usePlayerStore((s) => s.smartShuffle);
   const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
@@ -323,49 +320,6 @@ export function QueuePanel() {
             </section>
           )}
 
-          {/* queue history — what you previously played, excluding anything
-              still in the current queue so the two lists never mix */}
-          {(() => {
-            const queuedIds = new Set(queue.map((t) => t.id));
-            if (current) queuedIds.add(current.id);
-            const recent = history.filter((t) => !queuedIds.has(t.id)).slice(0, 10);
-            if (recent.length === 0) return null;
-            return (
-            <section className="min-h-0 border-t border-white/[0.07] pt-4">
-              <p className="flex items-center gap-1.5 px-1 pb-2 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
-                <Undo2 className="size-3" />
-                Recently played
-              </p>
-              <div className="space-y-1">
-                {recent.map((track, i) => (
-                  <div
-                    key={`${track.id}-${i}`}
-                    className="group flex items-center gap-2 rounded-lg px-1 py-1.5 transition-colors hover:bg-white/[0.05]"
-                  >
-                    <Clock3 className="size-4 shrink-0 text-muted-foreground/40" />
-                    <img
-                      src={track.coverUrl}
-                      alt=""
-                      className="size-10 shrink-0 rounded-md object-cover"
-                    />
-                    <div
-                      className="min-w-0 flex-1 cursor-pointer"
-                      onClick={() => playFromHistory(history.indexOf(track))}
-                    >
-                      <p className="truncate text-sm font-medium">{track.title}</p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {track.artistName}
-                      </p>
-                    </div>
-                    <span className="shrink-0 text-xs tabular-nums text-muted-foreground/70">
-                      {formatTime(track.duration)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </section>
-            );
-          })()}
         </div>
       </SheetContent>
     </Sheet>

@@ -128,6 +128,9 @@ interface PlayerStore {
   /** hide tracks flagged explicit */
   hideExplicit: boolean;
   toggleHideExplicit: () => void;
+  /** Liquid glass UI effect (frosted refraction panels) */
+  liquidGlass: boolean;
+  toggleLiquidGlass: () => void;
 
   // queue history (previously played, most recent first)
   history: Playable[];
@@ -1389,6 +1392,15 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       set((state) => {
         localStorage.setItem("ss.hideExplicit", state.hideExplicit ? "0" : "1");
         return { hideExplicit: !state.hideExplicit };
+      }),
+
+    liquidGlass: localStorage.getItem("ss.liquidGlass") !== "0",
+    toggleLiquidGlass: () =>
+      set((state) => {
+        const next = !state.liquidGlass;
+        localStorage.setItem("ss.liquidGlass", next ? "1" : "0");
+        document.documentElement.classList.toggle("no-glass", !next);
+        return { liquidGlass: next };
       }),
 
     // restore queue from the last session (does not autoplay — user resumes)

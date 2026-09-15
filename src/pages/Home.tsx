@@ -211,7 +211,6 @@ export default function Home() {
           playTrack(
             toPlayableYoutube(pick, `https://youtu.be/${pick.id}`, pool.filter((p) => p.id !== pick.id)),
           );
-          toast.success(`🎲 Now playing: ${pick.title} — ${pick.artist}`);
         } else {
           toast.error("No results — try again");
         }
@@ -245,7 +244,6 @@ export default function Home() {
         }
         const rest = pool.filter((p) => p.id !== song.id);
         playTrack(toPlayableYoutube(song, `https://youtu.be/${song.id}`, rest));
-        toast.success(`🍀 Your luck: ${song.title} — ${song.artist}`);
       })
       .catch(() => toast.error("Couldn't reach our music sources — try again"))
       .finally(() => setLuckyBusy(false));

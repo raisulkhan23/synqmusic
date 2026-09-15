@@ -221,7 +221,6 @@ export default function Search() {
       // across our sources — never the raw search results (those contain
       // duplicates and near-identical uploads of the same track).
       void startRadio(toPlayableYoutube(item, item.id));
-      toast.success("Now playing — similar songs queued up");
     },
     [startRadio],
   );

@@ -90,6 +90,8 @@ export function SettingsDialog({
   const setThemeMode = usePlayerStore((s) => s.setThemeMode);
   const hideExplicit = usePlayerStore((s) => s.hideExplicit);
   const toggleHideExplicit = usePlayerStore((s) => s.toggleHideExplicit);
+  const liquidGlass = usePlayerStore((s) => s.liquidGlass);
+  const toggleLiquidGlass = usePlayerStore((s) => s.toggleLiquidGlass);
 
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
@@ -501,6 +503,15 @@ export function SettingsDialog({
             onToggle={() => {
               toggleAmbientGlow();
               toast(ambientGlow ? "Ambient glow off" : "Ambient glow on");
+            }}
+          />
+          <ToggleRow
+            label="Liquid glass"
+            description="Frosted, refractive panels with a moving light sheen"
+            on={liquidGlass}
+            onToggle={() => {
+              toggleLiquidGlass();
+              toast(liquidGlass ? "Liquid glass off" : "Liquid glass on");
             }}
           />
           <ToggleRow

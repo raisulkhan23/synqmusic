@@ -271,6 +271,18 @@ html.light img {
       transparent 55%
     );
   }
+  /* Liquid glass disabled (Settings → Appearance) — flat, opaque panels.
+     Higher specificity so it wins over the .liquid-glass block above. */
+  html.no-glass .liquid-glass {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: var(--card) !important;
+    box-shadow: none !important;
+  }
+  html.no-glass .liquid-glass::before,
+  html.no-glass .liquid-glass::after {
+    content: none !important;
+  }
   .hide-scrollbar {
     scrollbar-width: none;
   }

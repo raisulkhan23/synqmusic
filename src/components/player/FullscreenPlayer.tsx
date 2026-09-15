@@ -27,11 +27,110 @@ import {
   Share2,
   Loader2,
   MicVocal,
+  Moon,
   Repeat,
   X,
   Waves,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+const SLEEP_OPTIONS: { label: string; value: number | "end" }[] = [
+  { label: "5 minutes", value: 5 },
+  { label: "10 minutes", value: 10 },
+  { label: "15 minutes", value: 15 },
+  { label: "30 minutes", value: 30 },
+  { label: "60 minutes", value: 60 },
+  { label: "After current song", value: "end" },
+];
+
+function formatRemaining(ms: number): string {
+  const totalSec = Math.max(0, Math.round(ms / 1000));
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return m > 0 ? `${m}:${String(s).padStart(2, "0")}` : `${s}s`;
+}
+
+function SleepTimerButton() {
+  const sleepEndsAt = usePlayerStore((s) => s.sleepEndsAt);
+  const sleepAtSongEnd = usePlayerStore((s) => s.sleepAtSongEnd);
+  const setSleepTimer = usePlayerStore((s) => s.setSleepTimer);
+  const [now, setNow] = useState(() => Date.now());
+
+  const active = sleepEndsAt !== null || sleepAtSongEnd;
+
+  // tick the countdown
+  useEffect(() => {
+    if (sleepEndsAt === null) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [sleepEndsAt]);
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label="Sleep timer"
+          title="Sleep timer"
+          className={cn(
+            "relative hidden rounded-full p-2 transition-colors hover:bg-white/[0.06] sm:block",
+            active ? "text-[rgb(var(--tint))]" : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          <Moon className="size-4" />
+          {active && (
+            <span className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-[rgb(var(--tint))]" />
+          )}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuLabel className="text-xs text-muted-foreground">
+          {sleepEndsAt !== null
+            ? `Pauses in ${formatRemaining(sleepEndsAt - now)}`
+            : sleepAtSongEnd
+              ? "Stops after this song"
+              : "Sleep timer"}
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {SLEEP_OPTIONS.map(({ label, value }) => (
+          <DropdownMenuItem
+            key={label}
+            className="gap-2"
+            onSelect={() => {
+              setSleepTimer(value);
+              toast.success(
+                value === "end" ? "Will stop after this song" : `Sleep timer: ${label}`,
+              );
+            }}
+          >
+            {label}
+          </DropdownMenuItem>
+        ))}
+        {active && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="gap-2 text-destructive"
+              onSelect={() => {
+                setSleepTimer(null);
+                toast("Sleep timer cancelled");
+              }}
+            >
+              Cancel timer
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
 const RATES = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
 
@@ -382,6 +481,7 @@ export function FullscreenPlayer() {
               </p>
             </div>
             <div className="flex items-center gap-1">
+              <SleepTimerButton />
               <button
                 type="button"
                 aria-label={liked[current.id] ? "Remove from liked songs" : "Add to liked songs"}

@@ -17,6 +17,11 @@ import "./index.css";
 
 // SYNQ defaults to dark; restore the user's theme mode before first paint.
 document.documentElement.classList.add("dark");
+// Liquid glass is ON by default; restore the user's off-state before paint so
+// panels never flash with the effect when it's disabled.
+if (localStorage.getItem("ss.liquidGlass") === "0") {
+  document.documentElement.classList.add("no-glass");
+}
 const savedTheme = localStorage.getItem("ss.themeMode");
 if (savedTheme === "light") {
   document.documentElement.classList.remove("dark");
