@@ -267,6 +267,166 @@ export const listAllLikes = query({
 });
 
 /**
+ * Recent signups across the deployment (admin only).
+ */
+export const recentSignups = query({
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, { limit }) => {
+    await getAdminUser(ctx);
+    const users = await ctx.db.query("users").collect();
+    return users
+      .sort((a, b) => b._creationTime - a._creationTime)
+      .slice(0, limit ?? 10)
+      .map((u) => ({
+        _id: u._id,
+        _creationTime: u._creationTime,
+        name: u.name ?? null,
+        email: u.email ?? null,
+        isAnonymous: u.isAnonymous ?? false,
+        role: u.role ?? null,
+      }));
+  },
+});
+
+/**
+ * Platform-wide listening statistics (admin only): total plays, total listen
+ * time estimate, plays per day for the last 14 days, and most active hour.
+ */
+export const platformListeningStats = query({
+  args: {},
+  handler: async (ctx) => {
+    await getAdminUser(ctx);
+    const history = await ctx.db.query("playHistory").collect();
+
+    const totalPlays = history.reduce((s, h) => s + h.playCount, 0);
+
+    // plays per day, last 14 days
+    const dayMs = 24 * 60 * 60 * 1000;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const daily: { day: string; label: string; plays: number }[] = [];
+    for (let i = 13; i >= 0; i--) {
+      const start = today.getTime() - i * dayMs;
+      const next = start + dayMs;
+      const plays = history
+        .filter((h) => h.playedAt >= start && h.playedAt < next)
+        .reduce((s, h) => s + h.playCount, 0);
+      const d = new Date(start);
+      daily.push({
+        day: d.toISOString().slice(0, 10),
+        label: d.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+        plays,
+      });
+    }
+
+    // most active hour of day (0-23)
+    const hourBuckets = new Array(24).fill(0) as number[];
+    for (const h of history) hourBuckets[new Date(h.playedAt).getHours()] += h.playCount;
+    const peakHour = hourBuckets.indexOf(Math.max(...hourBuckets));
+
+    // distinct tracks in the catalog history
+    const uniqueTracks = new Set(history.map((h) => h.trackId)).size;
+
+    return { totalPlays, totalRows: history.length, uniqueTracks, daily, peakHour, hourBuckets };
+  },
+});
+
+/**
+ * Listening rooms overview for moderation (admin only).
+ */
+export const listRooms = query({
+  args: {},
+  handler: async (ctx) => {
+    await getAdminUser(ctx);
+    const rooms = await ctx.db.query("listeningRooms").collect();
+    const users = await ctx.db.query("users").collect();
+    const names = new Map(users.map((u) => [u._id, u.name ?? u.email ?? "Anonymous"]));
+    return rooms
+      .map((r) => ({
+        _id: r._id,
+        name: r.name,
+        hostName: r.hostName ?? names.get(r.hostId) ?? "Unknown",
+        hostId: r.hostId,
+        memberCount: r.members.length,
+        nowPlaying: r.nowPlaying ?? null,
+        updatedAt: r.updatedAt,
+      }))
+      .sort((a, b) => b.updatedAt - a.updatedAt);
+  },
+});
+
+/** Delete a listening room (admin only). */
+export const deleteRoom = mutation({
+  args: { roomId: v.id("listeningRooms") },
+  handler: async (ctx, { roomId }) => {
+    await getAdminUser(ctx);
+    await ctx.db.delete(roomId);
+  },
+});
+
+/**
+ * Imported playlists audit (admin only) — shows what users brought in from
+ * other platforms.
+ */
+export const listImports = query({
+  args: {},
+  handler: async (ctx) => {
+    await getAdminUser(ctx);
+    const [imports, users] = await Promise.all([
+      ctx.db.query("importedPlaylists").collect(),
+      ctx.db.query("users").collect(),
+    ]);
+    const names = new Map(users.map((u) => [u._id, u.name ?? u.email ?? "Anonymous"]));
+    return imports
+      .map((i) => ({
+        _id: i._id,
+        name: i.name,
+        origin: i.origin,
+        trackCount: i.tracks.length,
+        ownerName: names.get(i.userId) ?? "Unknown",
+        createdAt: i.createdAt,
+      }))
+      .sort((a, b) => b.createdAt - a.createdAt);
+  },
+});
+
+/** Delete an imported playlist (admin only). */
+export const deleteImport = mutation({
+  args: { importId: v.id("importedPlaylists") },
+  handler: async (ctx, { importId }) => {
+    await getAdminUser(ctx);
+    await ctx.db.delete(importId);
+  },
+});
+
+/** Rename any playlist (admin only). */
+export const renamePlaylist = mutation({
+  args: { playlistId: v.id("playlists"), name: v.string() },
+  handler: async (ctx, { playlistId, name }) => {
+    await getAdminUser(ctx);
+    const trimmed = name.trim();
+    if (!trimmed) throw new ConvexError("Name cannot be empty");
+    const p = await ctx.db.get(playlistId);
+    if (p === null) throw new ConvexError("Playlist not found");
+    await ctx.db.patch(playlistId, { name: trimmed, updatedAt: Date.now() });
+  },
+});
+
+/** Clear a user's entire listening history (admin only). */
+export const clearUserHistory = mutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId }) => {
+    await getAdminUser(ctx);
+    const rows = await ctx.db
+      .query("playHistory")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    for (const row of rows) await ctx.db.delete(row._id);
+    return rows.length;
+  },
+});
+
+/**
  * Global listening stats: most played tracks across the whole deployment
  * (admin only).
  */

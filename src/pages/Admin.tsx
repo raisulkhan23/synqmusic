@@ -7,13 +7,19 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { useAction, useMutation, useQuery } from "convex/react";
 import type { LucideIcon } from "lucide-react";
 import {
+  Activity,
   ArrowDownToLine,
   ArrowUpFromLine,
+  BarChart3,
+  Clock3,
   Heart,
   ListMusic,
   Loader2,
+  Pencil,
+  Radio,
   Shield,
   ShieldCheck,
+  Sparkles,
   TrendingUp,
   Trash2,
   Users,
@@ -82,7 +88,55 @@ export default function Admin() {
   const setRole = useMutation(api.admin.setRole);
   const deleteUser = useMutation(api.admin.deleteUser);
   const deletePlaylist = useMutation(api.admin.deletePlaylist);
+  const renamePlaylist = useMutation(api.admin.renamePlaylist);
+  const clearUserHistory = useMutation(api.admin.clearUserHistory);
+  const deleteRoom = useMutation(api.admin.deleteRoom);
+  const deleteImport = useMutation(api.admin.deleteImport);
   const fetchGithub = useAction(api.admin.githubProfile);
+
+  const listeningStats = useQuery(api.admin.platformListeningStats, {});
+  const recentSignups = useQuery(api.admin.recentSignups, {});
+  const rooms = useQuery(api.admin.listRooms, {});
+  const imports = useQuery(api.admin.listImports, {});
+
+  const [renaming, setRenaming] = useState<{ id: Id<"playlists">; name: string } | null>(null);
+
+  const handleRenamePlaylist = async (playlistId: Id<"playlists">, name: string) => {
+    try {
+      await renamePlaylist({ playlistId, name });
+      toast.success("Playlist renamed");
+      setRenaming(null);
+    } catch {
+      toast.error("Could not rename the playlist");
+    }
+  };
+
+  const handleClearHistory = async (userId: Id<"users">, name: string) => {
+    try {
+      const n = await clearUserHistory({ userId });
+      toast.success(`Cleared ${n} history rows for ${name}`);
+    } catch {
+      toast.error("Could not clear the history");
+    }
+  };
+
+  const handleDeleteRoom = async (roomId: Id<"listeningRooms">) => {
+    try {
+      await deleteRoom({ roomId });
+      toast.success("Listening room removed");
+    } catch {
+      toast.error("Could not remove the room");
+    }
+  };
+
+  const handleDeleteImport = async (importId: Id<"importedPlaylists">) => {
+    try {
+      await deleteImport({ importId });
+      toast.success("Import deleted");
+    } catch {
+      toast.error("Could not delete the import");
+    }
+  };
 
   const [tab, setTab] = useState("overview");
   const [gh, setGh] = useState<{ userId: string; name: string; loading: boolean; data: Awaited<ReturnType<typeof fetchGithub>> } | null>(null);
@@ -187,11 +241,14 @@ export default function Admin() {
       </header>
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="bg-white/[0.05]">
+        <TabsList className="flex-wrap bg-white/[0.05]">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="users">Users</TabsTrigger>
+          <TabsTrigger value="insights">Insights</TabsTrigger>
           <TabsTrigger value="likes">Liked songs</TabsTrigger>
           <TabsTrigger value="playlists">Playlists</TabsTrigger>
+          <TabsTrigger value="rooms">Listening rooms</TabsTrigger>
+          <TabsTrigger value="imports">Imports</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-6 flex flex-col gap-6">
@@ -201,6 +258,28 @@ export default function Admin() {
             <StatCard icon={ListMusic} label="Playlists" value={counts.playlists} />
             <StatCard icon={Heart} label="Liked songs" value={counts.likes} />
           </div>
+
+          {recentSignups !== undefined && recentSignups.length > 0 && (
+            <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-5">
+              <p className="flex items-center gap-2 text-sm font-semibold">
+                <Sparkles className="size-4 text-[rgb(var(--tint))]" />
+                Recent signups
+              </p>
+              <div className="mt-3 flex flex-col gap-2">
+                {recentSignups.map((u) => (
+                  <div key={u._id} className="flex items-center justify-between gap-3 text-sm">
+                    <span className="min-w-0 truncate">
+                      {u.name ?? (u.isAnonymous ? "Guest listener" : "Unnamed listener")}
+                      {u.role === "admin" && (
+                        <span className="ml-2 text-xs text-[rgb(var(--tint))]">admin</span>
+                      )}
+                    </span>
+                    <span className="shrink-0 text-xs text-muted-foreground">{formatDate(u._creationTime)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-5">
             <p className="text-sm font-semibold">About this admin area</p>
@@ -321,6 +400,11 @@ export default function Admin() {
                                   Make admin
                                 </button>
                               )}
+                              <ConfirmButton
+                                label="Clear history"
+                                confirmLabel="Clear all plays?"
+                                onConfirm={() => handleClearHistory(user._id, name)}
+                              />
                               <ConfirmButton
                                 label="Delete"
                                 onConfirm={() => handleDeleteUser(user._id, name)}
@@ -484,12 +568,54 @@ export default function Admin() {
                       {formatDate(playlist._creationTime)}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex justify-end">
-                        <ConfirmButton
-                          label="Delete"
-                          confirmLabel="Delete playlist?"
-                          onConfirm={() => handleDeletePlaylist(playlist._id)}
-                        />
+                      <div className="flex items-center justify-end gap-2">
+                        {renaming?.id === playlist._id ? (
+                          <form
+                            onSubmit={(e) => {
+                              e.preventDefault();
+                              if (renaming.name.trim()) handleRenamePlaylist(playlist._id, renaming.name);
+                            }}
+                            className="flex items-center gap-1.5"
+                          >
+                            <input
+                              autoFocus
+                              value={renaming.name}
+                              onChange={(e) => setRenaming({ id: playlist._id, name: e.target.value })}
+                              className="w-40 rounded-full border border-white/15 bg-white/[0.05] px-3 py-1.5 text-xs outline-none focus:border-[rgb(var(--tint))]"
+                            />
+                            <button
+                              type="submit"
+                              className="rounded-full bg-[rgb(var(--tint))] px-3 py-1.5 text-xs font-semibold text-black"
+                            >
+                              Save
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setRenaming(null)}
+                              className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-muted-foreground"
+                            >
+                              Cancel
+                            </button>
+                          </form>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              aria-label={`Rename ${playlist.name}`}
+                              title="Rename"
+                              onClick={() => setRenaming({ id: playlist._id, name: playlist.name })}
+                              className="flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
+                            >
+                              <Pencil className="size-3.5" />
+                              Rename
+                            </button>
+                            <ConfirmButton
+                              label="Delete"
+                              confirmLabel="Delete playlist?"
+                              onConfirm={() => handleDeletePlaylist(playlist._id)}
+                            />
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -498,6 +624,150 @@ export default function Admin() {
                   <tr>
                     <td colSpan={5} className="px-4 py-10 text-center text-sm text-muted-foreground">
                       No playlists exist yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="insights" className="mt-6 flex flex-col gap-6">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <StatCard icon={Activity} label="Total plays" value={listeningStats?.totalPlays ?? 0} />
+            <StatCard icon={BarChart3} label="Unique tracks played" value={listeningStats?.uniqueTracks ?? 0} />
+            <StatCard
+              icon={Clock3}
+              label="Peak listening hour"
+              value={listeningStats ? `${String(listeningStats.peakHour).padStart(2, "0")}:00` : "—"}
+            />
+          </div>
+
+          <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-5">
+            <p className="text-sm font-semibold">Plays per day — last 14 days</p>
+            {listeningStats === undefined ? (
+              <div className="mt-3 h-32 animate-pulse rounded bg-white/[0.05]" />
+            ) : (
+              <div className="mt-4 flex h-32 items-end gap-1.5">
+                {listeningStats.daily.map((d) => {
+                  const max = Math.max(1, ...listeningStats.daily.map((x) => x.plays));
+                  return (
+                    <div key={d.day} className="group flex min-w-0 flex-1 flex-col items-center gap-1">
+                      <div
+                        className="w-full rounded-t bg-[rgb(var(--tint)_/_0.55)] transition-colors group-hover:bg-[rgb(var(--tint))]"
+                        style={{ height: `${Math.max(2, (d.plays / max) * 100)}%` }}
+                        title={`${d.label}: ${d.plays} plays`}
+                      />
+                      <span className="w-full truncate text-center text-[9px] text-muted-foreground">
+                        {d.label.split(" ")[1]}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="rooms" className="mt-6">
+          <div className="overflow-hidden rounded-2xl border border-white/[0.07]">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-white/[0.07] bg-white/[0.03] text-[11px] tracking-widest text-muted-foreground uppercase">
+                  <th className="px-4 py-3 font-semibold">Room</th>
+                  <th className="hidden px-4 py-3 font-semibold sm:table-cell">Host</th>
+                  <th className="px-4 py-3 font-semibold">Members</th>
+                  <th className="hidden px-4 py-3 font-semibold md:table-cell">Now playing</th>
+                  <th className="px-4 py-3 text-right font-semibold">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rooms === undefined &&
+                  [0, 1].map((i) => (
+                    <tr key={i}>
+                      <td colSpan={5} className="px-4 py-3">
+                        <div className="h-6 animate-pulse rounded bg-white/[0.05]" />
+                      </td>
+                    </tr>
+                  ))}
+                {rooms?.map((room) => (
+                  <tr key={room._id} className="border-b border-white/[0.04] last:border-0">
+                    <td className="flex items-center gap-2 px-4 py-3 font-medium">
+                      <Radio className="size-4 text-[rgb(var(--tint))]" />
+                      {room.name}
+                    </td>
+                    <td className="hidden px-4 py-3 text-muted-foreground sm:table-cell">{room.hostName}</td>
+                    <td className="px-4 py-3 text-muted-foreground tabular-nums">{room.memberCount}</td>
+                    <td className="hidden max-w-[220px] truncate px-4 py-3 text-muted-foreground md:table-cell">
+                      {room.nowPlaying ?? "—"}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex justify-end">
+                        <ConfirmButton
+                          label="Remove"
+                          confirmLabel="Remove room?"
+                          onConfirm={() => handleDeleteRoom(room._id)}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {rooms !== undefined && rooms.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                      No listening rooms exist yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="imports" className="mt-6">
+          <div className="overflow-hidden rounded-2xl border border-white/[0.07]">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-white/[0.07] bg-white/[0.03] text-[11px] tracking-widest text-muted-foreground uppercase">
+                  <th className="px-4 py-3 font-semibold">Playlist</th>
+                  <th className="hidden px-4 py-3 font-semibold sm:table-cell">Origin</th>
+                  <th className="hidden px-4 py-3 font-semibold sm:table-cell">Owner</th>
+                  <th className="px-4 py-3 font-semibold">Tracks</th>
+                  <th className="hidden px-4 py-3 font-semibold md:table-cell">Imported</th>
+                  <th className="px-4 py-3 text-right font-semibold">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {imports === undefined &&
+                  [0, 1].map((i) => (
+                    <tr key={i}>
+                      <td colSpan={6} className="px-4 py-3">
+                        <div className="h-6 animate-pulse rounded bg-white/[0.05]" />
+                      </td>
+                    </tr>
+                  ))}
+                {imports?.map((imp) => (
+                  <tr key={imp._id} className="border-b border-white/[0.04] last:border-0">
+                    <td className="px-4 py-3 font-medium">{imp.name}</td>
+                    <td className="hidden px-4 py-3 text-muted-foreground sm:table-cell">{imp.origin}</td>
+                    <td className="hidden px-4 py-3 text-muted-foreground sm:table-cell">{imp.ownerName}</td>
+                    <td className="px-4 py-3 text-muted-foreground tabular-nums">{imp.trackCount}</td>
+                    <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">{formatDate(imp.createdAt)}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex justify-end">
+                        <ConfirmButton
+                          label="Delete"
+                          confirmLabel="Delete import?"
+                          onConfirm={() => handleDeleteImport(imp._id)}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {imports !== undefined && imports.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                      No imported playlists yet.
                     </td>
                   </tr>
                 )}
@@ -566,7 +836,7 @@ function StatCard({
 }: {
   icon: LucideIcon;
   label: string;
-  value: number;
+  value: number | string;
 }) {
   return (
     <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-5">
