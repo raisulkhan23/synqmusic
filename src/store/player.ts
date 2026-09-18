@@ -534,21 +534,41 @@ const playedSessionIds = new Set<string>();
   const promise = (async () => {
     try {
       ytSearchClient = ytSearchClient ?? new ConvexClient(import.meta.env.VITE_CONVEX_URL as string);
-      const query = `${seed.title} ${seed.artistName.split(",")[0]?.trim() ?? ""} similar songs`.trim();
+      const artist = seed.artistName.split(",")[0]?.trim() ?? "";
+      // IMPORTANT: never query "<title> <artist> similar songs" — YouTube
+      // returns the SAME tracks as a regular search page. Query the ARTIST's
+      // style instead so results are NEW songs in the same vein/genre.
+      const queries = [
+        `${artist} songs`,
+        `artists similar to ${artist}`,
+        `${artist} mix`,
+        `${artist} genre playlist`,
+      ];
+      // Rotate randomly so repeat fills surface different mixes.
+      const query = queries[Math.floor(Math.random() * queries.length)];
       const res = await ytSearchClient.action(api.youtube.searchYoutube, { query });
       const items = res?.items ?? [];
       // Never include: the seed, anything queued, anything played this
-      // session, or an alternate upload of the seed (same normalized title).
+      // session, or near-duplicates of anything queued/heard (same normalized
+      // title) — that's how search-page duplicates sneak in.
       const existing = new Set(existingQueue.map((t) => t.id));
       existing.add(seed.id);
       for (const id of playedSessionIds) existing.add(id);
       const normTitle = (s: string) => s.toLowerCase().replace(/\([^)]*\)|\[[^\]]*\]/g, "").replace(/[^a-z0-9]/g, "");
+      const seenTitles = new Set(existingQueue.map((t) => normTitle(t.title)));
       const seedTitle = normTitle(seed.title);
-      return items
-        .filter((it: YtItem) => !existing.has(it.id))
-        .filter((it: YtItem) => normTitle(it.title) !== seedTitle || normTitle(it.artist ?? "") !== normTitle(seed.artistName))
-        .slice(0, count)
-        .map((it: YtItem) => toPlayableYoutube(it, ""));
+      const out: Playable[] = [];
+      for (const it of items as YtItem[]) {
+        if (existing.has(it.id)) continue;
+        const nt = normTitle(it.title);
+        if (nt === seedTitle) continue; // alternate upload of the seed
+        if (seenTitles.has(nt)) continue; // duplicate of queued/heard track
+        existing.add(it.id);
+        seenTitles.add(nt);
+        out.push(toPlayableYoutube(it, ""));
+        if (out.length >= count) break;
+      }
+      return out;
     } catch {
       return [];
     }
@@ -574,7 +594,24 @@ function handleEnded(): void {
     return;
   }
   if (s.queue.length > 0) {
-    // Queue is physically shuffled when shuffle is on — advance in order.
+    // Shuffle ON: jump to a RANDOM upcoming track, not the next in line.
+    if (s.shuffle && s.queue.length > 1) {
+      if (s.queueIndex < s.queue.length - 1) {
+        const exclude = s.queueIndex;
+        let i = Math.floor(Math.random() * s.queue.length);
+        if (i === exclude) i = (i + 1) % s.queue.length;
+        s.playIndex(i);
+        return;
+      }
+      if (s.repeat === "all") {
+        const exclude = s.queueIndex;
+        let i = Math.floor(Math.random() * s.queue.length);
+        if (i === exclude) i = (i + 1) % s.queue.length;
+        s.playIndex(i);
+        return;
+      }
+    }
+    // Normal: advance in order.
     if (s.queueIndex < s.queue.length - 1) {
       s.playIndex(s.queueIndex + 1);
       return;
@@ -979,7 +1016,13 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
   const next = () => {
     const s = get();
     if (s.queue.length === 0) return;
-    // Queue is physically shuffled when shuffle is on, so just advance.
+    // Shuffle ON: play a RANDOM other track (not the one directly below).
+    if (s.shuffle && s.queue.length > 1) {
+      let i = Math.floor(Math.random() * s.queue.length);
+      if (i === s.queueIndex) i = (i + 1) % s.queue.length;
+      playIndex(i);
+      return;
+    }
     if (s.queueIndex < s.queue.length - 1) {
       playIndex(s.queueIndex + 1);
     } else if (s.repeat === "all") {
