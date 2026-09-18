@@ -166,7 +166,9 @@ function LyricsPanel({ onClose }: { onClose: () => void }) {
   // effect (avoids set-state-inside-effect warnings).
   useEffect(() => {
     if (!key) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset when a new track loads
     setLines(null);
+     
     setLoading(true);
   }, [key]);
 
@@ -389,9 +391,11 @@ export function FullscreenPlayer() {
     if (audioFilter !== "off") {
       // Effects active: the muted slave video is positioned by the store —
       // make sure no stale overlay is parked here.
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reset overlay state
       setVideoReady(false);
       return;
     }
+     
     setVideoReady(false);
     setEmbedFallback(false);
     let stopTracking: (() => void) | null = null;

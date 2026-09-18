@@ -71,9 +71,8 @@ export function AppShell() {
     const s = usePlayerStore.getState();
     if (!s.fullscreen) ytEngine.dismissVideo();
     s.setQueueOpen(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [location.pathname]);
-
   // Keep the player store's liked map in sync with Convex.
   useEffect(() => {
     if (likedQuery) {
