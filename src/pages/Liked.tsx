@@ -1,9 +1,6 @@
 import { useNavigate } from "react-router";
 import { RemoteTrackRow } from "@/components/tracks/RemoteTrackRow";
-import { TrackRow } from "@/components/tracks/TrackRow";
 import { api } from "@/convex/_generated/api";
-import { toPlayable } from "@/lib/playable";
-import { trackById } from "@/lib/catalog";
 import { formatTime } from "@/lib/format";
 import { toPlayableYoutube } from "@/lib/playable";
 import type { Playable } from "@/lib/playable";
@@ -16,9 +13,7 @@ import { useState } from "react";
 
 export default function Liked() {
   const navigate = useNavigate();
-  const liked = usePlayerStore((s) => s.liked);
   const likedLoaded = usePlayerStore((s) => s.likedLoaded);
-  const toggleLike = usePlayerStore((s) => s.toggleLike);
   const playTrack = usePlayerStore((s) => s.playTrack);
   const searchYt = useAction(api.youtube.searchYoutube);
 
@@ -26,16 +21,8 @@ export default function Liked() {
   const remoteQuery = useQuery(api.likes.myLikedRemote);
   const remoteLikes = remoteQuery ?? [];
 
-  const likedTracks = Object.entries(liked)
-    .sort((a, b) => b[1] - a[1])
-    .map(([id]) => trackById(id))
-    .filter((t): t is NonNullable<typeof t> => t !== undefined)
-    .filter((t) => remoteLikes.every((r) => r.trackId !== t.id));
-
-  const totalCount = likedTracks.length + remoteLikes.length;
-  const totalSeconds =
-    likedTracks.reduce((sum, t) => sum + t.duration, 0) +
-    remoteLikes.reduce((sum, r) => sum + r.duration, 0);
+  const totalCount = remoteLikes.length;
+  const totalSeconds = remoteLikes.reduce((sum, r) => sum + r.duration, 0);
 
   const playRemoteLike = (row: (typeof remoteLikes)[number]) => {
     if (resolvingRemoteId) return;
@@ -65,13 +52,12 @@ export default function Liked() {
   };
 
   /**
-   * Resolve the full Liked Songs list into a playable queue: catalog tracks
-   * are instant, remote likes are matched through a live search. Used by both
-   * Play All and Shuffle All so the ENTIRE playlist lands in the queue.
+   * Resolve the full Liked Songs list into a playable queue. Remote likes
+   * resolve through live search; placeholder stream entries are auto-rescued
+   * by the player when they come up in the queue.
    */
   const buildLikedQueue = (firstPlayable: Playable, firstIsRemote?: string): Playable[] => {
     const out: Playable[] = [];
-    const remoteById = new Map(remoteLikes.map((r) => [r.trackId, r]));
     let firstInserted = false;
     for (const row of remoteLikes) {
       if (firstIsRemote === row.trackId) {
@@ -79,8 +65,6 @@ export default function Liked() {
         firstInserted = true;
         continue;
       }
-      // Unresolved remote likes get a placeholder stream entry — the player's
-      // auto-rescue handles them when they come up in the queue.
       const item: YtItem = {
         id: row.trackId,
         title: row.title,
@@ -93,43 +77,23 @@ export default function Liked() {
         youtubeId: row.youtubeId ?? undefined,
       });
     }
-    for (const t of likedTracks) out.push(toPlayable(t));
     void firstInserted;
     return out;
   };
 
   const playAll = () => {
     if (totalCount === 0) return;
-    // Catalog tracks play directly with the full list in the queue.
-    if (remoteLikes.length === 0) {
-      playTrack(likedTracks[0], likedTracks);
-      return;
-    }
-    // Mixed/remote list: resolve the first remote like, queue everything.
     const first = remoteLikes[0];
     playRemoteLike(first);
   };
 
   const shuffleAll = () => {
     if (totalCount === 0) return;
-    // Catalog-only: use the player's built-in shuffle queue.
-    if (remoteLikes.length === 0) {
-      const shuffled = [...likedTracks].sort(() => Math.random() - 0.5);
-      usePlayerStore.getState().playTrack(shuffled[0], shuffled);
-      // Enable shuffle so subsequent skips stay shuffled.
-      if (!usePlayerStore.getState().shuffle) usePlayerStore.getState().toggleShuffle();
-      toast.success(`Shuffling ${shuffled.length} liked songs`);
-      return;
-    }
-    // Remote list: pick a random remote like and let the queue play through.
     const row = remoteLikes[Math.floor(Math.random() * remoteLikes.length)];
     playRemoteLike(row);
     if (!usePlayerStore.getState().shuffle) usePlayerStore.getState().toggleShuffle();
     toast.success("Shuffling your liked songs");
   };
-
-  // (Liked Songs header copy will be re-branded once SYNQ copy is in place.)
-
 
   const total = totalSeconds;
 
@@ -198,15 +162,6 @@ export default function Liked() {
                 resolving={resolvingRemoteId === row.trackId}
                 onPlay={() => playRemoteLike(row)}
                 source={row.source === "spotify" ? "spotify" : "youtube"}
-              />
-            ))}
-            {likedTracks.map((track, i) => (
-              <TrackRow
-                key={track.id}
-                track={track}
-                list={likedTracks}
-                index={remoteLikes.length + i + 1}
-                onRemove={() => toggleLike(track.id)}
               />
             ))}
           </div>

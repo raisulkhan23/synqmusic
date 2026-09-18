@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import type { Track } from "@/lib/catalog";
+import type { Playable } from "@/lib/playable";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { ListMusic, ListPlus, Plus } from "lucide-react";
@@ -20,7 +20,7 @@ export function AddToPlaylistMenu({
   track,
   className,
 }: {
-  track: Track;
+  track: Playable;
   className?: string;
 }) {
   const playlists = useQuery(api.playlists.myPlaylists);

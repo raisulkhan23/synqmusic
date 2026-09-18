@@ -8,10 +8,8 @@ import {
   setEqMono as setEqMonoLib,
   type AudioFilterId,
 } from "@/lib/audio";
-import { trackById, type Track } from "@/lib/catalog";
-import { genreSimilarTracks, similarTracks } from "@/lib/catalog";
 import type { RGB } from "@/lib/covers";
-import { isPlayable, toPlayable, toPlayableYoutube, type Playable } from "@/lib/playable";
+import { toPlayableYoutube, type Playable } from "@/lib/playable";
 import * as ytEngine from "@/lib/youtubePlayer";
 import type { YtItem } from "@/lib/youtube";
 import { api } from "@/convex/_generated/api";
@@ -157,9 +155,9 @@ interface PlayerStore {
   toggleFollowArtist: (artistId: string) => void;
 
   // actions
-  playTrack: (track: Track | Playable, list?: (Track | Playable)[]) => void;
+  playTrack: (track: Playable, list?: (Playable)[]) => void;
   /** Start an endless related-mix radio from any track (any source). */
-  startRadio: (track: Track | Playable) => void;
+  startRadio: (track: Playable) => void;
   /** Play a YouTube track through the proxy/audio path (rescues non-embeddable videos). */
   playViaStream: (track: Playable, startSeconds?: number) => void;
   playIndex: (index: number) => void;
@@ -184,10 +182,10 @@ interface PlayerStore {
   setAccent: (accent: RGB | null) => void;
   removeFromQueue: (index: number) => void;
   undoRemoveFromQueue: () => void;
-  insertInQueue: (track: Track | Playable, index: number) => void;
-  addToQueue: (track: Track | Playable) => void;
+  insertInQueue: (track: Playable, index: number) => void;
+  addToQueue: (track: Playable) => void;
   /** Append songs similar to the given seed (genre/artist-based) to the queue. */
-  extendQueueWithSimilar: (seed?: Track | Playable) => void;
+  extendQueueWithSimilar: (seed?: Playable) => void;
   playFromHistory: (index: number) => void;
   replaceUpcoming: (upcoming: Playable[]) => void;
   clearQueue: () => void;
@@ -202,7 +200,6 @@ interface PlayerStore {
 
 interface PersistedPlayable {
   id: string;
-  catalogId?: string;
   youtubeId?: string;
   title?: string;
   artistName?: string;
@@ -215,7 +212,6 @@ const QUEUE_KEY = "ss.queue";
 /** Shrink a Playable to its storable essence. */
 const persistPlayable = (p: Playable): PersistedPlayable => ({
   id: p.id,
-  catalogId: p.catalogTrack?.id,
   youtubeId: p.youtubeId,
   title: p.title,
   artistName: p.artistName,
@@ -248,10 +244,6 @@ function readSavedQueue(): { items: Playable[]; queueIndex: number } | null {
     };
     const items: Playable[] = [];
     for (const p of parsed.items ?? []) {
-      if (p.catalogId) {
-        const t = trackById(p.catalogId);
-        if (t) { items.push(toPlayable(t)); continue; }
-      }
       if (p.youtubeId && p.title) {
         items.push({
           id: p.id,
@@ -533,12 +525,11 @@ function restartCurrent(): void {
  * same artist), falling back to the general similarity index. Catalog-aware;
  * empty for YouTube seeds.
  */
-function similarTracksFor(seed: Playable): Playable[] {
-  if (seed.catalogTrack) {
-    const genre = genreSimilarTracks(seed.catalogTrack.id, 10);
-    if (genre.length > 0) return genre.map(toPlayable);
-    return similarTracks(seed.catalogTrack.id, 10).map(toPlayable);
-  }
+/**
+ * Similar tracks for a seed — every source is YouTube-based now, so this
+ * always returns [] and the related-mix fetch fills the queue instead.
+ */
+function similarTracksFor(_seed: Playable): Playable[] {
   return [];
 }
 
@@ -825,7 +816,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
   wireYoutubeEngine();
   wireMediaKeys();
 
-  const norm = (t: Track | Playable): Playable => (isPlayable(t) ? t : toPlayable(t));
+  const norm = (t: Playable): Playable => t;
 
   let lastRemoved: { item: Playable; index: number } | null = null;
   /** Increments on every track load; stale async results are discarded. */
@@ -921,7 +912,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     syncMediaSession(track, true);
   };
 
-  const playTrack = (track: Track | Playable, list?: (Track | Playable)[]) => {
+  const playTrack = (track: Playable, list?: (Playable)[]) => {
     const list2 =
       list && list.length > 0 ? list.map(norm) : [norm(track)];
     const idx = list2.findIndex((t) => t.id === track.id);
@@ -944,7 +935,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     loadTrack(queue[index]);
   };
 
-  const startRadio = (track: Track | Playable) => {
+  const startRadio = (track: Playable) => {
     const seed = norm(track);
     const local = similarTracksFor(seed).filter((t) => t.id !== seed.id).slice(0, 15);
     // Build a queue immediately: seed first, local mix if available; if the
