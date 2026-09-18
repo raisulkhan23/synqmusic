@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router";
 import { RemoteTrackRow } from "@/components/tracks/RemoteTrackRow";
 import { api } from "@/convex/_generated/api";
@@ -138,7 +138,6 @@ export default function Search() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sharedQuery]);
-  const playTrack = usePlayerStore((s) => s.playTrack);
   const startRadio = usePlayerStore((s) => s.startRadio);
   const searchYt = useAction(api.youtube.searchYoutube);
 

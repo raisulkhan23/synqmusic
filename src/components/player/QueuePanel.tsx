@@ -9,7 +9,7 @@ import {
 import { Equalizer } from "@/components/player/Equalizer";
 import { api } from "@/convex/_generated/api";
 import { formatTime } from "@/lib/format";
-import { albumById, genreSimilarTracks, similarTracks } from "@/lib/catalog";
+import { albumById, genreSimilarTracks } from "@/lib/catalog";
 import { coverArt } from "@/lib/covers";
 import { usePlayerStore } from "@/store/player";
 import { toast } from "sonner";

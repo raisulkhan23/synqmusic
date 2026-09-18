@@ -514,26 +514,7 @@ export function clearSingleHistoryEntry(id: string): void {
   }
 }
 
-const randomIndex = (length: number, exclude: number): number => {
-  if (length <= 1) return 0;
-  let i = Math.floor(Math.random() * length);
-  if (i === exclude) i = (i + 1) % length;
-  return i;
-};
 
-/** Random queue index that prefers tracks not recently heard. */
-function smartIndex(length: number, exclude: number): number {
-  if (length <= 1) return 0;
-  const candidates: number[] = [];
-  for (let i = 0; i < length; i++) {
-    if (i === exclude) continue;
-    const id = usePlayerStore.getState().queue[i]?.id;
-    if (id && recentTrackIds.includes(id)) continue;
-    candidates.push(i);
-  }
-  if (candidates.length === 0) return randomIndex(length, exclude);
-  return candidates[Math.floor(Math.random() * candidates.length)];
-}
 
 // --- shared end-of-track handling ----------------------------------------------
 

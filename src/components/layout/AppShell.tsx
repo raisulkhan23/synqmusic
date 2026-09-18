@@ -11,7 +11,7 @@ import { api } from "@/convex/_generated/api";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { useAuth } from "@/hooks/use-auth";
-import { Heart, House, ListMusic, Search, Settings, UserRound, WifiOff } from "lucide-react";
+import { House, ListMusic, Search, Settings, UserRound, WifiOff } from "lucide-react";
 import { usePlayerStore, type RemoteLikeSnapshot } from "@/store/player";
 
 const MOBILE_NAV = [

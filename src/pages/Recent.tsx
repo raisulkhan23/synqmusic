@@ -36,6 +36,7 @@ function entryToItem(h: HistoryEntry): YtItem {
 
 export default function Recent() {
   const [historyVersion, setHistoryVersion] = useState(0);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-read history when an entry is removed
   const history = useMemo(() => readPlayHistory(), [historyVersion]);
   const playTrack = usePlayerStore((s) => s.playTrack);
   const searchYt = useAction(api.youtube.searchYoutube);
