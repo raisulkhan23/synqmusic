@@ -376,6 +376,8 @@ export function FullscreenPlayer() {
 
   const videoFrameRef = useRef<HTMLDivElement | null>(null);
   const [videoReady, setVideoReady] = useState(false);
+  /** True when the overlaid live player could NOT be presented — fall back to a muted inline embed. */
+  const [useEmbedFallback, setUseEmbedFallback] = useState(false);
 
   // Overlay the live YouTube player over the video frame whenever fullscreen
   // + video is on and the current track plays through the YouTube engine.
@@ -391,6 +393,7 @@ export function FullscreenPlayer() {
       return;
     }
     setVideoReady(false);
+    setUseEmbedFallback(false);
     let stopTracking: (() => void) | null = null;
     let tries = 0;
     let timer: ReturnType<typeof setTimeout>;
@@ -407,6 +410,7 @@ export function FullscreenPlayer() {
         return;
       }
       if (++tries < 40) timer = setTimeout(attempt, 100); // ~4s
+      else setUseEmbedFallback(true); // overlaid live player failed — show an inline embed instead
     };
     timer = setTimeout(attempt, 250);
     return () => {
