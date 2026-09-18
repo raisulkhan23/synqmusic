@@ -4,6 +4,7 @@ import { RemoteTrackRow } from "@/components/tracks/RemoteTrackRow";
 import { api } from "@/convex/_generated/api";
 import { greeting } from "@/lib/format";
 import { toPlayableYoutube, type Playable } from "@/lib/playable";
+
 import type { YtItem } from "@/lib/youtube";
 import { usePlayerStore, peekResumePosition } from "@/store/player";
 import {
@@ -12,7 +13,6 @@ import {
   type HistoryEntry,
   type LastPlayedSnapshot,
 } from "@/store/player";
-import { isPlayable } from "@/lib/playable";
 import { useAction, useQuery } from "convex/react";
 import { cn } from "@/lib/utils";
 import {
@@ -669,7 +669,7 @@ function RemoteRows({
 // --- helpers -----------------------------------------------------------------
 
 function isPlayableSource(snap: LastPlayedSnapshot): boolean {
-  return snap.source === "youtube" && !!snap.youtubeId;
+  return !!snap.youtubeId;
 }
 
 function snapshotToPlayable(snap: LastPlayedSnapshot): Playable {
@@ -680,7 +680,7 @@ function snapshotToPlayable(snap: LastPlayedSnapshot): Playable {
     albumName: snap.albumName,
     coverUrl: snap.coverUrl,
     duration: snap.duration,
-    source: snap.source,
+    source: "youtube",
     youtubeId: snap.youtubeId,
     audioUrl: snap.audioUrl,
   };

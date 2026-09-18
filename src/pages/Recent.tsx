@@ -231,7 +231,7 @@ function snapshotToPlayable(s: HistoryEntry): Playable {
     albumName: s.albumName,
     coverUrl: s.coverUrl,
     duration: s.duration,
-    source: s.source,
+    source: "youtube",
     youtubeId: s.youtubeId,
     audioUrl: s.audioUrl,
   };

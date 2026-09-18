@@ -2,11 +2,8 @@ import { useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router";
 import { Logo } from "@/components/brand/Logo";
-import { ALBUMS } from "@/lib/catalog";
-import { coverArt } from "@/lib/covers";
 import {
   Activity,
-  AudioLines,
   Heart,
   ListMusic,
   Pause,
@@ -227,8 +224,9 @@ export default function Landing() {
             <div className="flex items-center gap-4">
               <div className="relative shrink-0">
                 <img
-                  src={coverArt(ALBUMS[1])}
-                  alt="Afterglow cover art"
+                  src="/afterglow-cover.svg"
+                  alt="Now playing cover"
+                  onError={(e) => { (e.target as HTMLImageElement).style.visibility = "hidden"; }}
                   className="spin-slow size-16 rounded-full object-cover ring-4 ring-white/10"
                 />
                 <span className="absolute inset-0 rounded-full ring-1 ring-black/20" />

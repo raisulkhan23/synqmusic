@@ -383,7 +383,7 @@ export interface LastPlayedSnapshot {
   albumName: string;
   coverUrl: string;
   duration: number;
-  source: "catalog" | "youtube";
+  source: "youtube";
   youtubeId?: string;
   audioUrl: string;
   at: number;
@@ -520,19 +520,6 @@ function restartCurrent(): void {
   else void getAudio().play().catch(() => undefined);
 }
 
-/**
- * Local similar tracks for a seed — genre/mood-first (shares genre tags or
- * same artist), falling back to the general similarity index. Catalog-aware;
- * empty for YouTube seeds.
- */
-/**
- * Similar tracks for a seed — every source is YouTube-based now, so this
- * always returns [] and the related-mix fetch fills the queue instead.
- */
-function similarTracksFor(_seed: Playable): Playable[] {
-  return [];
-}
-
 /** In-flight related-mix fetch, deduped per seed so track-end doesn't double-fire. */
 let relatedMixInFlight: { seedId: string; promise: Promise<Playable[]> } | null = null;
 
@@ -598,23 +585,10 @@ function handleEnded(): void {
     }
   }
   // End of queue, repeat off — autoplay related music when enabled.
-  // Works for ANY source: catalog tracks use the local similarity index,
-  // YouTube tracks (and the catalog fallback) fetch a related mix from
-  // YouTube Music so the music never stops.
+  // Fetches a related mix (same vibe/genre as the seed) from YouTube Music
+  // so the music never stops, for ANY source.
   if (s.autoplay && s.current) {
     const seed = s.current;
-    const known = similarTracksFor(seed)
-      .filter((t) => !s.queue.some((q) => q.id === t.id) && t.id !== seed.id)
-      .slice(0, 5);
-    if (known.length > 0) {
-      usePlayerStore.setState((state) => ({
-        queue: [...state.queue, ...known],
-      }));
-      s.playIndex(s.queue.length);
-      return;
-    }
-    // No local candidates (e.g. a YouTube track) — fetch related tracks
-    // from YouTube Music, then keep playing without user interaction.
     void fetchRelatedMix(seed, s.queue, 5).then((related) => {
       const state = usePlayerStore.getState();
       const fresh = related.filter((t) => !state.queue.some((q) => q.id === t.id));
@@ -937,25 +911,21 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
 
   const startRadio = (track: Playable) => {
     const seed = norm(track);
-    const local = similarTracksFor(seed).filter((t) => t.id !== seed.id).slice(0, 15);
-    // Build a queue immediately: seed first, local mix if available; if the
-    // seed is a YouTube track (or the local mix is empty), fetch the related
-    // mix from YouTube Music in the background and append as it arrives.
-    const initial: Playable[] = [seed, ...local];
+    // Start the seed immediately; the related mix (same vibe/genre) is
+    // fetched in the background and appended as it arrives.
+    const initial: Playable[] = [seed];
     set({ queue: initial, queueIndex: 0 });
     loadTrack(seed);
-    if (local.length < 5) {
-      void fetchRelatedMix(seed, initial, 15).then((related) => {
-        const fresh = related.filter((t) => !get().queue.some((q) => q.id === t.id));
-        if (fresh.length === 0) return;
-        usePlayerStore.setState((st) => ({ queue: [...st.queue, ...fresh] }));
-        saveQueue(
-          usePlayerStore.getState().queue,
-          usePlayerStore.getState().queueIndex,
-          usePlayerStore.getState().current?.id ?? null,
-        );
-      });
-    }
+    void fetchRelatedMix(seed, initial, 15).then((related) => {
+      const fresh = related.filter((t) => !get().queue.some((q) => q.id === t.id));
+      if (fresh.length === 0) return;
+      usePlayerStore.setState((st) => ({ queue: [...st.queue, ...fresh] }));
+      saveQueue(
+        usePlayerStore.getState().queue,
+        usePlayerStore.getState().queueIndex,
+        usePlayerStore.getState().current?.id ?? null,
+      );
+    });
   };
 
   const playViaStream = (track: Playable, startSeconds?: number) => {
@@ -1533,7 +1503,11 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       set({ queue, queueIndex: insertAt });
       loadTrack(item);
     },
-    /** Fill the queue with more songs from the same genre as the current track. */
+    /**
+     * Fill the queue with more songs matching what's playing (same vibe/
+     * genre, fetched live). Fire-and-forget: appends as soon as results
+     * arrive, without interrupting playback.
+     */
     extendQueueWithSimilar: (seed) => {
       const s = get();
       const base = seed ? norm(seed) : s.current;
@@ -1541,27 +1515,23 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
         toast.error("Nothing playing to base recommendations on");
         return;
       }
-      const known = similarTracksFor(base).filter(
-        (t) => t.id !== base.id && !s.queue.some((q) => q.id === t.id),
-      );
-      if (known.length === 0) {
-        toast.info("No more genre matches — try the radio button");
-        return;
-      }
-      // When shuffle is on, add the genre picks in random order.
-      const picks = s.shuffle ? [...known].sort(() => Math.random() - 0.5) : known;
-      set((state) => ({
-        queue: [...state.queue, ...picks],
-        unshuffledQueue: state.unshuffledQueue
-          ? [...state.unshuffledQueue, ...picks]
-          : null,
-      }));
-      saveQueue(
-        usePlayerStore.getState().queue,
-        usePlayerStore.getState().queueIndex,
-        usePlayerStore.getState().current?.id ?? null,
-      );
-      toast.success(`Added ${picks.length} songs from the same genre`);
+      toast("Finding songs that match what's playing…");
+      void fetchRelatedMix(base, s.queue, 10).then((related) => {
+        const state = usePlayerStore.getState();
+        const fresh = related.filter((t) => !state.queue.some((q) => q.id === t.id));
+        if (fresh.length === 0) {
+          toast.error("Couldn't find more songs like this right now");
+          return;
+        }
+        const picks = state.shuffle ? [...fresh].sort(() => Math.random() - 0.5) : fresh;
+        usePlayerStore.setState((st) => ({
+          queue: [...st.queue, ...picks],
+          unshuffledQueue: st.unshuffledQueue ? [...st.unshuffledQueue, ...picks] : null,
+        }));
+        const after = usePlayerStore.getState();
+        saveQueue(after.queue, after.queueIndex, after.current?.id ?? null);
+        toast.success(`Added ${picks.length} songs like "${base.title}"`);
+      });
     },
     replaceUpcoming: (upcoming) =>
       set((state) => {

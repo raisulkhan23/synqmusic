@@ -1,9 +1,8 @@
 import { useEffect } from "react";
 
-/** Single shared <audio> element for catalog playback. */
+/** Single shared <audio> element for direct-stream playback. */
 export function getAudio(): HTMLAudioElement {
   if (typeof window === "undefined") {
-    // SSR safety — never actually used in this app, but keeps imports honest.
     return new Audio();
   }
   const w = window as unknown as { __ssAudio?: HTMLAudioElement };
@@ -38,17 +37,22 @@ let audioCtx: AudioContext | null = null;
 let filterSource: MediaElementAudioSourceNode | null = null;
 let analyser: AnalyserNode | null = null;
 
-// Filter graph nodes (created lazily alongside the context)
+// --- dedicated USER EQ nodes (always active once the graph exists) ------------
+let eqBassNode: BiquadFilterNode | null = null; // low shelf
+let eqTrebleNode: BiquadFilterNode | null = null; // high shelf
+let balanceNode: StereoPannerNode | null = null;
+
+// --- effect chain nodes (driven by the active sound effect) -------------------
+let fxIn: GainNode | null = null; // effects tap in here
 let bassFilter: BiquadFilterNode | null = null;
 let vocalFilter: BiquadFilterNode | null = null;
 let nightLow: BiquadFilterNode | null = null;
-let trebleFilter: BiquadFilterNode | null = null;
 let panner: StereoPannerNode | null = null;
 let gainOut: GainNode | null = null;
 
-// User EQ state (persisted by the settings store; applied whenever the graph exists)
-let eqBass = 0; // dB, low shelf @150Hz
-let eqTreble = 0; // dB, high shelf @6kHz
+// User EQ state (persisted by settings; applied whenever the graph exists)
+let eqBass = 0; // dB
+let eqTreble = 0; // dB
 let eqBalance = 0; // -1 (left) → +1 (right)
 let eqMono = false;
 
@@ -57,14 +61,25 @@ let rotateRaf = 0;
 
 /**
  * Lazily create the shared audio graph:
- *   <audio> → [biquad EQ nodes] → panner → analyser → destination
+ *   <audio> → [user EQ: bass → treble] → balance → [effects: bass → vocal →
+ *   night → pan → gain] → analyser → destination
+ *
+ * The user EQ lives on its OWN nodes, separate from the effect nodes, so
+ * presets/sound-effects can never clobber the user's bass/treble/balance
+ * settings (the old bug: both wrote to the same BiquadFilter gains, so
+ * changing one silently reset the other).
+ *
  * Must be called from a user-gesture context the first time (browsers block
- * suspended AudioContexts otherwise). YouTube playback isn't tappable here, so
- * filters apply to catalog tracks only.
+ * suspended AudioContexts). YouTube IFrame playback isn't tappable here —
+ * those tracks only hit this graph when routed through the audio element
+ * (effects active / stream rescue).
  */
 function ensureGraph(): boolean {
   try {
-    if (audioCtx && filterSource) return true;
+    if (audioCtx && filterSource) {
+      if (audioCtx.state === "suspended") void audioCtx.resume();
+      return true;
+    }
     const AudioCtx =
       window.AudioContext ??
       (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -72,6 +87,23 @@ function ensureGraph(): boolean {
     audioCtx = audioCtx ?? new AudioCtx();
 
     filterSource = audioCtx.createMediaElementSource(getAudio());
+
+    // user EQ stage
+    eqBassNode = audioCtx.createBiquadFilter();
+    eqBassNode.type = "lowshelf";
+    eqBassNode.frequency.value = 150;
+    eqBassNode.gain.value = eqBass;
+
+    eqTrebleNode = audioCtx.createBiquadFilter();
+    eqTrebleNode.type = "highshelf";
+    eqTrebleNode.frequency.value = 6000;
+    eqTrebleNode.gain.value = eqTreble;
+
+    balanceNode = audioCtx.createStereoPanner();
+    balanceNode.pan.value = eqMono ? 0 : eqBalance;
+
+    // effects stage (tapped after the user EQ)
+    fxIn = audioCtx.createGain();
 
     bassFilter = audioCtx.createBiquadFilter();
     bassFilter.type = "lowshelf";
@@ -89,28 +121,23 @@ function ensureGraph(): boolean {
     nightLow.frequency.value = 20000;
     nightLow.Q.value = 0.5;
 
-    trebleFilter = audioCtx.createBiquadFilter();
-    trebleFilter.type = "highshelf";
-    trebleFilter.frequency.value = 6000;
-    trebleFilter.gain.value = 0;
-
     panner = audioCtx.createStereoPanner();
     gainOut = audioCtx.createGain();
 
-    filterSource.connect(bassFilter);
+    filterSource.connect(eqBassNode);
+    eqBassNode.connect(eqTrebleNode);
+    eqTrebleNode.connect(balanceNode);
+    balanceNode.connect(fxIn);
+    fxIn.connect(bassFilter);
     bassFilter.connect(vocalFilter);
     vocalFilter.connect(nightLow);
-    nightLow.connect(trebleFilter);
-    trebleFilter.connect(panner);
+    nightLow.connect(panner);
     panner.connect(gainOut);
 
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = 256;
     gainOut.connect(analyser);
     analyser.connect(audioCtx.destination);
-
-    // Apply any persisted user EQ right away.
-    applyUserEq();
 
     if (audioCtx.state === "suspended") void audioCtx.resume();
     return true;
@@ -119,15 +146,23 @@ function ensureGraph(): boolean {
   }
 }
 
-/** Apply the user EQ/balance/mono settings to the graph (safe pre-init). */
-function applyUserEq(): void {
-  if (!audioCtx || !bassFilter || !trebleFilter || !panner) return;
-  bassFilter.gain.value = bassFilter.gain.value === 0 ? eqBass : bassFilter.gain.value + eqBass;
-  trebleFilter.gain.value = eqTreble;
-  panner.pan.value = eqMono ? 0 : eqBalance;
+/** Reset the effect stage to neutral (used when switching effects). */
+function resetEffects(): void {
+  stopRotation();
+  if (bassFilter) {
+    bassFilter.frequency.value = 150;
+    bassFilter.gain.value = 0;
+  }
+  if (vocalFilter) {
+    vocalFilter.frequency.value = 2500;
+    vocalFilter.Q.value = 1;
+    vocalFilter.gain.value = 0;
+  }
+  if (nightLow) nightLow.frequency.value = 20000;
+  if (gainOut) gainOut.gain.value = 1;
 }
 
-/** Analyser for the visualizer (now part of the filter graph). */
+/** Analyser for the visualizer (part of the graph). */
 export function ensureAnalyser(): AnalyserNode | null {
   ensureGraph();
   return analyser;
@@ -138,7 +173,7 @@ function stopRotation(): void {
     cancelAnimationFrame(rotateRaf);
     rotateRaf = 0;
   }
-  if (panner) panner.pan.value = eqMono ? 0 : eqBalance;
+  if (panner) panner.pan.value = 0;
 }
 
 function startRotation(): void {
@@ -149,59 +184,41 @@ function startRotation(): void {
   const start = ctx.currentTime;
   const tick = () => {
     if (!ctx || !panner) return;
-    // Full L/R sweep every 4 seconds with a 0.35Hz wobble — clearly audible
-    // "8D" motion (slow 8s pans read as stereo drift, not 8D).
-    const t = ctx.currentTime - start;
-    // Hard, wide swing: full -1 → +1 sweep every 3.2s. Combined with the
-    // mid-dip EQ this reads as an unmistakable orbit around the head.
-    panner.pan.value = Math.sin(t * (2 * Math.PI / 3.2));
+    // Full -1 → +1 sweep every 3.2s — clearly audible "8D" orbit.
+    panner.pan.value = Math.sin((ctx.currentTime - start) * ((2 * Math.PI) / 3.2));
     rotateRaf = requestAnimationFrame(tick);
   };
   rotateRaf = requestAnimationFrame(tick);
 }
 
-/** Activate an audio filter. Returns false if Web Audio isn't available. */
+/** Activate a sound effect. Returns false if Web Audio isn't available. */
 export function setAudioFilter(id: AudioFilterId): boolean {
   activeFilter = id;
-  if (id === "off") {
-    // Even for "off", keep the graph connected once it exists (the audio
-    // element can only ever have one MediaElementSource). Reset all nodes.
-    stopRotation();
-    if (audioCtx && bassFilter && vocalFilter && nightLow && gainOut) {
-      bassFilter.gain.value = 0;
-      vocalFilter.gain.value = 0;
-      nightLow.frequency.value = 20000;
-      gainOut.gain.value = 1;
-    }
-    return true;
-  }
   if (!ensureGraph()) return false;
-  if (audioCtx?.state === "suspended") void audioCtx.resume();
 
-  stopRotation();
-  bassFilter!.gain.value = 0;
-  vocalFilter!.gain.value = 0;
-  nightLow!.frequency.value = 20000;
-  gainOut!.gain.value = 1;
+  resetEffects();
+  if (id === "off") return true;
+
+  if (audioCtx?.state === "suspended") void audioCtx.resume();
 
   switch (id) {
     case "8d":
       startRotation();
       // Aggressive spatialization: dip mids hard while the fast full-sweep
-      // panning orbits the sound — unmistakably different from the original.
+      // panning orbits the sound.
       vocalFilter!.frequency.value = 1000;
       vocalFilter!.gain.value = -7;
       bassFilter!.gain.value = -5;
       break;
     case "bass":
-      // Extreme low-end: +24dB shelf at 70Hz — walls will shake.
+      // Extreme low-end: +24dB shelf at 70Hz.
       bassFilter!.frequency.value = 70;
       bassFilter!.gain.value = 24;
       vocalFilter!.frequency.value = 400;
       vocalFilter!.gain.value = -4; // clear room for the sub-bass
       break;
     case "vocal":
-      // Hard presence lift at 3.2kHz + big mud cut — vocals jump way forward.
+      // Hard presence lift at 3.2kHz + big mud cut.
       vocalFilter!.frequency.value = 3200;
       vocalFilter!.Q.value = 0.7;
       vocalFilter!.gain.value = 16;
@@ -209,8 +226,7 @@ export function setAudioFilter(id: AudioFilterId): boolean {
       bassFilter!.gain.value = -11;
       break;
     case "night":
-      // Night mode: hard low-pass, tamed level, gentle bass warmth — very
-      // obviously softer/darker than the original mix.
+      // Night mode: hard low-pass, tamed level, gentle bass warmth.
       nightLow!.frequency.value = 2400;
       gainOut!.gain.value = 0.45;
       vocalFilter!.gain.value = -5;
@@ -225,28 +241,31 @@ export function getActiveAudioFilter(): AudioFilterId {
 }
 
 // --- user EQ (audio settings panel) -------------------------------------------
+//
+// These write ONLY to the dedicated user-EQ nodes, so they work no matter
+// which sound effect is active and are never overwritten by effects.
 
 export function setEqBass(db: number): void {
   eqBass = db;
-  if (bassFilter) bassFilter.gain.value = db;
+  if (eqBassNode) eqBassNode.gain.value = db;
 }
 
 export function setEqTreble(db: number): void {
   eqTreble = db;
-  if (trebleFilter) trebleFilter.gain.value = db;
+  if (eqTrebleNode) eqTrebleNode.gain.value = db;
 }
 
 export function setEqBalance(v: number): void {
   eqBalance = Math.min(1, Math.max(-1, v));
-  if (panner && !eqMono) panner.pan.value = eqBalance;
+  if (balanceNode && !eqMono) balanceNode.pan.value = eqBalance;
 }
 
 export function setEqMono(mono: boolean): void {
   eqMono = mono;
-  if (panner) panner.pan.value = mono ? 0 : eqBalance;
+  if (balanceNode) balanceNode.pan.value = mono ? 0 : eqBalance;
 }
 
-/** One-shot EQ presets (additive with the active filter is avoided — resets first). */
+/** One-shot EQ presets. */
 export function applyEqPreset(preset: { bass: number; treble: number }): void {
   setEqBass(preset.bass);
   setEqTreble(preset.treble);

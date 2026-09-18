@@ -78,7 +78,7 @@ export function AppShell() {
       const current = usePlayerStore.getState().current;
       const snapshot =
         remote ??
-        (current && current.id === trackId && current.source !== "catalog"
+        (current && current.id === trackId
           ? {
               title: current.title,
               artistName: current.artistName,

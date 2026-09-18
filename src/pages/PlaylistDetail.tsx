@@ -1,16 +1,16 @@
 import { useNavigate, useParams, Link } from "react-router";
-import { PlayHeaderButton } from "@/components/tracks/PlayHeaderButton";
-import { TrackRow } from "@/components/tracks/TrackRow";
+import { RemoteTrackRow } from "@/components/tracks/RemoteTrackRow";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { albumById, artistById, trackById } from "@/lib/catalog";
-import { coverArt } from "@/lib/covers";
 import { formatTime } from "@/lib/format";
-import { useMutation, useQuery } from "convex/react";
-import { ListMusic, Search as SearchIcon, Trash2 } from "lucide-react";
+import { toPlayableYoutube } from "@/lib/playable";
+import { useAction, useMutation, useQuery } from "convex/react";
+import { ListMusic, Play, Search as SearchIcon, Shuffle, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { usePlayerStore } from "@/store/player";
+import type { YtItem } from "@/lib/youtube";
 
 export default function PlaylistDetail() {
   const { id } = useParams<{ id: string }>();
@@ -20,6 +20,10 @@ export default function PlaylistDetail() {
   });
   const removeTrack = useMutation(api.playlists.removeTrack);
   const removePlaylist = useMutation(api.playlists.remove);
+  const searchYt = useAction(api.youtube.searchYoutube);
+  const playTrack = usePlayerStore((s) => s.playTrack);
+
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
 
   if (playlist === undefined) {
     return (
@@ -51,26 +55,63 @@ export default function PlaylistDetail() {
     );
   }
 
-  const tracks = playlist.trackIds
-    .map((trackId) => trackById(trackId))
-    .filter((t) => t !== undefined);
-  const total = tracks.reduce((sum, t) => sum + t.duration, 0);
-  const firstTrack = tracks[0];
-  const cover = firstTrack ? coverArt(albumById(firstTrack.albumId)) : null;
+  // Rows are lightweight snapshots derived from the stored track ids. Track
+  // titles resolve at play time (the stored id is the YouTube video id where
+  // known; the first search hit covers the rest).
+  const rows = playlist.trackIds.map((trackId) => ({
+    id: trackId,
+    title: "",
+    artist: "",
+    thumbnail: "",
+    duration: 0,
+  }));
+  const total = 0;
+  const firstRow = rows[0];
 
-  // In-playlist search — no scrolling through 500 songs.
+  // In-playlist search — no scrolling through 500 songs. (Titles are resolved
+  // lazily, so this filter matches once a song has been resolved this session.)
   const [filter, setFilter] = useState("");
   const visibleTracks = useMemo(() => {
     const q = filter.trim().toLowerCase();
-    if (!q) return tracks.map((track, i) => ({ track, i }));
-    return tracks
+    if (!q) return rows.map((track, i) => ({ track, i }));
+    return rows
       .map((track, i) => ({ track, i }))
-      .filter(
-        ({ track }) =>
-          track.title.toLowerCase().includes(q) ||
-          artistById(track.artistId).name.toLowerCase().includes(q),
-      );
-  }, [tracks, filter]);
+      .filter(({ track }) => track.title.toLowerCase().includes(q));
+  }, [rows, filter]);
+
+  const playRow = (row: (typeof rows)[number]) => {
+    if (resolvingId) return;
+    setResolvingId(row.id);
+    searchYt({ query: row.title || row.id })
+      .then(({ items }) => {
+        const best = items.find((f) => f.id === row.id) ?? items[0];
+        if (!best) {
+          toast.error(`Couldn't load this song — try again`);
+          return;
+        }
+        const playable = toPlayableYoutube(
+          best,
+          `https://youtu.be/${best.id}`,
+          items.slice(1),
+        );
+        playTrack(playable);
+      })
+      .catch(() => toast.error("Playback failed — try again in a moment"))
+      .finally(() => setResolvingId(null));
+  };
+
+  const playAll = () => {
+    if (!firstRow) return;
+    playRow(firstRow);
+  };
+
+  const shuffleAll = () => {
+    if (rows.length === 0) return;
+    const pick = rows[Math.floor(Math.random() * rows.length)];
+    playRow(pick);
+    if (!usePlayerStore.getState().shuffle) usePlayerStore.getState().toggleShuffle();
+    toast.success("Shuffling the playlist");
+  };
 
   const handleDelete = async () => {
     try {
@@ -86,14 +127,8 @@ export default function PlaylistDetail() {
     <div className="flex flex-col gap-6">
       {/* header */}
       <div className="flex flex-col gap-5 sm:flex-row sm:items-end">
-        <div className="size-40 shrink-0 overflow-hidden rounded-2xl shadow-2xl ring-1 ring-white/10 sm:size-48">
-          {cover ? (
-            <img src={cover} alt="" className="size-full object-cover" />
-          ) : (
-            <div className="flex size-full items-center justify-center bg-gradient-to-br from-white/[0.09] to-white/[0.03]">
-              <ListMusic className="size-10 text-muted-foreground/50" />
-            </div>
-          )}
+        <div className="flex size-40 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-white/[0.09] to-white/[0.03] shadow-2xl ring-1 ring-white/10 sm:size-48">
+          <ListMusic className="size-10 text-muted-foreground/50" />
         </div>
         <div className="min-w-0">
           <p className="text-[11px] font-semibold tracking-[0.2em] text-muted-foreground uppercase">
@@ -105,29 +140,46 @@ export default function PlaylistDetail() {
           <p className="mt-2 text-sm text-muted-foreground">
             {playlist.trackIds.length}{" "}
             {playlist.trackIds.length === 1 ? "song" : "songs"}
-            {tracks.length > 0 && ` · ${formatTime(total)}`}
+            {total > 0 && ` · ${formatTime(total)}`}
           </p>
           <div className="mt-4 flex items-center gap-3">
-            <PlayHeaderButton list={tracks} />
+            <button
+              type="button"
+              onClick={playAll}
+              className="flex items-center gap-2 rounded-full bg-[rgb(var(--tint))] px-5 py-2.5 text-sm font-semibold text-black shadow-[0_8px_30px_rgb(var(--tint)/0.35)] transition-all hover:scale-[1.03] active:scale-95"
+            >
+              <Play className="size-4 fill-current" />
+              Play all
+            </button>
             {playlist.trackIds.length > 0 && (
-              <button
-                type="button"
-                aria-label="Delete playlist"
-                onClick={handleDelete}
-                className="flex items-center gap-1.5 rounded-full border border-white/10 px-3.5 py-2 text-sm text-muted-foreground transition-colors hover:border-red-500/40 hover:text-red-400"
-              >
-                <Trash2 className="size-4" />
-                Delete
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={shuffleAll}
+                  className="flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.05] px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-white/[0.1]"
+                >
+                  <Shuffle className="size-4" />
+                  Shuffle
+                </button>
+                <button
+                  type="button"
+                  aria-label="Delete playlist"
+                  onClick={() => void handleDelete()}
+                  className="flex items-center gap-1.5 rounded-full border border-white/10 px-3.5 py-2 text-sm text-muted-foreground transition-colors hover:border-red-500/40 hover:text-red-400"
+                >
+                  <Trash2 className="size-4" />
+                  Delete
+                </button>
+              </>
             )}
           </div>
         </div>
       </div>
 
       {/* tracks */}
-      {tracks.length > 0 ? (
+      {rows.length > 0 ? (
         <div className="flex flex-col gap-0.5">
-          {tracks.length > 20 && (
+          {rows.length > 20 && (
             <div className="relative mb-3 max-w-sm">
               <SearchIcon className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
               <input
@@ -144,18 +196,13 @@ export default function PlaylistDetail() {
             </p>
           ) : (
             visibleTracks.map(({ track, i }) => (
-              <TrackRow
+              <RemoteTrackRow
                 key={`${track.id}-${i}`}
-                track={track}
-                list={tracks}
+                item={toYtItem(track)}
                 index={i + 1}
-                onRemove={() =>
-                  removeTrack({
-                    playlistId: playlist._id,
-                    trackId: track.id,
-                    detail: track.title,
-                  })
-                }
+                resolving={resolvingId === track.id}
+                onPlay={(it) => playResolved(it, i)}
+                source="youtube"
               />
             ))
           )}
@@ -164,7 +211,7 @@ export default function PlaylistDetail() {
         <div className="flex flex-col items-center gap-3 rounded-3xl border border-dashed border-white/10 py-16 text-center">
           <ListMusic className="size-10 text-muted-foreground/40" />
           <p className="max-w-sm text-sm text-muted-foreground">
-            This playlist is empty. Add songs from search results or album pages.
+            This playlist is empty. Add songs from search results.
           </p>
           <Link
             to="/search"
@@ -178,6 +225,33 @@ export default function PlaylistDetail() {
       <ChangeHistory playlistId={playlist._id} />
     </div>
   );
+
+  function toYtItem(track: { id: string; title: string; artist: string; thumbnail: string; duration: number }): YtItem {
+    return {
+      id: track.id,
+      title: track.title || "Playlist song",
+      artist: track.artist || "",
+      thumbnail: track.thumbnail,
+      duration: track.duration,
+    };
+  }
+
+  function playResolved(item: YtItem, index: number) {
+    const row = rows[index];
+    if (resolvingId) return;
+    setResolvingId(item.id);
+    searchYt({ query: row.title || item.id })
+      .then(({ items }) => {
+        const best = items.find((f) => f.id === item.id) ?? items.find((f) => f.title === item.title) ?? items[0];
+        if (!best) {
+          toast.error("Couldn't load this song — try again");
+          return;
+        }
+        playTrack(toPlayableYoutube(best, `https://youtu.be/${best.id}`, items.slice(1)));
+      })
+      .catch(() => toast.error("Playback failed — try again in a moment"))
+      .finally(() => setResolvingId(null));
+  }
 }
 
 const KIND_LABELS: Record<string, { text: string; className: string }> = {

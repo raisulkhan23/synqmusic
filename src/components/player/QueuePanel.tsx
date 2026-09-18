@@ -1,5 +1,7 @@
+import { useEffect, useState } from "react";
 import { Reorder } from "framer-motion";
 import { useMutation } from "convex/react";
+
 import {
   Sheet,
   SheetContent,
@@ -9,8 +11,8 @@ import {
 import { Equalizer } from "@/components/player/Equalizer";
 import { api } from "@/convex/_generated/api";
 import { formatTime } from "@/lib/format";
-import { albumById, genreSimilarTracks } from "@/lib/catalog";
-import { coverArt } from "@/lib/covers";
+import { toPlayableYoutube, type Playable } from "@/lib/playable";
+import type { YtItem } from "@/lib/youtube";
 import { usePlayerStore } from "@/store/player";
 import { toast } from "sonner";
 import {
@@ -25,6 +27,21 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+/** Fetch a related-mix for the current track (any source) as suggestions. */
+async function fetchRelatedSuggestions(seed: Playable): Promise<Playable[]> {
+  try {
+    const client = (window as unknown as { __ssSuggestSearch?: { action: (fn: unknown, args: unknown) => Promise<{ items?: YtItem[] }> } }).__ssSuggestSearch;
+    if (!client) return [];
+    const primary = seed.artistName.split(",")[0]?.trim() ?? seed.artistName;
+    const res = await client.action("youtube:searchYoutube", {
+      query: `${seed.title} ${primary} similar songs`,
+    });
+    return (res?.items ?? []).slice(0, 6).map((it) => toPlayableYoutube(it, ""));
+  } catch {
+    return [];
+  }
+}
 
 export function QueuePanel() {
   const open = usePlayerStore((s) => s.queueOpen);
@@ -45,6 +62,7 @@ export function QueuePanel() {
   const autoplay = usePlayerStore((s) => s.autoplay);
   const toggleAutoplay = usePlayerStore((s) => s.toggleAutoplay);
   const addToQueue = usePlayerStore((s) => s.addToQueue);
+  const extendQueueWithSimilar = usePlayerStore((s) => s.extendQueueWithSimilar);
   const createPlaylist = useMutation(api.playlists.create);
   const addPlaylistTrack = useMutation(api.playlists.addTrack);
 
@@ -54,23 +72,41 @@ export function QueuePanel() {
   // each other. Composite "id#index" values keep every row distinct.
   const upcomingKeys = upcoming.map((t, i) => `${t.id}#${i}`);
 
-  // Queue suggestions: genre-similar to what's playing, not already queued.
-  const suggestions = (() => {
-    const seed = current?.catalogTrack?.id;
-    if (!seed || upcoming.length >= 15) return [];
-    return genreSimilarTracks(seed, 12)
-      .filter((t) => !queue.some((q) => q.catalogTrack?.id === t.id))
-      .slice(0, 3);
-  })();
+  // Queue suggestions: fetched related mix for what's playing (any source),
+  // filtered against what's already queued. Loaded lazily via an effect.
+  const [suggestions, setSuggestions] = useState<Playable[]>([]);
+  const currentKey = current?.id ?? null;
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- clearing suggestions on track change
+    setSuggestions([]);
+    if (!current || upcoming.length >= 15) return;
+    let cancelled = false;
+    void fetchRelatedSuggestions(current).then((items) => {
+      if (cancelled) return;
+      setSuggestions(
+        items
+          .filter((t) => !queue.some((q) => q.id === t.id) && t.id !== current.id)
+          .slice(0, 3),
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentKey]);
+
+  const extendQueue = () => {
+    extendQueueWithSimilar();
+  };
 
   const saveQueueAsPlaylist = async () => {
-    const ids = queue
-      .map((t) => t.catalogTrack?.id)
-      .filter((id): id is string => !!id);
-    if (ids.length === 0) {
-      toast.error("Queue has no catalog songs to save");
+    if (queue.length === 0) {
+      toast.error("The queue is empty");
       return;
     }
+    // Remote likes are stored as snapshots — save ids that playlists can
+    // resolve; YouTube ids play via search resolution.
+    const ids = queue.map((t) => t.id);
     try {
       const name = `Queue · ${new Date().toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
       const playlistId = await createPlaylist({ name, description: "Saved from your queue" });
@@ -279,8 +315,8 @@ export function QueuePanel() {
             </section>
           )}
 
-          {/* queue suggestions — "we think you'll like these next" */}
-          {suggestions.length > 0 && (
+          {/* queue suggestions — related songs for what's playing */}
+          {(suggestions.length > 0 || current) && (
             <section>
               <p className="flex items-center gap-1.5 px-1 pb-2 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
                 <Sparkles className="size-3" />
@@ -293,14 +329,14 @@ export function QueuePanel() {
                     className="group flex items-center gap-2 rounded-lg px-1 py-1.5 transition-colors hover:bg-white/[0.05]"
                   >
                     <img
-                      src={coverArt(albumById(track.albumId))}
+                      src={track.coverUrl}
                       alt=""
                       className="size-10 shrink-0 rounded-md object-cover opacity-80"
                     />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">{track.title}</p>
                       <p className="truncate text-xs text-muted-foreground">
-                        Same genre as what&apos;s playing
+                        Matches what&apos;s playing
                       </p>
                     </div>
                     <button
@@ -308,6 +344,7 @@ export function QueuePanel() {
                       aria-label={`Add ${track.title} to queue`}
                       onClick={() => {
                         addToQueue(track);
+                        setSuggestions((prev) => prev.filter((t) => t.id !== track.id));
                         toast.success(`Added "${track.title}" to queue`);
                       }}
                       className="shrink-0 rounded-full p-1.5 text-muted-foreground/60 transition-colors hover:bg-white/10 hover:text-foreground"
@@ -316,6 +353,14 @@ export function QueuePanel() {
                     </button>
                   </div>
                 ))}
+                <button
+                  type="button"
+                  onClick={extendQueue}
+                  className="mt-1 flex w-full items-center justify-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5 text-sm font-semibold transition-colors hover:border-[rgb(var(--tint)_/_0.35)] hover:bg-white/[0.05]"
+                >
+                  <Sparkles className="size-4 text-[rgb(var(--tint))]" />
+                  Add similar songs automatically
+                </button>
               </div>
             </section>
           )}

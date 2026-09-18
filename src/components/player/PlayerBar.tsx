@@ -4,8 +4,7 @@ import { api } from "@/convex/_generated/api";
 import { SeekBar } from "@/components/player/SeekBar";
 import { TransportControls } from "@/components/player/TransportControls";
 import { VolumeControl } from "@/components/player/VolumeControl";
-import { albumById } from "@/lib/catalog";
-import { accentFromString, coverArt, dominantColor } from "@/lib/covers";
+import { accentFromString, dominantColor } from "@/lib/covers";
 import { formatTime } from "@/lib/format";
 import { toPlayableYoutube } from "@/lib/playable";
 import { usePlayerStore } from "@/store/player";
@@ -49,11 +48,12 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
     }
     let cancelled = false;
 
-    if (current.source === "catalog" && current.catalogTrack) {
-      const album = albumById(current.catalogTrack.albumId);
-      setAccent(album.accent);
-      void dominantColor(coverArt(album)).then((c) => {
+    // Derive the accent from the artwork itself; fall back to a stable
+    // hash-based hue when sampling fails.
+    if (current.coverUrl) {
+      void dominantColor(current.coverUrl).then((c) => {
         if (!cancelled && c) setAccent(c);
+        else if (!cancelled) setAccent(accentFromString(`${current.title} ${current.artistName}`));
       });
     } else {
       setAccent(accentFromString(`${current.title} ${current.artistName}`));
@@ -144,7 +144,6 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
   if (!current) return null;
 
   const isLiked = liked[current.id] !== undefined;
-  const catalogTrack = current.source === "catalog" ? current.catalogTrack : undefined;
 
   return (
     <footer
@@ -172,15 +171,9 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
           >
             {current.title}
           </p>
-          {catalogTrack ? (
-            <span className="block truncate text-xs text-muted-foreground">
-              {current.artistName}
-            </span>
-          ) : (
-            <p className="block truncate text-xs text-muted-foreground">
-              {current.artistName}
-            </p>
-          )}
+          <p className="block truncate text-xs text-muted-foreground">
+            {current.artistName}
+          </p>
         </div>
         <button
           type="button"

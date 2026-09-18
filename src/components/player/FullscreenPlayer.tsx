@@ -471,9 +471,7 @@ export function FullscreenPlayer() {
                   {current.albumName}
                 </p>
               )}
-              <p className="text-xs text-muted-foreground">
-                {current.source === "catalog" ? "SYNQ catalog" : "Live session"}
-              </p>
+              <p className="text-xs text-muted-foreground">Live session</p>
             </div>
             <div className="flex items-center gap-1">
               <SleepTimerButton />

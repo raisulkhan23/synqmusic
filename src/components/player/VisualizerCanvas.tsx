@@ -34,20 +34,20 @@ function trackVibe(): { seed: number; energy: number; pulseHz: number } {
   for (let i = 0; i < current.id.length; i++) {
     seed = (seed * 31 + current.id.charCodeAt(i)) >>> 0;
   }
-  const moods = current.catalogTrack?.moods ?? [];
-  const highEnergy = ["dance", "synth", "rock", "energy", "funk", "groove", "electronic"];
-  const lowEnergy = ["chill", "ambient", "lo-fi", "dream", "lullaby", "soul"];
-  const hi = moods.filter((m) => highEnergy.includes(m)).length;
-  const lo = moods.filter((m) => lowEnergy.includes(m)).length;
-  const energy = Math.min(1, Math.max(0.35, 0.55 + hi * 0.18 - lo * 0.14));
+  // Derive a stable pseudo-energy from the title so each song looks distinct
+  // without needing genre metadata.
+  let titleHash = 0;
+  for (let i = 0; i < current.title.length; i++) {
+    titleHash = (titleHash * 33 + current.title.charCodeAt(i)) >>> 0;
+  }
+  const energy = 0.45 + (titleHash % 100) / 200; // 0.45 – 0.95
   // Pulse between ~1.4Hz (84 BPM ballad) and ~2.4Hz (144 BPM dance).
-  const pulseHz = Math.min(2.4, Math.max(1.4, 1.9 + (hi - lo) * 0.25 + ((seed % 20) - 10) * 0.02));
+  const pulseHz = Math.min(2.4, Math.max(1.4, 1.9 + ((seed % 20) - 10) * 0.02));
   return { seed, energy, pulseHz };
 }
 
 export function VisualizerCanvas({
   className,
-  active,
 }: {
   className?: string;
   active?: boolean;
