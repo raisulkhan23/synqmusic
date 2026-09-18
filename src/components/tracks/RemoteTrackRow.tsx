@@ -1,4 +1,5 @@
 import type { YtItem } from "@/lib/youtube";
+import type React from "react";
 import { formatTime } from "@/lib/format";
 import { toPlayableYoutube } from "@/lib/playable";
 import { cn } from "@/lib/utils";
@@ -18,6 +19,8 @@ export function RemoteTrackRow({
   onPlay,
   resolving,
   source = "youtube",
+  /** Optional extra content rendered before the like button (e.g. remove action). */
+  trailing,
 }: {
   item: YtItem;
   index: number;
@@ -25,6 +28,7 @@ export function RemoteTrackRow({
   resolving?: boolean;
   /** Which provider the chart row came from (affects badge + link-out). */
   source?: "youtube" | "spotify";
+  trailing?: React.ReactNode;
 }) {
   const currentId = usePlayerStore((s) => s.current?.id);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
@@ -125,6 +129,7 @@ export function RemoteTrackRow({
       </div>
 
       <div className="ml-auto flex shrink-0 items-center gap-2">
+        {trailing}
         <button
           type="button"
           aria-label={`Start ${item.title} radio`}

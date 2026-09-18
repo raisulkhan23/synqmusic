@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Link } from "react-router";
 import { SeekBar } from "@/components/player/SeekBar";
 import { TransportControls } from "@/components/player/TransportControls";
 import { VolumeControl } from "@/components/player/VolumeControl";
@@ -174,12 +173,9 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
             {current.title}
           </p>
           {catalogTrack ? (
-            <Link
-              to={`/album/${catalogTrack.albumId}`}
-              className="block truncate text-xs text-muted-foreground transition-colors hover:text-foreground hover:underline"
-            >
+            <span className="block truncate text-xs text-muted-foreground">
               {current.artistName}
-            </Link>
+            </span>
           ) : (
             <p className="block truncate text-xs text-muted-foreground">
               {current.artistName}

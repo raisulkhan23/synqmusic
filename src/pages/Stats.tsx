@@ -1,4 +1,3 @@
-import { Link } from "react-router";
 import {
   Bar,
   BarChart,
@@ -10,7 +9,9 @@ import {
   YAxis,
 } from "recharts";
 import { api } from "@/convex/_generated/api";
+import { Link } from "react-router";
 import { albumById, artistById, trackById } from "@/lib/catalog";
+
 import { coverArt } from "@/lib/covers";
 import { formatTime } from "@/lib/format";
 import { useQuery } from "convex/react";
@@ -165,9 +166,8 @@ export default function Stats() {
                   const track = trackById(t.trackId);
                   if (!track) return null;
                   return (
-                    <Link
+                    <div
                       key={t.trackId}
-                      to={`/album/${track.albumId}`}
                       className="flex items-center gap-3 rounded-xl px-2 py-1.5 transition-colors hover:bg-white/[0.05]"
                     >
                       <span className="w-5 text-center text-sm tabular-nums text-muted-foreground">{i + 1}</span>
@@ -177,7 +177,7 @@ export default function Stats() {
                         <p className="truncate text-xs text-muted-foreground">{artistById(track.artistId).name}</p>
                       </div>
                       <span className="text-sm tabular-nums text-[rgb(var(--tint))]">{t.playCount}×</span>
-                    </Link>
+                    </div>
                   );
                 })}
               </div>

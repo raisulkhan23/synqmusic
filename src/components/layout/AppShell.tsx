@@ -11,13 +11,13 @@ import { api } from "@/convex/_generated/api";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { useAuth } from "@/hooks/use-auth";
-import { Heart, House, LibraryBig, Search, Settings, UserRound, WifiOff } from "lucide-react";
+import { Heart, House, ListMusic, Search, Settings, UserRound, WifiOff } from "lucide-react";
 import { usePlayerStore, type RemoteLikeSnapshot } from "@/store/player";
 
 const MOBILE_NAV = [
   { to: "/home", label: "Home", icon: House },
   { to: "/search", label: "Search", icon: Search },
-  { to: "/library", label: "Library", icon: LibraryBig },
+  { to: "/playlists", label: "Library", icon: ListMusic },
   { to: "/profile", label: "Profile", icon: UserRound },
 ];
 

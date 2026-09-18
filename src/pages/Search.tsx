@@ -1,16 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router";
-import { AlbumCard } from "@/components/tracks/AlbumCard";
+import { useSearchParams } from "react-router";
 import { RemoteTrackRow } from "@/components/tracks/RemoteTrackRow";
-import { TrackRow } from "@/components/tracks/TrackRow";
 import { api } from "@/convex/_generated/api";
-import {
-  ALBUMS,
-  ARTISTS,
-  artistTracks,
-  searchCatalog,
-} from "@/lib/catalog";
-import { coverArt } from "@/lib/covers";
 import { toPlayableYoutube } from "@/lib/playable";
 import { type YtItem } from "@/lib/youtube";
 import { usePlayerStore } from "@/store/player";
@@ -137,7 +128,6 @@ export default function Search() {
   const [searchError, setSearchError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
 
-  const navigate = useNavigate();
   // Shared links open with ?q=… pre-filled — share → open → play.
   const [searchParams, setSearchParams] = useSearchParams();
   const sharedQuery = searchParams.get("q");
@@ -201,7 +191,7 @@ export default function Search() {
           if (!cancelled) {
             setYtResults([]);
             setSearchError(
-              "Couldn't reach our music sources right now. Try again, or browse the catalog below.",
+              "Couldn't reach our music sources right now. Try again in a moment.",
             );
           }
         })
@@ -225,7 +215,6 @@ export default function Search() {
     [startRadio],
   );
 
-  const results = useMemo(() => searchCatalog(query), [query]);
   const hasQuery = query.trim().length > 0;
 
   return (
@@ -236,8 +225,7 @@ export default function Search() {
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Find any song — search across all our music sources and stream it
-          instantly, or browse the
-          SYNQ catalog.
+          instantly.
         </p>
       </header>
 
@@ -290,7 +278,7 @@ export default function Search() {
               </div>
             </section>
           )}
-          <BrowseView onPick={setQuery} onAlbum={(id) => navigate(`/album/${id}`)} />
+          <BrowseView onPick={setQuery} />
         </>
       ) : (
         <div className="flex flex-col gap-10">
@@ -351,75 +339,12 @@ export default function Search() {
               </div>
             )}
           </section>
-
-          {/* catalog matches */}
-          {(results.tracks.length > 0 ||
-            results.albums.length > 0 ||
-            results.artists.length > 0) && (
-            <section>
-              <h2 className="mb-2 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
-                From the SYNQ catalog
-              </h2>
-              {results.tracks.length > 0 && (
-                <div className="flex flex-col gap-0.5">
-                  {results.tracks.slice(0, 6).map((track, i) => (
-                    <TrackRow
-                      key={track.id}
-                      track={track}
-                      list={results.tracks}
-                      index={i + 1}
-                    />
-                  ))}
-                </div>
-              )}
-              {results.albums.length > 0 && (
-                <div className="slider-rail -mx-4 mt-4 flex gap-4 overflow-x-auto px-4 pb-2">
-                  {results.albums.map((album) => (
-                    <AlbumCard key={album.id} album={album} />
-                  ))}
-                </div>
-              )}
-              {results.artists.length > 0 && (
-                <div className="slider-rail -mx-4 mt-4 flex gap-4 overflow-x-auto px-4 pb-2">
-                  {results.artists.map((artist) => {
-                    const album = ALBUMS.find(
-                      (a) => a.artistId === artist.id,
-                    );
-                    return (
-                      <button
-                        key={artist.id}
-                        type="button"
-                        onClick={() => album && navigate(`/album/${album.id}`)}
-                        className="group w-32 shrink-0 text-center"
-                      >
-                        <div className="mx-auto size-28 overflow-hidden rounded-full ring-1 ring-white/10 transition-transform duration-300 group-hover:scale-105">
-                          {album && (
-                            <img
-                              src={coverArt(album)}
-                              alt=""
-                              loading="lazy"
-                              className="size-full object-cover"
-                            />
-                          )}
-                        </div>
-                        <p className="mt-2 truncate text-sm font-semibold">
-                          {artist.name}
-                        </p>
-                        <p className="truncate text-xs text-muted-foreground">
-                          Artist
-                        </p>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
-          )}
         </div>
       )}
     </div>
   );
 }
+
 
 /** Debounce a value with a trailing delay. */
 function useDebounced<T>(value: T, delay: number): T {
@@ -433,10 +358,8 @@ function useDebounced<T>(value: T, delay: number): T {
 
 function BrowseView({
   onPick,
-  onAlbum,
 }: {
   onPick: (q: string) => void;
-  onAlbum: (id: string) => void;
 }) {
   return (
     <div className="flex flex-col gap-10">
@@ -484,54 +407,6 @@ function BrowseView({
               {genre}
             </button>
           ))}
-        </div>
-      </section>
-
-      <section>
-        <h2 className="mb-3 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
-          All albums
-        </h2>
-        <div className="slider-rail -mx-4 flex gap-4 overflow-x-auto px-4 pb-2">
-          {ALBUMS.map((album) => (
-            <AlbumCard key={album.id} album={album} />
-          ))}
-        </div>
-      </section>
-
-      <section>
-        <h2 className="mb-3 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
-          All artists
-        </h2>
-        <div className="slider-rail -mx-4 flex gap-4 overflow-x-auto px-4 pb-2">
-          {ARTISTS.map((artist) => {
-            const album = ALBUMS.find((a) => a.artistId === artist.id);
-            const tracks = artistTracks(artist.id);
-            return (
-              <button
-                key={artist.id}
-                type="button"
-                onClick={() => album && onAlbum(album.id)}
-                className="group w-32 shrink-0 text-center"
-              >
-                <div className="mx-auto size-28 overflow-hidden rounded-full ring-1 ring-white/10 transition-transform duration-300 group-hover:scale-105">
-                  {album && (
-                    <img
-                      src={coverArt(album)}
-                      alt=""
-                      loading="lazy"
-                      className="size-full object-cover"
-                    />
-                  )}
-                </div>
-                <p className="mt-2 truncate text-sm font-semibold">
-                  {artist.name}
-                </p>
-                <p className="truncate text-xs text-muted-foreground">
-                  {tracks.length} songs
-                </p>
-              </button>
-            );
-          })}
         </div>
       </section>
     </div>

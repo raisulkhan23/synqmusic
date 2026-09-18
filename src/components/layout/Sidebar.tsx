@@ -4,6 +4,7 @@ import { PlaylistDialog } from "@/components/playlists/PlaylistDialog";
 import { SettingsDialog } from "@/components/settings/SettingsDialog";
 import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/hooks/use-auth";
+import { usePlayerStore } from "@/store/player";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import {
@@ -12,7 +13,6 @@ import {
   Heart,
   History,
   House,
-  LibraryBig,
   ListMusic,
   Plus,
   Radio,
@@ -30,7 +30,7 @@ const NAV = [
 ];
 
 const LIBRARY_NAV = [
-  { to: "/library", label: "Your Library", icon: LibraryBig },
+  { to: "/playlists", label: "Your Library", icon: ListMusic },
   { to: "/liked", label: "Liked Songs", icon: Heart },
   { to: "/recent", label: "Recently Played", icon: History },
   { to: "/playlists", label: "Playlists", icon: ListMusic },
@@ -42,6 +42,7 @@ const SOCIAL_NAV = [
 
 export function Sidebar() {
   const { user, signOut } = useAuth();
+  const hideEmail = usePlayerStore((s) => s.hideSidebarEmail);
   const navigate = useNavigate();
   const playlists = useQuery(api.playlists.myPlaylists);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -220,9 +221,11 @@ export function Sidebar() {
           <p className="truncate text-sm font-semibold">
             {user?.name ?? (user?.isAnonymous ? "Guest" : "Listener")}
           </p>
-          <p className="truncate text-xs text-muted-foreground">
-            {user?.email ?? "Anonymous session"}
-          </p>
+          {hideEmail ? null : (
+            <p className="truncate text-xs text-muted-foreground">
+              {user?.email ?? "Anonymous session"}
+            </p>
+          )}
         </div>
         <button
           type="button"

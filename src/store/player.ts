@@ -9,13 +9,14 @@ import {
   type AudioFilterId,
 } from "@/lib/audio";
 import { trackById, type Track } from "@/lib/catalog";
-import { similarTracks } from "@/lib/catalog";
+import { genreSimilarTracks, similarTracks } from "@/lib/catalog";
 import type { RGB } from "@/lib/covers";
 import { isPlayable, toPlayable, toPlayableYoutube, type Playable } from "@/lib/playable";
 import * as ytEngine from "@/lib/youtubePlayer";
 import type { YtItem } from "@/lib/youtube";
 import { api } from "@/convex/_generated/api";
 import { ConvexClient } from "convex/browser";
+import { toast } from "sonner";
 
 /**
  * Resolve a direct audio stream URL for a YouTube video via the Convex
@@ -131,6 +132,9 @@ interface PlayerStore {
   /** Liquid glass UI effect (frosted refraction panels) */
   liquidGlass: boolean;
   toggleLiquidGlass: () => void;
+  /** Hide the account email in the sidebar corner. */
+  hideSidebarEmail: boolean;
+  toggleHideSidebarEmail: () => void;
 
   // queue history (previously played, most recent first)
   history: Playable[];
@@ -182,6 +186,8 @@ interface PlayerStore {
   undoRemoveFromQueue: () => void;
   insertInQueue: (track: Track | Playable, index: number) => void;
   addToQueue: (track: Track | Playable) => void;
+  /** Append songs similar to the given seed (genre/artist-based) to the queue. */
+  extendQueueWithSimilar: (seed?: Track | Playable) => void;
   playFromHistory: (index: number) => void;
   replaceUpcoming: (upcoming: Playable[]) => void;
   clearQueue: () => void;
@@ -496,6 +502,18 @@ export function clearPlayHistory(): void {
   }
 }
 
+/** Remove a single entry from the local play history (by track id). */
+export function clearSingleHistoryEntry(id: string): void {
+  const history = loadHistory();
+  const next = history.filter((h) => h.id !== id);
+  historyCache = next;
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+  } catch {
+    /* storage unavailable */
+  }
+}
+
 const randomIndex = (length: number, exclude: number): number => {
   if (length <= 1) return 0;
   let i = Math.floor(Math.random() * length);
@@ -530,11 +548,14 @@ function restartCurrent(): void {
 }
 
 /**
- * Local similar tracks for a seed (catalog-aware; empty for YouTube seeds).
- * Returned as Playables ready for the queue.
+ * Local similar tracks for a seed — genre/mood-first (shares genre tags or
+ * same artist), falling back to the general similarity index. Catalog-aware;
+ * empty for YouTube seeds.
  */
 function similarTracksFor(seed: Playable): Playable[] {
   if (seed.catalogTrack) {
+    const genre = genreSimilarTracks(seed.catalogTrack.id, 10);
+    if (genre.length > 0) return genre.map(toPlayable);
     return similarTracks(seed.catalogTrack.id, 10).map(toPlayable);
   }
   return [];
@@ -549,8 +570,7 @@ const playedSessionIds = new Set<string>();
 /**
  * Fetch a related-mix from YouTube Music based on the seed track's title +
  * artist. Returns Playables ready for the queue (empty on failure).
- */
-async function fetchRelatedMix(seed: Playable, existingQueue: Playable[], count: number): Promise<Playable[]> {
+ */async function fetchRelatedMix(seed: Playable, existingQueue: Playable[], count: number): Promise<Playable[]> {
   if (relatedMixInFlight?.seedId === seed.id) return relatedMixInFlight.promise;
   const promise = (async () => {
     try {
@@ -922,9 +942,23 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     const list2 =
       list && list.length > 0 ? list.map(norm) : [norm(track)];
     const idx = list2.findIndex((t) => t.id === track.id);
-    const index = idx >= 0 ? idx : 0;
-    set({ queue: list2, queueIndex: index });
-    loadTrack(list2[index]);
+    let index = idx >= 0 ? idx : 0;
+    let queue = list2;
+    // When shuffle is already on, physically shuffle the REST of the queue
+    // (clicked track first) — otherwise "next" would just walk the unshuffled
+    // list and shuffle would appear broken until the toggle was touched.
+    if (get().shuffle && queue.length > 1) {
+      const current = queue[index];
+      const rest = queue.filter((_, i) => i !== index);
+      for (let i = rest.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [rest[i], rest[j]] = [rest[j], rest[i]];
+      }
+      queue = current ? [current, ...rest] : rest;
+      index = 0;
+    }
+    set({ queue, queueIndex: index, unshuffledQueue: null, unshuffledIndex: -1 });
+    loadTrack(queue[index]);
   };
 
   const startRadio = (track: Track | Playable) => {
@@ -1058,21 +1092,22 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
   };
 
   const toggleShuffle = () => {
-    const next = !get().shuffle;
+    const s0 = get();
+    const next = !s0.shuffle;
     localStorage.setItem("ss.shuffle", next ? "1" : "0");
     // Physically reorder the queue so shuffle takes effect immediately and the
     // queue panel reflects it. The currently playing track keeps its slot; the
     // rest are Fisher–Yates shuffled. Turning shuffle off restores the saved
-    // original order.
-    const s = get();
-    if (s.queue.length > 2) {
-      const currentId = s.queueIndex >= 0 ? s.queue[s.queueIndex]?.id : null;
+    // original order. Works for ANY queue size (≥ 2) — small queues used to
+    // silently do nothing, which made shuffle feel broken.
+    if (s0.queue.length >= 2) {
+      const currentId = s0.queueIndex >= 0 ? s0.queue[s0.queueIndex]?.id : null;
       if (next) {
-        if (s.unshuffledQueue === null) {
-          set({ unshuffledQueue: [...s.queue], unshuffledIndex: s.queueIndex });
+        if (s0.unshuffledQueue === null) {
+          set({ unshuffledQueue: [...s0.queue], unshuffledIndex: s0.queueIndex });
         }
-        const current = currentId ? s.queue[s.queueIndex] : null;
-        const rest = s.queue.filter((_, i) => i !== s.queueIndex);
+        const current = currentId ? s0.queue[s0.queueIndex] : null;
+        const rest = s0.queue.filter((_, i) => i !== s0.queueIndex);
         for (let i = rest.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
           [rest[i], rest[j]] = [rest[j], rest[i]];
@@ -1080,9 +1115,9 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
         const newQueue = current ? [current, ...rest] : rest;
         set({ queue: newQueue, queueIndex: current ? 0 : -1 });
         saveQueue(newQueue, current ? 0 : -1, currentId);
-      } else if (s.unshuffledQueue !== null) {
-        const restored = s.unshuffledQueue;
-        let idx = s.unshuffledIndex;
+      } else if (s0.unshuffledQueue !== null) {
+        const restored = s0.unshuffledQueue;
+        let idx = s0.unshuffledIndex;
         if (currentId) {
           const found = restored.findIndex((t) => t.id === currentId);
           if (found >= 0) idx = found;
@@ -1403,6 +1438,14 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
         return { liquidGlass: next };
       }),
 
+    hideSidebarEmail: localStorage.getItem("ss.hideSidebarEmail") === "1",
+    toggleHideSidebarEmail: () =>
+      set((state) => {
+        const next = !state.hideSidebarEmail;
+        localStorage.setItem("ss.hideSidebarEmail", next ? "1" : "0");
+        return { hideSidebarEmail: next };
+      }),
+
     // restore queue from the last session (does not autoplay — user resumes)
     ...(savedQueue
       ? { queue: savedQueue.items, queueIndex: savedQueue.queueIndex }
@@ -1515,6 +1558,36 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       queue.splice(insertAt, 0, item);
       set({ queue, queueIndex: insertAt });
       loadTrack(item);
+    },
+    /** Fill the queue with more songs from the same genre as the current track. */
+    extendQueueWithSimilar: (seed) => {
+      const s = get();
+      const base = seed ? norm(seed) : s.current;
+      if (!base) {
+        toast.error("Nothing playing to base recommendations on");
+        return;
+      }
+      const known = similarTracksFor(base).filter(
+        (t) => t.id !== base.id && !s.queue.some((q) => q.id === t.id),
+      );
+      if (known.length === 0) {
+        toast.info("No more genre matches — try the radio button");
+        return;
+      }
+      // When shuffle is on, add the genre picks in random order.
+      const picks = s.shuffle ? [...known].sort(() => Math.random() - 0.5) : known;
+      set((state) => ({
+        queue: [...state.queue, ...picks],
+        unshuffledQueue: state.unshuffledQueue
+          ? [...state.unshuffledQueue, ...picks]
+          : null,
+      }));
+      saveQueue(
+        usePlayerStore.getState().queue,
+        usePlayerStore.getState().queueIndex,
+        usePlayerStore.getState().current?.id ?? null,
+      );
+      toast.success(`Added ${picks.length} songs from the same genre`);
     },
     replaceUpcoming: (upcoming) =>
       set((state) => {

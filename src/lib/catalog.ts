@@ -498,6 +498,23 @@ export function similarTracks(seedId: string, n = 10): Track[] {
     .map(({ t }) => t);
 }
 
+/**
+ * Genre-based similar tracks: all catalog tracks that share ANY mood/genre
+ * tag with the seed (plus same-artist), most popular first, seed excluded.
+ * Used to top up the queue with more songs from the same genre.
+ */
+export function genreSimilarTracks(seedId: string, n = 12): Track[] {
+  const seed = trackById(seedId);
+  if (!seed) return [];
+  return TRACKS.filter(
+    (t) =>
+      t.id !== seedId &&
+      (t.moods.some((m) => seed.moods.includes(m)) || t.artistId === seed.artistId),
+  )
+    .sort((a, b) => b.popularity - a.popularity)
+    .slice(0, n);
+}
+
 /** "Song Radio" / artist radio — an endless-feeling mix around a seed. */
 export function radioFor(seedId: string, n = 20): Track[] {
   const similar = similarTracks(seedId, n - 1);

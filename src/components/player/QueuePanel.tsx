@@ -9,9 +9,10 @@ import {
 import { Equalizer } from "@/components/player/Equalizer";
 import { api } from "@/convex/_generated/api";
 import { formatTime } from "@/lib/format";
-import { albumById, similarTracks } from "@/lib/catalog";
+import { albumById, genreSimilarTracks, similarTracks } from "@/lib/catalog";
 import { coverArt } from "@/lib/covers";
 import { usePlayerStore } from "@/store/player";
+import { toast } from "sonner";
 import {
   ArrowLeftRight,
   Clock3,
@@ -23,7 +24,6 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 export function QueuePanel() {
@@ -54,11 +54,11 @@ export function QueuePanel() {
   // each other. Composite "id#index" values keep every row distinct.
   const upcomingKeys = upcoming.map((t, i) => `${t.id}#${i}`);
 
-  // Queue suggestions: similar to what's playing, not already queued.
+  // Queue suggestions: genre-similar to what's playing, not already queued.
   const suggestions = (() => {
     const seed = current?.catalogTrack?.id;
     if (!seed || upcoming.length >= 15) return [];
-    return similarTracks(seed, 12)
+    return genreSimilarTracks(seed, 12)
       .filter((t) => !queue.some((q) => q.catalogTrack?.id === t.id))
       .slice(0, 3);
   })();
@@ -300,7 +300,7 @@ export function QueuePanel() {
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">{track.title}</p>
                       <p className="truncate text-xs text-muted-foreground">
-                        Because it&apos;s playing now
+                        Same genre as what&apos;s playing
                       </p>
                     </div>
                     <button

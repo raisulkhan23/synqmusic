@@ -2,8 +2,8 @@ import { useMemo, useState } from "react";
 import { RemoteTrackRow } from "@/components/tracks/RemoteTrackRow";
 import { toPlayableYoutube, type Playable } from "@/lib/playable";
 import type { YtItem } from "@/lib/youtube";
-import { readPlayHistory, usePlayerStore, type HistoryEntry } from "@/store/player";
-import { Dices, History, Loader2 } from "lucide-react";
+import { clearSingleHistoryEntry, readPlayHistory, usePlayerStore, type HistoryEntry } from "@/store/player";
+import { Dices, History, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useAction } from "convex/react";
@@ -35,7 +35,8 @@ function entryToItem(h: HistoryEntry): YtItem {
 }
 
 export default function Recent() {
-  const history = useMemo(() => readPlayHistory(), []);
+  const [historyVersion, setHistoryVersion] = useState(0);
+  const history = useMemo(() => readPlayHistory(), [historyVersion]);
   const playTrack = usePlayerStore((s) => s.playTrack);
   const searchYt = useAction(api.youtube.searchYoutube);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
@@ -84,6 +85,12 @@ export default function Recent() {
       })
       .catch(() => toast.error("Playback failed — try again"))
       .finally(() => setResolvingId(null));
+  };
+
+  const removeFromHistory = (id: string) => {
+    clearSingleHistoryEntry(id);
+    setHistoryVersion((v) => v + 1);
+    toast.success("Removed from recently played");
   };
 
   // "I'm feeling lucky" — random pick from this history, resolves via live search.
@@ -185,11 +192,27 @@ export default function Recent() {
                   onPlay={(it) => play(it, items)}
                   resolving={resolvingId === item.id}
                   source="youtube"
+                  trailing={
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="hidden text-[11px] text-muted-foreground/70 lg:block">
+                        {entry.playCount > 1 ? `${entry.playCount} plays · ` : ""}
+                        {timeAgo(entry.at)}
+                      </span>
+                      <button
+                        type="button"
+                        aria-label={`Remove ${item.title} from recently played`}
+                        title="Remove from recently played"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeFromHistory(entry.id);
+                        }}
+                        className="rounded-full p-1.5 text-muted-foreground/70 opacity-0 transition-all group-hover:opacity-100 hover:bg-white/10 hover:text-foreground focus:opacity-100"
+                      >
+                        <X className="size-4" />
+                      </button>
+                    </div>
+                  }
                 />
-                <span className="pointer-events-none absolute top-1/2 right-24 hidden -translate-y-1/2 text-[11px] text-muted-foreground/70 lg:block">
-                  {entry.playCount > 1 ? `${entry.playCount} plays · ` : ""}
-                  {timeAgo(entry.at)}
-                </span>
               </div>
             );
           })}

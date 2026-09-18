@@ -92,6 +92,8 @@ export function SettingsDialog({
   const toggleHideExplicit = usePlayerStore((s) => s.toggleHideExplicit);
   const liquidGlass = usePlayerStore((s) => s.liquidGlass);
   const toggleLiquidGlass = usePlayerStore((s) => s.toggleLiquidGlass);
+  const hideSidebarEmail = usePlayerStore((s) => s.hideSidebarEmail);
+  const toggleHideSidebarEmail = usePlayerStore((s) => s.toggleHideSidebarEmail);
 
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
@@ -232,6 +234,17 @@ export function SettingsDialog({
               )}
               Sign out
             </button>
+          )}
+          {user?.email && (
+            <ToggleRow
+              label="Hide email in sidebar"
+              description="Show only your name in the corner account panel"
+              on={hideSidebarEmail}
+              onToggle={() => {
+                toggleHideSidebarEmail();
+                toast(hideSidebarEmail ? "Email shown in sidebar" : "Email hidden in sidebar");
+              }}
+            />
           )}
         </section>
 

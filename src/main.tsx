@@ -38,11 +38,9 @@ const AuthPage = lazy(() => import("./pages/Auth.tsx"));
 import AppShell from "./components/layout/AppShell.tsx";
 const Home = lazy(() => import("./pages/Home.tsx"));
 const Search = lazy(() => import("./pages/Search.tsx"));
-const Library = lazy(() => import("./pages/Library.tsx"));
 const Liked = lazy(() => import("./pages/Liked.tsx"));
 const Playlists = lazy(() => import("./pages/Playlists.tsx"));
 const PlaylistDetail = lazy(() => import("./pages/PlaylistDetail.tsx"));
-const Album = lazy(() => import("./pages/Album.tsx"));
 const Admin = lazy(() => import("./pages/Admin.tsx"));
 const Stats = lazy(() => import("./pages/Stats.tsx"));
 const Recent = lazy(() => import("./pages/Recent.tsx"));
@@ -197,14 +195,6 @@ createRoot(document.getElementById("root")!).render(
                   }
                 />
                 <Route
-                  path="/library"
-                  element={
-                    <PageSuspense>
-                      <Library />
-                    </PageSuspense>
-                  }
-                />
-                <Route
                   path="/liked"
                   element={
                     <PageSuspense>
@@ -225,14 +215,6 @@ createRoot(document.getElementById("root")!).render(
                   element={
                     <PageSuspense>
                       <PlaylistDetail />
-                    </PageSuspense>
-                  }
-                />
-                <Route
-                  path="/album/:id"
-                  element={
-                    <PageSuspense>
-                      <Album />
                     </PageSuspense>
                   }
                 />
