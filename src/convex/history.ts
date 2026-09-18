@@ -2,14 +2,23 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
+const playSnapshot = {
+  source: v.optional(v.string()),
+  title: v.optional(v.string()),
+  artistName: v.optional(v.string()),
+  coverUrl: v.optional(v.string()),
+  duration: v.optional(v.number()),
+};
+
 /**
- * Record a play of a catalog track: upserts the user's playHistory row for
- * the track (bumping playCount + playedAt). Only catalog tracks are tracked —
- * YouTube results are ephemeral.
+ * Record a play of ANY track (catalog-era ids, YouTube video ids, etc.):
+ * upserts the user's playHistory row (bumping playCount + playedAt).
+ * Remote plays include a title/artist/cover snapshot so stats and history
+ * can render them without resolving anything.
  */
 export const recordPlay = mutation({
-  args: { trackId: v.string() },
-  handler: async (ctx, { trackId }) => {
+  args: { trackId: v.string(), ...playSnapshot },
+  handler: async (ctx, { trackId, source, title, artistName, coverUrl, duration }) => {
     const userId = await getAuthUserId(ctx);
     if (userId === null) {
       throw new ConvexError("Sign in to track listening history");
@@ -22,7 +31,15 @@ export const recordPlay = mutation({
       .first();
 
     if (existing !== null) {
-      await ctx.db.patch(existing._id, { playedAt: now, playCount: existing.playCount + 1 });
+      await ctx.db.patch(existing._id, {
+        playedAt: now,
+        playCount: existing.playCount + 1,
+        ...(source !== undefined ? { source } : {}),
+        ...(title !== undefined ? { title } : {}),
+        ...(artistName !== undefined ? { artistName } : {}),
+        ...(coverUrl !== undefined ? { coverUrl } : {}),
+        ...(duration !== undefined ? { duration } : {}),
+      });
       return existing.playCount + 1;
     }
 
@@ -31,13 +48,19 @@ export const recordPlay = mutation({
       trackId,
       playedAt: now,
       playCount: 1,
+      source,
+      title,
+      artistName,
+      coverUrl,
+      duration,
     });
     return 1;
   },
 });
 
 /**
- * The user's most recently played catalog tracks (unique, newest first).
+ * The user's most recently played tracks (unique, newest first) across all
+ * sources. Self-contained rows: title/artist/cover snapshot included.
  */
 export const recentlyPlayed = query({
   args: { limit: v.optional(v.number()) },
@@ -51,12 +74,20 @@ export const recentlyPlayed = query({
       .order("desc")
       .take(limit ?? 12);
 
-    return rows.map((r) => ({ trackId: r.trackId, playedAt: r.playedAt, playCount: r.playCount }));
+    return rows.map((r) => ({
+      trackId: r.trackId,
+      playedAt: r.playedAt,
+      playCount: r.playCount,
+      title: r.title,
+      artistName: r.artistName,
+      coverUrl: r.coverUrl,
+      duration: r.duration,
+    }));
   },
 });
 
 /**
- * The user's most played catalog tracks by total play count.
+ * The user's most played tracks by total play count, across all sources.
  */
 export const mostPlayed = query({
   args: { limit: v.optional(v.number()) },
@@ -74,13 +105,16 @@ export const mostPlayed = query({
       trackId: r.trackId,
       playedAt: r.playedAt,
       playCount: r.playCount,
+      title: r.title,
+      artistName: r.artistName,
+      coverUrl: r.coverUrl,
+      duration: r.duration,
     }));
   },
 });
 
 /**
- * The track the user listened to last (for "Continue listening") plus how far
- * in they got. Returns null when there is no history yet.
+ * The track the user listened to last (for "Continue listening").
  */
 export const continueListening = query({
   args: {},
@@ -94,14 +128,22 @@ export const continueListening = query({
       .order("desc")
       .first();
 
-    return last ? { trackId: last.trackId, playedAt: last.playedAt } : null;
+    if (!last) return null;
+    return {
+      trackId: last.trackId,
+      playedAt: last.playedAt,
+      title: last.title,
+      artistName: last.artistName,
+      coverUrl: last.coverUrl,
+    };
   },
 });
 
 /**
- * Full listening-statistics dashboard data for the signed-in user:
- * totals, most played, daily activity for the last 30 days, monthly history,
- * and listening streaks.
+ * Full listening-statistics dashboard data for the signed-in user —
+ * counted across ALL sources (every play of every song, catalog or not):
+ * totals, most played, daily activity for the last 30 days, monthly
+ * history, listening streaks and most-active hours.
  */
 export const listeningStats = query({
   args: {},
@@ -118,6 +160,7 @@ export const listeningStats = query({
       return {
         totalPlays: 0,
         uniqueSongs: 0,
+        totalSeconds: 0,
         topTracks: [],
         dailyActivity: [],
         monthlyActivity: [],
@@ -127,15 +170,26 @@ export const listeningStats = query({
     }
 
     const totalPlays = rows.reduce((sum, r) => sum + r.playCount, 0);
+    const totalSeconds = rows.reduce(
+      (sum, r) => sum + (r.duration ?? 0) * r.playCount,
+      0,
+    );
 
-    // Top tracks by play count.
+    // Top tracks by play count, with self-contained display info.
     const topTracks = [...rows]
       .sort((a, b) => b.playCount - a.playCount)
       .slice(0, 10)
-      .map((r) => ({ trackId: r.trackId, playCount: r.playCount, playedAt: r.playedAt }));
+      .map((r) => ({
+        trackId: r.trackId,
+        playCount: r.playCount,
+        playedAt: r.playedAt,
+        title: r.title ?? "Unknown song",
+        artistName: r.artistName ?? "Unknown artist",
+        coverUrl: r.coverUrl ?? "",
+        duration: r.duration,
+      }));
 
-    // Daily activity for the last 30 days (by play events — each row's
-    // playedAt is its most recent play, so weight by playCount).
+    // Daily activity for the last 30 days (weight by playCount).
     const dayMs = 24 * 60 * 60 * 1000;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -185,6 +239,7 @@ export const listeningStats = query({
     return {
       totalPlays,
       uniqueSongs: rows.length,
+      totalSeconds,
       topTracks,
       dailyActivity: daily,
       monthlyActivity: monthly,

@@ -848,9 +848,11 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     recordHistory(track);
 
     // record catalog plays for history / most-played
-    if (track.catalogTrack && historyRecorder) {
+    // Record EVERY play (any source) for listening stats — the recorder
+    // receives the playable's id; AppShell attaches a title/artist snapshot.
+    if (historyRecorder) {
       try {
-        historyRecorder(track.catalogTrack.id);
+        historyRecorder(track.id);
       } catch {
         /* ignore */
       }

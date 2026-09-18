@@ -92,10 +92,22 @@ export function AppShell() {
     });
   }, [toggleLikeMutation, setLikeMutation]);
 
-  // Fire-and-forget play history recording (recently / most played).
+  // Fire-and-forget play history recording — records EVERY play (any source)
+  // with a title/artist/cover snapshot so stats cover all music, not just one
+  // provider's catalog.
   useEffect(() => {
     setHistoryRecorder((trackId: string) => {
-      void recordPlay({ trackId }).catch(() => undefined);
+      const current = usePlayerStore.getState().current;
+      const snapshot = current && current.id === trackId
+        ? {
+            source: current.source,
+            title: current.title,
+            artistName: current.artistName,
+            coverUrl: current.coverUrl,
+            duration: current.duration,
+          }
+        : undefined;
+      void recordPlay({ trackId, ...snapshot }).catch(() => undefined);
     });
   }, [recordPlay, setHistoryRecorder]);
 

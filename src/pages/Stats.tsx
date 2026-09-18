@@ -10,9 +10,7 @@ import {
 } from "recharts";
 import { api } from "@/convex/_generated/api";
 import { Link } from "react-router";
-import { albumById, artistById, trackById } from "@/lib/catalog";
 
-import { coverArt } from "@/lib/covers";
 import { formatTime } from "@/lib/format";
 import { useQuery } from "convex/react";
 import { BarChart3, Flame, Hourglass, Music2, Trophy } from "lucide-react";
@@ -162,24 +160,26 @@ export default function Stats() {
                 Most played
               </h2>
               <div className="mt-3 flex flex-col gap-2">
-                {stats.topTracks.map((t, i) => {
-                  const track = trackById(t.trackId);
-                  if (!track) return null;
-                  return (
-                    <div
-                      key={t.trackId}
-                      className="flex items-center gap-3 rounded-xl px-2 py-1.5 transition-colors hover:bg-white/[0.05]"
-                    >
-                      <span className="w-5 text-center text-sm tabular-nums text-muted-foreground">{i + 1}</span>
-                      <img src={coverArt(albumById(track.albumId))} alt="" className="size-10 rounded-md object-cover ring-1 ring-white/10" loading="lazy" />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">{track.title}</p>
-                        <p className="truncate text-xs text-muted-foreground">{artistById(track.artistId).name}</p>
-                      </div>
-                      <span className="text-sm tabular-nums text-[rgb(var(--tint))]">{t.playCount}×</span>
+                {stats.topTracks.map((t, i) => (
+                  <div
+                    key={t.trackId}
+                    className="flex items-center gap-3 rounded-xl px-2 py-1.5 transition-colors hover:bg-white/[0.05]"
+                  >
+                    <span className="w-5 text-center text-sm tabular-nums text-muted-foreground">{i + 1}</span>
+                    {t.coverUrl ? (
+                      <img src={t.coverUrl} alt="" className="size-10 rounded-md object-cover ring-1 ring-white/10" loading="lazy" />
+                    ) : (
+                      <span className="flex size-10 items-center justify-center rounded-md bg-white/[0.06] ring-1 ring-white/10">
+                        <Music2 className="size-4 text-muted-foreground" />
+                      </span>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{t.title}</p>
+                      <p className="truncate text-xs text-muted-foreground">{t.artistName}</p>
                     </div>
-                  );
-                })}
+                    <span className="text-sm tabular-nums text-[rgb(var(--tint))]">{t.playCount}×</span>
+                  </div>
+                ))}
               </div>
             </section>
 
@@ -210,7 +210,7 @@ export default function Stats() {
                   </BarChart>
                 </ResponsiveContainer>
               <p className="mt-2 text-xs text-muted-foreground">
-                Total listening logged: {formatTime(stats.uniqueSongs * 210)} across catalog plays
+                Total listening logged: {formatTime(stats.totalSeconds)} across all songs
               </p>
             </section>
           </div>

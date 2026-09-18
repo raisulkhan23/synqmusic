@@ -58,7 +58,7 @@ const schema = defineSchema(
       .index("by_user_track", ["userId", "trackId"])
       .index("by_user", ["userId"]),
 
-    // user-created playlists referencing catalog track ids
+    // user-created playlists referencing track ids (any source)
     playlists: defineTable({
       userId: v.id("users"),
       name: v.string(),
@@ -68,12 +68,18 @@ const schema = defineSchema(
       updatedAt: v.number(),
     }).index("by_user", ["userId"]),
 
-    // listening history: one row per user+track, updated on every play
+    // listening history: one row per user+track, updated on every play.
+    // Covers ALL sources — remote plays store a title/artist/cover snapshot.
     playHistory: defineTable({
       userId: v.id("users"),
-      trackId: v.string(), // id of the track in the SYNQ demo catalog
+      trackId: v.string(), // opaque per-source id (youtube video id, etc.)
       playedAt: v.number(),
       playCount: v.number(),
+      source: v.optional(v.string()),
+      title: v.optional(v.string()),
+      artistName: v.optional(v.string()),
+      coverUrl: v.optional(v.string()),
+      duration: v.optional(v.number()),
     })
       .index("by_user_track", ["userId", "trackId"])
       .index("by_user_playedAt", ["userId", "playedAt"])
