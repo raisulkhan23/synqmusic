@@ -32,6 +32,8 @@ let ytSearchClient: ConvexClient | null = null;
 const convexSiteUrl = ((import.meta.env.VITE_CONVEX_URL as string) ?? "").replace(".cloud", ".site");
 const audioProxyBase = `${convexSiteUrl}/audio-proxy`;
 const ytResolve = async (videoId: string): Promise<string | null> => {
+  // 1) Server-side InnerTube resolution (best quality, but cloud IPs are
+  //    often bot-blocked by YouTube).
   try {
     ytResolveClient = ytResolveClient ?? new ConvexClient(import.meta.env.VITE_CONVEX_URL as string);
     // Network-aware quality: prefer a lighter stream when the connection is poor.
@@ -39,11 +41,41 @@ const ytResolve = async (videoId: string): Promise<string | null> => {
     const net = (navigator as Navigator & { connection?: NetInfo }).connection;
     const slow = net?.effectiveType === "2g" || net?.effectiveType === "slow-2g" || net?.effectiveType === "3g";
     const res = await ytResolveClient.action(api.youtube.resolveStream, { videoId, quality: slow ? "low" : "high" });
-    if (!res?.url) return null;
-    return `${audioProxyBase}?u=${encodeURIComponent(res.url)}`;
+    if (res?.url) return `${audioProxyBase}?u=${encodeURIComponent(res.url)}`;
   } catch {
-    return null;
+    /* fall through to browser-side resolution */
   }
+  // 2) Browser-side fallback via public Piped instances. These run CORS
+  //    headers directly and resolve from the USER's IP (never bot-blocked),
+  //    so the Web Audio effect chain always gets a stream to process.
+  try {
+    const instances = [
+      "https://pipedapi.kavin.rocks",
+      "https://pipedapi.adminforge.de",
+      "https://api.piped.private.coffee",
+    ];
+    for (const base of instances) {
+      try {
+        const ctrl = new AbortController();
+        const timeout = setTimeout(() => ctrl.abort(), 6000);
+        const res = await fetch(`${base}/streams/${videoId}`, { signal: ctrl.signal });
+        clearTimeout(timeout);
+        if (!res.ok) continue;
+        const data = (await res.json()) as {
+          audioStreams?: { url: string; bitrate?: number; mimeType?: string }[];
+        };
+        const streams = (data.audioStreams ?? [])
+          .filter((s) => !!s.url && (!s.mimeType || s.mimeType.includes("audio")))
+          .sort((a, b) => (b.bitrate ?? 0) - (a.bitrate ?? 0));
+        if (streams[0]?.url) return streams[0].url;
+      } catch {
+        continue;
+      }
+    }
+  } catch {
+    /* nothing else to try */
+  }
+  return null;
 };
 
 export type RepeatMode = "off" | "all" | "one";
