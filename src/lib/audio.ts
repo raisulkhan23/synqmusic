@@ -74,7 +74,7 @@ let rotateRaf = 0;
  * those tracks only hit this graph when routed through the audio element
  * (effects active / stream rescue).
  */
-function ensureGraph(): boolean {
+export function ensureGraph(): boolean {
   try {
     if (audioCtx && filterSource) {
       if (audioCtx.state === "suspended") void audioCtx.resume();

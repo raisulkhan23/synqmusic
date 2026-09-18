@@ -6,6 +6,7 @@ import {
   setEqTreble as setEqTrebleLib,
   setEqBalance as setEqBalanceLib,
   setEqMono as setEqMonoLib,
+  ensureGraph,
   type AudioFilterId,
 } from "@/lib/audio";
 import type { RGB } from "@/lib/covers";
@@ -1192,18 +1193,21 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
   };
 
   const setAudioFilterAction = (id: AudioFilterId) => {
+    // Warm the graph in the same gesture — a suspended context makes the
+    // whole effect chain a silent no-op.
+    if (id !== "off") ensureGraph();
     setAudioFilter(id);
     set({ audioFilter: id });
     // If a YouTube track is currently playing via the IFrame engine and an
     // effect was just activated, hot-swap it onto the filtered audio path.
     const s = get();
-    if (id !== "off" && s.current?.youtubeId && !s.current.audioUrl.includes("googlevideo")) {
+    if (id !== "off" && s.current?.youtubeId && !s.current.audioUrl.includes("googlevideo") && !s.current.audioUrl.includes("audio-proxy")) {
       const resumeAt = s.currentTime;
       void resolveAndPlayWithFilter(s.current, resumeAt);
     }
     // If the effect was turned off while a YouTube track is on the audio
     // element, swap back to the IFrame engine (better quality/reliability).
-    if (id === "off" && s.current?.youtubeId && s.current.audioUrl.includes("googlevideo")) {
+    if (id === "off" && s.current?.youtubeId && (s.current.audioUrl.includes("googlevideo") || s.current.audioUrl.includes("audio-proxy"))) {
       const resumeAt = s.currentTime;
       getAudio().pause();
       void ytEngine
@@ -1249,6 +1253,10 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
   const resolveAndPlayWithFilter = (track: Playable, resumeAt: number) => {
     const videoId = track.youtubeId;
     if (!videoId) return;
+    // Build the audio graph NOW (this runs inside the user-gesture click
+    // that started playback) — creating it later from a non-gesture context
+    // leaves the AudioContext suspended and the effects silent.
+    ensureGraph();
     // Update UI immediately — resolution can take seconds (or fail), and the
     // player must never show the previous song while the new one plays.
     set({
@@ -1285,6 +1293,10 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       .catch(() => {
         if (seq !== loadSeq) return; // stale
         // Fall back to the unfiltered IFrame engine so playback never dies.
+        // Tell the user the truth: the requested effect could NOT be applied
+        // (stream resolution blocked), otherwise it looks like a silent no-op.
+        toast.error("Effect unavailable for this song — playing without it", { id: "fx-fallback" });
+        usePlayerStore.setState({ audioFilter: "off" });
         getAudio().pause();
         ytEngine
           .play(videoId, { volume: get().volume, muted: get().muted, startSeconds: resumeAt || undefined })

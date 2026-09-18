@@ -108,9 +108,10 @@ function applyRate(): void {
 let handlers: YtEngineHandlers = {};
 let player: YtPlayerLike | null = null;
 let hostEl: HTMLDivElement | null = null;
-let mountEl: HTMLDivElement | null = null;
 let lastState = -1;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
+/** The video id currently loaded into the engine (null = nothing loaded). */
+let loadedVideoId: string | null = null;
 
 /**
  * Slave mode: the engine plays a video MUTED purely as visuals while the
@@ -181,7 +182,6 @@ async function ensurePlayer(): Promise<YtPlayerLike> {
   host.appendChild(mount);
   document.body.appendChild(host);
   hostEl = host;
-  mountEl = mount;
 
   player = await new Promise<YtPlayerLike>((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error("YT player init timed out")), 10_000);
@@ -264,6 +264,7 @@ export async function play(
     /* ignore */
   }
   lastState = -1;
+  loadedVideoId = videoId;
   p.loadVideoById(videoId, Math.max(0, opts.startSeconds ?? 0));
   // A fresh load resets the rate — the verified re-apply loop handles it.
   applyRate();
@@ -435,6 +436,11 @@ export function trackFrame(frame: HTMLElement): () => void {
 /** YT error code → human message (100/101/150 = unusable video). */
 export function isFatalError(code: number): boolean {
   return code === 2 || code === 5 || code === 100 || code === 101 || code === 150;
+}
+
+/** The video id the engine currently has loaded — null when nothing loaded. */
+export function getLoadedVideoId(): string | null {
+  return loadedVideoId;
 }
 
 // --- slave (visual-only) mode -------------------------------------------------

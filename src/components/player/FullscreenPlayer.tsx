@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { api } from "@/convex/_generated/api";
 import { formatTime } from "@/lib/format";
-import { dismissVideo, presentOverlay, trackFrame } from "@/lib/youtubePlayer";
+import { dismissVideo, getLoadedVideoId, presentOverlay, trackFrame } from "@/lib/youtubePlayer";
 import { AUDIO_FILTERS as FILTER_DEFS } from "@/lib/audio";
 import { usePlayerStore } from "@/store/player";
 import { toast } from "sonner";
@@ -402,6 +402,14 @@ export function FullscreenPlayer() {
     let tries = 0;
     let timer: ReturnType<typeof setTimeout>;
     const attempt = () => {
+      // The engine may not even have this video loaded (e.g. the track is
+      // playing through the filtered <audio> path) — no overlay is possible.
+      // Show the inline embed immediately instead of spinning forever.
+      const engineVideo = getLoadedVideoId();
+      if (engineVideo !== current.youtubeId) {
+        setEmbedFallback(true);
+        return;
+      }
       const frame = videoFrameRef.current;
       if (!frame || !frame.isConnected) {
         // Frame not mounted yet — retry briefly while the overlay opens.
