@@ -527,23 +527,58 @@ let relatedMixInFlight: { seedId: string; promise: Promise<Playable[]> } | null 
 const playedSessionIds = new Set<string>();
 
 /**
- * Fetch a related-mix from YouTube Music based on the seed track's title +
- * artist. Returns Playables ready for the queue (empty on failure).
+ * Known genre list used to infer the seed's genre when YouTube doesn't tell us.
+ * Checked against the artist name and track title for hints.
+ */
+const GENRE_HINTS = [
+  "pop", "rock", "hip hop", "rap", "r&b", "soul", "funk", "jazz", "blues",
+  "electronic", "edm", "house", "techno", "trance", "dubstep", "drum and bass",
+  "ambient", "lofi", "lo-fi", "chill", "classical", "country", "folk",
+  "indie", "alternative", "metal", "punk", "reggae", "latin", "afrobeats",
+  "k-pop", "kpop", "j-pop", "disco", "synthwave", "vaporwave", "gospel",
+  "acoustic", "dance", "disco",
+];
+
+/**
+ * Try to infer a genre tag for the seed from its artist/title metadata.
+ * Returns null when nothing obvious matches — callers then fall back to a
+ * broader "similar to X" style query.
+ */
+function inferGenre(seed: Playable): string | null {
+  const hay = `${seed.artistName} ${seed.title}`.toLowerCase();
+  for (const g of GENRE_HINTS) {
+    if (hay.includes(g)) return g === "lo-fi" ? "lofi" : g;
+  }
+  return null;
+}
+
+/**
+ * Fetch a related-mix from YouTube Music based on the seed track's GENRE.
+ * Returns Playables ready for the queue (empty on failure).
  */async function fetchRelatedMix(seed: Playable, existingQueue: Playable[], count: number): Promise<Playable[]> {
   if (relatedMixInFlight?.seedId === seed.id) return relatedMixInFlight.promise;
   const promise = (async () => {
     try {
       ytSearchClient = ytSearchClient ?? new ConvexClient(import.meta.env.VITE_CONVEX_URL as string);
       const artist = seed.artistName.split(",")[0]?.trim() ?? "";
-      // IMPORTANT: never query "<title> <artist> similar songs" — YouTube
-      // returns the SAME tracks as a regular search page. Query the ARTIST's
-      // style instead so results are NEW songs in the same vein/genre.
-      const queries = [
-        `${artist} songs`,
-        `artists similar to ${artist}`,
-        `${artist} mix`,
-        `${artist} genre playlist`,
-      ];
+      // IMPORTANT: prioritize GENRE over artist. Only one of the queries may
+      // mention the artist — the rest target the genre's radio/mix space so
+      // results come from many different artists, not the same singer.
+      const genre = inferGenre(seed);
+      const queries = genre
+        ? [
+            `${genre} mix`,
+            `${genre} music playlist`,
+            `${genre} hits`,
+            `${genre} radio`,
+            `best ${genre} songs`,
+            `${artist} ${genre} songs`, // at most one artist-anchored query
+          ]
+        : [
+            `artists similar to ${artist}`, // closest genre match we can get
+            `${artist} mix`,
+            `${artist} and similar artists playlist`,
+          ];
       // Rotate randomly so repeat fills surface different mixes.
       const query = queries[Math.floor(Math.random() * queries.length)];
       const res = await ytSearchClient.action(api.youtube.searchYoutube, { query });
@@ -563,6 +598,11 @@ const playedSessionIds = new Set<string>();
         const nt = normTitle(it.title);
         if (nt === seedTitle) continue; // alternate upload of the seed
         if (seenTitles.has(nt)) continue; // duplicate of queued/heard track
+        // Drop same-artist repeats unless the queue explicitly wants them —
+        // the point of the fill is DIFFERENT songs, ideally different artists.
+        const normArtist = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+        const seedArtist = normArtist(seed.artistName);
+        if (seedArtist && normArtist(it.artist ?? "") === seedArtist && out.length >= Math.floor(count / 3)) continue;
         existing.add(it.id);
         seenTitles.add(nt);
         out.push(toPlayableYoutube(it, ""));

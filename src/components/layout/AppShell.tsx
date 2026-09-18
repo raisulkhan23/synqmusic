@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
+import * as ytEngine from "@/lib/youtubePlayer";
 import { FullscreenPlayer } from "@/components/player/FullscreenPlayer";
 import { PlayerBar } from "@/components/player/PlayerBar";
 import { QueuePanel } from "@/components/player/QueuePanel";
@@ -25,6 +26,7 @@ const DEFAULT_TINT = "203 244 143";
 
 export function AppShell() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { signOut } = useAuth();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [offline, setOffline] = useState(!navigator.onLine);
@@ -61,6 +63,16 @@ export function AppShell() {
   useEffect(() => {
     if (currentUser) void claimAdminIfEmpty();
   }, [currentUser, claimAdminIfEmpty]);
+
+  // Route-change safety net: park any stale fullscreen video overlay and
+  // guarantee the player bar is visible outside the fullscreen player.
+  // (Fixes the player bar disappearing after visiting pages like /admin.)
+  useEffect(() => {
+    const s = usePlayerStore.getState();
+    if (!s.fullscreen) ytEngine.dismissVideo();
+    s.setQueueOpen(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
 
   // Keep the player store's liked map in sync with Convex.
   useEffect(() => {

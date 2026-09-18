@@ -376,8 +376,8 @@ export function FullscreenPlayer() {
 
   const videoFrameRef = useRef<HTMLDivElement | null>(null);
   const [videoReady, setVideoReady] = useState(false);
-  /** True when the overlaid live player could NOT be presented — fall back to a muted inline embed. */
-  const [useEmbedFallback, setUseEmbedFallback] = useState(false);
+  /** Set when the overlaid live player can't present — we fall back to an inline iframe. */
+  const [embedFallback, setEmbedFallback] = useState(false);
 
   // Overlay the live YouTube player over the video frame whenever fullscreen
   // + video is on and the current track plays through the YouTube engine.
@@ -393,7 +393,7 @@ export function FullscreenPlayer() {
       return;
     }
     setVideoReady(false);
-    setUseEmbedFallback(false);
+    setEmbedFallback(false);
     let stopTracking: (() => void) | null = null;
     let tries = 0;
     let timer: ReturnType<typeof setTimeout>;
@@ -410,7 +410,7 @@ export function FullscreenPlayer() {
         return;
       }
       if (++tries < 40) timer = setTimeout(attempt, 100); // ~4s
-      else setUseEmbedFallback(true); // overlaid live player failed — show an inline embed instead
+      else setEmbedFallback(true); // overlaid live player failed — show an inline embed instead
     };
     timer = setTimeout(attempt, 250);
     return () => {
@@ -565,8 +565,18 @@ export function FullscreenPlayer() {
                 <img
                   src={current.coverUrl}
                   alt=""
-                  className="absolute inset-0 size-full object-cover"
+                  className={cn("absolute inset-0 size-full object-cover", embedFallback && "opacity-0")}
                 />
+                {embedFallback && current.youtubeId && (
+                  <iframe
+                    key={current.youtubeId}
+                    title={`${current.title} video`}
+                    src={`https://www.youtube.com/embed/${current.youtubeId}?autoplay=0&controls=0&modestbranding=1&rel=0&iv_load_policy=3&disablekb=1&fs=0&start=${Math.floor(currentTime)}`}
+                    allow="accelerometer; encrypted-media; picture-in-picture"
+                    referrerPolicy="strict-origin-when-cross-origin"
+                    className="absolute inset-0 size-full border-0"
+                  />
+                )}
                 {/* Effect-active badge: in slave mode the iframe is parked, so
                     make it obvious the video is still "on" with sound processed. */}
                 {audioFilter !== "off" && (
