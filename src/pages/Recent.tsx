@@ -45,6 +45,9 @@ export default function Recent() {
   const [query, setQuery] = useState("");
 
   const filtered = useMemo(() => {
+    // Date.now() inside a memo is intentional: the "Today"/"This week"
+    // filters are relative to right now.
+    // eslint-disable-next-line react-hooks/purity
     const now = Date.now();
     return history.filter((h) => {
       if (filter === "Today" && (!h.at || now - h.at > 86400_000)) return false;

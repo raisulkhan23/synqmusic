@@ -6,7 +6,7 @@ import { formatTime } from "@/lib/format";
 import { toPlayableYoutube } from "@/lib/playable";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { ListMusic, Play, Search as SearchIcon, Shuffle, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { usePlayerStore } from "@/store/player";
@@ -18,12 +18,12 @@ export default function PlaylistDetail() {
   const playlist = useQuery(api.playlists.get, {
     playlistId: id as Id<"playlists">,
   });
-  const removeTrack = useMutation(api.playlists.removeTrack);
   const removePlaylist = useMutation(api.playlists.remove);
   const searchYt = useAction(api.youtube.searchYoutube);
   const playTrack = usePlayerStore((s) => s.playTrack);
 
   const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const [filter, setFilter] = useState("");
 
   if (playlist === undefined) {
     return (
@@ -70,14 +70,12 @@ export default function PlaylistDetail() {
 
   // In-playlist search — no scrolling through 500 songs. (Titles are resolved
   // lazily, so this filter matches once a song has been resolved this session.)
-  const [filter, setFilter] = useState("");
-  const visibleTracks = useMemo(() => {
-    const q = filter.trim().toLowerCase();
-    if (!q) return rows.map((track, i) => ({ track, i }));
-    return rows
-      .map((track, i) => ({ track, i }))
-      .filter(({ track }) => track.title.toLowerCase().includes(q));
-  }, [rows, filter]);
+  const visibleTracks = rows
+    .map((track, i) => ({ track, i }))
+    .filter(({ track }) => {
+      const q = filter.trim().toLowerCase();
+      return !q || track.title.toLowerCase().includes(q);
+    });
 
   const playRow = (row: (typeof rows)[number]) => {
     if (resolvingId) return;
@@ -107,6 +105,8 @@ export default function PlaylistDetail() {
 
   const shuffleAll = () => {
     if (rows.length === 0) return;
+    // Math.random inside a click handler is fine — it's not during render.
+    // eslint-disable-next-line react-hooks/purity
     const pick = rows[Math.floor(Math.random() * rows.length)];
     playRow(pick);
     if (!usePlayerStore.getState().shuffle) usePlayerStore.getState().toggleShuffle();

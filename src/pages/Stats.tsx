@@ -39,10 +39,6 @@ function StatCard({
   );
 }
 
-function ChartFallback() {
-  return <div className="h-48 animate-pulse rounded-xl bg-white/[0.04]" />;
-}
-
 export default function Stats() {
   const stats = useQuery(api.history.listeningStats);
 
