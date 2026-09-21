@@ -388,14 +388,12 @@ export function FullscreenPlayer() {
   useEffect(() => {
     if (!fullscreen || !current || !videoEnabled) return;
     if (!isYoutube) return;
-    if (audioFilter !== "off") {
-      // Effects active: the muted slave video is positioned by the store —
-      // make sure no stale overlay is parked here.
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- reset overlay state
-      setVideoReady(false);
-      return;
-    }
-     
+    // NOTE: no early return when an audio effect is active — the store runs
+    // the engine as a MUTED VISUAL SLAVE in that case (sound comes from the
+    // filtered <audio> element, video from the engine). The engine still has
+    // the video loaded, so the overlay can present normally. Skipping the
+    // overlay here used to leave the video frame showing only the thumbnail.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset overlay state on re-present
     setVideoReady(false);
     setEmbedFallback(false);
     let stopTracking: (() => void) | null = null;
@@ -424,7 +422,9 @@ export function FullscreenPlayer() {
       if (++tries < 40) timer = setTimeout(attempt, 100); // ~4s
       else setEmbedFallback(true); // overlaid live player failed — show an inline embed instead
     };
-    timer = setTimeout(attempt, 250);
+    // Give the slave a beat to load when an effect is active — the engine
+    // load is async, so the very first check can race it.
+    timer = setTimeout(attempt, audioFilter !== "off" ? 900 : 250);
     return () => {
       clearTimeout(timer);
       stopTracking?.();

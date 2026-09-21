@@ -580,7 +580,9 @@ const GENRE_HINTS = [
 function inferGenre(seed: Playable): string | null {
   const hay = `${seed.artistName} ${seed.title}`.toLowerCase();
   for (const g of GENRE_HINTS) {
-    if (hay.includes(g)) return g === "lo-fi" ? "lofi" : g;
+    // Whole-word match — "rock" must not match "Rockwell" or "rocking".
+    const re = new RegExp(`\\b${g.replace(/[^a-z& -]/g, "")}\\b`);
+    if (re.test(hay)) return g === "lo-fi" ? "lofi" : g;
   }
   return null;
 }
@@ -594,28 +596,48 @@ function inferGenre(seed: Playable): string | null {
     try {
       ytSearchClient = ytSearchClient ?? new ConvexClient(import.meta.env.VITE_CONVEX_URL as string);
       const artist = seed.artistName.split(",")[0]?.trim() ?? "";
-      // IMPORTANT: prioritize GENRE over artist. Only one of the queries may
-      // mention the artist — the rest target the genre's radio/mix space so
-      // results come from many different artists, not the same singer.
+      // IMPORTANT: prioritize GENRE over artist. Queries target SONGS in the
+      // genre (not "mix"/"playlist" compilations, which return whole-video
+      // uploads and rehash the same creators). Two queries run per fill and
+      // results are INTERLEAVED so the queue draws from many artists.
       const genre = inferGenre(seed);
-      const queries = genre
+      const songQueries = genre
         ? [
-            `${genre} mix`,
-            `${genre} music playlist`,
-            `${genre} hits`,
-            `${genre} radio`,
+            `${genre} songs`,
+            `top ${genre} songs`,
             `best ${genre} songs`,
-            `${artist} ${genre} songs`, // at most one artist-anchored query
+            `${genre} hit songs`,
+            `popular ${genre} music`,
+            `${genre} essentials`,
           ]
         : [
             `artists similar to ${artist}`, // closest genre match we can get
             `${artist} mix`,
             `${artist} and similar artists playlist`,
           ];
-      // Rotate randomly so repeat fills surface different mixes.
-      const query = queries[Math.floor(Math.random() * queries.length)];
-      const res = await ytSearchClient.action(api.youtube.searchYoutube, { query });
-      const items = res?.items ?? [];
+      // Pick two different queries so one fill blends two result pools.
+      const pick = () => songQueries[Math.floor(Math.random() * songQueries.length)];
+      const q1 = pick();
+      let q2 = pick();
+      let guard = 0;
+      while (q2 === q1 && guard++ < 5) q2 = pick();
+      const searchOnce = async (query: string): Promise<YtItem[]> => {
+        try {
+          const client = ytSearchClient as ConvexClient;
+          const res = await client.action(api.youtube.searchYoutube, { query });
+          return (res?.items ?? []) as YtItem[];
+        } catch {
+          return [];
+        }
+      };
+      const [items1, items2] = await Promise.all([searchOnce(q1), searchOnce(q2)]);
+      // Interleave the two result pools — spreads artists throughout.
+      const items: YtItem[] = [];
+      const maxLen = Math.max(items1.length, items2.length);
+      for (let i = 0; i < maxLen; i++) {
+        if (items1[i]) items.push(items1[i]);
+        if (items2[i]) items.push(items2[i]);
+      }
       // Never include: the seed, anything queued, anything played this
       // session, or near-duplicates of anything queued/heard (same normalized
       // title) — that's how search-page duplicates sneak in.
@@ -626,16 +648,21 @@ function inferGenre(seed: Playable): string | null {
       const seenTitles = new Set(existingQueue.map((t) => normTitle(t.title)));
       const seedTitle = normTitle(seed.title);
       const out: Playable[] = [];
+      const normArtist = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const seedArtist = normArtist(seed.artistName);
+      // Artist diversity inside the fill itself: max 2 songs per artist.
+      const artistSeen = new Map<string, number>();
       for (const it of items as YtItem[]) {
         if (existing.has(it.id)) continue;
         const nt = normTitle(it.title);
         if (nt === seedTitle) continue; // alternate upload of the seed
         if (seenTitles.has(nt)) continue; // duplicate of queued/heard track
-        // Drop same-artist repeats unless the queue explicitly wants them —
-        // the point of the fill is DIFFERENT songs, ideally different artists.
-        const normArtist = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
-        const seedArtist = normArtist(seed.artistName);
-        if (seedArtist && normArtist(it.artist ?? "") === seedArtist && out.length >= Math.floor(count / 3)) continue;
+        // Drop same-artist repeats after the first couple — the point of the
+        // fill is DIFFERENT songs, ideally different artists.
+        const thisArtist = normArtist(it.artist ?? "");
+        if (seedArtist && thisArtist === seedArtist && out.length >= 2) continue;
+        if (thisArtist && (artistSeen.get(thisArtist) ?? 0) >= 2) continue;
+        artistSeen.set(thisArtist, (artistSeen.get(thisArtist) ?? 0) + 1);
         existing.add(it.id);
         seenTitles.add(nt);
         out.push(toPlayableYoutube(it, ""));
@@ -647,6 +674,13 @@ function inferGenre(seed: Playable): string | null {
     }
   })();
   relatedMixInFlight = { seedId: seed.id, promise };
+  // Don't cache empty/failed fills — a transient search failure would lock
+  // the seed out of retries.
+  void promise.then((r: Playable[]) => {
+    if (r.length === 0 && relatedMixInFlight?.promise === promise) relatedMixInFlight = null;
+  }).catch(() => {
+    if (relatedMixInFlight?.promise === promise) relatedMixInFlight = null;
+  });
   return promise;
 }
 
@@ -942,7 +976,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     if (track.youtubeId) {
       const wantFilter = get().audioFilter !== "off";
       if (wantFilter && track.youtubeId) {
-        void resolveAndPlayWithFilter(track, resumeAt);
+        void resolveAndPlayWithFilter(track, resumeAt, true);
         return;
       }
       getAudio().pause();
@@ -964,7 +998,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       // (embed-restricted video), played through the resolved direct stream
       // + CORS proxy instead so it still plays.
       if (track.audioUrl === "stream") {
-        void resolveAndPlayWithFilter(track, resumeAt);
+        void resolveAndPlayWithFilter(track, resumeAt, false);
         return;
       }
       audio.src = track.audioUrl;
@@ -999,9 +1033,27 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
   const playTrack = (track: Playable, list?: (Playable)[]) => {
     const list2 =
       list && list.length > 0 ? list.map(norm) : [norm(track)];
-    const idx = list2.findIndex((t) => t.id === track.id);
+    const t = norm(track);
+    // Match by id OR youtubeId — history snapshots may carry a stored id that
+    // differs from the live item id, which used to make findIndex fail and
+    // silently play index 0 ("always the most recent song") instead.
+    let idx = list2.findIndex((x) => x.id === t.id);
+    if (idx < 0 && t.youtubeId) idx = list2.findIndex((x) => x.youtubeId === t.youtubeId);
+    if (idx < 0 && t.title) {
+      const normKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+      idx = list2.findIndex(
+        (x) => normKey(x.title) === normKey(t.title) && normKey(x.artistName) === normKey(t.artistName),
+      );
+    }
     let index = idx >= 0 ? idx : 0;
     let queue = list2;
+    // If the clicked track isn't in the list (id mismatch with history
+    // snapshots), prepend it so the song the user actually clicked plays —
+    // falling back to index 0 silently played the most recent entry.
+    if (idx < 0) {
+      queue = [t, ...queue.filter((x) => x.id !== t.id)];
+      index = 0;
+    }
     // When shuffle is already on, physically shuffle the REST of the queue
     // (clicked track first) — otherwise "next" would just walk the unshuffled
     // list and shuffle would appear broken until the toggle was touched.
@@ -1230,16 +1282,26 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     if (id !== "off") ensureGraph();
     setAudioFilter(id);
     set({ audioFilter: id });
+    // Detect the resolved-stream paths that play through the <audio> element.
+    // Covers: our Convex CORS proxy URLs, raw googlevideo URLs, and direct
+    // Piped URLs (the browser-side fallback) — string-matching only googlevideo
+    // used to miss Piped streams, so "off" never swapped back to the engine.
+    const onStreamPath = (t: Playable | null | undefined) =>
+      !!t &&
+      (t.audioUrl.includes("audio-proxy") ||
+        t.audioUrl.includes("googlevideo") ||
+        t.audioUrl === "stream" ||
+        /^https?:\/\//.test(t.audioUrl));
     // If a YouTube track is currently playing via the IFrame engine and an
     // effect was just activated, hot-swap it onto the filtered audio path.
     const s = get();
-    if (id !== "off" && s.current?.youtubeId && !s.current.audioUrl.includes("googlevideo") && !s.current.audioUrl.includes("audio-proxy")) {
+    if (id !== "off" && s.current?.youtubeId && !onStreamPath(s.current)) {
       const resumeAt = s.currentTime;
-      void resolveAndPlayWithFilter(s.current, resumeAt);
+      void resolveAndPlayWithFilter(s.current, resumeAt, true);
     }
     // If the effect was turned off while a YouTube track is on the audio
     // element, swap back to the IFrame engine (better quality/reliability).
-    if (id === "off" && s.current?.youtubeId && (s.current.audioUrl.includes("googlevideo") || s.current.audioUrl.includes("audio-proxy"))) {
+    if (id === "off" && s.current?.youtubeId && onStreamPath(s.current)) {
       const resumeAt = s.currentTime;
       getAudio().pause();
       void ytEngine
@@ -1282,7 +1344,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
    * audio element so the Web Audio effect chain applies. Falls back to the
    * IFrame engine when resolution fails.
    */
-  const resolveAndPlayWithFilter = (track: Playable, resumeAt: number) => {
+  const resolveAndPlayWithFilter = (track: Playable, resumeAt: number, forEffect = false) => {
     const videoId = track.youtubeId;
     if (!videoId) return;
     // Build the audio graph NOW (this runs inside the user-gesture click
@@ -1325,10 +1387,12 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       .catch(() => {
         if (seq !== loadSeq) return; // stale
         // Fall back to the unfiltered IFrame engine so playback never dies.
-        // Tell the user the truth: the requested effect could NOT be applied
-        // (stream resolution blocked), otherwise it looks like a silent no-op.
-        toast.error("Effect unavailable for this song — playing without it", { id: "fx-fallback" });
-        usePlayerStore.setState({ audioFilter: "off" });
+        // Only tell the user the effect failed when one was actually requested;
+        // rescue-loads (playViaStream) use this same path without an effect.
+        if (forEffect) {
+          toast.error("Effect unavailable for this song — playing without it", { id: "fx-fallback" });
+          usePlayerStore.setState({ audioFilter: "off" });
+        }
         getAudio().pause();
         ytEngine
           .play(videoId, { volume: get().volume, muted: get().muted, startSeconds: resumeAt || undefined })
