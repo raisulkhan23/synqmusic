@@ -50,9 +50,8 @@ const ytResolve = async (videoId: string): Promise<string | null> => {
   //    so the Web Audio effect chain always gets a stream to process.
   try {
     const instances = [
-      "https://pipedapi.kavin.rocks",
-      "https://pipedapi.adminforge.de",
       "https://api.piped.private.coffee",
+      "https://pipedapi.ducks.party",
     ];
     for (const base of instances) {
       try {
@@ -63,11 +62,21 @@ const ytResolve = async (videoId: string): Promise<string | null> => {
         if (!res.ok) continue;
         const data = (await res.json()) as {
           audioStreams?: { url: string; bitrate?: number; mimeType?: string }[];
+          videoStreams?: { url: string; quality?: string; videoOnly?: boolean; mimeType?: string }[];
         };
-        const streams = (data.audioStreams ?? [])
+        // Preferred: dedicated audio-only streams (best quality).
+        const audioStreams = (data.audioStreams ?? [])
           .filter((s) => !!s.url && (!s.mimeType || s.mimeType.includes("audio")))
           .sort((a, b) => (b.bitrate ?? 0) - (a.bitrate ?? 0));
-        if (streams[0]?.url) return streams[0].url;
+        if (audioStreams[0]?.url) return audioStreams[0].url;
+        // Fallback: the muxed itag-18 360p MP4 (video+audio). Piped's proxy
+        // serves it with CORS headers, and Web Audio can decode the audio
+        // track of an MP4 just fine — so effects still get real audio even
+        // when YouTube strips audio-only formats for this video.
+        const muxed = (data.videoStreams ?? []).find(
+          (s) => !!s.url && s.videoOnly === false && s.quality === "360p",
+        );
+        if (muxed?.url) return muxed.url;
       } catch {
         continue;
       }
