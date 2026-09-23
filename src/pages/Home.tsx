@@ -84,25 +84,21 @@ export default function Home() {
   };
 
   // Continue listening — the true last-played track from any source.
-  const [lastPlayed, setLastPlayed] = useState<LastPlayedSnapshot | null>(null);
-  useEffect(() => {
-    setLastPlayed(readLastPlayed());
-  }, []);
+  // Read once during the first render: localStorage isn't reactive, and
+  // set-state-in-effect here just triggers a cascading second render.
+  const [lastPlayed] = useState<LastPlayedSnapshot | null>(() => readLastPlayed());
   const continueTrack: Playable | null = useMemo(
     () => (lastPlayed && isPlayableSource(lastPlayed) ? snapshotToPlayable(lastPlayed) : null),
     [lastPlayed],
   );
 
-  // Cross-source play history (all sources alike).
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
-  useEffect(() => {
-    setHistory(readPlayHistory());
-  }, [lastPlayed]);
+  // Cross-source play history (all sources alike) — read once at mount.
+  const [history] = useState<HistoryEntry[]>(() => readPlayHistory());
 
   // Saved position for the continue-listening card (resume exactly where stopped).
   const continueResume = useMemo(
     () => (continueTrack ? peekResumePosition(continueTrack.id, continueTrack.duration) : 0),
-    [continueTrack, lastPlayed],
+    [continueTrack],
   );
 
   const historyItems: YtItem[] = useMemo(
@@ -283,9 +279,10 @@ export default function Home() {
         </p>
       </header>
 
-      {/* continue listening + surprise me */}
+      {/* continue listening + surprise me — stacks on mobile so the buttons
+            never truncate against the continue card */}
       {(continueTrack || likedLoaded) && (
-        <section className="flex flex-wrap items-center gap-3">
+        <section className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center">
           {continueTrack && (
             <button
               type="button"
@@ -329,8 +326,9 @@ export default function Home() {
         </section>
       )}
 
-      {/* personal quick links */}
-      <section className={cn("stagger grid gap-3", quickLinks.length === 3 ? "grid-cols-3" : "grid-cols-2")}>
+      {/* personal quick links — 3 columns squeeze the labels on phones, so
+            stack 2-wide on mobile and spread out from sm up */}
+      <section className="stagger grid grid-cols-2 gap-3 sm:grid-cols-3">
         {quickLinks.map(({ to, label, detail, icon: Icon }) => (
           <Link
             key={to}

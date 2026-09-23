@@ -33,7 +33,7 @@ function IconButton({
   );
 }
 
-export function TransportControls({ className }: { className?: string }) {
+export function TransportControls({ className, compact = false }: { className?: string; /** Mobile miniplayer mode: play/prev/next only — shuffle & repeat live in the fullscreen player. */ compact?: boolean }) {
   const current = usePlayerStore((s) => s.current);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const isBuffering = usePlayerStore((s) => s.isBuffering);
@@ -47,9 +47,11 @@ export function TransportControls({ className }: { className?: string }) {
 
   return (
     <div className={cn("flex items-center gap-0.5", className)}>
-      <IconButton active={shuffle} onClick={toggleShuffle} label="Shuffle">
-        <Shuffle className="size-4" />
-      </IconButton>
+      {!compact && (
+        <IconButton active={shuffle} onClick={toggleShuffle} label="Shuffle">
+          <Shuffle className="size-4" />
+        </IconButton>
+      )}
       <IconButton disabled={!current} onClick={prev} label="Previous">
         <SkipBack className="size-4 fill-current" />
       </IconButton>
@@ -71,13 +73,15 @@ export function TransportControls({ className }: { className?: string }) {
       <IconButton disabled={!current} onClick={next} label="Next">
         <SkipForward className="size-4 fill-current" />
       </IconButton>
-      <IconButton
-        active={repeat !== "off"}
-        onClick={cycleRepeat}
-        label={repeat === "one" ? "Repeat one" : repeat === "all" ? "Repeat all" : "Repeat off"}
-      >
-        {repeat === "one" ? <Repeat1 className="size-4" /> : <Repeat className="size-4" />}
-      </IconButton>
+      {!compact && (
+        <IconButton
+          active={repeat !== "off"}
+          onClick={cycleRepeat}
+          label={repeat === "one" ? "Repeat one" : repeat === "all" ? "Repeat all" : "Repeat off"}
+        >
+          {repeat === "one" ? <Repeat1 className="size-4" /> : <Repeat className="size-4" />}
+        </IconButton>
+      )}
     </div>
   );
 }

@@ -148,13 +148,13 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
   return (
     <footer
       className={cn(
-        "liquid-glass z-30 flex shrink-0 items-center gap-3 border-t border-white/[0.07] px-3 sm:px-4",
-        compact ? "h-[60px]" : "h-[76px]",
+        "liquid-glass z-30 flex shrink-0 items-center gap-2 border-t border-white/[0.07] px-2 sm:gap-3 sm:px-4",
+        compact ? "h-[60px]" : "h-[64px] sm:h-[76px]",
       )}
     >
       {/* now playing */}
-      <div className="flex min-w-0 w-[40%] items-center gap-2 sm:w-[30%] sm:gap-3">
-        <div className="relative size-10 shrink-0 overflow-hidden rounded-md shadow-lg ring-1 ring-white/10 sm:size-12">
+      <div className="flex min-w-0 flex-1 items-center gap-2 sm:w-[30%] sm:flex-none sm:gap-3">
+        <div className="relative size-9 shrink-0 overflow-hidden rounded-md shadow-lg ring-1 ring-white/10 sm:size-12">
           <img src={current.coverUrl} alt="" className="size-full object-cover" />
           {isBuffering && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/40">
@@ -175,6 +175,9 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
             {current.artistName}
           </p>
         </div>
+        {/* Like lives in the fullscreen player — the mobile bar only needs
+            play controls; keeping it here squeezed the title into the
+            transport buttons and they collided on small screens. */}
         <button
           type="button"
           aria-label={isLiked ? "Remove from liked songs" : "Add to liked songs"}
@@ -184,7 +187,7 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
             setTimeout(() => setLikePulse(false), 400);
           }}
           className={cn(
-            "shrink-0 rounded-full p-1.5 transition-all hover:scale-110",
+            "hidden shrink-0 rounded-full p-1.5 transition-all hover:scale-110 sm:block",
             isLiked ? "text-[rgb(var(--tint))]" : "text-muted-foreground hover:text-foreground",
           )}
         >
@@ -198,10 +201,11 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
         </button>
       </div>
 
-      {/* transport + seek */}
-      <div className="flex min-w-0 flex-1 flex-col items-center gap-0.5">
-        <TransportControls />
-        <div className="flex w-full max-w-xl items-center gap-2">
+      {/* transport + seek — timestamps are desktop-only; on mobile the
+            seekbar sits alone so prev/play/next never collide with them */}
+      <div className="flex min-w-0 flex-col items-center gap-0.5 sm:flex-1">
+        <TransportControls className="sm:hidden" compact />
+        <div className="hidden w-full max-w-xl items-center gap-2 sm:flex">
           <span className="w-11 shrink-0 text-right text-[10px] font-medium tabular-nums text-muted-foreground">
             {formatTime(currentTime)}
           </span>
@@ -212,14 +216,16 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
         </div>
       </div>
 
-      {/* right cluster */}
+      {/* right cluster — desktop keeps queue + volume + expand; mobile gets
+            just the expand chevron (queue lives in the fullscreen player and
+            the bottom tab bar already covers navigation) */}
       <div className="flex w-auto items-center justify-end gap-0.5 sm:w-[30%]">
         <button
           type="button"
           aria-label="Open queue"
           onClick={() => setQueueOpen(!queueOpen)}
           className={cn(
-            "rounded-full p-2 transition-colors hover:bg-white/[0.06]",
+            "hidden rounded-full p-2 transition-colors hover:bg-white/[0.06] sm:block",
             queueOpen ? "text-[rgb(var(--tint))]" : "text-muted-foreground hover:text-foreground",
           )}
         >
