@@ -133,8 +133,15 @@ function parseLength(raw?: string): number {
 
 // Loose structural helpers — InnerTube responses are deeply nested and typed
 // as unknown, so we traverse defensively.
-const get = (obj: unknown, path: string[]): unknown =>
+// NOTE: numeric segments index LISTS ("tabs" → [tab]) and string segments
+// read object keys — the old helper only handled dicts, so paths like
+// ["tabs", "0", ...] silently returned undefined and musicSearch always
+// returned zero results (the home sections never loaded).
+const get = (obj: unknown, path: (string | number)[]): unknown =>
   path.reduce<unknown>((acc, key) => {
+    if (typeof key === "number") {
+      return Array.isArray(acc) && key < acc.length ? acc[key] : undefined;
+    }
     if (acc && typeof acc === "object" && key in (acc as Record<string, unknown>)) {
       return (acc as Record<string, unknown>)[key];
     }
@@ -161,12 +168,12 @@ function extractSearchResults(data: Record<string, unknown>): YtItem[] {
       if (!videoId) continue;
 
       const title =
-        (get(vr, ["title", "runs", "0", "text"]) as string) ??
+        (get(vr, ["title", "runs", 0, "text"]) as string) ??
         (get(vr, ["title", "simpleText"]) as string) ??
         "Untitled";
       const artist =
-        (get(vr, ["ownerText", "runs", "0", "text"]) as string) ??
-        (get(vr, ["longBylineText", "runs", "0", "text"]) as string) ??
+        (get(vr, ["ownerText", "runs", 0, "text"]) as string) ??
+        (get(vr, ["longBylineText", "runs", 0, "text"]) as string) ??
         "Unknown artist";
       const lengthText = get(vr, ["lengthText", "simpleText"]) as string | undefined;
       const thumbs = get(vr, ["thumbnail", "thumbnails"]);
@@ -246,62 +253,146 @@ function isMusicTrack(item: YtItem): boolean {
 
 function extractMusicResults(data: Record<string, unknown>): YtItem[] {
   const out: YtItem[] = [];
+  const others: YtItem[] = [];
   const seen = new Set<string>();
-  const sections = get(data, ["contents", "tabbedSearchResultsRenderer", "tabs", "0", "tabRenderer", "content", "sectionListRenderer", "contents"]);
+  // Songs/videos first — playlists, albums and artists don't play as a single
+  // track and used to fill the results, pushing real songs out of the list.
+  const push = (entry: (YtItem & { kind?: "song" | "other" }) | null) => {
+    if (!entry || seen.has(entry.id)) return;
+    seen.add(entry.id);
+    if (entry.kind === "other") others.push(entry);
+    else out.push(entry);
+  };
+
+  const sections = get(data, ["contents", "tabbedSearchResultsRenderer", "tabs", 0, "tabRenderer", "content", "sectionListRenderer", "contents"]);
   const flat = Array.isArray(sections)
     ? sections
     : get(data, ["contents", "sectionListRenderer", "contents"]);
   if (!Array.isArray(flat)) return out;
 
   for (const section of flat) {
-    const items = get(section, ["musicShelfRenderer", "contents"]);
-    if (!Array.isArray(items)) continue;
-    for (const item of items) {
-      const renderer = get(item, ["musicResponsiveListItemRenderer"]) as Record<string, unknown> | undefined;
-      if (!renderer) continue;
-
-      // Only real, playable songs (videoId + playlistItemData implies a track).
-      // Songs shelf items carry playlistItemData.videoId.
-      const videoId =
-        (get(renderer, ["playlistItemData", "videoId"]) as string | undefined) ??
-        (get(renderer, ["overlay", "musicItemThumbnailOverlayRenderer", "content", "musicPlayButtonRenderer", "playNavigationEndpoint", "watchEndpoint", "videoId"]) as string | undefined);
-      if (!videoId) continue;
-
-      const flex = get(renderer, ["flexColumns"]);
-      if (!Array.isArray(flex)) continue;
-      const textOf = (col: unknown) =>
-        (get(col, ["musicResponsiveListItemFlexColumnRenderer", "text", "runs", "0", "text"]) as string | undefined) ?? "";
-      const title = textOf(flex[0]) || "Untitled";
-      // Column 1 packs artist + album + duration as separate runs, e.g.
-      // ["Artist", " • ", "Album", " • ", "2:21"].
-      const runs = (get(flex[1], ["musicResponsiveListItemFlexColumnRenderer", "text", "runs"]) as Array<{ text?: string }> | undefined) ?? [];
-      const runTexts = runs.map((r) => r.text ?? "");
-      const artist = runTexts[0] || "Unknown artist";
-      const durationMatch = [...runTexts]
-        .reverse()
-        .find((t) => /^\d{1,2}:\d{2}(:\d{2})?$/.test(t.trim()));
-      const durationRaw = durationMatch ?? textOf(flex[2]) ?? "";
-
-      const thumbs = get(renderer, ["thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails"]);
-      const thumbnail = Array.isArray(thumbs)
-        ? ((thumbs[thumbs.length - 1] as { url?: string })?.url ?? "")
-        : "";
-
-      const entry: YtItem = {
-        id: videoId,
-        title,
-        artist,
-        duration: parseLength(durationRaw),
-        thumbnail,
-      };
-      if (isMusicTrack(entry) && !seen.has(videoId)) {
-        seen.add(videoId);
-        out.push(entry);
+    // Legacy shape: a dedicated songs shelf.
+    const shelf = get(section, ["musicShelfRenderer", "contents"]);
+    if (Array.isArray(shelf)) {
+      for (const item of shelf) {
+        const renderer = get(item, ["musicResponsiveListItemRenderer"]) as Record<string, unknown> | undefined;
+        if (renderer) {
+          const entry = parseMusicListItem(renderer);
+          if (entry) push(entry);
+        }
+        if (out.length >= 20) break;
       }
-      if (out.length >= 10) return out;
+      if (out.length >= 20) break;
+      continue;
+    }
+
+    // Current shape (2026+): results arrive as a list of
+    // itemSectionRenderer blocks, each wrapping one
+    // musicResponsiveListItemRenderer — plus a musicCardShelfRenderer top
+    // result. The old parser only read musicShelfRenderer, so every search
+    // silently returned zero items and the home sections never loaded.
+    const card = get(section, ["musicCardShelfRenderer"]);
+    if (card && typeof card === "object") {
+      const entry = parseMusicCardShelf(card as Record<string, unknown>);
+      if (entry) push(entry);
+    }
+    const isrItems = get(section, ["itemSectionRenderer", "contents"]);
+    if (Array.isArray(isrItems)) {
+      for (const item of isrItems) {
+        const renderer = get(item, ["musicResponsiveListItemRenderer"]) as Record<string, unknown> | undefined;
+        if (renderer) {
+          const entry = parseMusicListItem(renderer);
+          if (entry) push(entry);
+        }
+        if (out.length >= 20) break;
+      }
+      if (out.length >= 20) break;
     }
   }
-  return out;
+  // Not enough single tracks — top up with the rest (videos without a type
+  // run, etc.), still capped.
+  for (const o of others) {
+    if (out.length >= 20) break;
+    out.push(o);
+  }
+  return out.filter(isMusicTrack).slice(0, 10);
+}
+
+/**
+ * One musicResponsiveListItemRenderer → YtItem, or null when the row isn't a
+ * directly playable single track (playlists/artists have no watch videoId).
+ * Reads the videoId from every place YouTube puts it: playlistItemData, the
+ * overlay play button's watchEndpoint, or the row's navigationEndpoint.
+ * Also classifies the row: YouTube puts the type ("Song"/"Video"/"Playlist"…)
+ * as the first subtitle run of column 1.
+ */
+function parseMusicListItem(renderer: Record<string, unknown>): (YtItem & { kind: "song" | "other" }) | null {
+  const videoId =
+    (get(renderer, ["playlistItemData", "videoId"]) as string | undefined) ??
+    (get(renderer, ["overlay", "musicItemThumbnailOverlayRenderer", "content", "musicPlayButtonRenderer", "playNavigationEndpoint", "watchEndpoint", "videoId"]) as string | undefined) ??
+    (get(renderer, ["navigationEndpoint", "watchEndpoint", "videoId"]) as string | undefined);
+  if (!videoId) return null;
+
+  const flex = get(renderer, ["flexColumns"]);
+  if (!Array.isArray(flex)) return null;
+  const runsOf = (col: unknown) =>
+    (get(col, ["musicResponsiveListItemFlexColumnRenderer", "text", "runs"]) as Array<{ text?: string }> | undefined) ?? [];
+  const textOf = (col: unknown) => runsOf(col)[0]?.text ?? "";
+  const title = textOf(flex[0]) || "Untitled";
+  // Column 1 packs type + artist + album + duration as separate runs, e.g.
+  // ["Song", " • ", "Artist", " • ", "Album", " • ", "2:21"] — the first run
+  // is the row type (Song / Video / Playlist / Album / Artist / Episode…).
+  const runs = (get(flex[1], ["musicResponsiveListItemFlexColumnRenderer", "text", "runs"]) as Array<{ text?: string }> | undefined) ?? [];
+  const runTexts = runs.map((r) => r.text ?? "");
+  const first = runTexts[0]?.trim() ?? "";
+  const isTypedRow = /^[A-Za-z]/.test(first) && !/^\d{1,2}:\d{2}/.test(first);
+  const kind: "song" | "other" =
+    first === "Song" || first === "Video" ? "song" : isTypedRow ? "other" : "song";
+  // Skip the type run itself when extracting artist/duration.
+  const metaRuns = isTypedRow ? runTexts.slice(1) : runTexts;
+  const artist = metaRuns[0]?.trim() || "Unknown artist";
+  const durationMatch = [...metaRuns]
+    .reverse()
+    .find((t) => /^\d{1,2}:\d{2}(:\d{2})?$/.test(t.trim()));
+  const durationRaw = durationMatch ?? textOf(flex[2]) ?? "";
+
+  const thumbs = get(renderer, ["thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails"]);
+  const thumbnail = Array.isArray(thumbs)
+    ? ((thumbs[thumbs.length - 1] as { url?: string })?.url ?? "")
+    : "";
+
+  return {
+    id: videoId,
+    title,
+    artist,
+    duration: parseLength(durationRaw),
+    thumbnail,
+    kind,
+  };
+}
+
+/** The musicCardShelfRenderer "Top result" card → YtItem (song only). */
+function parseMusicCardShelf(card: Record<string, unknown>): YtItem | null {
+  const videoId =
+    (get(card, ["onTap", "watchEndpoint", "videoId"]) as string | undefined) ??
+    (get(card, ["buttons", 0, "buttonRenderer", "command", "watchEndpoint", "videoId"]) as string | undefined);
+  if (!videoId) return null;
+
+  const title =
+    (get(card, ["title", "runs", 0, "text"]) as string | undefined) ??
+    (get(card, ["header", "musicCardShelfHeaderBasicRenderer", "title", "runs", 0, "text"]) as string | undefined) ??
+    "Top result";
+  // Subtitle runs pack artist • song • year.
+  const subtitle = (get(card, ["subtitle", "runs"]) as Array<{ text?: string }> | undefined) ?? [];
+  const parts = subtitle.map((r) => r.text ?? "").join("").split("•").map((s) => s.trim());
+  const artist = parts[0] || "Unknown artist";
+
+  const thumbs = get(card, ["thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails"]);
+  const thumbnail = Array.isArray(thumbs)
+    ? ((thumbs[thumbs.length - 1] as { url?: string })?.url ?? "")
+    : "";
+
+  return { id: videoId, title, artist, duration: 0, thumbnail };
 }
 
 /**
