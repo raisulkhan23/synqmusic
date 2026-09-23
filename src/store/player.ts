@@ -949,6 +949,42 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
   /** Increments on every track load; stale async results are discarded. */
   let loadSeq = 0;
 
+  /**
+   * Keep the queue topped up: when autoplay is on and fewer than 3 upcoming
+   * songs remain, fetch a genre/related mix and append it — the user should
+   * never have to open the queue and press "add similar songs" manually.
+   * Guarded so only one fetch runs at a time and the seed can't double-fill.
+   */
+  let autofillInFlight = false;
+  let autofillSeedId: string | null = null;
+  const maybeAutofillQueue = () => {
+    const s = get();
+    if (!s.autoplay || !s.current) return;
+    const upcoming = s.queueIndex >= 0 ? s.queue.length - 1 - s.queueIndex : s.queue.length;
+    if (upcoming >= 3) return;
+    if (autofillInFlight || autofillSeedId === s.current.id) return;
+    autofillInFlight = true;
+    autofillSeedId = s.current.id;
+    const seed = s.current;
+    void fetchRelatedMix(seed, s.queue, 8)
+      .then((related) => {
+        const state = usePlayerStore.getState();
+        if (state.current?.id !== seed.id) return; // song changed meanwhile
+        const fresh = related.filter((t) => !state.queue.some((q) => q.id === t.id));
+        if (fresh.length > 0) {
+          usePlayerStore.setState((st) => ({
+            queue: [...st.queue, ...fresh],
+            unshuffledQueue: st.unshuffledQueue ? [...st.unshuffledQueue, ...fresh] : null,
+          }));
+          const after = usePlayerStore.getState();
+          saveQueue(after.queue, after.queueIndex, after.current?.id ?? null);
+        }
+      })
+      .finally(() => {
+        autofillInFlight = false;
+      });
+  };
+
   /** Route loading/playback to the right engine for the given track. */
   const loadTrack = (track: Playable, startSeconds?: number) => {
     const seq = ++loadSeq;
@@ -1037,6 +1073,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       abB: null,
     });
     syncMediaSession(track, true);
+    maybeAutofillQueue();
   };
 
   const playTrack = (track: Playable, list?: (Playable)[]) => {
@@ -1121,6 +1158,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     saveQueue(s.queue, index, s.queue[index]?.id ?? null);
     set({ queueIndex: index });
     loadTrack(s.queue[index]);
+    maybeAutofillQueue();
   };
 
   const togglePlay = () => {

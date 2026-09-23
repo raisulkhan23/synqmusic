@@ -583,7 +583,11 @@ export function FullscreenPlayer() {
                   <iframe
                     key={current.youtubeId}
                     title={`${current.title} video`}
-                    src={`https://www.youtube.com/embed/${current.youtubeId}?autoplay=0&controls=0&modestbranding=1&rel=0&iv_load_policy=3&disablekb=1&fs=0&start=${Math.floor(currentTime)}`}
+                    // Muted autoplay is allowed by browser policy; unmuted
+                    // autoplay=0 meant the embedded video loaded but NEVER
+                    // started — the frame looked dead. Audio still comes from
+                    // the app's own engine, so a muted picture is correct.
+                    src={`https://www.youtube.com/embed/${current.youtubeId}?autoplay=1&mute=1&controls=0&modestbranding=1&rel=0&iv_load_policy=3&disablekb=1&fs=0&start=${Math.floor(currentTime)}`}
                     allow="accelerometer; encrypted-media; picture-in-picture"
                     referrerPolicy="strict-origin-when-cross-origin"
                     className="absolute inset-0 size-full border-0"

@@ -262,12 +262,14 @@ export function QueuePanel() {
                 <Clock3 className="size-3" />
                 Playing next · {upcoming.length}
               </p>
+              {/* Own scroll area, capped height — long queues used to push the
+                  suggestions block into the drag rows and they collided. */}
               <Reorder.Group
                 axis="y"
                 values={upcomingKeys}
                 onReorder={handleReorder}
                 layoutScroll
-                className="space-y-1"
+                className="max-h-[42vh] space-y-1 overflow-y-auto overscroll-contain pr-1"
               >
                 {upcoming.map((track, rowIndex) => (
                   <Reorder.Item
