@@ -21,6 +21,7 @@ import type { YtItem } from "@/lib/youtube";
 import { api } from "@/convex/_generated/api";
 import { ConvexClient } from "convex/browser";
 import { toast } from "sonner";
+import { track as trackEvent } from "@/lib/analytics";
 
 /**
  * Resolve a direct audio stream URL for a YouTube video via the Convex
@@ -1189,6 +1190,14 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
         /* ignore */
       }
     }
+    // Product analytics: what actually gets played, from where.
+    trackEvent("track_play", {
+      track_id: track.id,
+      title: track.title.slice(0, 120),
+      artist: track.artistName.slice(0, 120),
+      source: track.source,
+      has_video: !!track.youtubeId,
+    });
 
     const resumeAt = startSeconds ?? getResumePosition(track.id, track.duration);
 
@@ -1523,6 +1532,13 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     if (id !== "off") ensureGraph();
     setAudioFilter(id);
     set({ audioFilter: id });
+    if (id !== "off") {
+      trackEvent("audio_effect_applied", {
+        effect: id,
+        track_id: get().current?.id ?? null,
+        source: get().current?.source ?? null,
+      });
+    }
     // Detect the resolved-stream paths that play through the <audio> element.
     // Covers: our Convex CORS proxy URLs, raw googlevideo URLs, and direct
     // Piped URLs (the browser-side fallback) — string-matching only googlevideo

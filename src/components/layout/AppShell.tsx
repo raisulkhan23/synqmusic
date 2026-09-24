@@ -15,6 +15,7 @@ import { useMutation, useQuery } from "convex/react";
 import { useAuth } from "@/hooks/use-auth";
 import { House, ListMusic, Search, Settings, UserRound, WifiOff } from "lucide-react";
 import { usePlayerStore, type RemoteLikeSnapshot } from "@/store/player";
+import { track } from "@/lib/analytics";
 
 const MOBILE_NAV = [
   { to: "/home", label: "Home", icon: House },
@@ -122,6 +123,18 @@ export function AppShell() {
       void recordPlay({ trackId, ...snapshot }).catch(() => undefined);
     });
   }, [recordPlay, setHistoryRecorder]);
+
+  // Session start (one per app load) + a page view on every route change.
+  useEffect(() => {
+    track("session_start", {
+      path: window.location.pathname,
+      referrer: document.referrer || "direct",
+    });
+  }, []);
+  useEffect(() => {
+    // Skip the very first render: session_start already covers the entry page.
+    track("page_view", { path: location.pathname });
+  }, [location.pathname]);
 
   // Keyboard "/" (and other nav shortcuts) route via this event.
   useEffect(() => {

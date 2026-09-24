@@ -5,6 +5,7 @@ import { api } from "@/convex/_generated/api";
 import { toPlayableYoutube } from "@/lib/playable";
 import { type YtItem } from "@/lib/youtube";
 import { usePlayerStore } from "@/store/player";
+import { track as trackEvent } from "@/lib/analytics";
 import { useAction } from "convex/react";
 import {
   Loader2,
@@ -184,9 +185,16 @@ export default function Search() {
       setSearching(true);
       setSearchError(null);
       rememberQuery(q);
+      trackEvent("search_performed", { query: q.slice(0, 120) });
       searchYt({ query: q })
         .then(({ items }) => {
-          if (!cancelled) setYtResults(items);
+          if (!cancelled) {
+            setYtResults(items);
+            trackEvent("search_results", {
+              query: q.slice(0, 120),
+              result_count: items.length,
+            });
+          }
         })
         .catch(() => {
           if (!cancelled) {
@@ -211,6 +219,12 @@ export default function Search() {
       // Start the clicked song, then fill the queue with songs from the SAME
       // search (same genre/vibe) — never the raw result list, which is full
       // of duplicate uploads, and never generic "similar artist" filler.
+      trackEvent("search_result_played", {
+        query: (debouncedQuery || query).slice(0, 120),
+        track_id: item.id,
+        title: item.title.slice(0, 120),
+        artist: item.artist.slice(0, 120),
+      });
       void startRadio(toPlayableYoutube(item, item.id), debouncedQuery || query);
     },
     [startRadio, debouncedQuery, query],
