@@ -27,6 +27,7 @@ import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import {
   Check,
+  Clock3,
   Database,
   Film,
   Gauge,
@@ -152,6 +153,11 @@ export function SettingsDialog({
   const toggleAutoplay = usePlayerStore((s) => s.toggleAutoplay);
   const shuffle = usePlayerStore((s) => s.shuffle);
   const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
+  const smartShuffle = usePlayerStore((s) => s.smartShuffle);
+  const toggleSmartShuffle = usePlayerStore((s) => s.toggleSmartShuffle);
+  const sleepEndsAt = usePlayerStore((s) => s.sleepEndsAt);
+  const sleepAtSongEnd = usePlayerStore((s) => s.sleepAtSongEnd);
+  const setSleepTimer = usePlayerStore((s) => s.setSleepTimer);
   const accentTheme = usePlayerStore((s) => s.accentTheme);
   const setAccentTheme = usePlayerStore((s) => s.setAccentTheme);
   const compactMode = usePlayerStore((s) => s.compactMode);
@@ -816,6 +822,61 @@ export function SettingsDialog({
             on={shuffle}
             onToggle={toggleShuffle}
           />
+          <ToggleRow
+            label="Smart shuffle"
+            description="Avoid recently played tracks when filling shuffle queues"
+            on={smartShuffle}
+            onToggle={() => {
+              toggleSmartShuffle();
+              toast(smartShuffle ? "Smart shuffle off" : "Smart shuffle on");
+            }}
+          />
+
+          <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
+            <div className="flex items-center gap-2">
+              <Clock3 className="size-4 text-[rgb(var(--tint))]" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium">Sleep timer</p>
+                <p className="text-xs text-muted-foreground">Stop playback automatically</p>
+              </div>
+              {sleepAtSongEnd || sleepEndsAt !== null ? (
+                <span className="text-[10px] font-semibold uppercase tracking-widest text-[rgb(var(--tint))]">Active</span>
+              ) : null}
+            </div>
+            <div className="mt-2.5 grid grid-cols-3 gap-1.5">
+              {[
+                { label: "Off", value: null },
+                { label: "Song end", value: "end" as const },
+                { label: "15 min", value: 15 },
+                { label: "30 min", value: 30 },
+                { label: "60 min", value: 60 },
+              ].map((option) => {
+                const active = option.value === null
+                  ? sleepEndsAt === null && !sleepAtSongEnd
+                  : option.value === "end"
+                    ? sleepAtSongEnd
+                    : sleepEndsAt !== null && sleepEndsAt - Date.now() > (option.value - 1) * 60_000 && sleepEndsAt - Date.now() < (option.value + 1) * 60_000;
+                return (
+                  <button
+                    key={option.label}
+                    type="button"
+                    onClick={() => {
+                      setSleepTimer(option.value);
+                      toast(option.value === null ? "Sleep timer off" : option.value === "end" ? "Stopping after this song" : `Sleep timer set for ${option.value} minutes`);
+                    }}
+                    className={cn(
+                      "rounded-lg border px-2 py-1.5 text-[11px] font-semibold transition-colors",
+                      active
+                        ? "border-[rgb(var(--tint))] bg-[rgb(var(--tint)_/_0.14)] text-[rgb(var(--tint))]"
+                        : "border-white/10 text-muted-foreground hover:border-white/25 hover:text-foreground",
+                    )}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
           {/* default playback speed */}
           <div className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
