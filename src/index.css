@@ -405,6 +405,45 @@ html,
       transparent 55%
     );
   }
+  /* The settings route is a full page surface, so keep its glass treatment
+     visible even when the compact app surfaces have glass disabled. */
+  .settings-liquid-glass {
+    position: relative;
+    background: color-mix(in oklab, var(--card) 58%, transparent) !important;
+    backdrop-filter: blur(30px) saturate(1.85) brightness(1.06) !important;
+    -webkit-backdrop-filter: blur(30px) saturate(1.85) brightness(1.06) !important;
+    box-shadow:
+      inset 0 1px 0 0 rgb(255 255 255 / 0.1),
+      inset 0 -1px 0 0 rgb(255 255 255 / 0.045),
+      0 18px 48px rgb(0 0 0 / 0.24),
+      0 0 34px rgb(var(--tint) / 0.06) !important;
+  }
+  .settings-liquid-glass::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background: linear-gradient(
+      115deg,
+      transparent 28%,
+      rgb(255 255 255 / 0.07) 45%,
+      rgb(255 255 255 / 0.12) 50%,
+      rgb(255 255 255 / 0.07) 55%,
+      transparent 72%
+    );
+    background-size: 250% 100%;
+    animation: glass-sheen 9s ease-in-out infinite;
+  }
+  .settings-liquid-glass::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background: radial-gradient(120% 90% at 12% 0%, rgb(var(--tint) / 0.09), transparent 58%);
+  }
+
   /* Liquid glass disabled (Settings → Appearance) — flat, opaque panels.
      Higher specificity so it wins over the .liquid-glass block above. */
   html.no-glass .liquid-glass {

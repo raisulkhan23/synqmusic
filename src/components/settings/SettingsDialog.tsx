@@ -550,7 +550,7 @@ export function SettingsDialog({
         showCloseButton={!pageMode}
         className={
           pageMode
-            ? "liquid-glass !static !top-auto !left-auto !z-10 !mx-auto !grid !w-full !max-w-3xl !translate-x-0 !translate-y-0 !gap-0 !rounded-3xl !border !border-white/10 !p-5 !shadow-xl sm:!p-8"
+            ? "liquid-glass settings-liquid-glass relative !static !top-auto !left-auto !z-10 !mx-auto !grid !w-full !max-w-3xl !translate-x-0 !translate-y-0 !gap-0 !rounded-3xl !border !border-white/10 !p-5 !shadow-xl sm:!p-8"
             : "glass-card !fixed max-h-[85vh] max-w-md overflow-y-auto"
         }
       >
@@ -569,7 +569,7 @@ export function SettingsDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <nav className="sticky top-0 z-20 -mx-1 border-y border-white/[0.07] bg-card/90 px-1 py-2 backdrop-blur-xl" aria-label="Settings sections">
+        <nav className="liquid-glass settings-liquid-glass sticky top-0 z-20 -mx-1 border-y border-white/[0.07] !bg-card/70 px-1 py-2 shadow-lg" aria-label="Settings sections">
           <div className="flex items-center gap-2">
             <span className="shrink-0 px-1 text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">
               Jump to
