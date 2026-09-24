@@ -187,6 +187,12 @@ export function SettingsDialog({
   const [trackPalettes, setTrackPalettes] = useState(
     () => localStorage.getItem("ss.trackPalettes") !== "0",
   );
+  const [settingsShimmer, setSettingsShimmer] = useState(
+    () => localStorage.getItem("ss.settingsShimmer") !== "0",
+  );
+  const [settingsDepth, setSettingsDepth] = useState(
+    () => localStorage.getItem("ss.settingsDepth") !== "0",
+  );
   const [focusLayout, setFocusLayout] = useState<FocusLayout>(() => {
     const saved = localStorage.getItem("ss.focusLayout");
     if (isFocusLayout(saved)) return saved;
@@ -550,7 +556,11 @@ export function SettingsDialog({
         showCloseButton={!pageMode}
         className={
           pageMode
-            ? "liquid-glass settings-liquid-glass relative !static !top-auto !left-auto !z-10 !mx-auto !grid !w-full !max-w-3xl !translate-x-0 !translate-y-0 !gap-0 !rounded-3xl !border !border-white/10 !p-5 !shadow-xl sm:!p-8"
+            ? cn(
+                "liquid-glass settings-liquid-glass relative !static !top-auto !left-auto !z-10 !mx-auto !grid !w-full !max-w-3xl !translate-x-0 !translate-y-0 !gap-0 !rounded-3xl !border !border-white/10 !p-5 !shadow-xl sm:!p-8",
+                settingsShimmer ? "settings-glass-shimmer" : "settings-glass-still",
+                settingsDepth && "settings-glass-depth",
+              )
             : "glass-card !fixed max-h-[85vh] max-w-md overflow-y-auto"
         }
       >
@@ -886,6 +896,39 @@ export function SettingsDialog({
 
         {/* appearance */}
         <section id="settings-appearance" className="scroll-mt-20 flex flex-col gap-2.5">
+          <div className="settings-liquid-glass rounded-xl border border-white/[0.08] px-3 py-3 shadow-lg">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold">Interface finish</p>
+                <p className="text-xs text-muted-foreground">Tune the light and depth of this settings surface.</p>
+              </div>
+              <Sparkles className="size-4 text-[rgb(var(--tint))]" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <ToggleRow
+                label="Animated glass sheen"
+                description="Let light drift across the settings surface"
+                on={settingsShimmer}
+                onToggle={() => {
+                  const next = !settingsShimmer;
+                  setSettingsShimmer(next);
+                  localStorage.setItem("ss.settingsShimmer", next ? "1" : "0");
+                  toast(next ? "Settings sheen on" : "Settings sheen paused");
+                }}
+              />
+              <ToggleRow
+                label="Deep surface depth"
+                description="Add a softer floating shadow beneath the glass"
+                on={settingsDepth}
+                onToggle={() => {
+                  const next = !settingsDepth;
+                  setSettingsDepth(next);
+                  localStorage.setItem("ss.settingsDepth", next ? "1" : "0");
+                  toast(next ? "Surface depth on" : "Surface depth off");
+                }}
+              />
+            </div>
+          </div>
           <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
             <Palette className="size-3.5" />
             Appearance
