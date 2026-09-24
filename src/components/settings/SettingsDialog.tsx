@@ -40,6 +40,7 @@ import {
   Pencil,
   SlidersHorizontal,
   Sparkles,
+  RotateCcw,
   Trash2,
   UserRound,
 } from "lucide-react";
@@ -524,6 +525,32 @@ export function SettingsDialog({
     toast.success(`${entry.name} removed`);
   };
 
+  const resetVisualPreferences = () => {
+    setAccentTheme("auto");
+    setThemeMode("dark");
+    setTrackPalettes(true);
+    setSettingsShimmer(true);
+    setSettingsDepth(true);
+    setReduceMotion(false);
+    if (!liquidGlass) toggleLiquidGlass();
+    if (!ambientGlow) toggleAmbientGlow();
+    if (!pointerEffects) togglePointerEffects();
+    if (!visualizerEnabled) toggleVisualizer();
+    localStorage.setItem("ss.accentTheme", "auto");
+    localStorage.setItem("ss.themeMode", "dark");
+    localStorage.setItem("ss.trackPalettes", "1");
+    localStorage.setItem("ss.settingsShimmer", "1");
+    localStorage.setItem("ss.settingsDepth", "1");
+    localStorage.setItem("ss.reduceMotion", "0");
+    localStorage.setItem("ss.liquidGlass", "1");
+    localStorage.setItem("ss.ambientGlow", "1");
+    localStorage.setItem("ss.pointerEffects", "1");
+    localStorage.setItem("ss.visualizer", "1");
+    document.documentElement.classList.remove("no-glass", "reduce-motion");
+    window.dispatchEvent(new CustomEvent("synq:track-palettes-change", { detail: true }));
+    toast.success("Visual preferences reset");
+  };
+
   const clearWallpaper = () => {
     if (wallpaper?.startsWith("blob:") && !wallpaperLibraryUrlsRef.current.includes(wallpaper)) {
       URL.revokeObjectURL(wallpaper);
@@ -937,6 +964,14 @@ export function SettingsDialog({
                   toast(next ? "Reduced motion on" : "Reduced motion off");
                 }}
               />
+              <button
+                type="button"
+                onClick={resetVisualPreferences}
+                className="mt-1 inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:border-white/25 hover:bg-white/[0.05] hover:text-foreground"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                Reset visual preferences
+              </button>
             </div>
           </div>
           <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
