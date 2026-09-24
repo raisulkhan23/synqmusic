@@ -42,6 +42,7 @@ export function AppShell() {
   );
   const rippleLayerRef = useRef<HTMLDivElement>(null);
   const cursorTrailRefs = useRef<Array<HTMLSpanElement | null>>([]);
+  const wallpaperVideoRef = useRef<HTMLVideoElement>(null);
 
   // Restore an uploaded wallpaper from IndexedDB after a page reload.
   useEffect(() => {
@@ -98,10 +99,23 @@ export function AppShell() {
   const ambientGlow = usePlayerStore((s) => s.ambientGlow);
   const wallpaper = usePlayerStore((s) => s.wallpaper);
   const wallpaperType = usePlayerStore((s) => s.wallpaperType);
+  const fullscreen = usePlayerStore((s) => s.fullscreen);
   const pointerEffects = usePlayerStore((s) => s.pointerEffects);
   const setLiked = usePlayerStore((s) => s.setLiked);
   const setLikeMutation = usePlayerStore((s) => s.setLikeMutation);
   const setHistoryRecorder = usePlayerStore((s) => s.setHistoryRecorder);
+
+  // Do not keep decoding the background video while the maximized player has
+  // its own full-screen media layer active.
+  useEffect(() => {
+    const video = wallpaperVideoRef.current;
+    if (!video) return;
+    if (fullscreen) {
+      video.pause();
+    } else {
+      void video.play().catch(() => undefined);
+    }
+  }, [fullscreen, wallpaper, wallpaperType]);
 
   const likedQuery = useQuery(api.likes.myLikedTrackIds);
   const toggleLikeMutation = useMutation(api.likes.toggleLike);
@@ -382,6 +396,7 @@ export function AppShell() {
         <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden bg-background/35" aria-hidden="true">
           {wallpaperType === "video" ? (
             <video
+              ref={wallpaperVideoRef}
               src={wallpaper}
               autoPlay
               muted

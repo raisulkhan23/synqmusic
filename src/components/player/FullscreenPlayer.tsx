@@ -352,6 +352,7 @@ function AbRepeatControls() {
 export function FullscreenPlayer() {
   const fullscreen = usePlayerStore((s) => s.fullscreen);
   const current = usePlayerStore((s) => s.current);
+  const isPlaying = usePlayerStore((s) => s.isPlaying);
   const currentTime = usePlayerStore((s) => s.currentTime);
   const duration = usePlayerStore((s) => s.duration);
   const liked = usePlayerStore((s) => s.liked);
@@ -557,7 +558,10 @@ export function FullscreenPlayer() {
           }}
         />
 
-        <VisualizerCanvas className="absolute inset-x-0 bottom-0 z-[1] h-[44vh] w-full opacity-70" />
+        <VisualizerCanvas
+          active={isPlaying}
+          className="absolute inset-x-0 bottom-0 z-[1] h-[44vh] w-full opacity-70"
+        />
 
         <div className="relative z-10 flex h-full flex-col px-4 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-10 sm:pt-4 sm:pb-5">
           {/* top row */}

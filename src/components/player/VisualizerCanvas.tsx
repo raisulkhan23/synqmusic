@@ -6,8 +6,7 @@ import { usePlayerStore } from "@/store/player";
 const BAR_COUNT = 56;
 const FALLBACK_LIME = { r: 196, g: 246, b: 152 };
 
-function sampleBins(freq: Uint8Array, n: number): number[] {
-  const out: number[] = [];
+function sampleBins(freq: Uint8Array, n: number, out: number[]): void {
   const chunk = Math.max(1, Math.floor(freq.length / n));
   for (let i = 0; i < n; i++) {
     let m = 0;
@@ -16,9 +15,8 @@ function sampleBins(freq: Uint8Array, n: number): number[] {
     for (let j = start; j < end; j++) {
       if (freq[j] > m) m = freq[j];
     }
-    out.push(m);
+    out[i] = m;
   }
-  return out;
 }
 
 /**
@@ -48,6 +46,7 @@ function trackVibe(): { seed: number; energy: number; pulseHz: number } {
 
 export function VisualizerCanvas({
   className,
+  active = true,
 }: {
   className?: string;
   active?: boolean;
@@ -78,15 +77,19 @@ export function VisualizerCanvas({
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !visualizerEnabled) return;
+    if (!canvas || !visualizerEnabled || !active) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    // Keep the canvas inexpensive: 1x resolution and 30 FPS are still smooth
+    // for a background visualizer and use far less GPU/CPU than a 2x/60 FPS loop.
+    const dpr = 1;
     const freq = new Uint8Array(analyserRef.current?.frequencyBinCount ?? 128);
     const sim = new Float32Array(BAR_COUNT);
+    const values = new Array<number>(BAR_COUNT);
     let raf = 0;
     let last = performance.now();
+    let lastDraw = 0;
     let vibe = trackVibe();
 
     // Re-derive the vibe whenever the track changes.
@@ -108,6 +111,12 @@ export function VisualizerCanvas({
     const draw = (now: number) => {
       const dt = Math.min(0.1, (now - last) / 1000);
       last = now;
+      if (now - lastDraw < 33) {
+        raf = requestAnimationFrame(draw);
+        return;
+      }
+      lastDraw = now;
+
       const rect = canvas.getBoundingClientRect();
       const w = rect.width;
       const h = rect.height;
@@ -116,7 +125,6 @@ export function VisualizerCanvas({
       // A graph may have been created after this animation frame started.
       // Retry here as a final recovery path for a context rejected on mount.
       const analyserNode = (analyserRef.current ??= ensureAnalyser());
-      let values: number[];
       // Use real FFT only when the catalog audio element is the active
       // source. For YouTube (IFrame engine) the spectrum isn't tappable, so
       // we simulate — but with the track's own energy/tempo signature.
@@ -126,7 +134,7 @@ export function VisualizerCanvas({
 
       if (usingRealAudio) {
         readFrequencyData(analyserNode, freq);
-        values = sampleBins(freq, BAR_COUNT);
+        sampleBins(freq, BAR_COUNT, values);
       } else {
         const { seed, energy, pulseHz } = vibe;
         const playing = usePlayerStore.getState().isPlaying;
@@ -146,7 +154,7 @@ export function VisualizerCanvas({
               (0.4 + 0.6 * Math.abs(Math.sin(now / (700 + char * 500) + i * 0.62)));
           sim[i] += (target - sim[i]) * Math.min(1, dt * (6 + beat * 6));
         }
-        values = Array.from(sim, (v) => v * 255);
+        for (let i = 0; i < BAR_COUNT; i++) values[i] = sim[i] * 255;
       }
 
       const { r, g, b } = accent ?? FALLBACK_LIME;
@@ -177,7 +185,7 @@ export function VisualizerCanvas({
       ro.disconnect();
       unsubTrack();
     };
-  }, [accent, trackId, visualizerEnabled]);
+  }, [accent, trackId, visualizerEnabled, active]);
 
   if (!visualizerEnabled) return null;
   return <canvas ref={canvasRef} className={cn("block", className)} />;
