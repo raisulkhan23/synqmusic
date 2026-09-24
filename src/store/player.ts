@@ -1589,6 +1589,10 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     // When video is enabled and an effect activates, the sound now comes from
     // the filtered <audio> element — sync the muted video slave to it.
     syncVideoSlave();
+    // Outside the fullscreen player the video must never be on screen. Park
+    // it explicitly: a left-over fixed overlay is a click blocker, and this is
+    // the exact moment one used to appear (enabling an effect).
+    if (!get().fullscreen) ytEngine.dismissVideo();
   };
 
   /**

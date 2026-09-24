@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
 import * as ytEngine from "@/lib/youtubePlayer";
@@ -123,6 +123,38 @@ export function AppShell() {
       void recordPlay({ trackId, ...snapshot }).catch(() => undefined);
     });
   }, [recordPlay, setHistoryRecorder]);
+
+  /**
+   * Self-heal for "the UI won't let me click anything".
+   *
+   * Radix menus/dialogs/sheets lock the page by setting
+   * `document.body.style.pointerEvents = "none"` while they are open. If a
+   * layer is unmounted or re-rendered while open (which happens here when an
+   * effect selection re-renders the player), that lock is sometimes never
+   * released and EVERY click is swallowed until the same button is pressed
+   * again. Nothing in Soniq should hold a body-level click lock with no layer
+   * on screen, so clear the stale lock.
+   */
+  const radixLockWatch = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    const clearStaleBodyLock = () => {
+      if (document.body.style.pointerEvents !== "none") return;
+      const hasOpenLayer =
+        document.querySelector(
+          '[data-radix-popper-content-wrapper], [role="dialog"]:not([hidden]), [data-slot="sheet-content"], [data-slot="dropdown-menu-content"]',
+        ) !== null;
+      if (!hasOpenLayer) document.body.style.pointerEvents = "";
+    };
+    radixLockWatch.current = setInterval(clearStaleBodyLock, 300);
+    // Also check right after a click, so recovery is instant.
+    const onPointerDown = () => clearStaleBodyLock();
+    window.addEventListener("pointerdown", onPointerDown, true);
+    return () => {
+      if (radixLockWatch.current) clearInterval(radixLockWatch.current);
+      radixLockWatch.current = null;
+      window.removeEventListener("pointerdown", onPointerDown, true);
+    };
+  }, []);
 
   // Session start (one per app load) + a page view on every route change.
   useEffect(() => {
