@@ -27,6 +27,7 @@ import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import {
   Check,
+  Film,
   Gauge,
   ImageOff,
   ImagePlus,
@@ -100,12 +101,17 @@ export function SettingsDialog({
   const liquidGlass = usePlayerStore((s) => s.liquidGlass);
   const toggleLiquidGlass = usePlayerStore((s) => s.toggleLiquidGlass);
   const wallpaper = usePlayerStore((s) => s.wallpaper);
+  const wallpaperType = usePlayerStore((s) => s.wallpaperType);
   const setWallpaper = usePlayerStore((s) => s.setWallpaper);
+  const setWallpaperType = usePlayerStore((s) => s.setWallpaperType);
   const hideSidebarEmail = usePlayerStore((s) => s.hideSidebarEmail);
   const toggleHideSidebarEmail = usePlayerStore((s) => s.toggleHideSidebarEmail);
 
   const [name, setName] = useState("");
   const wallpaperInputRef = useRef<HTMLInputElement>(null);
+  const [liveWallpaperUrl, setLiveWallpaperUrl] = useState(
+    () => localStorage.getItem("ss.wallpaperType") === "video" ? localStorage.getItem("ss.wallpaper") ?? "" : "",
+  );
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
   const [savingAvatar, setSavingAvatar] = useState(false);
@@ -239,6 +245,25 @@ export function SettingsDialog({
     } finally {
       setSavingAvatar(false);
     }
+  };
+
+  const applyLiveWallpaper = () => {
+    const value = liveWallpaperUrl.trim();
+    if (!value) {
+      toast.error("Paste a video URL first");
+      return;
+    }
+    try {
+      const url = new URL(value);
+      if (url.protocol !== "http:" && url.protocol !== "https:") {
+        throw new Error("unsupported protocol");
+      }
+    } catch {
+      toast.error("Use a valid http(s) video URL");
+      return;
+    }
+    setWallpaper(value, "video");
+    toast.success("Live wallpaper applied");
   };
 
   const handleWallpaperChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -648,7 +673,9 @@ export function SettingsDialog({
           <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
             <div className="flex items-center gap-3">
               <div className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-black/20">
-                {wallpaper ? (
+                {wallpaper && wallpaperType === "video" ? (
+                  <video src={wallpaper} muted loop autoPlay playsInline className="size-full object-cover" />
+                ) : wallpaper ? (
                   <img src={wallpaper} alt="Wallpaper preview" className="size-full object-cover" />
                 ) : (
                   <ImagePlus className="size-5 text-muted-foreground" />
@@ -657,38 +684,95 @@ export function SettingsDialog({
               <div className="min-w-0">
                 <p className="text-sm font-medium">Personal wallpaper</p>
                 <p className="text-xs leading-5 text-muted-foreground">
-                  Your image sits behind the app with a soft blur and dark glass overlay.
+                  {wallpaperType === "video"
+                    ? "A looping video sits behind the app with a soft blur and dark glass overlay."
+                    : "Your image sits behind the app with a soft blur and dark glass overlay."}
                 </p>
               </div>
             </div>
-            <input
-              ref={wallpaperInputRef}
-              type="file"
-              accept="image/png,image/jpeg,image/webp,image/avif"
-              className="hidden"
-              onChange={handleWallpaperChange}
-            />
-            <div className="mt-2.5 flex flex-wrap gap-2">
+
+            <div className="mt-3 grid grid-cols-2 gap-1.5 rounded-lg border border-white/[0.07] bg-black/10 p-1">
+              {(["image", "video"] as const).map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => {
+                    if (type === wallpaperType) return;
+                    const switchingFromImage = type === "video" && wallpaper?.startsWith("data:image/");
+                    const switchingFromVideo = type === "image" && wallpaper?.startsWith("http");
+                    if (wallpaper && (switchingFromImage || switchingFromVideo)) {
+                      setWallpaper(null, type);
+                    } else {
+                      setWallpaperType(type);
+                    }
+                  }}
+                  className={cn(
+                    "rounded-md px-2 py-1.5 text-[11px] font-semibold transition-colors",
+                    wallpaperType === type
+                      ? "bg-white/[0.1] text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {type === "image" ? "Photo" : "Live video"}
+                </button>
+              ))}
+            </div>
+
+            {wallpaperType === "image" ? (
+              <>
+                <input
+                  ref={wallpaperInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/avif"
+                  className="hidden"
+                  onChange={handleWallpaperChange}
+                />
+                <div className="mt-2.5 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => wallpaperInputRef.current?.click()}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-white/25 hover:bg-white/[0.1]"
+                  >
+                    <ImagePlus className="size-3.5" />
+                    {wallpaper ? "Replace image" : "Choose image"}
+                  </button>
+                </div>
+                <p className="mt-2 text-[11px] text-muted-foreground">PNG, JPG, WebP or AVIF · up to 3 MB</p>
+              </>
+            ) : (
+              <>
+                <div className="mt-2.5 flex gap-2">
+                  <Input
+                    value={liveWallpaperUrl}
+                    onChange={(event) => setLiveWallpaperUrl(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") applyLiveWallpaper();
+                    }}
+                    placeholder="https://.../wallpaper.mp4"
+                    aria-label="Live wallpaper video URL"
+                    className="min-w-0 text-xs"
+                  />
+                  <Button size="sm" onClick={applyLiveWallpaper} className="shrink-0">
+                    <Film className="size-3.5" />
+                    Apply
+                  </Button>
+                </div>
+                <p className="mt-2 text-[11px] leading-4 text-muted-foreground">
+                  Use a direct MP4/WebM URL. It autoplays muted behind the UI.
+                </p>
+              </>
+            )}
+
+            {wallpaper && (
               <button
                 type="button"
-                onClick={() => wallpaperInputRef.current?.click()}
-                className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-white/25 hover:bg-white/[0.1]"
+                onClick={clearWallpaper}
+                className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-red-400/30 hover:bg-red-400/[0.08] hover:text-red-300"
               >
-                <ImagePlus className="size-3.5" />
-                {wallpaper ? "Replace image" : "Choose image"}
+                <ImageOff className="size-3.5" />
+                Remove wallpaper
               </button>
-              {wallpaper && (
-                <button
-                  type="button"
-                  onClick={clearWallpaper}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-red-400/30 hover:bg-red-400/[0.08] hover:text-red-300"
-                >
-                  <ImageOff className="size-3.5" />
-                  Remove
-                </button>
-              )}
-            </div>
-            <p className="mt-2 text-[11px] text-muted-foreground">PNG, JPG, WebP or AVIF · up to 3 MB</p>
+            )}
           </div>
 
           <ToggleRow

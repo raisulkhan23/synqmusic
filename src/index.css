@@ -283,6 +283,28 @@ html.light img {
   html.no-glass .liquid-glass::after {
     content: none !important;
   }
+  .aurora-orb {
+    background: radial-gradient(circle, rgb(var(--tint) / 0.13), transparent 68%);
+    filter: blur(58px);
+    opacity: 0.55;
+    will-change: transform;
+  }
+  .aurora-orb-one {
+    animation: aurora-drift-one 18s ease-in-out infinite alternate;
+  }
+  .aurora-orb-two {
+    background: radial-gradient(circle, rgb(120 160 255 / 0.1), transparent 68%);
+    animation: aurora-drift-two 22s ease-in-out infinite alternate;
+  }
+  @keyframes aurora-drift-one {
+    from { transform: translate3d(-2%, -2%, 0) scale(0.92); }
+    to { transform: translate3d(14%, 10%, 0) scale(1.08); }
+  }
+  @keyframes aurora-drift-two {
+    from { transform: translate3d(4%, 8%, 0) scale(1.05); }
+    to { transform: translate3d(-12%, -6%, 0) scale(0.9); }
+  }
+
   /* Smaller glass surfaces used for cards, navigation and profile surfaces. */
   .glass-card {
     position: relative;
@@ -375,6 +397,17 @@ html.light img {
   }
   html.no-glass .glass-card::before {
     content: none !important;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .aurora-orb,
+    .liquid-glass::before {
+      animation: none !important;
+    }
+    .glass-card,
+    .pointer-glow {
+      transition: none !important;
+    }
   }
 
   .hide-scrollbar {

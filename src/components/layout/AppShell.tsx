@@ -51,6 +51,7 @@ export function AppShell() {
   const compactMode = usePlayerStore((s) => s.compactMode);
   const ambientGlow = usePlayerStore((s) => s.ambientGlow);
   const wallpaper = usePlayerStore((s) => s.wallpaper);
+  const wallpaperType = usePlayerStore((s) => s.wallpaperType);
   const pointerEffects = usePlayerStore((s) => s.pointerEffects);
   const setLiked = usePlayerStore((s) => s.setLiked);
   const setLikeMutation = usePlayerStore((s) => s.setLikeMutation);
@@ -286,16 +287,29 @@ export function AppShell() {
       }
     >
       <div className="ambient-grid pointer-events-none absolute inset-0 -z-20 opacity-70" aria-hidden="true" />
+      <div className="aurora-orb aurora-orb-one pointer-events-none absolute -top-48 -left-32 -z-10 size-[34rem] rounded-full" aria-hidden="true" />
+      <div className="aurora-orb aurora-orb-two pointer-events-none absolute -right-48 bottom-[-16rem] -z-10 size-[42rem] rounded-full" aria-hidden="true" />
       {pointerEffects && (
         <div className="pointer-glow pointer-events-none absolute inset-0 -z-[5]" aria-hidden="true" />
       )}
       {wallpaper && (
         <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden bg-background/35" aria-hidden="true">
-          <img
-            src={wallpaper}
-            alt=""
-            className="size-full scale-110 object-cover blur-3xl"
-          />
+          {wallpaperType === "video" ? (
+            <video
+              src={wallpaper}
+              autoPlay
+              muted
+              loop
+              playsInline
+              className="size-full scale-110 object-cover blur-3xl"
+            />
+          ) : (
+            <img
+              src={wallpaper}
+              alt=""
+              className="size-full scale-110 object-cover blur-3xl"
+            />
+          )}
           <div className="absolute inset-0 bg-background/45" />
           <div className="absolute inset-0 bg-gradient-to-b from-background/20 via-background/10 to-background/55" />
         </div>

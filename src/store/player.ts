@@ -255,7 +255,9 @@ interface PlayerStore {
   toggleLiquidGlass: () => void;
   /** Optional locally-persisted blurred background wallpaper. */
   wallpaper: string | null;
-  setWallpaper: (dataUrl: string | null) => void;
+  wallpaperType: "image" | "video";
+  setWallpaper: (value: string | null, type?: "image" | "video") => void;
+  setWallpaperType: (type: "image" | "video") => void;
   /** Hide the account email in the sidebar corner. */
   hideSidebarEmail: boolean;
   /** Spotify-style collapsed sidebar (icon rail). */
@@ -423,6 +425,7 @@ const initialGlow = readBool("ss.ambientGlow", true);
 const initialVisualizer = readBool("ss.visualizer", true);
 const initialPointerEffects = readBool("ss.pointerEffects", true);
 const initialWallpaper = localStorage.getItem("ss.wallpaper");
+const initialWallpaperType = localStorage.getItem("ss.wallpaperType") === "video" ? "video" : "image";
 const savedQueue = readSavedQueue();
 
 const readIdSet = (key: string): Record<string, true> => {
@@ -2018,15 +2021,22 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       }),
 
     wallpaper: initialWallpaper,
-    setWallpaper: (dataUrl) =>
+    wallpaperType: initialWallpaperType,
+    setWallpaperType: (type) =>
+      set(() => {
+        localStorage.setItem("ss.wallpaperType", type);
+        return { wallpaperType: type };
+      }),
+    setWallpaper: (value, type = "image") =>
       set(() => {
         try {
-          if (dataUrl) localStorage.setItem("ss.wallpaper", dataUrl);
+          if (value) localStorage.setItem("ss.wallpaper", value);
           else localStorage.removeItem("ss.wallpaper");
+          localStorage.setItem("ss.wallpaperType", type);
         } catch {
           // Keep the current session usable even when browser storage is full.
         }
-        return { wallpaper: dataUrl };
+        return { wallpaper: value, wallpaperType: type };
       }),
 
     // restore queue from the last session (does not autoplay — user resumes)
