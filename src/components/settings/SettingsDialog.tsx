@@ -316,7 +316,7 @@ export function SettingsDialog({
     }
   };
 
-  const handleWallpaperChange = async (event: ChangeEvent<HTMLInputElement>) => {
+  const handleWallpaperChange = (event: ChangeEvent<HTMLInputElement>) => {
     const input = event.currentTarget;
     const file = input.files?.[0];
     input.value = "";
@@ -330,16 +330,17 @@ export function SettingsDialog({
       return;
     }
 
-    try {
-      await saveImageWallpaperFile(file);
-      if (wallpaper?.startsWith("blob:")) URL.revokeObjectURL(wallpaper);
-      const url = URL.createObjectURL(file);
-      setWallpaper(url, "image");
-      localStorage.setItem("ss.wallpaper", IMAGE_WALLPAPER_MARKER);
-      toast.success("Wallpaper applied");
-    } catch {
-      toast.error("Couldn't save that image — try a smaller file");
-    }
+    void saveImageWallpaperFile(file)
+      .then(() => {
+        if (wallpaper?.startsWith("blob:")) URL.revokeObjectURL(wallpaper);
+        const url = URL.createObjectURL(file);
+        setWallpaper(url, "image");
+        localStorage.setItem("ss.wallpaper", IMAGE_WALLPAPER_MARKER);
+        toast.success("Wallpaper applied");
+      })
+      .catch(() => {
+        toast.error("Couldn't save that image — try a smaller file");
+      });
   };
 
   const clearWallpaper = () => {
