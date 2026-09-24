@@ -579,7 +579,15 @@ export function SettingsDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <nav className="sticky top-0 z-20 -mx-1 rounded-xl border border-white/[0.07] bg-white/[0.03] px-1 py-2 shadow-sm backdrop-blur-xl" aria-label="Settings sections">
+        <nav
+          className="sticky top-0 z-30 -mx-1 rounded-xl border border-white/[0.07] px-1 py-2"
+          style={{
+            backgroundColor: "rgb(255 255 255 / 0.045)",
+            backgroundImage: "linear-gradient(110deg, rgb(255 255 255 / 0.06), transparent 58%)",
+            boxShadow: "0 8px 22px rgb(0 0 0 / 0.14)",
+          }}
+          aria-label="Settings sections"
+        >
           <div className="flex items-center gap-2">
             <span className="shrink-0 px-1 text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">
               Jump to
