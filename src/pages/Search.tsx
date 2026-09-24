@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import { RemoteTrackRow } from "@/components/tracks/RemoteTrackRow";
 import { api } from "@/convex/_generated/api";
@@ -77,7 +77,48 @@ const POPULAR_MIXES = [
   { id: "indie", title: "Indie Pulse", desc: "Fresh indie sounds from rising voices.", query: "indie hits", gradient: "from-rose-500/30 via-pink-500/15 to-transparent" },
   { id: "lofi", title: "Late Night Lo-fi", desc: "Mellow beats for late nights and deep focus.", query: "lo-fi beats late night", gradient: "from-indigo-500/30 via-slate-500/15 to-transparent" },
   { id: "workout", title: "Beast Mode", desc: "High-energy tracks built for the gym.", query: "workout energy hits", gradient: "from-lime-500/30 via-green-500/15 to-transparent" },
+  { id: "daily-discovery", title: "Daily Discovery", desc: "A fresh batch of songs worth hearing today.", query: "new music discoveries today", gradient: "from-cyan-500/30 via-sky-500/15 to-transparent" },
+  { id: "global-vibes", title: "Global Sounds", desc: "Latin, African, Asian and worldwide favorites.", query: "worldwide music hits", gradient: "from-orange-500/30 via-rose-500/15 to-transparent" },
+  { id: "deep-focus", title: "Deep Focus", desc: "Instrumental textures for concentration and flow.", query: "instrumental focus music", gradient: "from-blue-500/30 via-indigo-500/15 to-transparent" },
+  { id: "after-hours", title: "After Hours", desc: "Smooth R&B and soul for the quiet hours.", query: "r&b soul after hours", gradient: "from-violet-500/30 via-purple-500/15 to-transparent" },
+  { id: "acoustic-sunrise", title: "Acoustic Sunrise", desc: "Easy acoustic songs for starting the day.", query: "acoustic morning songs", gradient: "from-yellow-500/30 via-orange-500/15 to-transparent" },
+  { id: "electronic-energy", title: "Electronic Energy", desc: "Fresh electronic sounds to move to right now.", query: "electronic dance music hits", gradient: "from-emerald-500/30 via-cyan-500/15 to-transparent" },
+  { id: "retro-arcade", title: "Retro Arcade", desc: "Bright synths and nostalgic hooks on repeat.", query: "retro synth pop hits", gradient: "from-pink-500/30 via-fuchsia-500/15 to-transparent" },
+  { id: "global-peace", title: "Peaceful World", desc: "Calm, expansive sounds for reset and reflection.", query: "calm ambient world music", gradient: "from-teal-500/30 via-blue-500/15 to-transparent" },
 ] as const;
+
+const POPULAR_MIX_REFRESH_INTERVAL = 24 * 60 * 60 * 1000;
+const POPULAR_MIX_REFRESH_KEY = "synq:popular-mixes-refreshed-at";
+const POPULAR_MIX_COUNT = 8;
+
+function popularMixCycle() {
+  const now = Date.now();
+  if (typeof window === "undefined") return Math.floor(now / POPULAR_MIX_REFRESH_INTERVAL);
+
+  try {
+    const stored = Number(window.localStorage.getItem(POPULAR_MIX_REFRESH_KEY));
+    if (!stored || now - stored >= POPULAR_MIX_REFRESH_INTERVAL) {
+      window.localStorage.setItem(POPULAR_MIX_REFRESH_KEY, String(now));
+      return Math.floor(now / POPULAR_MIX_REFRESH_INTERVAL);
+    }
+    return Math.floor(stored / POPULAR_MIX_REFRESH_INTERVAL);
+  } catch {
+    return Math.floor(now / POPULAR_MIX_REFRESH_INTERVAL);
+  }
+}
+
+function usePopularMixCycle() {
+  const [cycle, setCycle] = useState(popularMixCycle);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setCycle(popularMixCycle());
+    }, 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  return cycle;
+}
 
 function MixCard({ mix }: { mix: (typeof POPULAR_MIXES)[number] }) {
   const searchYt = useAction(api.youtube.searchYoutube);
@@ -388,6 +429,15 @@ function BrowseView({
 }: {
   onPick: (q: string) => void;
 }) {
+  const mixCycle = usePopularMixCycle();
+  const popularMixes = useMemo(() => {
+    const start = (mixCycle * 3) % POPULAR_MIXES.length;
+    return [
+      ...POPULAR_MIXES.slice(start, start + POPULAR_MIX_COUNT),
+      ...POPULAR_MIXES.slice(0, Math.max(0, start + POPULAR_MIX_COUNT - POPULAR_MIXES.length)),
+    ];
+  }, [mixCycle]);
+
   return (
     <div className="flex flex-col gap-10">
       <section>
@@ -395,10 +445,11 @@ function BrowseView({
           Popular mixes
         </h2>
         <div className="slider-rail -mx-4 flex gap-3 overflow-x-auto px-4 pb-2">
-          {POPULAR_MIXES.map((mix) => (
+          {popularMixes.map((mix) => (
             <MixCard key={mix.id} mix={mix} />
           ))}
         </div>
+        <p className="mt-2 text-[10px] text-muted-foreground/70">Refreshes daily with new mix picks</p>
       </section>
 
       <section>

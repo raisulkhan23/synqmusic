@@ -33,6 +33,18 @@ import { useEffect, useMemo, useState } from "react";
 
 type RemoteMap = Record<string, YtItem[] | undefined>;
 
+const DISCOVERY_REFRESH_INTERVAL = 24 * 60 * 60 * 1000;
+const DISCOVERY_REFRESH_KEY = "synq:discovery-refreshed-at";
+
+function markDiscoveryRefreshed() {
+  try {
+    window.localStorage.setItem(DISCOVERY_REFRESH_KEY, String(Date.now()));
+  } catch {
+    // Storage can be unavailable in private browsing; the in-memory refresh
+    // timer should still keep the current Home session fresh.
+  }
+}
+
 export default function Home() {
   const playTrack = usePlayerStore((s) => s.playTrack);
   const likedCount = usePlayerStore((s) => Object.keys(s.liked).length);
@@ -42,6 +54,8 @@ export default function Home() {
   const searchYt = useAction(api.youtube.searchYoutube);
 
   const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const [remote, setRemote] = useState<RemoteMap>({});
+  const [remoteRefreshToken, setRemoteRefreshToken] = useState(0);
 
   // Songs of the week — global chart, streamed live.
   const [trending, setTrending] = useState<YtItem[] | null>(null);
@@ -57,7 +71,7 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [spotifyChart]);
+  }, [spotifyChart, remoteRefreshToken]);
 
   const playTrending = (item: YtItem) => {
     setResolvingId(item.id);
@@ -148,17 +162,28 @@ export default function Home() {
     return q;
   }, [continueTrack?.title, continueArtistName, timeLabel, season, favArtist]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const [remote, setRemote] = useState<RemoteMap>({});
-  const [remoteRefreshToken, setRemoteRefreshToken] = useState(0);
-
-  // Remote shelves are live data, so refresh them once per day while Home
-  // stays open. Resetting the map shows the existing skeletons while fresh
-  // source results arrive.
+  // Remote shelves are live data, so refresh them once per day. The first
+  // render always fetches current data; this timestamp makes the cadence
+  // survive route changes and browser sessions instead of only living in
+  // this mounted Home page.
   useEffect(() => {
+    let lastRefresh = 0;
+    try {
+      lastRefresh = Number(window.localStorage.getItem(DISCOVERY_REFRESH_KEY)) || 0;
+    } catch {
+      // Ignore unavailable storage and use the in-memory timer below.
+    }
+
+    if (!lastRefresh || Date.now() - lastRefresh >= DISCOVERY_REFRESH_INTERVAL) {
+      markDiscoveryRefreshed();
+    }
+
     const timer = window.setInterval(() => {
       setRemote({});
+      setTrending(null);
       setRemoteRefreshToken((value) => value + 1);
-    }, 24 * 60 * 60 * 1000);
+      markDiscoveryRefreshed();
+    }, DISCOVERY_REFRESH_INTERVAL);
     return () => window.clearInterval(timer);
   }, []);
 
