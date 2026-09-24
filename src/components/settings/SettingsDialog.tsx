@@ -579,7 +579,7 @@ export function SettingsDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <nav className="liquid-glass settings-liquid-glass sticky top-0 z-20 -mx-1 border-y border-white/[0.07] !bg-card/70 px-1 py-2 shadow-lg" aria-label="Settings sections">
+        <nav className="settings-jump-glass sticky top-0 z-20 -mx-1 border-y border-white/[0.12] px-1 py-2" aria-label="Settings sections">
           <div className="flex items-center gap-2">
             <span className="shrink-0 px-1 text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">
               Jump to
