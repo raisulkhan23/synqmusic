@@ -134,6 +134,14 @@ function usePopularMixCycle() {
   return cycle;
 }
 
+function creatorQueryLooksLikeName(query: string, artist?: string): boolean {
+  const normalizedQuery = query.toLocaleLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const handleLike = /^[a-z0-9][a-z0-9_.:-]{2,}$/.test(query.trim()) && /[0-9_.:-]/.test(query.trim());
+  const terms = normalizedQuery.split(" ").filter(Boolean);
+  const normalizedArtist = (artist ?? "").toLocaleLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  return handleLike || Boolean(normalizedArtist && terms.length > 0 && terms.every((term) => normalizedArtist.includes(term)));
+}
+
 function MixCard({ mix }: { mix: (typeof POPULAR_MIXES)[number] }) {
   const searchYt = useAction(api.youtube.searchYoutube);
   const playTrack = usePlayerStore((s) => s.playTrack);
@@ -195,6 +203,7 @@ export default function Search() {
     popular: [],
   });
   const [creatorSearching, setCreatorSearching] = useState(false);
+  const [creatorSearchEnabled, setCreatorSearchEnabled] = useState(false);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
@@ -210,6 +219,22 @@ export default function Search() {
   const searchCreatorUploads = useAction(api.youtube.searchCreatorUploads);
 
   const debouncedQuery = useDebounced(query, 450);
+
+  // Creator uploads are opt-in by default. This prevents a song/title query
+  // such as "inferno clash" from showing unrelated gaming uploads; a likely
+  // handle or a matching primary artist can enable them automatically.
+  useEffect(() => {
+    setCreatorSearchEnabled(false);
+    setCreatorResults({ recent: [], popular: [] });
+    setCreatorSearching(false);
+  }, [debouncedQuery]);
+
+  useEffect(() => {
+    if (!debouncedQuery.trim() || ytResults === null) return;
+    setCreatorSearchEnabled(
+      creatorQueryLooksLikeName(debouncedQuery.trim(), ytResults[0]?.artist),
+    );
+  }, [debouncedQuery, ytResults]);
 
   // Search history — persisted locally, capped at 8 entries.
   const [searchHistory, setSearchHistory] = useState<string[]>(() => {
@@ -293,23 +318,25 @@ export default function Search() {
         });
       // Creator uploads stay in their own category so a spoken-word result or
       // fan upload can never leak into the primary Songs list or radio queue.
-      setCreatorSearching(true);
-      searchCreatorUploads({ query: q })
-        .then((results) => {
-          if (!cancelled) setCreatorResults(results);
-        })
-        .catch(() => {
-          if (!cancelled) setCreatorResults({ recent: [], popular: [] });
-        })
-        .finally(() => {
-          if (!cancelled) setCreatorSearching(false);
-        });
+      if (creatorSearchEnabled) {
+        setCreatorSearching(true);
+        searchCreatorUploads({ query: q })
+          .then((results) => {
+            if (!cancelled) setCreatorResults(results);
+          })
+          .catch(() => {
+            if (!cancelled) setCreatorResults({ recent: [], popular: [] });
+          })
+          .finally(() => {
+            if (!cancelled) setCreatorSearching(false);
+          });
+      }
       return () => {
         cancelled = true;
       };
     };
     run();
-  }, [debouncedQuery, searchYt, searchLyricVideos, searchCreatorUploads, retryKey, rememberQuery]);
+  }, [debouncedQuery, searchYt, searchLyricVideos, searchCreatorUploads, creatorSearchEnabled, retryKey, rememberQuery]);
 
   const playRemote = useCallback(
     (item: YtItem) => {
@@ -467,7 +494,26 @@ export default function Search() {
             )}
           </section>
 
-          {(creatorSearching || creatorGroups.length > 0) && (
+          {hasQuery && !creatorSearchEnabled && !searching && ytResults !== null && (
+            <div className="flex flex-col gap-3 rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">Looking for a singer or writer?</p>
+                <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                  Search their channel separately for recent and popular uploads. This stays out of the Songs list.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCreatorSearchEnabled(true)}
+                className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full border border-[rgb(var(--tint)_/_0.35)] bg-[rgb(var(--tint)_/_0.1)] px-3.5 py-2 text-xs font-semibold text-[rgb(var(--tint))] transition-colors hover:bg-[rgb(var(--tint)_/_0.18)]"
+              >
+                <UsersRound className="size-3.5" />
+                Search creator uploads
+              </button>
+            </div>
+          )}
+
+          {creatorSearchEnabled && (creatorSearching || creatorGroups.length > 0) && (
             <section aria-labelledby="creator-uploads-heading">
               <div className="mb-2 flex flex-wrap items-center gap-2">
                 <Upload className="size-4 text-[rgb(var(--tint))]" />
