@@ -275,6 +275,44 @@ function queryTerms(query: string): string[] {
     .filter((term) => term.length > 1 && !QUERY_NOISE_RE.test(term));
 }
 
+const CREATOR_QUERY_NOISE_RE =
+  /\b(latest|popular|upload|uploads|official|video|videos|music|song|songs|artist|singer|writer|lyrics?|lyrical|live|channel)\b/i;
+const CREATOR_RESULT_NOISE_TERMS = [
+  "short",
+  "shorts",
+  "fan",
+  "reaction",
+  "karaoke",
+  "compilation",
+  "mix",
+  "remix",
+  "cover",
+  "podcast",
+  "episode",
+  "unboxing",
+  "gameplay",
+  "trailer",
+  "review",
+  "asmr",
+];
+
+/** Require a creator result to actually match the typed creator name. */
+export function isCreatorUploadRelevant(item: YtItem, query: string): boolean {
+  const terms = normalizeMatchText(query)
+    .split(" ")
+    .map((term) => term.trim())
+    .filter((term) => term.length > 1 && !CREATOR_QUERY_NOISE_RE.test(term));
+  if (terms.length === 0) return false;
+
+  const resultText = normalizeMatchText(`${item.title} ${item.artist}`);
+  if (!terms.every((term) => resultText.includes(term))) return false;
+
+  const normalizedQuery = normalizeMatchText(query);
+  return !CREATOR_RESULT_NOISE_TERMS.some(
+    (term) => resultText.includes(term) && !normalizedQuery.includes(term),
+  );
+}
+
 /** Strict gate for the supplemental lyric/lo-fi source. */
 export function isLyricVideoTrack(item: YtItem, query: string): boolean {
   if (!isMusicTrack(item)) return false;
@@ -495,8 +533,14 @@ export const searchCreatorUploads = action({
       ]);
       const seen = new Set<string>();
       return {
-        recent: dedupeCreatorItems(recentResults, seen).slice(0, 6),
-        popular: dedupeCreatorItems(popularResults, seen).slice(0, 6),
+        recent: dedupeCreatorItems(
+          recentResults.filter((item) => isCreatorUploadRelevant(item, rawQuery)),
+          seen,
+        ).slice(0, 6),
+        popular: dedupeCreatorItems(
+          popularResults.filter((item) => isCreatorUploadRelevant(item, rawQuery)),
+          seen,
+        ).slice(0, 6),
       };
     } catch {
       return { recent: [], popular: [] };

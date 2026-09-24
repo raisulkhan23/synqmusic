@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   dedupeMusicItems,
+  isCreatorUploadRelevant,
   isLyricVideoTrack,
   parseMusicListItem,
 } from "../src/convex/youtube";
@@ -81,6 +82,35 @@ describe("supplemental lyric-video filtering", () => {
         item({ id: "lyric-3", title: "  Khusir   Anek Range | Achena Atithi | Lyrical Video Song  " }),
       ]).map((entry) => entry.id),
     ).toEqual(["lyric-1"]);
+  });
+});
+
+describe("creator upload relevance", () => {
+  const item = (overrides = {}) => ({
+    id: "creator-1",
+    title: "nombra101 official latest video",
+    artist: "nombra101",
+    duration: 240,
+    thumbnail: "",
+    ...overrides,
+  });
+
+  test("accepts a creator upload that matches the typed name", () => {
+    expect(isCreatorUploadRelevant(item(), "nombra101")).toBe(true);
+  });
+
+  test("rejects unrelated videos even when they contain generic music words", () => {
+    expect(
+      isCreatorUploadRelevant(
+        item({ title: "Random reaction and fan upload", artist: "Random Channel" }),
+        "nombra101",
+      ),
+    ).toBe(false);
+  });
+
+  test("rejects fan, reaction, and karaoke noise unless explicitly requested", () => {
+    expect(isCreatorUploadRelevant(item({ title: "nombra101 fan reaction" }), "nombra101")).toBe(false);
+    expect(isCreatorUploadRelevant(item({ title: "nombra101 karaoke cover" }), "nombra101")).toBe(false);
   });
 });
 
