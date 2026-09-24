@@ -156,6 +156,11 @@ export default function Home() {
 
   // --- live remote fills for every section -----------------------------------
   const timeLabel = timeOfDayLabel();
+  const [localTime, setLocalTime] = useState(() => formatLocalTime());
+  useEffect(() => {
+    const timer = window.setInterval(() => setLocalTime(formatLocalTime()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
   const season = seasonLabel();
   const continueArtistName = lastPlayed?.artistName.split(",")[0]?.trim() ?? "";
   const favArtist = mostPlayedItems[0]?.artist.split(",")[0]?.trim();
@@ -692,7 +697,7 @@ export default function Home() {
             <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-4">
               <h3 className="font-display flex items-center gap-2 text-base font-bold tracking-tight">
                 <Sun className="size-4 text-[rgb(var(--tint))]" />
-                {capitalize(timeLabel)}
+                When you listen · {localTime}
               </h3>
               <RemoteRows
                 items={remote.timeOfDay}
@@ -908,6 +913,14 @@ function snapshotToPlayable(snap: LastPlayedSnapshot): Playable {
     youtubeId: snap.youtubeId,
     audioUrl: snap.audioUrl,
   };
+}
+
+function formatLocalTime(date = new Date()): string {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  }).format(date);
 }
 
 function timeOfDayLabel(): string {
