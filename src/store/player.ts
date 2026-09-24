@@ -926,6 +926,39 @@ function audioElementIsSource(t: Playable | null | undefined): boolean {
 }
 
 /** A-B repeat + resume-position bookkeeping, run on every time update. */
+const prefetchedTrackIds = new Set<string>();
+
+function prefetchTrack(track: Playable | undefined): void {
+  if (!track || typeof window === "undefined" || prefetchedTrackIds.has(track.id)) return;
+  prefetchedTrackIds.add(track.id);
+
+  // Keep next-track preparation off the critical click path. Artwork is cheap
+  // to warm, and direct audio sources can fetch metadata without playing.
+  window.setTimeout(() => {
+    if (track.coverUrl) {
+      const image = new Image();
+      image.decoding = "async";
+      image.src = track.coverUrl;
+    }
+    if (track.youtubeId) {
+      const thumbnail = new Image();
+      thumbnail.decoding = "async";
+      thumbnail.src = `https://i.ytimg.com/vi/${track.youtubeId}/hqdefault.jpg`;
+    }
+    if (!track.youtubeId && /^https?:/.test(track.audioUrl)) {
+      const audio = new Audio();
+      audio.preload = "metadata";
+      audio.src = track.audioUrl;
+      audio.load();
+      window.setTimeout(() => {
+        audio.pause();
+        audio.removeAttribute("src");
+        audio.load();
+      }, 15_000);
+    }
+  }, 250);
+}
+
 function onTimeUpdate(t: number, duration: number): void {
   const s = usePlayerStore.getState();
   if (s.abA !== null && s.abB !== null && t >= s.abB) {
@@ -1018,6 +1051,13 @@ function wireAudio() {
 // --- youtube iframe engine wiring --------------------------------------------
 
 let ytWired = false;
+let ytLoadWatchdog: ReturnType<typeof setTimeout> | null = null;
+
+function clearYtLoadWatchdog(): void {
+  if (ytLoadWatchdog !== null) clearTimeout(ytLoadWatchdog);
+  ytLoadWatchdog = null;
+}
+
 function wireYoutubeEngine() {
   if (ytWired) return;
   ytWired = true;
@@ -1030,6 +1070,7 @@ function wireYoutubeEngine() {
       // isPlaying off while the audio element is already playing.
       if (!usePlayerStore.getState().current?.youtubeId) return;
       if (state === 1) {
+        clearYtLoadWatchdog();
         usePlayerStore.setState({ isPlaying: true, isBuffering: false });
       } else if (state === 2) {
         usePlayerStore.setState({ isPlaying: false, isBuffering: false });
@@ -1049,6 +1090,7 @@ function wireYoutubeEngine() {
     },
     onError: (code) => {
       if (ytEngine.isFatalError(code)) {
+        clearYtLoadWatchdog();
         usePlayerStore.setState((s) => ({
           isBuffering: false,
           isPlaying: false,
@@ -1202,6 +1244,17 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
         return;
       }
       getAudio().pause();
+      clearYtLoadWatchdog();
+      ytLoadWatchdog = setTimeout(() => {
+        const state = usePlayerStore.getState();
+        if (seq !== loadSeq || !state.current?.youtubeId || state.isPlaying) return;
+        clearYtLoadWatchdog();
+        usePlayerStore.setState((currentState) => ({
+          isBuffering: false,
+          isPlaying: false,
+          errorNonce: currentState.errorNonce + 1,
+        }));
+      }, 12_000);
       ytEngine
         .play(track.youtubeId, { volume: get().volume, muted: get().muted, startSeconds: resumeAt || undefined })
         .then(() => {
@@ -1210,6 +1263,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
           if (seq !== loadSeq) ytEngine.pause();
         })
         .catch(() => {
+          clearYtLoadWatchdog();
           if (seq !== loadSeq) return;
           set({ isPlaying: false, isBuffering: false, errorNonce: get().errorNonce + 1 });
         });
@@ -1254,6 +1308,8 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       abB: null,
     });
     syncMediaSession(track, true);
+    const nextIndex = get().queueIndex + 1;
+    prefetchTrack(get().queue[nextIndex]);
     maybeAutofillQueue();
   };
 

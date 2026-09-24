@@ -100,6 +100,7 @@ export function AppShell() {
   const wallpaper = usePlayerStore((s) => s.wallpaper);
   const wallpaperType = usePlayerStore((s) => s.wallpaperType);
   const fullscreen = usePlayerStore((s) => s.fullscreen);
+  const isBuffering = usePlayerStore((s) => s.isBuffering);
   const pointerEffects = usePlayerStore((s) => s.pointerEffects);
   const setLiked = usePlayerStore((s) => s.setLiked);
   const setLikeMutation = usePlayerStore((s) => s.setLikeMutation);
@@ -110,12 +111,12 @@ export function AppShell() {
   useEffect(() => {
     const video = wallpaperVideoRef.current;
     if (!video) return;
-    if (fullscreen) {
+    if (fullscreen || isBuffering) {
       video.pause();
     } else {
       void video.play().catch(() => undefined);
     }
-  }, [fullscreen, wallpaper, wallpaperType]);
+  }, [fullscreen, isBuffering, wallpaper, wallpaperType]);
 
   const likedQuery = useQuery(api.likes.myLikedTrackIds);
   const toggleLikeMutation = useMutation(api.likes.toggleLike);
