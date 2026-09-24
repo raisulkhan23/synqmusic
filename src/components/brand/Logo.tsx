@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 import { Link } from "react-router";
 
 /** iconOnly renders just the mark — used in the collapsed sidebar rail. */
-export function Logo({ to = "/", className, iconOnly = false }: { to?: string; className?: string; iconOnly?: boolean }) {
+export function Logo({ to = "/home", className, iconOnly = false }: { to?: string; className?: string; iconOnly?: boolean }) {
   if (iconOnly) {
     return (
       <Link to={to} className={cn("group inline-flex", className)}>

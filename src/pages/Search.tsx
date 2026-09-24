@@ -6,6 +6,7 @@ import { toPlayableYoutube } from "@/lib/playable";
 import { type YtItem } from "@/lib/youtube";
 import { usePlayerStore } from "@/store/player";
 import { track as trackEvent } from "@/lib/analytics";
+import { GravitySponsor } from "@/components/ads/GravitySponsor";
 import { useAction } from "convex/react";
 import {
   Loader2,
@@ -343,13 +344,24 @@ export default function Search() {
               </p>
             ) : (
               <div className="flex flex-col gap-0.5">
+                {/* Contextual sponsor slot: one clearly-labelled card, after
+                    the third result, so it never crowds the first songs a
+                    user is actually looking for. Renders nothing when unset. */}
                 {ytResults?.map((item, i) => (
-                  <RemoteTrackRow
-                    key={item.id}
-                    item={item}
-                    index={i + 1}
-                    onPlay={playRemote}
-                  />
+                  <div key={item.id}>
+                    {i === 2 && hasQuery ? (
+                      <GravitySponsor
+                        context={query.trim()}
+                        placement="search_results"
+                        className="my-3"
+                      />
+                    ) : null}
+                    <RemoteTrackRow
+                      item={item}
+                      index={i + 1}
+                      onPlay={playRemote}
+                    />
+                  </div>
                 ))}
               </div>
             )}
