@@ -460,6 +460,50 @@ function parseMusicCardShelf(card: Record<string, unknown>): YtItem | null {
   return { id: videoId, title, artist, duration: 0, thumbnail };
 }
 
+async function webVideoSearch(query: string): Promise<YtItem[]> {
+  const data = await innerTube("search", WEB, {
+    context: clientContext(WEB),
+    query,
+    params: "EgIQAQ%3D%3D",
+  });
+  return extractSearchResults(data);
+}
+
+function dedupeCreatorItems(items: YtItem[], seen: Set<string>): YtItem[] {
+  return dedupeMusicItems(items).filter((item) => {
+    if (seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
+}
+
+/**
+ * Search channel-style uploads separately from the primary Songs results.
+ * This is intentionally not filtered through isMusicTrack: singer and writer
+ * searches can legitimately include spoken-word, live, and video uploads.
+ */
+export const searchCreatorUploads = action({
+  args: { query: v.string() },
+  handler: async (_ctx, { query }): Promise<{ recent: YtItem[]; popular: YtItem[] }> => {
+    const rawQuery = query.trim();
+    if (!rawQuery) return { recent: [], popular: [] };
+
+    try {
+      const [recentResults, popularResults] = await Promise.all([
+        webVideoSearch(`${rawQuery} latest upload`),
+        webVideoSearch(`${rawQuery} popular uploads`),
+      ]);
+      const seen = new Set<string>();
+      return {
+        recent: dedupeCreatorItems(recentResults, seen).slice(0, 6),
+        popular: dedupeCreatorItems(popularResults, seen).slice(0, 6),
+      };
+    } catch {
+      return { recent: [], popular: [] };
+    }
+  },
+});
+
 /**
  * Search YouTube for music. Uses the YouTube Music endpoint so ONLY music
  * tracks are ever returned — no podcasts, vlogs, mixes, or other videos.

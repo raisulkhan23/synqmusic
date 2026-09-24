@@ -16,6 +16,8 @@ import {
   Globe,
   Music2,
   Play,
+  Upload,
+  UsersRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -188,6 +190,11 @@ export default function Search() {
   // must never be merged into the first result list or its radio queue.
   const [lyricResults, setLyricResults] = useState<YtItem[] | null>(null);
   const [lyricSearching, setLyricSearching] = useState(false);
+  const [creatorResults, setCreatorResults] = useState<{ recent: YtItem[]; popular: YtItem[] }>({
+    recent: [],
+    popular: [],
+  });
+  const [creatorSearching, setCreatorSearching] = useState(false);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
@@ -200,6 +207,7 @@ export default function Search() {
   const startRadio = usePlayerStore((s) => s.startRadio);
   const searchYt = useAction(api.youtube.searchYoutube);
   const searchLyricVideos = useAction(api.youtube.searchLyricVideos);
+  const searchCreatorUploads = useAction(api.youtube.searchCreatorUploads);
 
   const debouncedQuery = useDebounced(query, 450);
 
@@ -237,9 +245,11 @@ export default function Search() {
       if (!q) {
         setYtResults(null);
         setLyricResults(null);
+        setCreatorResults({ recent: [], popular: [] });
         setSearchError(null);
         setSearching(false);
         setLyricSearching(false);
+        setCreatorSearching(false);
         return;
       }
       let cancelled = false;
@@ -281,12 +291,25 @@ export default function Search() {
         .finally(() => {
           if (!cancelled) setLyricSearching(false);
         });
+      // Creator uploads stay in their own category so a spoken-word result or
+      // fan upload can never leak into the primary Songs list or radio queue.
+      setCreatorSearching(true);
+      searchCreatorUploads({ query: q })
+        .then((results) => {
+          if (!cancelled) setCreatorResults(results);
+        })
+        .catch(() => {
+          if (!cancelled) setCreatorResults({ recent: [], popular: [] });
+        })
+        .finally(() => {
+          if (!cancelled) setCreatorSearching(false);
+        });
       return () => {
         cancelled = true;
       };
     };
     run();
-  }, [debouncedQuery, searchYt, searchLyricVideos, retryKey, rememberQuery]);
+  }, [debouncedQuery, searchYt, searchLyricVideos, searchCreatorUploads, retryKey, rememberQuery]);
 
   const playRemote = useCallback(
     (item: YtItem) => {
@@ -305,6 +328,10 @@ export default function Search() {
   );
 
   const hasQuery = query.trim().length > 0;
+  const creatorGroups = [
+    { id: "recent", title: "Latest uploads", detail: "Newest creator videos", items: creatorResults.recent },
+    { id: "popular", title: "Popular uploads", detail: "Most-watched creator videos", items: creatorResults.popular },
+  ].filter((group) => group.items.length > 0);
 
   return (
     <div className="flex flex-col gap-8">
@@ -439,6 +466,68 @@ export default function Search() {
               </div>
             )}
           </section>
+
+          {(creatorSearching || creatorGroups.length > 0) && (
+            <section aria-labelledby="creator-uploads-heading">
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <Upload className="size-4 text-[rgb(var(--tint))]" />
+                <h2
+                  id="creator-uploads-heading"
+                  className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase"
+                >
+                  Creator uploads
+                </h2>
+                <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] text-muted-foreground">
+                  Recent & popular
+                </span>
+                {creatorSearching && <Loader2 className="size-3 animate-spin text-muted-foreground" />}
+              </div>
+              <p className="mb-3 text-xs text-muted-foreground">
+                Separate channel uploads for the artist or writer you searched. These never mix into Songs.
+              </p>
+              {creatorSearching && creatorGroups.length === 0 ? (
+                <div className="grid gap-4 lg:grid-cols-2">
+                  {[0, 1].map((group) => (
+                    <div key={group} className="space-y-2">
+                      {Array.from({ length: 3 }).map((_, index) => (
+                        <div key={index} className="flex items-center gap-3 rounded-xl px-3 py-2">
+                          <div className="size-10 animate-pulse rounded-md bg-white/[0.05]" />
+                          <div className="flex-1 space-y-2">
+                            <div className="h-3.5 w-3/4 animate-pulse rounded bg-white/[0.05]" />
+                            <div className="h-3 w-1/2 animate-pulse rounded bg-white/[0.05]" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="grid gap-6 lg:grid-cols-2">
+                  {creatorGroups.map((group) => (
+                    <div key={group.id} className="min-w-0">
+                      <div className="mb-1 flex items-center justify-between gap-3">
+                        <h3 className="flex items-center gap-1.5 text-sm font-semibold">
+                          <UsersRound className="size-3.5 text-[rgb(var(--tint))]" />
+                          {group.title}
+                        </h3>
+                        <span className="text-[10px] text-muted-foreground">{group.detail}</span>
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        {group.items.map((item, index) => (
+                          <RemoteTrackRow
+                            key={`${group.id}-${item.id}`}
+                            item={item}
+                            index={index + 1}
+                            onPlay={playRemote}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
 
           {!lyricSearching && lyricResults !== null && lyricResults.length > 0 && (
             <section aria-labelledby="lyric-video-results-heading">
