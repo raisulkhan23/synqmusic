@@ -85,6 +85,18 @@ const schema = defineSchema(
       .index("by_user_playedAt", ["userId", "playedAt"])
       .index("by_user", ["userId"]),
 
+    // One row per individual play. playHistory is an upsert per track (so
+    // replaying a song only bumps a counter), which made time-based stats
+    // impossible — analytics read from this append-only log instead.
+    playEvents: defineTable({
+      userId: v.id("users"),
+      trackId: v.string(),
+      playedAt: v.number(),
+      source: v.optional(v.string()),
+      title: v.optional(v.string()),
+      artistName: v.optional(v.string()),
+    }).index("by_playedAt", ["playedAt"]),
+
     // playlists imported from other music services. Tracks are stored as
     // snapshots (title + artist) and resolved to playable YouTube tracks at
     // play time — so a CSV export from any provider works without OAuth.

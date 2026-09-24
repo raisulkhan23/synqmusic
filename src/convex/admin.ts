@@ -296,9 +296,9 @@ export const platformListeningStats = query({
   args: {},
   handler: async (ctx) => {
     await getAdminUser(ctx);
-    const history = await ctx.db.query("playHistory").collect();
+    const events = await ctx.db.query("playEvents").collect();
 
-    const totalPlays = history.reduce((s, h) => s + h.playCount, 0);
+    const totalPlays = events.length;
 
     // plays per day, last 14 days
     const dayMs = 24 * 60 * 60 * 1000;
@@ -308,9 +308,9 @@ export const platformListeningStats = query({
     for (let i = 13; i >= 0; i--) {
       const start = today.getTime() - i * dayMs;
       const next = start + dayMs;
-      const plays = history
+      const plays = events
         .filter((h) => h.playedAt >= start && h.playedAt < next)
-        .reduce((s, h) => s + h.playCount, 0);
+        .length;
       const d = new Date(start);
       daily.push({
         day: d.toISOString().slice(0, 10),
@@ -321,13 +321,13 @@ export const platformListeningStats = query({
 
     // most active hour of day (0-23)
     const hourBuckets = new Array(24).fill(0) as number[];
-    for (const h of history) hourBuckets[new Date(h.playedAt).getHours()] += h.playCount;
+    for (const h of events) hourBuckets[new Date(h.playedAt).getHours()] += 1;
     const peakHour = hourBuckets.indexOf(Math.max(...hourBuckets));
 
     // distinct tracks in the catalog history
-    const uniqueTracks = new Set(history.map((h) => h.trackId)).size;
+    const uniqueTracks = new Set(events.map((h) => h.trackId)).size;
 
-    return { totalPlays, totalRows: history.length, uniqueTracks, daily, peakHour, hourBuckets };
+    return { totalPlays, totalRows: events.length, uniqueTracks, daily, peakHour, hourBuckets };
   },
 });
 

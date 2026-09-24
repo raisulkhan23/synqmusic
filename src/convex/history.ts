@@ -40,6 +40,17 @@ export const recordPlay = mutation({
         ...(coverUrl !== undefined ? { coverUrl } : {}),
         ...(duration !== undefined ? { duration } : {}),
       });
+
+      // Log the replay in the per-play analytics table (see insert branch).
+      await ctx.db.insert("playEvents", {
+        userId,
+        trackId,
+        playedAt: now,
+        ...(source !== undefined ? { source } : {}),
+        ...(title !== undefined ? { title } : {}),
+        ...(artistName !== undefined ? { artistName } : {}),
+      });
+
       return existing.playCount + 1;
     }
 
@@ -54,6 +65,19 @@ export const recordPlay = mutation({
       coverUrl,
       duration,
     });
+
+    // Append-only per-play log — analytics (plays per day, peak hour) read
+    // from this instead of playHistory, which is an upsert per track and
+    // collapses every replay into one timestamp.
+    await ctx.db.insert("playEvents", {
+      userId,
+      trackId,
+      playedAt: now,
+      ...(source !== undefined ? { source } : {}),
+      ...(title !== undefined ? { title } : {}),
+      ...(artistName !== undefined ? { artistName } : {}),
+    });
+
     return 1;
   },
 });

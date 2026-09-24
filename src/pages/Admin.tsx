@@ -21,7 +21,6 @@ import {
   ShieldCheck,
   Sparkles,
   TrendingUp,
-  Trash2,
   Users,
 } from "lucide-react";
 import { toast } from "sonner";
