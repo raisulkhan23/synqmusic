@@ -83,10 +83,13 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     setIsLoading(true);
     setError(null);
     try {
-      // Convex Auth OAuth — pass a RELATIVE path; the server-side redirect
-      // callback rewrites it to the trusted frontend origin. Absolute URLs
-      // here get rejected when SITE_URL points at the convex.site host.
-      await signIn(provider, { redirectTo: redirect });
+      // Send OAuth back to the origin the user is actually using. Passing a
+      // relative path made the server choose one hard-coded production origin,
+      // so GitHub could authenticate successfully and then land on the wrong
+      // site (or appear to fail). The server callback still validates this
+      // origin against its trusted Freebuff domains.
+      const redirectTo = `${window.location.origin}${redirect}`;
+      await signIn(provider, { redirectTo });
     } catch (error) {
       console.error(`${provider} sign-in error:`, error);
       setError(
