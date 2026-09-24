@@ -243,7 +243,7 @@ async function musicSearch(query: string): Promise<YtItem[]> {
  * - title/owner must not look like a podcast, interview, mix, etc.
  */
 const NON_MUSIC_RE =
-  /\b(podcast|episode|interview|full album|mix(?:ed)? by|megamix|dj set|live set|1 hour|10 hours|hours of|asmr|reaction|tutorial|karaoke|cover\s*\?*)\b/i;
+  /\b(podcast|episode|interview|full album|mix(?:ed)? by|megamix|dj set|live set|1 hour|10 hours|hours of|asmr|reaction|tutorial|karaoke|cover\s*\?*|clash of clans|coc|gameplay|gaming|super troops?|inferno tower|witch|dragon|home village|new troops?|how to deal with)\b/i;
 
 function isMusicTrack(item: YtItem): boolean {
   if (item.duration > 0 && (item.duration < 30 || item.duration > 900)) return false;
