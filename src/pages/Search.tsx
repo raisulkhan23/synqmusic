@@ -9,6 +9,7 @@ import { track as trackEvent } from "@/lib/analytics";
 import { GravitySponsor } from "@/components/ads/GravitySponsor";
 import { useAction } from "convex/react";
 import {
+  ChevronDown,
   Loader2,
   RefreshCw,
   Search as SearchIcon,
@@ -204,6 +205,7 @@ export default function Search() {
   });
   const [creatorSearching, setCreatorSearching] = useState(false);
   const [creatorSearchEnabled, setCreatorSearchEnabled] = useState(false);
+  const [creatorExpanded, setCreatorExpanded] = useState(false);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
@@ -221,20 +223,14 @@ export default function Search() {
   const debouncedQuery = useDebounced(query, 450);
 
   // Creator uploads are opt-in by default. This prevents a song/title query
-  // such as "inferno clash" from showing unrelated gaming uploads; a likely
-  // handle or a matching primary artist can enable them automatically.
+  // such as "inferno clash" from showing unrelated gaming uploads. The user
+  // explicitly enables the separate channel search from the disclosure below.
   useEffect(() => {
     setCreatorSearchEnabled(false);
+    setCreatorExpanded(false);
     setCreatorResults({ recent: [], popular: [] });
     setCreatorSearching(false);
   }, [debouncedQuery]);
-
-  useEffect(() => {
-    if (!debouncedQuery.trim() || ytResults === null) return;
-    setCreatorSearchEnabled(
-      creatorQueryLooksLikeName(debouncedQuery.trim(), ytResults[0]?.artist),
-    );
-  }, [debouncedQuery, ytResults]);
 
   // Search history — persisted locally, capped at 8 entries.
   const [searchHistory, setSearchHistory] = useState<string[]>(() => {
@@ -316,27 +312,37 @@ export default function Search() {
         .finally(() => {
           if (!cancelled) setLyricSearching(false);
         });
-      // Creator uploads stay in their own category so a spoken-word result or
-      // fan upload can never leak into the primary Songs list or radio queue.
-      if (creatorSearchEnabled) {
-        setCreatorSearching(true);
-        searchCreatorUploads({ query: q })
-          .then((results) => {
-            if (!cancelled) setCreatorResults(results);
-          })
-          .catch(() => {
-            if (!cancelled) setCreatorResults({ recent: [], popular: [] });
-          })
-          .finally(() => {
-            if (!cancelled) setCreatorSearching(false);
-          });
-      }
       return () => {
         cancelled = true;
       };
     };
     run();
-  }, [debouncedQuery, searchYt, searchLyricVideos, searchCreatorUploads, creatorSearchEnabled, retryKey, rememberQuery]);
+  }, [debouncedQuery, searchYt, searchLyricVideos, retryKey, rememberQuery]);
+
+  // Keep creator loading independent from the primary Songs request. This
+  // makes the opt-in action reliable instead of coupling it to search state.
+  useEffect(() => {
+    const q = debouncedQuery.trim();
+    if (!creatorSearchEnabled || !q) {
+      setCreatorSearching(false);
+      return;
+    }
+    let cancelled = false;
+    setCreatorSearching(true);
+    searchCreatorUploads({ query: q })
+      .then((results) => {
+        if (!cancelled) setCreatorResults(results);
+      })
+      .catch(() => {
+        if (!cancelled) setCreatorResults({ recent: [], popular: [] });
+      })
+      .finally(() => {
+        if (!cancelled) setCreatorSearching(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedQuery, creatorSearchEnabled, searchCreatorUploads]);
 
   const playRemote = useCallback(
     (item: YtItem) => {
@@ -494,87 +500,6 @@ export default function Search() {
             )}
           </section>
 
-          {hasQuery && !creatorSearchEnabled && !searching && ytResults !== null && (
-            <div className="flex flex-col gap-3 rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold">Looking for a singer or writer?</p>
-                <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
-                  Search their channel separately for recent and popular uploads. This stays out of the Songs list.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setCreatorSearchEnabled(true)}
-                className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full border border-[rgb(var(--tint)_/_0.35)] bg-[rgb(var(--tint)_/_0.1)] px-3.5 py-2 text-xs font-semibold text-[rgb(var(--tint))] transition-colors hover:bg-[rgb(var(--tint)_/_0.18)]"
-              >
-                <UsersRound className="size-3.5" />
-                Search creator uploads
-              </button>
-            </div>
-          )}
-
-          {creatorSearchEnabled && (creatorSearching || creatorGroups.length > 0) && (
-            <section aria-labelledby="creator-uploads-heading">
-              <div className="mb-2 flex flex-wrap items-center gap-2">
-                <Upload className="size-4 text-[rgb(var(--tint))]" />
-                <h2
-                  id="creator-uploads-heading"
-                  className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase"
-                >
-                  Creator uploads
-                </h2>
-                <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] text-muted-foreground">
-                  Recent & popular
-                </span>
-                {creatorSearching && <Loader2 className="size-3 animate-spin text-muted-foreground" />}
-              </div>
-              <p className="mb-3 text-xs text-muted-foreground">
-                Separate channel uploads for the artist or writer you searched. These never mix into Songs.
-              </p>
-              {creatorSearching && creatorGroups.length === 0 ? (
-                <div className="grid gap-4 lg:grid-cols-2">
-                  {[0, 1].map((group) => (
-                    <div key={group} className="space-y-2">
-                      {Array.from({ length: 3 }).map((_, index) => (
-                        <div key={index} className="flex items-center gap-3 rounded-xl px-3 py-2">
-                          <div className="size-10 animate-pulse rounded-md bg-white/[0.05]" />
-                          <div className="flex-1 space-y-2">
-                            <div className="h-3.5 w-3/4 animate-pulse rounded bg-white/[0.05]" />
-                            <div className="h-3 w-1/2 animate-pulse rounded bg-white/[0.05]" />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="grid gap-6 lg:grid-cols-2">
-                  {creatorGroups.map((group) => (
-                    <div key={group.id} className="min-w-0">
-                      <div className="mb-1 flex items-center justify-between gap-3">
-                        <h3 className="flex items-center gap-1.5 text-sm font-semibold">
-                          <UsersRound className="size-3.5 text-[rgb(var(--tint))]" />
-                          {group.title}
-                        </h3>
-                        <span className="text-[10px] text-muted-foreground">{group.detail}</span>
-                      </div>
-                      <div className="flex flex-col gap-0.5">
-                        {group.items.map((item, index) => (
-                          <RemoteTrackRow
-                            key={`${group.id}-${item.id}`}
-                            item={item}
-                            index={index + 1}
-                            onPlay={playRemote}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-          )}
-
           {!lyricSearching && lyricResults !== null && lyricResults.length > 0 && (
             <section aria-labelledby="lyric-video-results-heading">
               <div className="mb-2 flex items-center gap-2">
@@ -602,6 +527,94 @@ export default function Search() {
                   />
                 ))}
               </div>
+            </section>
+          )}
+
+          {hasQuery && (
+            <section className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035]" aria-labelledby="creator-uploads-heading">
+              <button
+                type="button"
+                className="flex w-full items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-white/[0.04] sm:px-5"
+                aria-expanded={creatorExpanded}
+                aria-controls="creator-uploads-content"
+                onClick={() => setCreatorExpanded((expanded) => !expanded)}
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-cyan-300/10 text-cyan-300">
+                  <UsersRound className="h-4 w-4" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span id="creator-uploads-heading" className="block text-sm font-semibold">Creator uploads</span>
+                  <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                    {creatorSearchEnabled
+                      ? creatorSearching
+                        ? "Searching the community…"
+                        : "Latest and popular uploads"
+                      : "Optional — load uploads from the artist’s community"}
+                  </span>
+                </span>
+                {creatorSearchEnabled && creatorGroups.length > 0 && (
+                  <span className="hidden text-xs text-muted-foreground sm:block">
+                    {creatorGroups.reduce((total, group) => total + group.items.length, 0)} videos
+                  </span>
+                )}
+                <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${creatorExpanded ? "rotate-180" : ""}`} />
+              </button>
+              {creatorExpanded && (
+                <div id="creator-uploads-content" className="border-t border-white/10 px-4 py-4 sm:px-5 sm:py-5">
+                  {!creatorSearchEnabled ? (
+                    <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+                      <div>
+                        <p className="text-sm font-semibold">Looking for a singer or writer?</p>
+                        <p className="mt-1 max-w-xl text-xs leading-5 text-muted-foreground">
+                          Search their channel separately for recent and popular uploads. This stays out of the Songs list.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setCreatorSearchEnabled(true)}
+                        className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full border border-[rgb(var(--tint)_/_0.35)] bg-[rgb(var(--tint)_/_0.1)] px-3.5 py-2 text-xs font-semibold text-[rgb(var(--tint))] transition-colors hover:bg-[rgb(var(--tint)_/_0.18)]"
+                      >
+                        <UsersRound className="h-3.5 w-3.5" />
+                        Load creator uploads
+                      </button>
+                    </div>
+                  ) : creatorSearching ? (
+                    <div className="flex flex-col gap-0.5" aria-label="Loading creator uploads">
+                      {Array.from({ length: 3 }).map((_, i) => (
+                        <div key={i} className="flex items-center gap-3 rounded-xl px-2 py-2">
+                          <div className="h-10 w-10 animate-pulse rounded-lg bg-white/[0.06]" />
+                          <div className="flex-1 space-y-2">
+                            <div className="h-3.5 w-2/3 animate-pulse rounded bg-white/[0.06]" />
+                            <div className="h-3 w-1/3 animate-pulse rounded bg-white/[0.05]" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : creatorGroups.length > 0 ? (
+                    <div className="flex flex-col gap-6">
+                      {creatorGroups.map((group) => (
+                        <div key={group.id}>
+                          <div className="mb-2 flex items-center gap-2.5">
+                            <span className="h-1.5 w-1.5 rounded-full bg-cyan-300" />
+                            <h3 className="text-sm font-semibold">{group.title}</h3>
+                            <span className="text-xs text-muted-foreground">{group.items.length} videos</span>
+                            <span className="ml-auto hidden text-xs text-muted-foreground/70 sm:block">{group.detail}</span>
+                          </div>
+                          <div className="flex flex-col gap-0.5">
+                            {group.items.map((item, i) => (
+                              <RemoteTrackRow key={`${group.id}-${item.id}`} item={item} index={i + 1} onPlay={playRemote} />
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="rounded-2xl border border-dashed border-white/10 px-4 py-5 text-sm text-muted-foreground">
+                      No relevant creator uploads found for this search.
+                    </p>
+                  )}
+                </div>
+              )}
             </section>
           )}
         </div>
