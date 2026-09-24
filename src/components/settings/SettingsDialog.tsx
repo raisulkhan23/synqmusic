@@ -579,7 +579,7 @@ export function SettingsDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <nav className="settings-jump-glass sticky top-0 z-20 -mx-1 border-y border-white/[0.12] px-1 py-2" aria-label="Settings sections">
+        <nav className="sticky top-0 z-20 -mx-1 rounded-xl border border-white/[0.07] bg-white/[0.03] px-1 py-2 shadow-sm backdrop-blur-xl" aria-label="Settings sections">
           <div className="flex items-center gap-2">
             <span className="shrink-0 px-1 text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">
               Jump to
@@ -896,7 +896,7 @@ export function SettingsDialog({
 
         {/* appearance */}
         <section id="settings-appearance" className="scroll-mt-20 flex flex-col gap-2.5">
-          <div className="settings-liquid-glass rounded-xl border border-white/[0.08] px-3 py-3 shadow-lg">
+          <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-3">
             <div className="mb-2 flex items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold">Interface finish</p>
