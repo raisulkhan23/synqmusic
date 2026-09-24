@@ -361,10 +361,14 @@ export default function Search() {
   );
 
   const hasQuery = query.trim().length > 0;
-  const creatorGroups = [
-    { id: "recent", title: "Latest uploads", detail: "Newest creator videos", items: creatorResults.recent },
-    { id: "popular", title: "Popular uploads", detail: "Most-watched creator videos", items: creatorResults.popular },
-  ].filter((group) => group.items.length > 0);
+  const creatorItems = Array.from(
+    new Map(
+      [...creatorResults.recent, ...creatorResults.popular].map((item) => [
+        `${item.id}:${item.title.toLocaleLowerCase()}:${item.artist.toLocaleLowerCase()}`,
+        item,
+      ]),
+    ).values(),
+  ).slice(0, 12);
 
   return (
     <div className="flex flex-col gap-8">
@@ -548,14 +552,12 @@ export default function Search() {
                     {creatorSearchEnabled
                       ? creatorSearching
                         ? "Searching the community…"
-                        : "Latest and popular uploads"
+                        : "Unified creator search"
                       : "Optional — load uploads from the artist’s community"}
                   </span>
                 </span>
-                {creatorSearchEnabled && creatorGroups.length > 0 && (
-                  <span className="hidden text-xs text-muted-foreground sm:block">
-                    {creatorGroups.reduce((total, group) => total + group.items.length, 0)} videos
-                  </span>
+                {creatorSearchEnabled && creatorItems.length > 0 && (
+                  <span className="hidden text-xs text-muted-foreground sm:block">{creatorItems.length} videos</span>
                 )}
                 <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${creatorExpanded ? "rotate-180" : ""}`} />
               </button>
@@ -566,7 +568,7 @@ export default function Search() {
                       <div>
                         <p className="text-sm font-semibold">Looking for a singer or writer?</p>
                         <p className="mt-1 max-w-xl text-xs leading-5 text-muted-foreground">
-                          Search their channel separately for recent and popular uploads. This stays out of the Songs list.
+                          Search their channel separately for a unified list of recent and popular uploads. This stays out of the Songs list.
                         </p>
                       </div>
                       <button
@@ -590,22 +592,10 @@ export default function Search() {
                         </div>
                       ))}
                     </div>
-                  ) : creatorGroups.length > 0 ? (
-                    <div className="flex flex-col gap-6">
-                      {creatorGroups.map((group) => (
-                        <div key={group.id}>
-                          <div className="mb-2 flex items-center gap-2.5">
-                            <span className="h-1.5 w-1.5 rounded-full bg-cyan-300" />
-                            <h3 className="text-sm font-semibold">{group.title}</h3>
-                            <span className="text-xs text-muted-foreground">{group.items.length} videos</span>
-                            <span className="ml-auto hidden text-xs text-muted-foreground/70 sm:block">{group.detail}</span>
-                          </div>
-                          <div className="flex flex-col gap-0.5">
-                            {group.items.map((item, i) => (
-                              <RemoteTrackRow key={`${group.id}-${item.id}`} item={item} index={i + 1} onPlay={playRemote} />
-                            ))}
-                          </div>
-                        </div>
+                  ) : creatorItems.length > 0 ? (
+                    <div className="flex flex-col gap-0.5">
+                      {creatorItems.map((item, i) => (
+                        <RemoteTrackRow key={`creator-${item.id}`} item={item} index={i + 1} onPlay={playRemote} />
                       ))}
                     </div>
                   ) : (
