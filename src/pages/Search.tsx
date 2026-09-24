@@ -86,11 +86,22 @@ const POPULAR_MIXES = [
   { id: "electronic-energy", title: "Electronic Energy", desc: "Fresh electronic sounds to move to right now.", query: "electronic dance music hits", gradient: "from-emerald-500/30 via-cyan-500/15 to-transparent" },
   { id: "retro-arcade", title: "Retro Arcade", desc: "Bright synths and nostalgic hooks on repeat.", query: "retro synth pop hits", gradient: "from-pink-500/30 via-fuchsia-500/15 to-transparent" },
   { id: "global-peace", title: "Peaceful World", desc: "Calm, expansive sounds for reset and reflection.", query: "calm ambient world music", gradient: "from-teal-500/30 via-blue-500/15 to-transparent" },
+  { id: "viral", title: "Viral Right Now", desc: "The songs taking over every feed today.", query: "viral songs this week", gradient: "from-pink-500/30 via-rose-500/15 to-transparent" },
+  { id: "rnb-vibes", title: "R&B After Dark", desc: "Smooth late-night R&B with a little bounce.", query: "r&b vibes after dark", gradient: "from-fuchsia-500/30 via-purple-500/15 to-transparent" },
+  { id: "indie-discovery", title: "Indie Discovery", desc: "The next favorite artist is already here.", query: "new indie artists discovery", gradient: "from-lime-500/30 via-emerald-500/15 to-transparent" },
+  { id: "dance-floor", title: "Dance Floor", desc: "Big hooks, bright lights, no warm-up needed.", query: "dance pop party hits", gradient: "from-cyan-500/30 via-blue-500/15 to-transparent" },
+  { id: "acoustic-slow", title: "Acoustic Slowdown", desc: "Stripped-back songs for a softer pace.", query: "acoustic chill songs", gradient: "from-orange-500/30 via-amber-500/15 to-transparent" },
+  { id: "90s", title: "90s Forever", desc: "The songs that still own the aux.", query: "90s hits classics", gradient: "from-purple-500/30 via-indigo-500/15 to-transparent" },
+  { id: "00s", title: "00s Rewind", desc: "Early pop, R&B, and hip-hop essentials.", query: "2000s music hits", gradient: "from-blue-500/30 via-sky-500/15 to-transparent" },
+  { id: "feel-good", title: "Feel Good Frequency", desc: "Instant mood-lifting songs, no skips.", query: "feel good upbeat songs", gradient: "from-yellow-500/30 via-orange-500/15 to-transparent" },
+  { id: "global-pop", title: "Global Pop", desc: "Bright pop favorites from around the world.", query: "international pop hits", gradient: "from-cyan-500/30 via-teal-500/15 to-transparent" },
+  { id: "soft-edges", title: "Soft Edges", desc: "Warm, hazy songs for the in-between moments.", query: "dreamy chill music", gradient: "from-violet-500/30 via-indigo-500/15 to-transparent" },
+  { id: "new-music", title: "New Music Radar", desc: "Fresh tracks from the artists on the rise.", query: "best new music this week", gradient: "from-rose-500/30 via-pink-500/15 to-transparent" },
 ] as const;
 
-const POPULAR_MIX_REFRESH_INTERVAL = 24 * 60 * 60 * 1000;
+const POPULAR_MIX_REFRESH_INTERVAL = 12 * 60 * 60 * 1000;
 const POPULAR_MIX_REFRESH_KEY = "synq:popular-mixes-refreshed-at";
-const POPULAR_MIX_COUNT = 8;
+const POPULAR_MIX_COUNT = 10;
 
 function popularMixCycle() {
   const now = Date.now();
@@ -500,7 +511,7 @@ function BrowseView({
             <MixCard key={mix.id} mix={mix} />
           ))}
         </div>
-        <p className="mt-2 text-[10px] text-muted-foreground/70">Refreshes daily with new mix picks</p>
+        <p className="mt-2 text-[10px] text-muted-foreground/70">Live from YouTube Music · picks rotate every 12 hours</p>
       </section>
 
       <section>
