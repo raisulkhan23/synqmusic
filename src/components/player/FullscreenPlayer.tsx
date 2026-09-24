@@ -67,7 +67,7 @@ function SleepTimerButton() {
   }, [sleepEndsAt]);
 
   return (
-    <DropdownMenu>
+    <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
         <button
           type="button"
@@ -725,7 +725,7 @@ export function FullscreenPlayer() {
               <AbRepeatControls />
 
               {/* speed — icon only until a non-1× speed is active */}
-              <DropdownMenu>
+              <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
@@ -759,7 +759,7 @@ export function FullscreenPlayer() {
               </DropdownMenu>
 
               {/* audio effects — waves icon; label shown only when one is active */}
-              <DropdownMenu>
+              <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
@@ -783,7 +783,16 @@ export function FullscreenPlayer() {
                     <DropdownMenuItem
                       key={f.id}
                       className={cn("gap-2", f.id === audioFilter && "text-[rgb(var(--tint))]")}
-                      onSelect={() => setAudioFilter(f.id)}
+                      onSelect={() => {
+                        // Guarded: an exception thrown here aborts Radix's
+                        // close sequence, leaving the menu's full-screen click
+                        // shield in place and the whole UI unclickable.
+                        try {
+                          setAudioFilter(f.id);
+                        } catch {
+                          /* never block the menu from closing */
+                        }
+                      }}
                     >
                       <span aria-hidden>{f.icon}</span>
                       {f.label}
