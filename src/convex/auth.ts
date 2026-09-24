@@ -5,7 +5,7 @@ import { emailOtp } from "./auth/emailOtp";
 import Google from "@auth/core/providers/google";
 import GitHub from "@auth/core/providers/github";
 
-const SITE_URL_ENV = (process.env.SITE_URL ?? process.env.CONVEX_SITE_URL ?? "").replace(/\/$/, "");
+const SITE_URL_ENV = (process.env.CONVEX_SITE_URL ?? process.env.SITE_URL ?? "").replace(/\/$/, "");
 
 const TRUSTED_ORIGINS = [
   SITE_URL_ENV,

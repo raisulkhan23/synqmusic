@@ -23,7 +23,7 @@ export default {
       // CONVEX_SITE_URL is not guaranteed to be injected, and leaving the
       // domain undefined makes locally issued session JWTs fail validation —
       // which logs the user out again on every refresh.
-      domain: process.env.SITE_URL ?? process.env.CONVEX_SITE_URL!,
+      domain: process.env.CONVEX_SITE_URL ?? process.env.SITE_URL!,
       applicationID: "convex",
     },
     {
