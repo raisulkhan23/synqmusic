@@ -950,6 +950,17 @@ function audioElementIsSource(t: Playable | null | undefined): boolean {
   );
 }
 
+/**
+ * IFrame players are commonly suspended when a mobile browser is minimized.
+ * Prefer the persistent HTML audio path on phones/tablets, with the existing
+ * IFrame as an automatic fallback if a direct stream cannot be resolved.
+ */
+function prefersBackgroundAudio(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.matchMedia?.("(max-width: 767px)").matches === true ||
+    /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
 /** A-B repeat + resume-position bookkeeping, run on every time update. */
 const prefetchedTrackIds = new Set<string>();
 
@@ -1332,8 +1343,11 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       // <audio> element. Checking only the effect preset is why the bass /
       // treble sliders appeared to do nothing.
       const wantFilter = get().audioFilter !== "off" || hasAudioProcessing();
-      if (wantFilter && track.youtubeId) {
-        void resolveAndPlayWithFilter(track, resumeAt, true);
+      // Mobile browsers are much more likely to keep a mounted HTML audio
+      // element alive when the tab is minimized than a YouTube IFrame. The
+      // resolver still falls back to the IFrame if the stream is unavailable.
+      if ((wantFilter || prefersBackgroundAudio()) && track.youtubeId) {
+        void resolveAndPlayWithFilter(track, resumeAt, wantFilter);
         return;
       }
       getAudio().pause();

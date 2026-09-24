@@ -7,9 +7,19 @@ export function getAudio(): HTMLAudioElement {
   }
   const w = window as unknown as { __ssAudio?: HTMLAudioElement };
   if (!w.__ssAudio) {
-    w.__ssAudio = new Audio();
-    w.__ssAudio.preload = "auto";
-    w.__ssAudio.crossOrigin = "anonymous";
+    const audio = new Audio();
+    audio.preload = "auto";
+    audio.crossOrigin = "anonymous";
+    // Mobile browsers are more consistent about continuing Media Session
+    // playback when the media element remains in the document. Keep it
+    // hidden and non-interactive; the player store still owns all controls.
+    audio.setAttribute("aria-hidden", "true");
+    audio.setAttribute("playsinline", "true");
+    audio.style.display = "none";
+    if (document.body) document.body.appendChild(audio);
+    w.__ssAudio = audio;
+  } else if (!w.__ssAudio.isConnected && document.body) {
+    document.body.appendChild(w.__ssAudio);
   }
   return w.__ssAudio;
 }

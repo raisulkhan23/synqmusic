@@ -14,6 +14,7 @@ import {
   Search as SearchIcon,
   SearchX,
   Globe,
+  Music2,
   Play,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -172,6 +173,10 @@ export default function Search() {
   const sharedQuery = searchParams.get("q");
   const [query, setQuery] = useState(() => sharedQuery ?? "");
   const [ytResults, setYtResults] = useState<YtItem[] | null>(null);
+  // Kept separate from the primary Songs results by design. These uploads
+  // must never be merged into the first result list or its radio queue.
+  const [lyricResults, setLyricResults] = useState<YtItem[] | null>(null);
+  const [lyricSearching, setLyricSearching] = useState(false);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
@@ -183,6 +188,7 @@ export default function Search() {
   }, [sharedQuery]);
   const startRadio = usePlayerStore((s) => s.startRadio);
   const searchYt = useAction(api.youtube.searchYoutube);
+  const searchLyricVideos = useAction(api.youtube.searchLyricVideos);
 
   const debouncedQuery = useDebounced(query, 450);
 
@@ -219,12 +225,15 @@ export default function Search() {
     const run = () => {
       if (!q) {
         setYtResults(null);
+        setLyricResults(null);
         setSearchError(null);
         setSearching(false);
+        setLyricSearching(false);
         return;
       }
       let cancelled = false;
       setSearching(true);
+      setLyricSearching(true);
       setSearchError(null);
       rememberQuery(q);
       trackEvent("search_performed", { query: q.slice(0, 120) });
@@ -249,12 +258,24 @@ export default function Search() {
         .finally(() => {
           if (!cancelled) setSearching(false);
         });
+      // The original query is sent unchanged. The backend derives its own
+      // narrowly scoped lyric-video query and keeps these results separate.
+      searchLyricVideos({ query: q })
+        .then(({ items }) => {
+          if (!cancelled) setLyricResults(items);
+        })
+        .catch(() => {
+          if (!cancelled) setLyricResults([]);
+        })
+        .finally(() => {
+          if (!cancelled) setLyricSearching(false);
+        });
       return () => {
         cancelled = true;
       };
     };
     run();
-  }, [debouncedQuery, searchYt, retryKey, rememberQuery]);
+  }, [debouncedQuery, searchYt, searchLyricVideos, retryKey, rememberQuery]);
 
   const playRemote = useCallback(
     (item: YtItem) => {
@@ -407,6 +428,36 @@ export default function Search() {
               </div>
             )}
           </section>
+
+          {!lyricSearching && lyricResults !== null && lyricResults.length > 0 && (
+            <section aria-labelledby="lyric-video-results-heading">
+              <div className="mb-2 flex items-center gap-2">
+                <Music2 className="size-4 text-[rgb(var(--tint))]" />
+                <h2
+                  id="lyric-video-results-heading"
+                  className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase"
+                >
+                  Lyric & lo-fi videos
+                </h2>
+                <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] text-muted-foreground">
+                  Separate uploads
+                </span>
+              </div>
+              <p className="mb-2 text-xs text-muted-foreground">
+                Carefully filtered music and lyric uploads. These are not mixed into the Songs results above.
+              </p>
+              <div className="flex flex-col gap-0.5">
+                {lyricResults.map((item, i) => (
+                  <RemoteTrackRow
+                    key={`lyric-${item.id}`}
+                    item={item}
+                    index={i + 1}
+                    onPlay={playRemote}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       )}
     </div>

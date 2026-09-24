@@ -251,6 +251,65 @@ function isMusicTrack(item: YtItem): boolean {
   return !NON_MUSIC_RE.test(hay);
 }
 
+// Lyric/lo-fi uploads are a separate source, not interchangeable with the
+// YouTube Music Songs shelf. These helpers deliberately require a real music
+// marker, a song-like duration, and a close match to the user's query so a
+// video that merely mentions a song can never leak into this list.
+const MUSIC_VIDEO_MARKER_RE =
+  /\b(lyrics?|lyrical|lofi|lo-fi|music\s*video|audio|song|official\s*(audio|video)|remix|version)\b/i;
+const QUERY_NOISE_RE =
+  /\b(song|songs|music|track|video|official|lyrics?|lyrical|lofi|lo-fi|remix|version|full|album|audio)\b/i;
+
+function normalizeMatchText(value: string): string {
+  return value
+    .toLocaleLowerCase()
+    .normalize("NFKC")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+
+function queryTerms(query: string): string[] {
+  return normalizeMatchText(query)
+    .split(" ")
+    .map((term) => term.trim())
+    .filter((term) => term.length > 1 && !QUERY_NOISE_RE.test(term));
+}
+
+/** Strict gate for the supplemental lyric/lo-fi source. */
+export function isLyricVideoTrack(item: YtItem, query: string): boolean {
+  if (!isMusicTrack(item)) return false;
+  // Unknown-length results are not safe to classify from title text alone.
+  if (item.duration < 30 || item.duration > 900) return false;
+  const haystack = normalizeMatchText(`${item.title} ${item.artist}`);
+  if (!MUSIC_VIDEO_MARKER_RE.test(`${item.title} ${item.artist}`)) return false;
+
+  const terms = queryTerms(query);
+  if (terms.length === 0) return false;
+  const matches = terms.filter((term) => haystack.includes(term)).length;
+  // Song-title searches are normally short, so require every meaningful term.
+  // For longer searches, allow a small amount of artist/title noise without
+  // accepting a result that shares only one generic word.
+  return terms.length <= 6 ? matches === terms.length : matches >= Math.ceil(terms.length * 0.7);
+}
+
+/** Deduplicate by video id and by normalized title + artist. */
+export function dedupeMusicItems(items: YtItem[]): YtItem[] {
+  const seenIds = new Set<string>();
+  const seenTracks = new Set<string>();
+  return items.filter((item) => {
+    const trackKey = `${normalizeMatchText(item.title)}|${normalizeMatchText(item.artist)}`;
+    if (seenIds.has(item.id) || seenTracks.has(trackKey)) return false;
+    seenIds.add(item.id);
+    seenTracks.add(trackKey);
+    return true;
+  });
+}
+
+function hasMusicEvidence(item: YtItem): boolean {
+  return item.duration >= 30 && item.duration <= 900 &&
+    MUSIC_VIDEO_MARKER_RE.test(`${item.title} ${item.artist}`);
+}
+
 function extractMusicResults(data: Record<string, unknown>): YtItem[] {
   const out: YtItem[] = [];
   const others: YtItem[] = [];
@@ -309,11 +368,12 @@ function extractMusicResults(data: Record<string, unknown>): YtItem[] {
       if (out.length >= 20) break;
     }
   }
-  // Not enough single tracks — top up with the rest (videos without a type
-  // run, etc.), still capped.
+  // Not enough typed single tracks — only top up with rows that carry an
+  // explicit music marker. Untyped rows are deliberately not promoted: that
+  // was the path that previously let unrelated videos into music search.
   for (const o of others) {
     if (out.length >= 20) break;
-    out.push(o);
+    if (hasMusicEvidence(o)) out.push(o);
   }
   return out.filter(isMusicTrack).slice(0, 10);
 }
@@ -352,7 +412,9 @@ export function parseMusicListItem(renderer: Record<string, unknown>): (YtItem &
   const artistIndex = typeIndex >= 0 ? typeIndex + 1 : 0;
   const typeRun = typeIndex >= 0 ? metaRuns[typeIndex] : "";
   const kind: "song" | "other" =
-    /^song$/i.test(typeRun) || /^video$/i.test(typeRun) || typeIndex < 0 ? "song" : "other";
+    /^song$/i.test(typeRun) || /^video$/i.test(typeRun) || /music video/i.test(typeRun)
+      ? "song"
+      : "other";
   const artist = metaRuns[artistIndex] || "Unknown artist";
   const durationMatch = [...metaRuns]
     .reverse()
@@ -423,7 +485,44 @@ export const searchYoutube = action({
       query,
       params: "EgIQAQ%3D%3D",
     });
-    return { items: extractSearchResults(data).filter(isMusicTrack) };
+    // The fallback is only for a failed/empty YouTube Music response. It must
+    // be stricter than the primary path: no duration-less or marker-less
+    // uploads, otherwise a generic vlog can appear to be a song result.
+    return {
+      items: dedupeMusicItems(extractSearchResults(data).filter(isMusicTrack).filter(hasMusicEvidence)),
+    };
+  },
+});
+
+/**
+ * Search only the lyric/lo-fi music-video category. The user's query stays
+ * unchanged everywhere else; this action derives a narrowly scoped YouTube
+ * query internally and then applies a second, strict filter before returning
+ * anything. Results are intentionally kept separate from `searchYoutube`.
+ */
+export const searchLyricVideos = action({
+  args: { query: v.string() },
+  handler: async (_ctx, { query }): Promise<{ items: YtItem[] }> => {
+    const rawQuery = query.trim();
+    if (!rawQuery) return { items: [] };
+
+    // This derived string is used ONLY for this supplemental action. It is
+    // never written back to the input, search history, analytics, or the
+    // primary YouTube Music request.
+    const videoQuery = `${rawQuery} (lyric video OR lyrics OR lofi OR lo-fi OR music video)`;
+    try {
+      const data = await innerTube("search", WEB, {
+        context: clientContext(WEB),
+        query: videoQuery,
+        params: "EgIQAQ%3D%3D",
+      });
+      const items = dedupeMusicItems(
+        extractSearchResults(data).filter((item) => isLyricVideoTrack(item, rawQuery)),
+      );
+      return { items: items.slice(0, 8) };
+    } catch {
+      return { items: [] };
+    }
   },
 });
 
