@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
 import * as ytEngine from "@/lib/youtubePlayer";
@@ -51,6 +51,7 @@ export function AppShell() {
   const compactMode = usePlayerStore((s) => s.compactMode);
   const ambientGlow = usePlayerStore((s) => s.ambientGlow);
   const wallpaper = usePlayerStore((s) => s.wallpaper);
+  const pointerEffects = usePlayerStore((s) => s.pointerEffects);
   const setLiked = usePlayerStore((s) => s.setLiked);
   const setLikeMutation = usePlayerStore((s) => s.setLikeMutation);
   const setHistoryRecorder = usePlayerStore((s) => s.setHistoryRecorder);
@@ -252,12 +253,42 @@ export function AppShell() {
         ? `${accent.r} ${accent.g} ${accent.b}`
         : DEFAULT_TINT;
 
+  const handlePointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    if (!pointerEffects || event.pointerType === "touch") return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    event.currentTarget.style.setProperty("--pointer-x", `${event.clientX - rect.left}px`);
+    event.currentTarget.style.setProperty("--pointer-y", `${event.clientY - rect.top}px`);
+  };
+
+  const handlePointerEnter = (event: PointerEvent<HTMLDivElement>) => {
+    if (pointerEffects && event.pointerType !== "touch") {
+      event.currentTarget.style.setProperty("--pointer-opacity", "1");
+    }
+  };
+
+  const handlePointerLeave = (event: PointerEvent<HTMLDivElement>) => {
+    event.currentTarget.style.setProperty("--pointer-opacity", "0");
+  };
+
   return (
     <div
       className="relative isolate flex h-dvh overflow-hidden bg-background text-foreground"
-      style={{ "--tint": tint } as React.CSSProperties}
+      onPointerMove={handlePointerMove}
+      onPointerEnter={handlePointerEnter}
+      onPointerLeave={handlePointerLeave}
+      style={
+        {
+          "--tint": tint,
+          "--pointer-x": "50%",
+          "--pointer-y": "50%",
+          "--pointer-opacity": "0",
+        } as React.CSSProperties
+      }
     >
       <div className="ambient-grid pointer-events-none absolute inset-0 -z-20 opacity-70" aria-hidden="true" />
+      {pointerEffects && (
+        <div className="pointer-glow pointer-events-none absolute inset-0 -z-[5]" aria-hidden="true" />
+      )}
       {wallpaper && (
         <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden bg-background/35" aria-hidden="true">
           <img

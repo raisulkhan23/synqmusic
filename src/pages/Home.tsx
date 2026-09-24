@@ -149,6 +149,18 @@ export default function Home() {
   }, [continueTrack?.title, continueArtistName, timeLabel, season, favArtist]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [remote, setRemote] = useState<RemoteMap>({});
+  const [remoteRefreshToken, setRemoteRefreshToken] = useState(0);
+
+  // Remote shelves are live data, so refresh them once per day while Home
+  // stays open. Resetting the map shows the existing skeletons while fresh
+  // source results arrive.
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setRemote({});
+      setRemoteRefreshToken((value) => value + 1);
+    }, 24 * 60 * 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -177,7 +189,7 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [remoteQueries, searchYt]);
+  }, [remoteQueries, remoteRefreshToken, searchYt]);
 
   const playRemoteItem = (item: YtItem, rest: YtItem[]) => {
     playTrack(
@@ -274,6 +286,9 @@ export default function Home() {
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Everything the world is listening to — streamed live from our global music sources.
+        </p>
+        <p className="mt-2 inline-flex rounded-full border border-[rgb(var(--tint)_/_0.2)] bg-[rgb(var(--tint)_/_0.08)] px-2.5 py-1 text-[10px] font-semibold tracking-wide text-[rgb(var(--tint))]">
+          Live shelves refresh daily
         </p>
       </header>
 

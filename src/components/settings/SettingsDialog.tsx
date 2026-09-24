@@ -91,6 +91,8 @@ export function SettingsDialog({
   const toggleAmbientGlow = usePlayerStore((s) => s.toggleAmbientGlow);
   const visualizerEnabled = usePlayerStore((s) => s.visualizerEnabled);
   const toggleVisualizer = usePlayerStore((s) => s.toggleVisualizer);
+  const pointerEffects = usePlayerStore((s) => s.pointerEffects);
+  const togglePointerEffects = usePlayerStore((s) => s.togglePointerEffects);
   const themeMode = usePlayerStore((s) => s.themeMode);
   const setThemeMode = usePlayerStore((s) => s.setThemeMode);
   const hideExplicit = usePlayerStore((s) => s.hideExplicit);
@@ -732,6 +734,15 @@ export function SettingsDialog({
             onToggle={() => {
               toggleVisualizer();
               toast(visualizerEnabled ? "Visualizer off" : "Visualizer on");
+            }}
+          />
+          <ToggleRow
+            label="Pointer glow"
+            description="A soft liquid-glass light that follows your cursor"
+            on={pointerEffects}
+            onToggle={() => {
+              togglePointerEffects();
+              toast(pointerEffects ? "Pointer glow off" : "Pointer glow on");
             }}
           />
         </section>

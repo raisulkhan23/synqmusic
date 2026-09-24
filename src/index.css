@@ -353,6 +353,20 @@ html.light img {
       0 0 38px rgb(var(--tint) / 0.1);
   }
 
+  /* Cursor light is painted behind the UI and follows CSS custom properties,
+     so pointer movement never triggers a React re-render. */
+  .pointer-glow {
+    opacity: var(--pointer-opacity, 0);
+    background: radial-gradient(
+      280px circle at var(--pointer-x, 50%) var(--pointer-y, 50%),
+      rgb(var(--tint) / 0.13),
+      rgb(var(--tint) / 0.045) 32%,
+      transparent 72%
+    );
+    transition: opacity 300ms ease;
+    mix-blend-mode: screen;
+  }
+
   html.no-glass .glass-card {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;

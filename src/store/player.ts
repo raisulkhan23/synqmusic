@@ -241,6 +241,9 @@ interface PlayerStore {
   /** Visualizer animation on/off. */
   visualizerEnabled: boolean;
   toggleVisualizer: () => void;
+  /** Pointer-following ambient glow, enabled by default. */
+  pointerEffects: boolean;
+  togglePointerEffects: () => void;
   /** UI theme: "dark" (default) | "light" | "amoled" */
   themeMode: string;
   setThemeMode: (mode: string) => void;
@@ -418,6 +421,7 @@ const initialAccentTheme = localStorage.getItem("ss.accentTheme") ?? "auto";
 const initialCompact = readBool("ss.compact", false);
 const initialGlow = readBool("ss.ambientGlow", true);
 const initialVisualizer = readBool("ss.visualizer", true);
+const initialPointerEffects = readBool("ss.pointerEffects", true);
 const initialWallpaper = localStorage.getItem("ss.wallpaper");
 const savedQueue = readSavedQueue();
 
@@ -1964,6 +1968,12 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       set((state) => {
         localStorage.setItem("ss.visualizer", state.visualizerEnabled ? "0" : "1");
         return { visualizerEnabled: !state.visualizerEnabled };
+      }),
+    pointerEffects: initialPointerEffects,
+    togglePointerEffects: () =>
+      set((state) => {
+        localStorage.setItem("ss.pointerEffects", state.pointerEffects ? "0" : "1");
+        return { pointerEffects: !state.pointerEffects };
       }),
 
     themeMode: localStorage.getItem("ss.themeMode") ?? "dark",
