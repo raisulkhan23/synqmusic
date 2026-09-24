@@ -1371,14 +1371,23 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     // Covers: our Convex CORS proxy URLs, raw googlevideo URLs, and direct
     // Piped URLs (the browser-side fallback) — string-matching only googlevideo
     // used to miss Piped streams, so "off" never swapped back to the engine.
+    // CRITICAL: the DEFAULT audioUrl for YouTube tracks is the placeholder
+    // "https://youtu.be/<id>" — that is NOT a playable stream (it's an HTML
+    // page!). Treating it as a stream path made effect activation a no-op:
+    // the song kept playing through the IFrame engine where Web Audio can't
+    // tap anything, so the EQ never applied. Only REAL media streams count.
     const onStreamPath = (t: Playable | null | undefined) =>
       !!t &&
       (t.audioUrl.includes("audio-proxy") ||
         t.audioUrl.includes("googlevideo") ||
-        t.audioUrl === "stream" ||
-        /^https?:\/\//.test(t.audioUrl));
+        t.audioUrl.includes("videoplayback") ||
+        t.audioUrl.includes("piped") ||
+        t.audioUrl.includes("odycdn") ||
+        t.audioUrl === "stream");
     // If a YouTube track is currently playing via the IFrame engine and an
     // effect was just activated, hot-swap it onto the filtered audio path.
+    // (Anything that isn't a real media stream — including the youtu.be
+    // placeholder — needs the swap too.)
     const s = get();
     if (id !== "off" && s.current?.youtubeId && !onStreamPath(s.current)) {
       const resumeAt = s.currentTime;
