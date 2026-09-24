@@ -604,9 +604,9 @@ export function SettingsDialog({
         <nav
           className="sticky top-0 z-30 -mx-1 rounded-xl border border-white/[0.07] px-1 py-2"
           style={{
-            backgroundColor: "rgb(255 255 255 / 0.045)",
-            backgroundImage: "linear-gradient(110deg, rgb(255 255 255 / 0.06), transparent 58%)",
-            boxShadow: "0 8px 22px rgb(0 0 0 / 0.14)",
+            backgroundColor: "rgb(255 255 255 / 0.03)",
+            backgroundImage: "none",
+            boxShadow: "none",
           }}
           aria-label="Settings sections"
         >
