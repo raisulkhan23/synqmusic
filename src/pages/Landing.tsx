@@ -344,11 +344,12 @@ export default function Landing() {
                   src="/show-me-love-cover.svg"
                   alt="Now playing cover"
                   onError={(e) => { (e.target as HTMLImageElement).style.visibility = "hidden"; }}
-                  className="spin-slow size-16 rounded-full object-cover ring-4 ring-white/10"
+                  className="size-16 rounded-xl object-cover shadow-lg ring-1 ring-white/15"
                 />
-                <span className="absolute inset-0 rounded-full ring-1 ring-black/20" />
+                <span className="absolute inset-0 rounded-xl ring-1 ring-black/20" />
               </div>
               <div className="min-w-0">
+                <p className="mb-1 text-[9px] font-bold uppercase tracking-[0.22em] text-[rgb(var(--tint))]">Now playing</p>
                 <p className="font-display text-[15px] font-bold tracking-tight">
                   Show Me Love
                 </p>

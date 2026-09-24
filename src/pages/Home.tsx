@@ -59,6 +59,7 @@ function markDiscoveryRefreshed() {
 
 export default function Home() {
   const playTrack = usePlayerStore((s) => s.playTrack);
+  const setQueueOpen = usePlayerStore((s) => s.setQueueOpen);
   const likedCount = usePlayerStore((s) => Object.keys(s.liked).length);
   const likedLoaded = usePlayerStore((s) => s.likedLoaded);
   const playlists = useQuery(api.playlists.myPlaylists);
@@ -66,6 +67,10 @@ export default function Home() {
   const searchYt = useAction(api.youtube.searchYoutube);
 
   const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const surpriseMood = useMemo(
+    () => MOOD_LAUNCHES[Math.floor(Math.random() * MOOD_LAUNCHES.length)],
+    [],
+  );
   const [remote, setRemote] = useState<RemoteMap>({});
   const [remoteRefreshToken, setRemoteRefreshToken] = useState(0);
 
@@ -474,6 +479,48 @@ export default function Home() {
             <span>Recent listening</span>
             <span>Keep the streak going</span>
           </div>
+        </div>
+      </section>
+
+      {/* quick actions */}
+      <section className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-4 sm:p-5">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[rgb(var(--tint))]">Quick actions</p>
+            <h2 className="mt-1 text-lg font-semibold tracking-tight">Jump straight into listening</h2>
+          </div>
+          <Dices className="size-5 text-[rgb(var(--tint))]" />
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <Link
+            to={`/search?q=${encodeURIComponent(surpriseMood.query)}`}
+            className="group flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 transition-colors hover:border-[rgb(var(--tint)_/_0.4)] hover:bg-white/[0.06]"
+          >
+            <span className="flex size-9 items-center justify-center rounded-lg bg-[rgb(var(--tint)_/_0.12)] text-[rgb(var(--tint))]"><Dices className="size-4" /></span>
+            <span className="min-w-0"><span className="block text-sm font-semibold">Surprise me</span><span className="block truncate text-xs text-muted-foreground">{surpriseMood.label} mix</span></span>
+          </Link>
+          <button
+            type="button"
+            onClick={() => setQueueOpen(true)}
+            className="group flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 text-left transition-colors hover:border-[rgb(var(--tint)_/_0.4)] hover:bg-white/[0.06]"
+          >
+            <span className="flex size-9 items-center justify-center rounded-lg bg-violet-400/10 text-violet-300"><ListMusic className="size-4" /></span>
+            <span className="min-w-0"><span className="block text-sm font-semibold">Open queue</span><span className="block truncate text-xs text-muted-foreground">Rearrange what plays next</span></span>
+          </button>
+          <Link
+            to="/stats"
+            className="group flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 transition-colors hover:border-[rgb(var(--tint)_/_0.4)] hover:bg-white/[0.06]"
+          >
+            <span className="flex size-9 items-center justify-center rounded-lg bg-amber-400/10 text-amber-300"><BarChart3 className="size-4" /></span>
+            <span className="min-w-0"><span className="block text-sm font-semibold">Listening stats</span><span className="block truncate text-xs text-muted-foreground">See your listening pulse</span></span>
+          </Link>
+          <Link
+            to="/playlists"
+            className="group flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 transition-colors hover:border-[rgb(var(--tint)_/_0.4)] hover:bg-white/[0.06]"
+          >
+            <span className="flex size-9 items-center justify-center rounded-lg bg-rose-400/10 text-rose-300"><ListMusic className="size-4" /></span>
+            <span className="min-w-0"><span className="block text-sm font-semibold">Your library</span><span className="block truncate text-xs text-muted-foreground">Playlists and liked songs</span></span>
+          </Link>
         </div>
       </section>
 

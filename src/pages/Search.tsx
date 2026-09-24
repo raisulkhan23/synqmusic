@@ -20,6 +20,7 @@ import {
   Play,
   Upload,
   UsersRound,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -413,6 +414,16 @@ export default function Search() {
           <Loader2
             className="absolute top-1/2 right-4 size-4 -translate-y-1/2 animate-spin text-muted-foreground"
           />
+        )}
+        {!searching && hasQuery && (
+          <button
+            type="button"
+            aria-label="Clear search"
+            onClick={() => setQuery("")}
+            className="absolute top-1/2 right-3 flex size-7 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+          >
+            <X className="size-3.5" />
+          </button>
         )}
       </div>
 
