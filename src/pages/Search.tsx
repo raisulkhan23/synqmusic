@@ -276,32 +276,41 @@ export default function Search() {
         return;
       }
       let cancelled = false;
+      let retryTimer: number | undefined;
       setSearching(true);
       setLyricSearching(true);
       setSearchError(null);
       rememberQuery(q);
       trackEvent("search_performed", { query: q.slice(0, 120) });
-      searchYt({ query: q })
-        .then(({ items }) => {
-          if (!cancelled) {
+      const requestPrimary = (attempt: number) => {
+        searchYt({ query: q })
+          .then(({ items }) => {
+            if (cancelled) return;
+            if (items.length === 0 && attempt === 0) {
+              retryTimer = window.setTimeout(() => requestPrimary(1), 300);
+              return;
+            }
             setYtResults(items);
+            setSearching(false);
             trackEvent("search_results", {
               query: q.slice(0, 120),
               result_count: items.length,
             });
-          }
-        })
-        .catch(() => {
-          if (!cancelled) {
+          })
+          .catch(() => {
+            if (cancelled) return;
+            if (attempt === 0) {
+              retryTimer = window.setTimeout(() => requestPrimary(1), 300);
+              return;
+            }
             setYtResults([]);
+            setSearching(false);
             setSearchError(
               "Couldn't reach our music sources right now. Try again in a moment.",
             );
-          }
-        })
-        .finally(() => {
-          if (!cancelled) setSearching(false);
-        });
+          });
+      };
+      requestPrimary(0);
       // The original query is sent unchanged. The backend derives its own
       // narrowly scoped lyric-video query and keeps these results separate.
       searchLyricVideos({ query: q })
@@ -316,6 +325,7 @@ export default function Search() {
         });
       return () => {
         cancelled = true;
+        if (retryTimer !== undefined) window.clearTimeout(retryTimer);
       };
     };
     run();
