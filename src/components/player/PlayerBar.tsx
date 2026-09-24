@@ -161,13 +161,13 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
   return (
     <footer
       className={cn(
-        "liquid-glass z-30 flex w-full min-w-0 shrink-0 items-center gap-2 overflow-hidden border-t border-white/[0.07] px-2 sm:gap-3 sm:px-4",
-        compact ? "min-h-[60px]" : "min-h-[64px] sm:min-h-[76px]",
+        "liquid-glass z-40 flex w-full min-w-0 shrink-0 items-center gap-2 overflow-hidden border-t border-white/[0.07] px-2 transition-all duration-300 sm:gap-3 sm:px-4 lg:mx-auto lg:mb-3 lg:w-[min(92vw,760px)] lg:rounded-[2rem] lg:border lg:border-white/10 lg:px-3 lg:py-2 lg:shadow-[0_18px_60px_rgba(0,0,0,0.38)] lg:hover:scale-[1.01]",
+        compact ? "min-h-[60px] lg:min-h-0" : "min-h-[64px] sm:min-h-[76px] lg:min-h-0",
       )}
     >
       {/* now playing */}
-      <div className="flex min-w-0 flex-1 basis-0 items-center gap-2 sm:max-w-[34%] sm:gap-3">
-        <div className="relative size-9 shrink-0 overflow-hidden rounded-md shadow-lg ring-1 ring-white/10 sm:size-12">
+      <div className="flex min-w-0 flex-1 basis-0 items-center gap-2 sm:max-w-[34%] sm:gap-3 lg:max-w-[230px] lg:flex-none lg:basis-[230px]">
+        <div className="relative size-9 shrink-0 overflow-hidden rounded-full shadow-lg ring-1 ring-white/15 sm:size-11 lg:size-10">
           <img src={current.coverUrl} alt="" className="size-full object-cover" />
           {isBuffering && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/40">
@@ -216,7 +216,7 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
 
       {/* transport + seek — timestamps are desktop-only; on mobile the
             seekbar sits alone so prev/play/next never collide with them */}
-      <div className="flex min-w-0 flex-1 basis-0 flex-col items-center gap-0.5">
+      <div className="flex min-w-0 flex-1 basis-0 flex-col items-center gap-0.5 lg:min-w-0">
         <TransportControls className="sm:hidden" compact />
         <TransportControls className="hidden sm:flex" />
         <div className="hidden w-full max-w-xl items-center gap-2 sm:flex">
@@ -239,13 +239,13 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
           aria-label="Open queue"
           onClick={() => setQueueOpen(!queueOpen)}
           className={cn(
-            "hidden rounded-full p-2 transition-colors hover:bg-white/[0.06] sm:block",
+            "hidden rounded-full p-2 transition-colors hover:bg-white/[0.06] sm:block lg:p-1.5",
             queueOpen ? "text-[rgb(var(--tint))]" : "text-muted-foreground hover:text-foreground",
           )}
         >
           <ListMusic className="size-4" />
         </button>
-        <VolumeControl className="hidden md:flex" />
+        <VolumeControl className="hidden md:flex lg:scale-90 lg:origin-right" />
         <button
           type="button"
           aria-label="Open full-screen player"

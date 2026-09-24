@@ -50,6 +50,7 @@ export function AppShell() {
   const accentTheme = usePlayerStore((s) => s.accentTheme);
   const compactMode = usePlayerStore((s) => s.compactMode);
   const ambientGlow = usePlayerStore((s) => s.ambientGlow);
+  const wallpaper = usePlayerStore((s) => s.wallpaper);
   const setLiked = usePlayerStore((s) => s.setLiked);
   const setLikeMutation = usePlayerStore((s) => s.setLikeMutation);
   const setHistoryRecorder = usePlayerStore((s) => s.setHistoryRecorder);
@@ -253,9 +254,20 @@ export function AppShell() {
 
   return (
     <div
-      className="flex h-dvh overflow-hidden bg-background text-foreground"
+      className="relative isolate flex h-dvh overflow-hidden bg-background text-foreground"
       style={{ "--tint": tint } as React.CSSProperties}
     >
+      {wallpaper && (
+        <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden bg-background/35" aria-hidden="true">
+          <img
+            src={wallpaper}
+            alt=""
+            className="size-full scale-110 object-cover blur-3xl"
+          />
+          <div className="absolute inset-0 bg-background/45" />
+          <div className="absolute inset-0 bg-gradient-to-b from-background/20 via-background/10 to-background/55" />
+        </div>
+      )}
       <Sidebar />
 
       <div className="flex min-w-0 flex-1 flex-col">

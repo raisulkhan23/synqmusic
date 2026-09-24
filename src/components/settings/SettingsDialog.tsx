@@ -28,6 +28,8 @@ import { api } from "@/convex/_generated/api";
 import {
   Check,
   Gauge,
+  ImageOff,
+  ImagePlus,
   Keyboard,
   Loader2,
   LogOut,
@@ -39,8 +41,10 @@ import {
   Trash2,
   UserRound,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { toast } from "sonner";
+
+const MAX_WALLPAPER_BYTES = 3_000_000;
 
 const SHORTCUTS: [string, string][] = [
   ["Space", "Play / pause"],
@@ -92,10 +96,13 @@ export function SettingsDialog({
   const toggleHideExplicit = usePlayerStore((s) => s.toggleHideExplicit);
   const liquidGlass = usePlayerStore((s) => s.liquidGlass);
   const toggleLiquidGlass = usePlayerStore((s) => s.toggleLiquidGlass);
+  const wallpaper = usePlayerStore((s) => s.wallpaper);
+  const setWallpaper = usePlayerStore((s) => s.setWallpaper);
   const hideSidebarEmail = usePlayerStore((s) => s.hideSidebarEmail);
   const toggleHideSidebarEmail = usePlayerStore((s) => s.toggleHideSidebarEmail);
 
   const [name, setName] = useState("");
+  const wallpaperInputRef = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -175,6 +182,38 @@ export function SettingsDialog({
     } finally {
       setClearing(false);
     }
+  };
+
+  const handleWallpaperChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    input.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Choose an image file for your wallpaper");
+      return;
+    }
+    if (file.size > MAX_WALLPAPER_BYTES) {
+      toast.error("Wallpaper must be smaller than 3 MB");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== "string") {
+        toast.error("Couldn't read that image");
+        return;
+      }
+      setWallpaper(reader.result);
+      toast.success("Wallpaper applied");
+    };
+    reader.onerror = () => toast.error("Couldn't read that image");
+    reader.readAsDataURL(file);
+  };
+
+  const clearWallpaper = () => {
+    setWallpaper(null);
+    toast("Wallpaper removed");
   };
 
   return (
@@ -494,6 +533,53 @@ export function SettingsDialog({
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* personal wallpaper */}
+          <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
+            <div className="flex items-center gap-3">
+              <div className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-black/20">
+                {wallpaper ? (
+                  <img src={wallpaper} alt="Wallpaper preview" className="size-full object-cover" />
+                ) : (
+                  <ImagePlus className="size-5 text-muted-foreground" />
+                )}
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-medium">Personal wallpaper</p>
+                <p className="text-xs leading-5 text-muted-foreground">
+                  Your image sits behind the app with a soft blur and dark glass overlay.
+                </p>
+              </div>
+            </div>
+            <input
+              ref={wallpaperInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/avif"
+              className="hidden"
+              onChange={handleWallpaperChange}
+            />
+            <div className="mt-2.5 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => wallpaperInputRef.current?.click()}
+                className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-white/25 hover:bg-white/[0.1]"
+              >
+                <ImagePlus className="size-3.5" />
+                {wallpaper ? "Replace image" : "Choose image"}
+              </button>
+              {wallpaper && (
+                <button
+                  type="button"
+                  onClick={clearWallpaper}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-red-400/30 hover:bg-red-400/[0.08] hover:text-red-300"
+                >
+                  <ImageOff className="size-3.5" />
+                  Remove
+                </button>
+              )}
+            </div>
+            <p className="mt-2 text-[11px] text-muted-foreground">PNG, JPG, WebP or AVIF · up to 3 MB</p>
           </div>
 
           <ToggleRow

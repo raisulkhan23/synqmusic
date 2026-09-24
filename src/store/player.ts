@@ -250,6 +250,9 @@ interface PlayerStore {
   /** Liquid glass UI effect (frosted refraction panels) */
   liquidGlass: boolean;
   toggleLiquidGlass: () => void;
+  /** Optional locally-persisted blurred background wallpaper. */
+  wallpaper: string | null;
+  setWallpaper: (dataUrl: string | null) => void;
   /** Hide the account email in the sidebar corner. */
   hideSidebarEmail: boolean;
   /** Spotify-style collapsed sidebar (icon rail). */
@@ -415,6 +418,7 @@ const initialAccentTheme = localStorage.getItem("ss.accentTheme") ?? "auto";
 const initialCompact = readBool("ss.compact", false);
 const initialGlow = readBool("ss.ambientGlow", true);
 const initialVisualizer = readBool("ss.visualizer", true);
+const initialWallpaper = localStorage.getItem("ss.wallpaper");
 const savedQueue = readSavedQueue();
 
 const readIdSet = (key: string): Record<string, true> => {
@@ -2001,6 +2005,18 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
         const next = !state.hideSidebarEmail;
         localStorage.setItem("ss.hideSidebarEmail", next ? "1" : "0");
         return { hideSidebarEmail: next };
+      }),
+
+    wallpaper: initialWallpaper,
+    setWallpaper: (dataUrl) =>
+      set(() => {
+        try {
+          if (dataUrl) localStorage.setItem("ss.wallpaper", dataUrl);
+          else localStorage.removeItem("ss.wallpaper");
+        } catch {
+          // Keep the current session usable even when browser storage is full.
+        }
+        return { wallpaper: dataUrl };
       }),
 
     // restore queue from the last session (does not autoplay — user resumes)
