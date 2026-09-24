@@ -174,6 +174,9 @@ interface PlayerStore {
   toggleLiquidGlass: () => void;
   /** Hide the account email in the sidebar corner. */
   hideSidebarEmail: boolean;
+  /** Spotify-style collapsed sidebar (icon rail). */
+  sidebarCollapsed: boolean;
+  toggleSidebarCollapsed: () => void;
   toggleHideSidebarEmail: () => void;
 
   // queue history (previously played, most recent first)
@@ -1646,6 +1649,13 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       }),
 
     hideSidebarEmail: localStorage.getItem("ss.hideSidebarEmail") === "1",
+    toggleSidebarCollapsed: () =>
+      set((state) => {
+        const next = !state.sidebarCollapsed;
+        localStorage.setItem("ss.sidebarCollapsed", next ? "1" : "0");
+        return { sidebarCollapsed: next };
+      }),
+    sidebarCollapsed: localStorage.getItem("ss.sidebarCollapsed") === "1",
     toggleHideSidebarEmail: () =>
       set((state) => {
         const next = !state.hideSidebarEmail;
