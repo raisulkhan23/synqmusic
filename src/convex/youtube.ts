@@ -339,21 +339,24 @@ function parseMusicListItem(renderer: Record<string, unknown>): (YtItem & { kind
     (get(col, ["musicResponsiveListItemFlexColumnRenderer", "text", "runs"]) as Array<{ text?: string }> | undefined) ?? [];
   const textOf = (col: unknown) => runsOf(col)[0]?.text ?? "";
   const title = textOf(flex[0]) || "Untitled";
-  // Column 1 packs type + artist + album + duration as separate runs, e.g.
-  // ["Song", " • ", "Artist", " • ", "Album", " • ", "2:21"] — the first run
-  // is the row type (Song / Video / Playlist / Album / Artist / Episode…).
+  // Column 1 interleaves metadata and separator runs. Depending on the
+  // response shape it can be [artist, " • ", album, " • ", duration] or
+  // [type, " • ", artist, " • ", duration], so separators must never be
+  // mistaken for the artist.
   const runs = (get(flex[1], ["musicResponsiveListItemFlexColumnRenderer", "text", "runs"]) as Array<{ text?: string }> | undefined) ?? [];
-  const runTexts = runs.map((r) => r.text ?? "");
-  const first = runTexts[0]?.trim() ?? "";
-  const isTypedRow = /^[A-Za-z]/.test(first) && !/^\d{1,2}:\d{2}/.test(first);
+  const metaRuns = runs
+    .map((run) => run.text?.trim() ?? "")
+    .filter((value) => value && !/^[•·,&]+$/.test(value));
+  const typePattern = /^(song|video|playlist|album|artist|episode|short|music video|live performance|single|ep)$/i;
+  const typeIndex = metaRuns.findIndex((value) => typePattern.test(value));
+  const artistIndex = typeIndex >= 0 ? typeIndex + 1 : 0;
+  const typeRun = typeIndex >= 0 ? metaRuns[typeIndex] : "";
   const kind: "song" | "other" =
-    first === "Song" || first === "Video" ? "song" : isTypedRow ? "other" : "song";
-  // Skip the type run itself when extracting artist/duration.
-  const metaRuns = isTypedRow ? runTexts.slice(1) : runTexts;
-  const artist = metaRuns[0]?.trim() || "Unknown artist";
+    /^song$/i.test(typeRun) || /^video$/i.test(typeRun) || typeIndex < 0 ? "song" : "other";
+  const artist = metaRuns[artistIndex] || "Unknown artist";
   const durationMatch = [...metaRuns]
     .reverse()
-    .find((t) => /^\d{1,2}:\d{2}(:\d{2})?$/.test(t.trim()));
+    .find((value) => /^\d{1,2}:\d{2}(:\d{2})?$/.test(value));
   const durationRaw = durationMatch ?? textOf(flex[2]) ?? "";
 
   const thumbs = get(renderer, ["thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails"]);
