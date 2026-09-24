@@ -7,6 +7,7 @@ import { VolumeControl } from "@/components/player/VolumeControl";
 import { accentFromString, dominantColor } from "@/lib/covers";
 import { formatTime } from "@/lib/format";
 import { toPlayableYoutube } from "@/lib/playable";
+import { getAudio } from "@/lib/audio";
 import { usePlayerStore } from "@/store/player";
 import {
   Heart,
@@ -62,7 +63,7 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
     return () => {
       cancelled = true;
     };
-  }, [current?.id, current?.source, current?.title, current?.artistName, setAccent]);
+  }, [current, setAccent]);
 
   // Auto-fallback: if a YouTube video can't play (embed disabled, removed,
   // etc.), automatically try the next search result. Manual switching is also
@@ -96,6 +97,18 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
     if (!track.audioUrl) {
       rescueExhausted.current = true;
       toast.loading(`Finding a way to play "${track.title}"…`, { id: "yt-fallback" });
+      // playViaStream resolves asynchronously. Clear the loading toast when
+      // the shared audio element actually starts, rather than leaving it
+      // stuck after a successful rescue.
+      const audio = getAudio();
+      const cleanup = () => {
+        audio.removeEventListener("playing", onPlaying);
+        window.clearTimeout(timeout);
+        toast.dismiss("yt-fallback");
+      };
+      const onPlaying = () => cleanup();
+      const timeout = window.setTimeout(cleanup, 15_000);
+      audio.addEventListener("playing", onPlaying, { once: true });
       playViaStream(track);
       return;
     }

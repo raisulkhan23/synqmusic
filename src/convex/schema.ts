@@ -95,7 +95,9 @@ const schema = defineSchema(
       source: v.optional(v.string()),
       title: v.optional(v.string()),
       artistName: v.optional(v.string()),
-    }).index("by_playedAt", ["playedAt"]),
+    })
+      .index("by_playedAt", ["playedAt"])
+      .index("by_user", ["userId"]),
 
     // playlists imported from other music services. Tracks are stored as
     // snapshots (title + artist) and resolved to playable YouTube tracks at

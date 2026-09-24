@@ -289,21 +289,27 @@ export const recentSignups = query({
 });
 
 /**
- * Platform-wide listening statistics (admin only): total plays, total listen
- * time estimate, plays per day for the last 14 days, and most active hour.
+ * Platform-wide listening statistics for the last 14 days (admin only):
+ * total plays, unique tracks, daily activity, and most active hour.
  */
 export const platformListeningStats = query({
   args: {},
   handler: async (ctx) => {
     await getAdminUser(ctx);
-    const events = await ctx.db.query("playEvents").collect();
+    const dayMs = 24 * 60 * 60 * 1000;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const windowStart = today.getTime() - 13 * dayMs;
+    // The dashboard is a 14-day view. Use the time index so this does not
+    // scan the entire append-only event history on every admin refresh.
+    const events = await ctx.db
+      .query("playEvents")
+      .withIndex("by_playedAt", (q) => q.gte("playedAt", windowStart))
+      .collect();
 
     const totalPlays = events.length;
 
     // plays per day, last 14 days
-    const dayMs = 24 * 60 * 60 * 1000;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
     const daily: { day: string; label: string; plays: number }[] = [];
     for (let i = 13; i >= 0; i--) {
       const start = today.getTime() - i * dayMs;
@@ -322,12 +328,12 @@ export const platformListeningStats = query({
     // most active hour of day (0-23)
     const hourBuckets = new Array(24).fill(0) as number[];
     for (const h of events) hourBuckets[new Date(h.playedAt).getHours()] += 1;
-    const peakHour = hourBuckets.indexOf(Math.max(...hourBuckets));
+    const peakHour = totalPlays === 0 ? null : hourBuckets.indexOf(Math.max(...hourBuckets));
 
     // distinct tracks in the catalog history
     const uniqueTracks = new Set(events.map((h) => h.trackId)).size;
 
-    return { totalPlays, totalRows: events.length, uniqueTracks, daily, peakHour, hourBuckets };
+    return { totalPlays, uniqueTracks, daily, peakHour, hourBuckets };
   },
 });
 
@@ -421,7 +427,11 @@ export const clearUserHistory = mutation({
       .query("playHistory")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
-    for (const row of rows) await ctx.db.delete(row._id);
+    const events = await ctx.db
+      .query("playEvents")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    for (const row of [...rows, ...events]) await ctx.db.delete(row._id);
     return rows.length;
   },
 });

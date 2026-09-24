@@ -10,6 +10,7 @@
 // nothing, so the app is completely unaffected until setup is done.
 // ---------------------------------------------------------------------------
 
+import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import { action } from "./_generated/server";
 
@@ -40,10 +41,12 @@ export const requestAds = action({
     messages: v.optional(
       v.array(v.object({ role: v.string(), content: v.string() })),
     ),
+    /** Durable, opaque browser identity for signed-out visitors. */
+    visitorId: v.optional(v.string()),
   },
   handler: async (
-    _ctx,
-    { context, placement = "search_results", messages = [] },
+    ctx,
+    { context, placement = "search_results", messages = [], visitorId },
   ): Promise<{ ads: GravityAdPayload[]; skipped?: boolean; error?: string }> => {
     const apiKey = process.env.GRAVITY_API_KEY;
     if (!apiKey) return { ads: [], skipped: true };
@@ -59,7 +62,6 @@ export const requestAds = action({
           Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-          api_key: apiKey,
           // Test mode by default; flip to true to serve real campaigns.
           production: process.env.GRAVITY_PRODUCTION === "1",
           messages: [
@@ -73,7 +75,10 @@ export const requestAds = action({
             },
           ],
           user: {
-            gruid: "soniq-web",
+            gruid:
+              (await getAuthUserId(ctx).catch(() => null)) ??
+              visitorId?.trim() ??
+              `web-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`,
           },
         }),
       });

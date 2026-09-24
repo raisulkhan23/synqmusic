@@ -287,7 +287,11 @@ export const clearHistory = mutation({
       .query("playHistory")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
-    for (const row of rows) {
+    const events = await ctx.db
+      .query("playEvents")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    for (const row of [...rows, ...events]) {
       await ctx.db.delete(row._id);
     }
     return rows.length;

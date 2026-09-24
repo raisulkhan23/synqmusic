@@ -15,8 +15,10 @@ import { v } from "convex/values";
 import { action } from "./_generated/server";
 
 const AMPLITUDE_URL = "https://api2.amplitude.com/2/httpapi";
-/** Amplitude rejects device_id/user_id values that aren't set and simple. */
-const ANON_ID = "anonymous";
+/** Fallback only for callers that cannot provide a durable client id. */
+function makeAnonymousId(): string {
+  return `web-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+}
 
 /** Properties must be primitives; anything else is dropped. */
 function sanitize(value: unknown): string | number | boolean | null {
@@ -42,14 +44,18 @@ export const track = action({
     }
 
     // Prefer the signed-in user as the identity so events stitch together
-    // across devices; fall back to the caller's device id / anonymous.
+    // across devices; fall back to the caller's durable device id. Never use
+    // a shared literal for anonymous traffic: that collapses every visitor
+    // into one analytics user.
     const userId = await getAuthUserId(ctx).catch(() => null);
+    const identity = userId ?? deviceId ?? makeAnonymousId();
 
     const eventPayload: Record<string, unknown> = {
       event_type: event.slice(0, 100),
-      user_id: userId ?? deviceId ?? ANON_ID,
-      device_id: deviceId ?? ANON_ID,
-      time: Date.now(),
+      user_id: identity,
+      device_id: deviceId ?? identity,
+      // Amplitude HTTP v2 timestamps are microseconds, not milliseconds.
+      time: Date.now() * 1000,
       event_properties: properties ?? {},
     };
     if (userId) eventPayload.user_properties = { signedIn: true };
@@ -90,11 +96,12 @@ export const trackBatch = action({
     if (!apiKey) return { ok: false, skipped: true, sent: 0 };
 
     const userId = await getAuthUserId(ctx).catch(() => null);
+    const identity = userId ?? deviceId ?? makeAnonymousId();
     const payload = events.slice(0, 20).map((e) => ({
       event_type: e.event.slice(0, 100),
-      user_id: userId ?? deviceId ?? ANON_ID,
-      device_id: deviceId ?? ANON_ID,
-      time: Date.now(),
+      user_id: identity,
+      device_id: deviceId ?? identity,
+      time: Date.now() * 1000,
       event_properties: e.properties ?? {},
     }));
 

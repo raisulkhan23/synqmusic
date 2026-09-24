@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { ensureAnalyser, readFrequencyData } from "@/lib/audio";
+import { ensureAnalyser, getAudio, readFrequencyData } from "@/lib/audio";
 import { cn } from "@/lib/utils";
 import { usePlayerStore } from "@/store/player";
 
@@ -58,11 +58,23 @@ export function VisualizerCanvas({
   const visualizerEnabled = usePlayerStore((s) => s.visualizerEnabled);
   const analyserRef = useRef<AnalyserNode | null>(null);
 
-  // Create the analyser on mount — the parent overlay is opened by a user
-  // gesture, so the AudioContext can start.
+  // Attach to the shared audio element when visualization is enabled. The
+  // graph can fail during the first render (before a browser gesture), so
+  // retry on the toggle and on the next user interaction rather than relying
+  // on a DOM <audio> element that this app never appends.
   useEffect(() => {
-    analyserRef.current = ensureAnalyser();
-  }, []);
+    if (!visualizerEnabled) return;
+    const attachAnalyser = () => {
+      analyserRef.current = ensureAnalyser();
+    };
+    attachAnalyser();
+    window.addEventListener("pointerdown", attachAnalyser, { passive: true });
+    window.addEventListener("focus", attachAnalyser);
+    return () => {
+      window.removeEventListener("pointerdown", attachAnalyser);
+      window.removeEventListener("focus", attachAnalyser);
+    };
+  }, [visualizerEnabled]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -101,12 +113,14 @@ export function VisualizerCanvas({
       const h = rect.height;
       ctx.clearRect(0, 0, w, h);
 
-      const analyserNode = analyserRef.current;
+      // A graph may have been created after this animation frame started.
+      // Retry here as a final recovery path for a context rejected on mount.
+      const analyserNode = (analyserRef.current ??= ensureAnalyser());
       let values: number[];
       // Use real FFT only when the catalog audio element is the active
       // source. For YouTube (IFrame engine) the spectrum isn't tappable, so
       // we simulate — but with the track's own energy/tempo signature.
-      const audioEl = document.querySelector("audio");
+      const audioEl = getAudio();
       const usingRealAudio =
         analyserNode && audioEl && !audioEl.paused && !audioEl.src.includes("youtu");
 

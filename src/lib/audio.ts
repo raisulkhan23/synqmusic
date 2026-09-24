@@ -296,8 +296,11 @@ function startRotation(): void {
 
 /** Activate a sound effect. Returns false if Web Audio isn't available. */
 export function setAudioFilter(id: AudioFilterId): boolean {
-  activeFilter = id;
+  // Do not publish the requested filter until the graph is actually built.
+  // Otherwise a failed initialization leaves hasAudioProcessing() true and
+  // forces every later track through an effect path that cannot work.
   if (!ensureGraph()) return false;
+  activeFilter = id;
 
   resetEffects();
   if (id === "off") return true;

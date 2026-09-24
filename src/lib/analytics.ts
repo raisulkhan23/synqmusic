@@ -35,8 +35,19 @@ function getDeviceId(): string {
   }
 }
 
-/** True once a call has clearly failed, so we stop retrying every event. */
+/** Stop after repeated hard failures; transient offline errors are ignored. */
 let disabled = false;
+let consecutiveFailures = 0;
+
+function recordAnalyticsSuccess(): void {
+  consecutiveFailures = 0;
+}
+
+function recordAnalyticsFailure(): void {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+  consecutiveFailures += 1;
+  if (consecutiveFailures >= 3) disabled = true;
+}
 
 export function isAnalyticsEnabled(): boolean {
   return !disabled;
@@ -52,11 +63,12 @@ export function track(event: string, properties: Props = {}): void {
         // `skipped` means the key isn't configured yet — stay quiet but keep
         // the integration ready for when it is added.
         if (res && "skipped" in res && res.skipped) return;
+        recordAnalyticsSuccess();
       })
       .catch(() => {
-        // A single failure shouldn't disable tracking; only a hard auth
-        // failure does (e.g. deployment misconfigured).
-        if (navigator.onLine === false) return;
+        // A single failure shouldn't disable tracking; repeated hard failures
+        // indicate a misconfigured deployment and should stop the hot path.
+        recordAnalyticsFailure();
       });
   } catch {
     disabled = true;
@@ -69,7 +81,8 @@ export function trackBatch(events: { event: string; properties?: Props }[]): voi
   try {
     void getClient()
       .action(api.amplitude.trackBatch, { events, deviceId: getDeviceId() })
-      .catch(() => undefined);
+      .then(() => recordAnalyticsSuccess())
+      .catch(() => recordAnalyticsFailure());
   } catch {
     disabled = true;
   }
@@ -78,4 +91,5 @@ export function trackBatch(events: { event: string; properties?: Props }[]): voi
 /** Re-enable after the user adds their API key mid-session. */
 export function resetAnalytics(): void {
   disabled = false;
+  consecutiveFailures = 0;
 }

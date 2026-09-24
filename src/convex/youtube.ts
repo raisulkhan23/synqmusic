@@ -326,7 +326,7 @@ function extractMusicResults(data: Record<string, unknown>): YtItem[] {
  * Also classifies the row: YouTube puts the type ("Song"/"Video"/"Playlist"…)
  * as the first subtitle run of column 1.
  */
-function parseMusicListItem(renderer: Record<string, unknown>): (YtItem & { kind: "song" | "other" }) | null {
+export function parseMusicListItem(renderer: Record<string, unknown>): (YtItem & { kind: "song" | "other" }) | null {
   const videoId =
     (get(renderer, ["playlistItemData", "videoId"]) as string | undefined) ??
     (get(renderer, ["overlay", "musicItemThumbnailOverlayRenderer", "content", "musicPlayButtonRenderer", "playNavigationEndpoint", "watchEndpoint", "videoId"]) as string | undefined) ??

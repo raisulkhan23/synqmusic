@@ -480,7 +480,7 @@ export function FullscreenPlayer() {
       // no invisible overlay can ever swallow clicks again.
       dismissVideo();
     };
-  }, [fullscreen, current?.id, videoEnabled, isYoutube, audioFilter]);
+  }, [fullscreen, current, videoEnabled, isYoutube, audioFilter]);
 
   // Re-sync the overlay when the lyrics panel toggles (frame may move).
   useEffect(() => {

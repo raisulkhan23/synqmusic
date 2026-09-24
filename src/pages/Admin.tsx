@@ -633,12 +633,16 @@ export default function Admin() {
 
         <TabsContent value="insights" className="mt-6 flex flex-col gap-6">
           <div className="grid gap-3 sm:grid-cols-3">
-            <StatCard icon={Activity} label="Total plays" value={listeningStats?.totalPlays ?? 0} />
-            <StatCard icon={BarChart3} label="Unique tracks played" value={listeningStats?.uniqueTracks ?? 0} />
+            <StatCard icon={Activity} label="Plays · last 14 days" value={listeningStats?.totalPlays ?? 0} />
+            <StatCard icon={BarChart3} label="Unique tracks · 14 days" value={listeningStats?.uniqueTracks ?? 0} />
             <StatCard
               icon={Clock3}
               label="Peak listening hour"
-              value={listeningStats ? `${String(listeningStats.peakHour).padStart(2, "0")}:00` : "—"}
+              value={
+                listeningStats?.peakHour == null
+                  ? "—"
+                  : `${String(listeningStats.peakHour).padStart(2, "0")}:00`
+              }
             />
           </div>
 

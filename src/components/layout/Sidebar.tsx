@@ -68,9 +68,11 @@ export function Sidebar() {
   if (collapsed) {
     return (
       <aside className="liquid-glass hidden w-[72px] shrink-0 flex-col items-center overflow-hidden border-r border-white/[0.06] py-3 lg:flex">
-        <Link to="/home" aria-label="Home" className="mb-2 flex size-10 items-center justify-center rounded-lg hover:bg-white/[0.05]">
-          <Logo to="/home" iconOnly />
-        </Link>
+        <Logo
+          to="/home"
+          iconOnly
+          className="mb-2 flex size-10 items-center justify-center rounded-lg hover:bg-white/[0.05]"
+        />
         {[
           { to: "/home", label: "Home", icon: House },
           { to: "/search", label: "Search", icon: Search },

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAction } from "convex/react";
-import { GravityAd } from "@gravity-ai/react";
+import { GravityAd, type AdResponse } from "@gravity-ai/react";
 import { api } from "@/convex/_generated/api";
 import { cn } from "@/lib/utils";
 import { Sparkles } from "lucide-react";
@@ -10,17 +10,25 @@ import { Sparkles } from "lucide-react";
  *
  * Deliberately restrained: one card, labelled, skippable, and it renders
  * nothing at all when the integration isn't configured (no key, no fill) or
- * when the user has turned sponsored content off. The request happens
- * server-side, so no API key is ever exposed.
+ * after the user dismisses it for this view. The request happens server-side,
+ * so no API key is ever exposed.
  */
 
-const OPT_OUT_KEY = "ss.hideSponsored";
+const VISITOR_KEY = "ss.gravityVisitorId";
+const adCache = new Map<string, AdResponse | null>();
 
-function optOutEnabled(): boolean {
+function getVisitorId(): string {
   try {
-    return localStorage.getItem(OPT_OUT_KEY) === "1";
+    const existing = localStorage.getItem(VISITOR_KEY);
+    if (existing) return existing;
+    const id =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `web-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    localStorage.setItem(VISITOR_KEY, id);
+    return id;
   } catch {
-    return true;
+    return `web-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   }
 }
 
@@ -34,35 +42,51 @@ export function GravitySponsor({
   className?: string;
 }) {
   const requestAds = useAction(api.gravity.requestAds);
-  const [ad, setAd] = useState<Record<string, unknown> | null>(null);
+  const [ad, setAd] = useState<AdResponse | null>(null);
+  const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
-    if (optOutEnabled()) return;
-    let cancelled = false;
+    if (dismissed) return;
     const query = context.trim();
     if (query.length < 2) return;
-    void requestAds({ context: query, placement })
-      .then((res) => {
-        if (cancelled) return;
-        const first = res.ads?.[0];
-        setAd(first ? (first as unknown as Record<string, unknown>) : null);
-      })
-      .catch(() => undefined);
+    const key = `${placement}:${query}`;
+    const cached = adCache.get(key);
+    let cancelled = false;
+    if (cached !== undefined) {
+      const timer = window.setTimeout(() => {
+        if (!cancelled) setAd(cached);
+      }, 0);
+      return () => {
+        cancelled = true;
+        window.clearTimeout(timer);
+      };
+    }
+
+    const timer = window.setTimeout(() => {
+      void requestAds({ context: query, placement, visitorId: getVisitorId() })
+        .then((res) => {
+          if (cancelled) return;
+          const first = res.ads?.[0];
+          const nextAd: AdResponse | null =
+            first && typeof first.adText === "string" ? first : null;
+          adCache.set(key, nextAd);
+          setAd(nextAd);
+        })
+        .catch(() => undefined);
+    }, 300);
+
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
-  }, [context, placement, requestAds]);
+  }, [context, dismissed, placement, requestAds]);
 
   const dismiss = () => {
+    setDismissed(true);
     setAd(null);
-    try {
-      localStorage.setItem(OPT_OUT_KEY, "1");
-    } catch {
-      /* ignore */
-    }
   };
 
-  if (optOutEnabled() || ad === null) return null;
+  if (dismissed || ad === null) return null;
 
   return (
     <div
@@ -86,8 +110,7 @@ export function GravitySponsor({
         </button>
       </div>
       <GravityAd
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ad={ad as any}
+        ad={ad}
         variant="labeled"
         showLabel={false}
         openInNewTab

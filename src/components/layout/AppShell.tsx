@@ -140,7 +140,7 @@ export function AppShell() {
       if (document.body.style.pointerEvents !== "none") return;
       const hasOpenLayer =
         document.querySelector(
-          '[data-radix-popper-content-wrapper], [role="dialog"]:not([hidden]), [data-slot="sheet-content"], [data-slot="dropdown-menu-content"]',
+          '[data-radix-popper-content-wrapper], [data-radix-menu-content], [data-radix-dialog-content], [data-radix-popover-content], [data-radix-hover-card-content], [data-radix-tooltip-content], [data-radix-select-content], [role="dialog"]:not([hidden]), [role="menu"], [data-slot="sheet-content"], [data-slot="dropdown-menu-content"]',
         ) !== null;
       if (!hasOpenLayer) document.body.style.pointerEvents = "";
     };
