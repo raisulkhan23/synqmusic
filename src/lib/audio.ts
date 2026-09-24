@@ -220,7 +220,7 @@ export async function resumeGraph(attempts = 4): Promise<boolean> {
     } catch {
       /* try again next frame */
     }
-    await new Promise((r) => setTimeout(r, 60));
+    await Promise.resolve();
   }
   return audioCtx?.state === "running";
 }
