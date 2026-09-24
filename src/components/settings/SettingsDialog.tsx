@@ -146,6 +146,9 @@ export function SettingsDialog({
   const [wallpaperBlur, setWallpaperBlur] = useState(
     () => localStorage.getItem("ss.wallpaperBlur") !== "0",
   );
+  const [lowMemoryWallpaperPreviews, setLowMemoryWallpaperPreviews] = useState(
+    () => localStorage.getItem("ss.lowMemoryWallpaperPreviews") !== "0",
+  );
 
   const loadWallpaperLibrary = useCallback(async () => {
     const records = await listWallpaperFiles();
@@ -1012,11 +1015,32 @@ export function SettingsDialog({
                           )}
                           aria-label={`Use ${entry.name}`}
                         >
-                          {entry.kind === "video" ? (
-                            <video src={entry.url} muted loop autoPlay playsInline className="size-full object-cover" />
-                          ) : (
-                            <img src={entry.url} alt="" className="size-full object-cover" />
-                          )}
+                        {entry.kind === "video" &&
+                        (lowMemoryWallpaperPreviews && !selected ? (
+                          <span className="flex size-full flex-col items-center justify-center gap-1 bg-gradient-to-br from-white/[0.1] to-black/30 text-white/55">
+                            <Film className="size-5" />
+                            <span className="text-[9px] font-medium">Video</span>
+                          </span>
+                        ) : (
+                          <video
+                            src={entry.url}
+                            muted
+                            loop={!lowMemoryWallpaperPreviews}
+                            autoPlay={!lowMemoryWallpaperPreviews}
+                            playsInline
+                            preload={lowMemoryWallpaperPreviews ? "metadata" : "auto"}
+                            className="size-full object-cover"
+                          />
+                        ))}
+                        {entry.kind === "image" && (
+                          <img
+                            src={entry.url}
+                            alt=""
+                            loading="lazy"
+                            decoding="async"
+                            className="size-full object-cover"
+                          />
+                        )}
                           {selected && (
                             <span className="absolute right-1.5 top-1.5 flex size-5 items-center justify-center rounded-full bg-[rgb(var(--tint))] text-black shadow-lg">
                               <Check className="size-3" />
@@ -1066,6 +1090,18 @@ export function SettingsDialog({
               localStorage.setItem("ss.wallpaperBlur", next ? "1" : "0");
               window.dispatchEvent(new CustomEvent("ss:wallpaper-blur-change", { detail: next }));
               toast(next ? "Wallpaper blur on" : "Wallpaper blur off");
+            }}
+          />
+
+          <ToggleRow
+            label="Low-memory wallpaper previews"
+            description="Avoid playing saved video previews until you select one; switching stays instant"
+            on={lowMemoryWallpaperPreviews}
+            onToggle={() => {
+              const next = !lowMemoryWallpaperPreviews;
+              setLowMemoryWallpaperPreviews(next);
+              localStorage.setItem("ss.lowMemoryWallpaperPreviews", next ? "1" : "0");
+              toast(next ? "Low-memory previews on" : "Live previews on");
             }}
           />
 
