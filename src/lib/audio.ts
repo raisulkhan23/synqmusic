@@ -80,6 +80,17 @@ export function ensureGraph(): boolean {
       if (audioCtx.state === "suspended") void audioCtx.resume();
       return true;
     }
+    // A previous attempt may have died half-way (e.g. created the context in
+    // a non-gesture task). Tear it down so this call can build it cleanly —
+    // otherwise every subsequent call throws and the EQ never works.
+    if (audioCtx && !filterSource) {
+      try {
+        void audioCtx.close();
+      } catch {
+        /* ignore */
+      }
+      audioCtx = null;
+    }
     const AudioCtx =
       window.AudioContext ??
       (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -142,7 +153,59 @@ export function ensureGraph(): boolean {
     if (audioCtx.state === "suspended") void audioCtx.resume();
     return true;
   } catch {
+    // Reset everything so the next user gesture can rebuild the graph.
+    try {
+      if (audioCtx && audioCtx.state !== "closed") void audioCtx.close();
+    } catch {
+      /* ignore */
+    }
+    audioCtx = null;
+    filterSource = null;
+    eqBassNode = null;
+    eqTrebleNode = null;
+    balanceNode = null;
+    fxIn = null;
+    bassFilter = null;
+    vocalFilter = null;
+    nightLow = null;
+    panner = null;
+    gainOut = null;
+    analyser = null;
     return false;
+  }
+}
+
+/** True when the Web Audio graph exists and the audio element flows through it. */
+export function isGraphReady(): boolean {
+  return !!audioCtx && !!filterSource;
+}
+
+/**
+ * True when the user has ANY non-default audio processing configured (EQ
+ * sliders, mono, balance or an effect preset). Playback MUST then run through
+ * the <audio> element — the YouTube IFrame cannot be tapped by Web Audio, so
+ * these settings would otherwise be inaudible.
+ */
+export function hasAudioProcessing(): boolean {
+  return (
+    activeFilter !== "off" ||
+    eqBass !== 0 ||
+    eqTreble !== 0 ||
+    eqBalance !== 0 ||
+    eqMono
+  );
+}
+
+/** Notified whenever the user changes an EQ value, so playback can be re-routed. */
+let eqChangeListener: (() => void) | null = null;
+export function onEqChange(cb: (() => void) | null): void {
+  eqChangeListener = cb;
+}
+function notifyEqChange(): void {
+  try {
+    eqChangeListener?.();
+  } catch {
+    /* ignore */
   }
 }
 
@@ -248,21 +311,25 @@ export function getActiveAudioFilter(): AudioFilterId {
 export function setEqBass(db: number): void {
   eqBass = db;
   if (eqBassNode) eqBassNode.gain.value = db;
+  notifyEqChange();
 }
 
 export function setEqTreble(db: number): void {
   eqTreble = db;
   if (eqTrebleNode) eqTrebleNode.gain.value = db;
+  notifyEqChange();
 }
 
 export function setEqBalance(v: number): void {
   eqBalance = Math.min(1, Math.max(-1, v));
   if (balanceNode && !eqMono) balanceNode.pan.value = eqBalance;
+  notifyEqChange();
 }
 
 export function setEqMono(mono: boolean): void {
   eqMono = mono;
   if (balanceNode) balanceNode.pan.value = mono ? 0 : eqBalance;
+  notifyEqChange();
 }
 
 /** One-shot EQ presets. */

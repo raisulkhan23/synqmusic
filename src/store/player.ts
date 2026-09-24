@@ -7,6 +7,8 @@ import {
   setEqBalance as setEqBalanceLib,
   setEqMono as setEqMonoLib,
   ensureGraph,
+  hasAudioProcessing,
+  onEqChange,
   AUDIO_FILTERS,
   type AudioFilterId,
 } from "@/lib/audio";
@@ -1173,7 +1175,11 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     // the <audio> element with a resolved direct stream instead — the IFrame
     // engine can't be tapped by Web Audio, so effects would be silent no-ops.
     if (track.youtubeId) {
-      const wantFilter = get().audioFilter !== "off";
+      // The IFrame engine cannot be tapped by Web Audio, so ANY audio
+      // processing (effect preset OR a non-flat EQ) must play through the
+      // <audio> element. Checking only the effect preset is why the bass /
+      // treble sliders appeared to do nothing.
+      const wantFilter = get().audioFilter !== "off" || hasAudioProcessing();
       if (wantFilter && track.youtubeId) {
         void resolveAndPlayWithFilter(track, resumeAt, true);
         return;
@@ -1516,7 +1522,11 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     // (Anything that isn't a real media stream — including the youtu.be
     // placeholder — needs the swap too.)
     const s = get();
-    if (id !== "off" && s.current?.youtubeId && !onStreamPath(s.current)) {
+    if (
+      (id !== "off" || hasAudioProcessing()) &&
+      s.current?.youtubeId &&
+      !onStreamPath(s.current)
+    ) {
       const resumeAt = s.currentTime;
       void resolveAndPlayWithFilter(s.current, resumeAt, true);
     }
@@ -1770,6 +1780,27 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
         });
       });
   };
+
+  // Moving an EQ slider while a YouTube track plays through the IFrame engine
+  // is inaudible, because the IFrame can't be tapped by Web Audio. On the
+  // first real change we re-route playback onto the <audio> element so the
+  // new EQ is immediately audible (and keep it there for the whole session).
+  onEqChange(() => {
+    const s = get();
+    if (!hasAudioProcessing()) return;
+    const t = s.current;
+    if (!t?.youtubeId) return;
+    const onStream =
+      t.audioUrl.includes("audio-proxy") ||
+      t.audioUrl.includes("googlevideo") ||
+      t.audioUrl.includes("videoplayback") ||
+      t.audioUrl.includes("piped") ||
+      t.audioUrl.includes("odycdn") ||
+      t.audioUrl === "stream";
+    if (onStream) return; // already filterable
+    ensureGraph();
+    void resolveAndPlayWithFilter(t, s.currentTime, false);
+  });
 
   return {
     queue: [],
