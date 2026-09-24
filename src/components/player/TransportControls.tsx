@@ -24,7 +24,7 @@ function IconButton({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "rounded-full p-2 text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-40",
+        "touch-manipulation rounded-full p-2 text-muted-foreground transition-all active:scale-90 hover:text-foreground disabled:pointer-events-none disabled:opacity-40",
         active && "text-[rgb(var(--tint))]",
       )}
     >
@@ -60,7 +60,7 @@ export function TransportControls({ className, compact = false }: { className?: 
         aria-label={isPlaying ? "Pause" : "Play"}
         onClick={togglePlay}
         disabled={!current}
-        className="mx-1 flex size-9 shrink-0 items-center justify-center rounded-full bg-white text-black shadow-[0_4px_20px_rgba(255,255,255,0.18)] transition-transform hover:scale-105 active:scale-95 disabled:pointer-events-none disabled:opacity-40"
+        className="touch-manipulation mx-1 flex size-9 shrink-0 items-center justify-center rounded-full bg-white text-black shadow-[0_4px_20px_rgba(255,255,255,0.18)] transition-transform hover:scale-105 active:scale-90 disabled:pointer-events-none disabled:opacity-40"
       >
         {isBuffering && current ? (
           <Loader2 className="size-4 animate-spin" />

@@ -161,13 +161,13 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
   return (
     <footer
       className={cn(
-        "liquid-glass dynamic-island z-40 flex w-full min-w-0 shrink-0 items-center gap-2 overflow-hidden border-t border-white/[0.07] px-2 transition-all duration-300 sm:gap-3 sm:px-4 lg:mx-auto lg:mb-3 lg:w-[min(92vw,760px)] lg:rounded-[2rem] lg:border lg:border-white/10 lg:px-3 lg:py-2 lg:shadow-[0_18px_60px_rgba(0,0,0,0.38)] lg:hover:scale-[1.01]",
+        "mobile-player liquid-glass dynamic-island z-40 flex w-full min-w-0 shrink-0 items-center gap-2 overflow-hidden border-t border-white/[0.07] px-2 transition-all duration-300 sm:gap-3 sm:px-4 lg:mx-auto lg:mb-3 lg:w-[min(92vw,760px)] lg:rounded-[2rem] lg:border lg:border-white/10 lg:px-3 lg:py-2 lg:shadow-[0_18px_60px_rgba(0,0,0,0.38)] lg:hover:scale-[1.01]",
         compact ? "min-h-[60px] lg:min-h-0" : "min-h-[64px] sm:min-h-[76px] lg:min-h-0",
       )}
     >
       {/* now playing */}
       <div className="flex min-w-0 flex-1 basis-0 items-center gap-2 sm:max-w-[34%] sm:gap-3 lg:max-w-[230px] lg:flex-none lg:basis-[230px]">
-        <div className="relative size-9 shrink-0 overflow-hidden rounded-full shadow-lg ring-1 ring-white/15 sm:size-11 lg:size-10">
+        <div className="mobile-player-art relative size-9 shrink-0 overflow-hidden rounded-full shadow-lg ring-1 ring-white/15 sm:size-11 lg:size-10">
           <img src={current.coverUrl} alt="" className="size-full object-cover" />
           {isBuffering && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/40">

@@ -42,6 +42,7 @@ export function AppShell() {
   );
   const rippleLayerRef = useRef<HTMLDivElement>(null);
   const cursorTrailRefs = useRef<Array<HTMLSpanElement | null>>([]);
+  const touchGlowTimeoutRef = useRef<number | null>(null);
   const wallpaperVideoRef = useRef<HTMLVideoElement>(null);
 
   // Restore an uploaded wallpaper from IndexedDB after a page reload.
@@ -78,6 +79,14 @@ export function AppShell() {
     };
     window.addEventListener("ss:wallpaper-blur-change", onWallpaperBlurChange);
     return () => window.removeEventListener("ss:wallpaper-blur-change", onWallpaperBlurChange);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (touchGlowTimeoutRef.current !== null) {
+        window.clearTimeout(touchGlowTimeoutRef.current);
+      }
+    };
   }, []);
 
   // Offline mode banner — react to connectivity changes live.
@@ -345,7 +354,26 @@ export function AppShell() {
   };
 
   const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
-    if (!pointerEffects || event.pointerType === "touch" || !rippleLayerRef.current) return;
+    if (!pointerEffects || !rippleLayerRef.current) return;
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    event.currentTarget.style.setProperty("--pointer-x", `${event.clientX - rect.left}px`);
+    event.currentTarget.style.setProperty("--pointer-y", `${event.clientY - rect.top}px`);
+
+    // Touch devices have no cursor to trail. A short accent bloom at the
+    // contact point gives them the same liquid-light response without
+    // rendering desktop cursor motes.
+    if (event.pointerType === "touch") {
+      event.currentTarget.style.setProperty("--pointer-opacity", "1");
+      if (touchGlowTimeoutRef.current !== null) {
+        window.clearTimeout(touchGlowTimeoutRef.current);
+      }
+      touchGlowTimeoutRef.current = window.setTimeout(() => {
+        event.currentTarget.style.setProperty("--pointer-opacity", "0");
+        touchGlowTimeoutRef.current = null;
+      }, 720);
+    }
+
     const layer = rippleLayerRef.current;
     const ripple = document.createElement("span");
     ripple.className = "click-ripple";
@@ -391,7 +419,7 @@ export function AppShell() {
               />
             ))}
           </div>
-          <div ref={rippleLayerRef} className="pointer-events-none absolute inset-0 -z-[4] overflow-hidden" aria-hidden="true" />
+          <div ref={rippleLayerRef} className="touch-ripple-layer pointer-events-none absolute inset-0 -z-[4] overflow-hidden" aria-hidden="true" />
         </>
       )}
       {wallpaper && wallpaper !== LIVE_WALLPAPER_MARKER && wallpaper !== IMAGE_WALLPAPER_MARKER && (
@@ -427,7 +455,7 @@ export function AppShell() {
           </div>
         )}
         {/* mobile top bar */}
-        <div className="liquid-glass sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between border-b border-white/[0.06] px-4 lg:hidden">
+        <div className="mobile-topbar liquid-glass sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between border-b border-white/[0.06] px-4 lg:hidden">
           <Logo to="/home" />
           <button
             type="button"
@@ -462,7 +490,7 @@ export function AppShell() {
         <PlayerBar compact={compactMode} />
 
         {/* mobile bottom nav */}
-        <nav className="liquid-glass z-30 flex h-14 shrink-0 items-center justify-around border-t border-white/[0.06] pb-[env(safe-area-inset-bottom)] lg:hidden">
+        <nav className="mobile-bottom-nav liquid-glass z-30 flex h-14 shrink-0 items-center justify-around border-t border-white/[0.06] pb-[env(safe-area-inset-bottom)] lg:hidden">
           {MOBILE_NAV.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
@@ -470,10 +498,10 @@ export function AppShell() {
               aria-label={label}
               className={({ isActive }) =>
                 cn(
-                  "flex flex-col items-center gap-0.5 px-3 py-1.5 text-[10px] font-medium transition-colors",
+                  "mobile-nav-item flex min-w-14 flex-col items-center gap-0.5 rounded-2xl px-3 py-1.5 text-[10px] font-medium transition-all duration-300",
                   isActive
-                    ? "text-[rgb(var(--tint))]"
-                    : "text-muted-foreground hover:text-foreground",
+                    ? "mobile-nav-item-active text-[rgb(var(--tint))]"
+                    : "text-muted-foreground active:scale-95",
                 )
               }
             >
