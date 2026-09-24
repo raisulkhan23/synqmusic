@@ -10,6 +10,7 @@ import { GravitySponsor } from "@/components/ads/GravitySponsor";
 import { useAction } from "convex/react";
 import {
   ChevronDown,
+  Dices,
   Loader2,
   RefreshCw,
   Search as SearchIcon,
@@ -361,6 +362,11 @@ export default function Search() {
   );
 
   const hasQuery = query.trim().length > 0;
+  const surpriseMe = () => {
+    const pick = MOOD_CHIPS[Math.floor(Math.random() * MOOD_CHIPS.length)];
+    setQuery(pick);
+    toast.success(`Surprise mix: ${pick}`);
+  };
   const creatorItems = Array.from(
     new Map(
       [...creatorResults.recent, ...creatorResults.popular].map((item) => [
@@ -372,14 +378,23 @@ export default function Search() {
 
   return (
     <div className="flex flex-col gap-8">
-      <header>
-        <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
-          Search
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Find any song — search across all our music sources and stream it
-          instantly.
-        </p>
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
+            Search
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Find any song — search across all our music sources and stream it instantly.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={surpriseMe}
+          className="inline-flex w-fit items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:border-[rgb(var(--tint)_/_0.4)] hover:bg-[rgb(var(--tint)_/_0.1)] hover:text-foreground"
+        >
+          <Dices className="h-3.5 w-3.5 text-[rgb(var(--tint))]" />
+          Surprise me
+        </button>
       </header>
 
       {/* search input */}

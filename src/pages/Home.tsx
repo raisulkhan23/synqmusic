@@ -513,12 +513,11 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Songs of the week — global chart */}
-      <RemoteSection
-        title="Songs of the week"
-        subtitle="The most-played songs across the globe right now."
-        icon={<Flame className="size-5 text-[rgb(var(--tint))]" />}
-        items={trending ?? undefined}
+      {/* Songs of the week — global chart */}        <RemoteSection
+          title="Songs of the week"
+          subtitle="The most-played songs across the globe right now."
+          icon={<Flame className="size-5 text-[rgb(var(--tint))]" />}
+          items={trending ?? undefined}
       >
         {(items) =>
           items.slice(0, 8).map((item, i) => (
@@ -532,10 +531,21 @@ export default function Home() {
             />
           ))
         }
-      </RemoteSection>
+      </RemoteSection>        {trending && trending.length > 1 && (
+          <div className="mb-3 flex justify-end">
+            <button
+              type="button"
+              onClick={() => playRemoteItem(trending[0], trending.slice(1))}
+              className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-[rgb(var(--tint)_/_0.4)] hover:text-foreground"
+            >
+              <Dices className="h-3.5 w-3.5 text-[rgb(var(--tint))]" />
+              Shuffle the week
+            </button>
+          </div>
+        )}
 
-      <RemoteSection
-        title="Today's top tracks"
+        <RemoteSection
+          title="Today's top tracks"
         subtitle="The biggest songs right now, streamed live."
         items={remote.topTracks}
       >

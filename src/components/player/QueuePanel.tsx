@@ -19,6 +19,7 @@ import {
   ArrowLeftRight,
   Clock3,
   GripVertical,
+  Link2,
   ListMusic,
   Plus,
   Save,
@@ -243,6 +244,20 @@ export function QueuePanel() {
                   </p>
                 </div>
                 {isPlaying && <Equalizer className="shrink-0" />}
+                {current.youtubeId && (
+                  <button
+                    type="button"
+                    aria-label="Copy current track link"
+                    title="Copy current track link"
+                    onClick={() => {
+                      void navigator.clipboard?.writeText(`https://youtu.be/${current.youtubeId}`);
+                      toast.success("Track link copied");
+                    }}
+                    className="flex size-8 shrink-0 items-center justify-center rounded-full border border-white/10 text-muted-foreground transition-colors hover:border-white/25 hover:text-foreground"
+                  >
+                    <Link2 className="size-3.5" />
+                  </button>
+                )}
               </div>
             </section>
           ) : (
