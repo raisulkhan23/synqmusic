@@ -49,15 +49,15 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
     }
     let cancelled = false;
 
-    // Derive the accent from the artwork itself; fall back to a stable
-    // hash-based hue when sampling fails.
+    // Start with a deterministic track color so every song gets its own theme
+    // immediately. If same-origin artwork can be sampled, replace that seed
+    // with the cover's dominant color when extraction finishes.
+    const seededAccent = accentFromString(`${current.title} ${current.artistName}`);
+    setAccent(seededAccent);
     if (current.coverUrl) {
       void dominantColor(current.coverUrl).then((c) => {
         if (!cancelled && c) setAccent(c);
-        else if (!cancelled) setAccent(accentFromString(`${current.title} ${current.artistName}`));
       });
-    } else {
-      setAccent(accentFromString(`${current.title} ${current.artistName}`));
     }
 
     return () => {

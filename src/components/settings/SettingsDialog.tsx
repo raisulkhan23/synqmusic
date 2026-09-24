@@ -91,6 +91,19 @@ const SCENES = [
   { id: "tide", accent: "teal", name: "Tide", detail: "Clear cyan air", swatch: "linear-gradient(135deg, #102f36, #2dd4bf)" },
 ] as const;
 
+const FOCUS_LAYOUTS = [
+  { id: "off", name: "Off", detail: "Full navigation" },
+  { id: "study", name: "Study", detail: "Wide and calm" },
+  { id: "work", name: "Work", detail: "Compact and focused" },
+  { id: "sleep", name: "Sleep", detail: "Dim with end-of-song stop" },
+] as const;
+
+type FocusLayout = (typeof FOCUS_LAYOUTS)[number]["id"];
+
+function isFocusLayout(value: string | null): value is FocusLayout {
+  return FOCUS_LAYOUTS.some((layout) => layout.id === value);
+}
+
 export function SettingsDialog({
   open,
   onOpenChange,
@@ -141,9 +154,14 @@ export function SettingsDialog({
   const [sceneTheme, setSceneTheme] = useState(
     () => localStorage.getItem("ss.sceneTheme") ?? "studio",
   );
-  const [focusMode, setFocusMode] = useState(
-    () => localStorage.getItem("ss.focusMode") === "1",
+  const [trackPalettes, setTrackPalettes] = useState(
+    () => localStorage.getItem("ss.trackPalettes") !== "0",
   );
+  const [focusLayout, setFocusLayout] = useState<FocusLayout>(() => {
+    const saved = localStorage.getItem("ss.focusLayout");
+    if (isFocusLayout(saved)) return saved;
+    return localStorage.getItem("ss.focusMode") === "1" ? "study" : "off";
+  });
   const [name, setName] = useState("");
   const wallpaperInputRef = useRef<HTMLInputElement>(null);
   const liveWallpaperInputRef = useRef<HTMLInputElement>(null);
@@ -198,15 +216,21 @@ export function SettingsDialog({
       const next = (event as CustomEvent<string>).detail;
       if (typeof next === "string" && next) setSceneTheme(next);
     };
-    const onFocusChange = (event: Event) => {
+    const onTrackPaletteChange = (event: Event) => {
       const next = (event as CustomEvent<boolean>).detail;
-      if (typeof next === "boolean") setFocusMode(next);
+      if (typeof next === "boolean") setTrackPalettes(next);
+    };
+    const onFocusLayoutChange = (event: Event) => {
+      const next = (event as CustomEvent<string>).detail;
+      if (isFocusLayout(next)) setFocusLayout(next);
     };
     window.addEventListener("synq:scene-change", onSceneChange);
-    window.addEventListener("synq:focus-change", onFocusChange);
+    window.addEventListener("synq:track-palettes-change", onTrackPaletteChange);
+    window.addEventListener("synq:focus-layout-change", onFocusLayoutChange);
     return () => {
       window.removeEventListener("synq:scene-change", onSceneChange);
-      window.removeEventListener("synq:focus-change", onFocusChange);
+      window.removeEventListener("synq:track-palettes-change", onTrackPaletteChange);
+      window.removeEventListener("synq:focus-layout-change", onFocusLayoutChange);
     };
   }, []);
 
@@ -811,7 +835,10 @@ export function SettingsDialog({
                     onClick={() => {
                       setSceneTheme(scene.id);
                       setAccentTheme(scene.accent);
+                      setTrackPalettes(false);
                       localStorage.setItem("ss.sceneTheme", scene.id);
+                      localStorage.setItem("ss.trackPalettes", "0");
+                      window.dispatchEvent(new CustomEvent("synq:track-palettes-change", { detail: false }));
                       window.dispatchEvent(
                         new CustomEvent("synq:scene-change", { detail: scene.id }),
                       );
@@ -841,6 +868,20 @@ export function SettingsDialog({
             </div>
           </div>
 
+          <ToggleRow
+            label="Adaptive track palettes"
+            description="Build a smooth new color theme from every song's artwork"
+            on={trackPalettes}
+            onToggle={() => {
+              const next = !trackPalettes;
+              setTrackPalettes(next);
+              if (next) setAccentTheme("auto");
+              localStorage.setItem("ss.trackPalettes", next ? "1" : "0");
+              window.dispatchEvent(new CustomEvent("synq:track-palettes-change", { detail: next }));
+              toast(next ? "Track palettes on" : "Track palettes off");
+            }}
+          />
+
           {/* accent color */}
           <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
             <div className="flex items-center justify-between gap-3">
@@ -868,7 +909,15 @@ export function SettingsDialog({
                   key={id}
                   type="button"
                   title={label}
-                  onClick={() => setAccentTheme(id)}
+                  onClick={() => {
+                    setAccentTheme(id);
+                    const adaptive = id === "auto";
+                    setTrackPalettes(adaptive);
+                    localStorage.setItem("ss.trackPalettes", adaptive ? "1" : "0");
+                    window.dispatchEvent(
+                      new CustomEvent("synq:track-palettes-change", { detail: adaptive }),
+                    );
+                  }}
                   className={cn(
                     "flex h-8 items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-semibold transition-all",
                     accentTheme === id
@@ -1258,18 +1307,42 @@ export function SettingsDialog({
               toast(compactMode ? "Compact mode off" : "Compact mode on");
             }}
           />
-          <ToggleRow
-            label="Focus mode"
-            description="Hide navigation and ambient effects for distraction-free listening"
-            on={focusMode}
-            onToggle={() => {
-              const next = !focusMode;
-              setFocusMode(next);
-              localStorage.setItem("ss.focusMode", next ? "1" : "0");
-              window.dispatchEvent(new CustomEvent("synq:focus-change", { detail: next }));
-              toast(next ? "Focus mode on" : "Focus mode off");
-            }}
-          />
+          <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
+            <p className="text-sm font-medium">Focus layout</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Adapt the canvas and player to your session
+            </p>
+            <div className="mt-2.5 grid grid-cols-2 gap-2">
+              {FOCUS_LAYOUTS.map((layout) => {
+                const selected = focusLayout === layout.id;
+                return (
+                  <button
+                    key={layout.id}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => {
+                      setFocusLayout(layout.id);
+                      localStorage.setItem("ss.focusLayout", layout.id);
+                      localStorage.setItem("ss.focusMode", layout.id === "off" ? "0" : "1");
+                      window.dispatchEvent(
+                        new CustomEvent("synq:focus-layout-change", { detail: layout.id }),
+                      );
+                      toast(layout.id === "off" ? "Focus layout off" : `${layout.name} focus on`);
+                    }}
+                    className={cn(
+                      "rounded-lg border px-2.5 py-2 text-left transition-all hover:-translate-y-0.5",
+                      selected
+                        ? "border-[rgb(var(--tint))] bg-[rgb(var(--tint)_/_0.1)] ring-2 ring-[rgb(var(--tint)_/_0.18)]"
+                        : "border-white/10 hover:border-white/25",
+                    )}
+                  >
+                    <span className="block text-xs font-semibold">{layout.name}</span>
+                    <span className="mt-0.5 block text-[10px] text-muted-foreground">{layout.detail}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           <ToggleRow
             label="Ambient glow"
             description="Soft colored glow at the top of the page"

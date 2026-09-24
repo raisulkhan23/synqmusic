@@ -12,7 +12,7 @@ import { api } from "@/convex/_generated/api";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { useAuth } from "@/hooks/use-auth";
-import { House, ListMusic, Minimize2, Search, Settings, UserRound, WifiOff } from "lucide-react";
+import { BookOpen, Briefcase, House, ListMusic, Minimize2, Moon, Search, Settings, UserRound, WifiOff } from "lucide-react";
 import { usePlayerStore, type RemoteLikeSnapshot } from "@/store/player";
 import { track } from "@/lib/analytics";
 import {
@@ -32,6 +32,72 @@ const MOBILE_NAV = [
 const DEFAULT_TINT = "203 244 143";
 const DEFAULT_WALLPAPER_BLUR_AMOUNT = 24;
 const MAX_WALLPAPER_BLUR_AMOUNT = 48;
+const FOCUS_LAYOUT_IDS = ["off", "study", "work", "sleep"] as const;
+type FocusLayout = (typeof FOCUS_LAYOUT_IDS)[number];
+type FocusLayoutMeta = {
+  label: string;
+  detail: string;
+  icon: typeof BookOpen;
+};
+
+const FOCUS_LAYOUTS: Record<Exclude<FocusLayout, "off">, FocusLayoutMeta> = {
+  study: { label: "Study", detail: "A calm, wide reading canvas", icon: BookOpen },
+  work: { label: "Work", detail: "Compact controls for deep focus", icon: Briefcase },
+  sleep: { label: "Sleep", detail: "Low-light listening with an end-of-song timer", icon: Moon },
+};
+
+function isFocusLayout(value: string | null): value is FocusLayout {
+  return FOCUS_LAYOUT_IDS.includes(value as FocusLayout);
+}
+
+function parseTint(value: string): [number, number, number] {
+  const channels = value.trim().split(/\s+/).map(Number);
+  return [
+    Number.isFinite(channels[0]) ? channels[0] : 203,
+    Number.isFinite(channels[1]) ? channels[1] : 244,
+    Number.isFinite(channels[2]) ? channels[2] : 143,
+  ];
+}
+
+/** Smoothly interpolates between track colors instead of snapping the UI. */
+function useAnimatedTint(target: string): string {
+  const [displayTint, setDisplayTint] = useState(target);
+  const currentRef = useRef(target);
+  const frameRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+    const from = parseTint(currentRef.current);
+    const to = parseTint(target);
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reducedMotion || from.every((channel, index) => channel === to[index])) {
+      currentRef.current = target;
+      setDisplayTint(target);
+      return;
+    }
+
+    const startedAt = performance.now();
+    const duration = 850;
+    const tick = (now: number) => {
+      const progress = Math.min(1, (now - startedAt) / duration);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const next = from.map((channel, index) =>
+        Math.round(channel + (to[index] - channel) * eased),
+      ).join(" ");
+      currentRef.current = next;
+      setDisplayTint(next);
+      if (progress < 1) frameRef.current = requestAnimationFrame(tick);
+      else frameRef.current = null;
+    };
+    frameRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+      frameRef.current = null;
+    };
+  }, [target]);
+
+  return displayTint;
+}
 
 export function AppShell() {
   const navigate = useNavigate();
@@ -42,9 +108,15 @@ export function AppShell() {
   const [sceneTheme, setSceneTheme] = useState(
     () => localStorage.getItem("ss.sceneTheme") ?? "studio",
   );
-  const [focusMode, setFocusMode] = useState(
-    () => localStorage.getItem("ss.focusMode") === "1",
+  const [trackPalettes, setTrackPalettes] = useState(
+    () => localStorage.getItem("ss.trackPalettes") !== "0",
   );
+  const [focusLayout, setFocusLayout] = useState<FocusLayout>(() => {
+    const saved = localStorage.getItem("ss.focusLayout");
+    if (isFocusLayout(saved)) return saved;
+    return localStorage.getItem("ss.focusMode") === "1" ? "study" : "off";
+  });
+  const focusMode = focusLayout !== "off";
   const [wallpaperBlurAmount, setWallpaperBlurAmount] = useState(() => {
     const storedAmount = Number(localStorage.getItem("ss.wallpaperBlurAmount"));
     if (Number.isFinite(storedAmount) && storedAmount > 0) {
@@ -90,15 +162,21 @@ export function AppShell() {
       const next = (event as CustomEvent<string>).detail;
       if (typeof next === "string" && next) setSceneTheme(next);
     };
-    const onFocusChange = (event: Event) => {
+    const onTrackPaletteChange = (event: Event) => {
       const next = (event as CustomEvent<boolean>).detail;
-      if (typeof next === "boolean") setFocusMode(next);
+      if (typeof next === "boolean") setTrackPalettes(next);
+    };
+    const onFocusLayoutChange = (event: Event) => {
+      const next = (event as CustomEvent<string>).detail;
+      if (isFocusLayout(next)) setFocusLayout(next);
     };
     window.addEventListener("synq:scene-change", onSceneChange);
-    window.addEventListener("synq:focus-change", onFocusChange);
+    window.addEventListener("synq:track-palettes-change", onTrackPaletteChange);
+    window.addEventListener("synq:focus-layout-change", onFocusLayoutChange);
     return () => {
       window.removeEventListener("synq:scene-change", onSceneChange);
-      window.removeEventListener("synq:focus-change", onFocusChange);
+      window.removeEventListener("synq:track-palettes-change", onTrackPaletteChange);
+      window.removeEventListener("synq:focus-layout-change", onFocusLayoutChange);
     };
   }, []);
 
@@ -151,6 +229,8 @@ export function AppShell() {
   const setLiked = usePlayerStore((s) => s.setLiked);
   const setLikeMutation = usePlayerStore((s) => s.setLikeMutation);
   const setHistoryRecorder = usePlayerStore((s) => s.setHistoryRecorder);
+  const sleepAtSongEnd = usePlayerStore((s) => s.sleepAtSongEnd);
+  const setSleepTimer = usePlayerStore((s) => s.setSleepTimer);
 
   // Do not keep decoding the background video while the maximized player has
   // its own full-screen media layer active.
@@ -354,12 +434,29 @@ export function AppShell() {
     teal: "45 212 191",
     orange: "251 146 60",
   };
-  const tint =
-    accentTheme !== "auto" && FIXED_TINTS[accentTheme]
-      ? FIXED_TINTS[accentTheme]
-      : accent
-        ? `${accent.r} ${accent.g} ${accent.b}`
+  const targetTint =
+    trackPalettes && accent
+      ? `${accent.r} ${accent.g} ${accent.b}`
+      : accentTheme !== "auto" && FIXED_TINTS[accentTheme]
+        ? FIXED_TINTS[accentTheme]
         : DEFAULT_TINT;
+  const tint = useAnimatedTint(targetTint);
+  const paletteForeground =
+    accent && accent.r * 0.299 + accent.g * 0.587 + accent.b * 0.114 > 155
+      ? "rgb(12 15 18)"
+      : "rgb(250 252 255)";
+  const dynamicPaletteStyle =
+    trackPalettes && accent
+      ? {
+          "--primary": `rgb(${accent.r} ${accent.g} ${accent.b})`,
+          "--primary-foreground": paletteForeground,
+          "--ring": `rgb(${accent.r} ${accent.g} ${accent.b} / 0.58)`,
+          "--sidebar-primary": `rgb(${accent.r} ${accent.g} ${accent.b})`,
+          "--sidebar-ring": `rgb(${accent.r} ${accent.g} ${accent.b} / 0.48)`,
+          "--brand": `rgb(${accent.r} ${accent.g} ${accent.b})`,
+          "--brand-foreground": paletteForeground,
+        }
+      : {};
 
   const handlePointerMove = (event: PointerEvent<HTMLDivElement>) => {
     if (!pointerEffects || event.pointerType === "touch") return;
@@ -421,7 +518,12 @@ export function AppShell() {
 
   return (
     <div
-      className="relative isolate flex h-dvh overflow-hidden bg-background text-foreground"
+      className={cn(
+        "theme-surface relative isolate flex h-dvh overflow-hidden bg-background text-foreground",
+        focusLayout === "study" && "focus-study",
+        focusLayout === "work" && "focus-work",
+        focusLayout === "sleep" && "focus-sleep",
+      )}
       onPointerMove={handlePointerMove}
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
@@ -432,7 +534,8 @@ export function AppShell() {
           "--pointer-x": "50%",
           "--pointer-y": "50%",
           "--pointer-opacity": "0",
-        } as React.CSSProperties
+          ...dynamicPaletteStyle,
+        } as unknown as React.CSSProperties
       }
     >
       {!focusMode && (
@@ -493,10 +596,10 @@ export function AppShell() {
         <button
           type="button"
           onClick={() => {
-            const next = false;
-            setFocusMode(next);
+            setFocusLayout("off");
+            localStorage.setItem("ss.focusLayout", "off");
             localStorage.setItem("ss.focusMode", "0");
-            window.dispatchEvent(new CustomEvent("synq:focus-change", { detail: next }));
+            window.dispatchEvent(new CustomEvent("synq:focus-layout-change", { detail: "off" }));
           }}
           className="liquid-glass fixed top-20 left-4 z-40 inline-flex items-center gap-2 rounded-full border border-white/15 px-3.5 py-2 text-xs font-semibold text-foreground shadow-lg transition hover:scale-[1.02] hover:border-[rgb(var(--tint)_/_0.5)] sm:top-4"
         >
@@ -525,6 +628,37 @@ export function AppShell() {
           </button>
         </div>
 
+        {focusMode && (
+          <div className="focus-session-bar liquid-glass flex shrink-0 items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-2.5 sm:px-6">
+            <div className="flex min-w-0 items-center gap-2.5">
+              {(() => {
+                const Icon = FOCUS_LAYOUTS[focusLayout].icon;
+                return <Icon className="size-4 shrink-0 text-[rgb(var(--tint))]" />;
+              })()}
+              <div className="min-w-0">
+                <p className="text-xs font-semibold">{FOCUS_LAYOUTS[focusLayout].label} focus</p>
+                <p className="truncate text-[10px] text-muted-foreground">
+                  {FOCUS_LAYOUTS[focusLayout].detail}
+                </p>
+              </div>
+            </div>
+            {focusLayout === "sleep" && (
+              <button
+                type="button"
+                onClick={() => setSleepTimer(sleepAtSongEnd ? null : "end")}
+                className={cn(
+                  "shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-semibold transition",
+                  sleepAtSongEnd
+                    ? "border-[rgb(var(--tint))] bg-[rgb(var(--tint)_/_0.14)] text-[rgb(var(--tint))]"
+                    : "border-white/10 text-muted-foreground hover:border-white/25 hover:text-foreground",
+                )}
+              >
+                {sleepAtSongEnd ? "Timer armed" : "Stop after this song"}
+              </button>
+            )}
+          </div>
+        )}
+
         <main className="relative min-h-0 flex-1 overflow-y-auto">
           {/* ambient accent glow follows the current album art */}
           {ambientGlow && !focusMode && (
@@ -539,16 +673,24 @@ export function AppShell() {
             className={cn(
               "relative mx-auto w-full max-w-6xl px-4 pt-6 pb-10 sm:px-6 lg:px-8 lg:pt-8",
               compactMode && "max-w-7xl",
+              focusLayout === "study" && "max-w-7xl",
+              focusLayout === "work" && "max-w-5xl",
+              focusLayout === "sleep" && "max-w-4xl",
             )}
           >
             <Outlet />
           </div>
         </main>
 
-        <PlayerBar compact={compactMode} />
+        <PlayerBar compact={compactMode || focusLayout === "work" || focusLayout === "sleep"} />
 
         {/* mobile bottom nav */}
-        <nav className="mobile-bottom-nav liquid-glass z-30 flex h-[calc(3.5rem+env(safe-area-inset-bottom))] shrink-0 items-center justify-around border-t border-white/[0.06] pb-[env(safe-area-inset-bottom)] lg:hidden">
+        <nav
+          className={cn(
+            "mobile-bottom-nav liquid-glass z-30 flex h-[calc(3.5rem+env(safe-area-inset-bottom))] shrink-0 items-center justify-around border-t border-white/[0.06] pb-[env(safe-area-inset-bottom)] lg:hidden",
+            focusMode && "hidden",
+          )}
+        >
           {MOBILE_NAV.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}

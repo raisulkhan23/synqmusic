@@ -3,6 +3,29 @@
 @import "tw-animate-css";
 @custom-variant dark (&:is(.dark *));
 
+/* Register theme colors so scene and artwork changes can interpolate rather
+   than snap between surface treatments. */
+@property --primary {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: oklch(0.872 0.21 127);
+}
+@property --ring {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: oklch(0.872 0.21 127 / 60%);
+}
+@property --brand {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: oklch(0.872 0.21 127);
+}
+@property --sidebar-primary {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: oklch(0.872 0.21 127);
+}
+
 /* DO NOT CHANGE */
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
@@ -209,6 +232,79 @@ html[data-scene="tide"] {
   --brand: oklch(0.78 0.13 189);
   --brand-foreground: oklch(0.15 0.03 210);
   --tint: 45 212 191;
+}
+
+html,
+.theme-surface,
+.bg-background,
+.bg-card,
+.bg-popover,
+.liquid-glass,
+.glass {
+  transition:
+    --primary 700ms cubic-bezier(0.22, 1, 0.36, 1),
+    --ring 700ms cubic-bezier(0.22, 1, 0.36, 1),
+    --brand 700ms cubic-bezier(0.22, 1, 0.36, 1),
+    --sidebar-primary 700ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 700ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 500ms ease,
+    box-shadow 700ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.focus-session-bar {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.08),
+    0 8px 28px rgb(0 0 0 / 0.12),
+    0 0 24px rgb(var(--tint) / 0.045);
+}
+
+.focus-study {
+  background:
+    radial-gradient(70% 50% at 50% 0%, rgb(var(--tint) / 0.045), transparent 72%),
+    var(--background);
+}
+.focus-study main {
+  scroll-behavior: smooth;
+}
+
+.focus-work {
+  background:
+    linear-gradient(90deg, transparent calc(50% - 1px), rgb(var(--tint) / 0.018) 50%, transparent calc(50% + 1px)),
+    var(--background);
+}
+.focus-work main > div {
+  letter-spacing: -0.012em;
+}
+
+.focus-sleep {
+  --background: oklch(0.105 0.014 275);
+  --card: oklch(0.14 0.016 275);
+  --popover: oklch(0.15 0.016 275);
+  --sidebar: oklch(0.12 0.014 275);
+  --muted-foreground: oklch(0.58 0.014 275);
+  background:
+    radial-gradient(80% 65% at 50% 0%, rgb(var(--tint) / 0.055), transparent 76%),
+    var(--background);
+}
+.focus-sleep main > div {
+  filter: saturate(0.72) brightness(0.82);
+  opacity: 0.86;
+}
+.focus-sleep .dynamic-island,
+.focus-sleep .focus-session-bar {
+  filter: saturate(0.75) brightness(0.9);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html,
+  .theme-surface,
+  .bg-background,
+  .bg-card,
+  .bg-popover,
+  .liquid-glass,
+  .glass {
+    transition-duration: 0.01ms !important;
+  }
 }
 
 @layer base {
