@@ -32,8 +32,74 @@ let ytSearchClient: ConvexClient | null = null;
 const convexSiteUrl = ((import.meta.env.VITE_CONVEX_URL as string) ?? "").replace(".cloud", ".site");
 const audioProxyBase = `${convexSiteUrl}/audio-proxy`;
 const ytResolve = async (videoId: string): Promise<string | null> => {
-  // 1) Server-side InnerTube resolution (best quality, but cloud IPs are
-  //    often bot-blocked by YouTube).
+  // 1) Browser-side InnerTube resolution. Runs from the USER's IP, which is
+  //    NOT subject to YouTube's datacenter bot-check (cloud functions get
+  //    "Sign in to confirm you're not a bot" for most videos, which is what
+  //    made every effect report "Effect unavailable"). The returned
+  //    googlevideo URL then goes through our CORS proxy so the <audio>
+  //    element (and therefore the EQ chain) can load it.
+  try {
+    const clients = [
+      { name: "ANDROID_VR", id: "28", version: "1.60.19", ua: "com.google.android.apps.youtube.vr.oculus/1.60.19 (Linux; U; Android 12; eureka-user Build/SQ3A.220605.009.A1) gzip", extra: { androidSdkVersion: 31, osName: "Android", osVersion: "12" } },
+      { name: "TVHTML5", id: "7", version: "7.20240801.18.00", ua: "Mozilla/5.0 (PlayStation; PlayStation 4/12.00) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Safari/605.1.15", extra: {} },
+    ];
+    for (const c of clients) {
+      try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 8000);
+        const res = await fetch(`https://www.youtube.com/youtubei/v1/player?prettyPrint=false`, {
+          method: "POST",
+          signal: ctrl.signal,
+          headers: {
+            "Content-Type": "application/json",
+            "User-Agent": c.ua,
+            "X-Youtube-Client-Name": c.id,
+            "X-Youtube-Client-Version": c.version,
+            Origin: "https://www.youtube.com",
+          },
+          body: JSON.stringify({
+            context: { client: { hl: "en", gl: "US", clientName: c.name, clientVersion: c.version, ...c.extra } },
+            videoId,
+            contentCheckOk: true,
+            racyCheckOk: true,
+            thirdParty: { embedUrl: "https://www.youtube.com" },
+          }),
+        });
+        clearTimeout(timer);
+        if (!res.ok) continue;
+        const data = (await res.json()) as {
+          playabilityStatus?: { status?: string };
+          streamingData?: {
+            adaptiveFormats?: Record<string, unknown>[];
+            formats?: Record<string, unknown>[];
+          };
+        };
+        if (data.playabilityStatus?.status && data.playabilityStatus.status !== "OK") continue;
+        const formats = [
+          ...(data.streamingData?.adaptiveFormats ?? []),
+          ...(data.streamingData?.formats ?? []),
+        ];
+        const audio = formats
+          .filter(
+            (f) =>
+              typeof f.url === "string" &&
+              typeof f.mimeType === "string" &&
+              f.mimeType.startsWith("audio/"),
+          )
+          .sort((a, b) => (b.bitrate as number) - (a.bitrate as number));
+        const best = audio[0];
+        if (typeof best?.url === "string") {
+          return `${audioProxyBase}?u=${encodeURIComponent(best.url)}`;
+        }
+      } catch {
+        continue;
+      }
+    }
+  } catch {
+    /* fall through to the other resolvers */
+  }
+  // 2) Server-side InnerTube resolution as a backup (may be bot-blocked, but
+  //    occasionally the cloud IP isn't).
   try {
     ytResolveClient = ytResolveClient ?? new ConvexClient(import.meta.env.VITE_CONVEX_URL as string);
     // Network-aware quality: prefer a lighter stream when the connection is poor.
