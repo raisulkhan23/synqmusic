@@ -4,6 +4,8 @@ import { Link } from "react-router";
 import { Logo } from "@/components/brand/Logo";
 import {
   Activity,
+  Disc3,
+  Headphones,
   Heart,
   ListMusic,
   Pause,
@@ -13,6 +15,7 @@ import {
   Shuffle,
   SkipBack,
   SkipForward,
+  Sparkles,
   Zap,
 } from "lucide-react";
 
@@ -107,6 +110,117 @@ function VisualizerDemo() {
   );
 }
 
+const EXPERIENCE_TRACKS = [
+  { title: "Afterglow", artist: "Neon Fields", tone: "from-brand/80 via-lime-300/35 to-transparent", rotate: "-12" },
+  { title: "Khusir Anek Range", artist: "Rp Creation", tone: "from-violet-500/75 via-fuchsia-400/25 to-transparent", rotate: "10" },
+  { title: "Mahe Mahe Tobo", artist: "Nure Al Miskat", tone: "from-cyan-400/70 via-blue-500/25 to-transparent", rotate: "-7" },
+];
+
+function ListeningExperience() {
+  return (
+    <div className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-[#0a0b10]/80 px-4 py-8 shadow-[0_30px_100px_rgba(0,0,0,0.42)] sm:px-8 sm:py-12">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_70%_at_50%_45%,rgba(203,244,143,0.10),transparent_70%)]" />
+      <div className="pointer-events-none absolute inset-0 opacity-40 [background-image:linear-gradient(rgba(255,255,255,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.045)_1px,transparent_1px)] [background-size:42px_42px] [mask-image:linear-gradient(to_bottom,transparent,black_28%,black_72%,transparent)]" />
+      <div className="relative mx-auto max-w-5xl">
+        <div className="mx-auto max-w-xl text-center">
+          <span className="inline-flex items-center gap-2 rounded-full border border-brand/20 bg-brand/8 px-3 py-1 text-[10px] font-semibold tracking-[0.22em] text-brand uppercase">
+            <Sparkles className="size-3.5" /> One continuous atmosphere
+          </span>
+          <h2 className="mt-4 font-display text-3xl font-bold tracking-tight sm:text-5xl">
+            Your queue, in motion.
+          </h2>
+          <p className="mt-3 text-sm leading-6 text-muted-foreground sm:text-base">
+            From the first note to the next obsession, every layer of SYNQ is designed to keep you in the flow.
+          </p>
+        </div>
+
+        <div className="relative mx-auto mt-10 h-[360px] max-w-4xl sm:mt-14 sm:h-[430px]">
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 28, repeat: Infinity, ease: "linear" }}
+            className="absolute left-1/2 top-1/2 size-[250px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-dashed border-brand/20 sm:size-[330px]"
+          >
+            <span className="absolute left-1/2 top-[-5px] size-2.5 -translate-x-1/2 rounded-full bg-brand shadow-[0_0_18px_5px_rgba(203,244,143,0.45)]" />
+            <span className="absolute bottom-[12%] right-[-4px] size-2 rounded-full bg-violet-300 shadow-[0_0_16px_4px_rgba(196,181,253,0.4)]" />
+          </motion.div>
+          <div className="absolute left-1/2 top-1/2 size-[205px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-white/[0.025] shadow-[0_0_80px_rgba(203,244,143,0.08)] sm:size-[270px]" />
+          <div className="absolute left-1/2 top-1/2 size-[150px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-brand/20 bg-brand/5 sm:size-[200px]" />
+
+          <motion.div
+            animate={{ y: [0, -8, 0], rotate: [0, 2, 0] }}
+            transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute left-1/2 top-1/2 z-10 size-[122px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/20 bg-[#11151a] p-2 shadow-[0_20px_50px_rgba(0,0,0,0.55),0_0_45px_rgba(203,244,143,0.16)] sm:size-[164px]"
+          >
+            <div className="relative size-full overflow-hidden rounded-full border border-white/10">
+              <img src="/afterglow-cover.svg" alt="" className="size-full object-cover" />
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,transparent_30%,rgba(0,0,0,0.45))]" />
+              <div className="absolute left-1/2 top-1/2 size-7 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/40 bg-[#11151a] shadow-[0_0_0_5px_rgba(255,255,255,0.06)] sm:size-9" />
+            </div>
+          </motion.div>
+
+          {EXPERIENCE_TRACKS.map((track, index) => (
+            <motion.div
+              key={track.title}
+              initial={{ opacity: 0, scale: 0.9 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true }}
+              transition={{ delay: index * 0.12, duration: 0.5 }}
+              animate={{ y: [0, index % 2 === 0 ? -7 : 7, 0] }}
+              style={{ rotate: track.rotate }}
+              className={`liquid-glass absolute z-20 w-[190px] rounded-2xl border border-white/10 p-3 shadow-[0_18px_45px_rgba(0,0,0,0.4)] sm:w-[220px] ${
+                index === 0
+                  ? "left-[3%] top-[12%] sm:left-[7%] sm:top-[10%]"
+                  : index === 1
+                    ? "right-[2%] top-[17%] sm:right-[6%] sm:top-[13%]"
+                    : "bottom-[4%] left-[9%] sm:bottom-[5%] sm:left-[16%]"
+              }`}
+            >
+              <div className={`h-1.5 rounded-full bg-gradient-to-r ${track.tone}`} />
+              <div className="mt-3 flex items-center gap-2.5">
+                <div className="flex size-8 items-center justify-center rounded-lg bg-white/[0.07] text-brand">
+                  <Disc3 className="size-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-semibold text-foreground">{track.title}</p>
+                  <p className="truncate text-[10px] text-muted-foreground">{track.artist}</p>
+                </div>
+                <Headphones className="ml-auto size-3.5 shrink-0 text-muted-foreground" />
+              </div>
+              <div className="mt-3 flex h-5 items-end gap-1">
+                {Array.from({ length: 18 }, (_, i) => (
+                  <span
+                    key={i}
+                    className="eq-bar w-1 rounded-full bg-brand/70"
+                    style={{ height: `${25 + ((i * 29) % 70)}%`, animationDelay: `${(i % 6) * 0.11}s` }}
+                  />
+                ))}
+              </div>
+            </motion.div>
+          ))}
+
+          <div className="absolute bottom-[7%] right-[8%] z-20 hidden items-center gap-2 rounded-full border border-white/10 bg-[#11131a]/85 px-3 py-2 text-[10px] font-medium text-muted-foreground shadow-xl backdrop-blur-xl sm:flex">
+            <span className="size-1.5 animate-pulse rounded-full bg-brand" />
+            Queue synced · 3 tracks
+          </div>
+        </div>
+
+        <div className="relative mx-auto grid max-w-3xl grid-cols-3 gap-2 border-t border-white/[0.07] pt-5 text-center sm:gap-4">
+          {[
+            ["∞", "endless discovery"],
+            ["0", "interruptions"],
+            ["1", "continuous mix"],
+          ].map(([value, label]) => (
+            <div key={label}>
+              <p className="font-display text-xl font-bold text-brand sm:text-2xl">{value}</p>
+              <p className="mt-0.5 text-[10px] text-muted-foreground sm:text-xs">{label}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Landing() {
 
   return (
@@ -127,6 +241,9 @@ export default function Landing() {
           </a>
           <a href="#visualizer" className="transition-colors hover:text-foreground">
             Visualizer
+          </a>
+          <a href="#experience" className="transition-colors hover:text-foreground">
+            Experience
           </a>
         </nav>
         <div className="flex items-center gap-2">
@@ -322,6 +439,11 @@ export default function Landing() {
         </motion.div>
       </section>
 
+      {/* visual story — the listening atmosphere */}
+      <section id="experience" className="relative z-10 mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">
+        <ListeningExperience />
+      </section>
+
       {/* features */}
       <section id="features" className="relative z-10 mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">
         <motion.div {...fadeUp} className="mx-auto max-w-2xl text-center">
@@ -417,6 +539,9 @@ export default function Landing() {
             </a>
             <a href="#visualizer" className="transition-colors hover:text-foreground">
               Visualizer
+            </a>
+            <a href="#experience" className="transition-colors hover:text-foreground">
+              Experience
             </a>
           </nav>
         </div>
