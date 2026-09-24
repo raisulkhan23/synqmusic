@@ -245,7 +245,7 @@ export function Sidebar() {
         </div>
 
         {/* filter chips */}
-        <div className="flex gap-1.5 overflow-x-auto px-4 pb-2">
+        <div className="grid grid-cols-3 gap-1 px-3 pb-2">
           {(
             [
               { id: "playlists", label: "Playlists" },
@@ -263,7 +263,7 @@ export function Sidebar() {
                 if (chip.id === "playlists") navigate("/playlists");
               }}
               className={cn(
-                "shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors",
+                "min-w-0 rounded-lg px-2 py-1 text-[11px] font-medium transition-colors",
                 filter === chip.id
                   ? "bg-foreground text-background"
                   : "bg-white/[0.06] text-muted-foreground hover:bg-white/[0.1]",
