@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { Logo } from "@/components/brand/Logo";
 import { PlaylistDialog } from "@/components/playlists/PlaylistDialog";
 import { SettingsDialog } from "@/components/settings/SettingsDialog";
@@ -65,9 +66,17 @@ export function Sidebar() {
         : "text-muted-foreground hover:bg-white/[0.04] hover:text-foreground",
     );
 
-  if (collapsed) {
-    return (
-      <aside className="liquid-glass hidden w-[72px] shrink-0 flex-col items-center overflow-hidden border-r border-white/[0.06] py-3 lg:flex">
+  return (
+    <AnimatePresence mode="popLayout" initial={false}>
+      {collapsed ? (
+        <motion.aside
+          key="collapsed"
+          initial={{ width: 240, opacity: 0 }}
+          animate={{ width: 72, opacity: 1 }}
+          exit={{ width: 240, opacity: 0 }}
+          transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+          className="liquid-glass hidden w-[72px] shrink-0 flex-col items-center overflow-hidden border-r border-white/[0.06] py-3 lg:flex"
+        >
         <Logo
           to="/home"
           iconOnly
@@ -184,12 +193,16 @@ export function Sidebar() {
 
         <PlaylistDialog open={dialogOpen} onOpenChange={setDialogOpen} />
         <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} onSignOut={handleSignOut} />
-      </aside>
-    );
-  }
-
-  return (
-    <aside className="liquid-glass hidden w-60 shrink-0 flex-col border-r border-white/[0.06] lg:flex">
+        </motion.aside>
+      ) : (
+        <motion.aside
+          key="expanded"
+          initial={{ width: 72, opacity: 0 }}
+          animate={{ width: 240, opacity: 1 }}
+          exit={{ width: 72, opacity: 0 }}
+          transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+          className="liquid-glass hidden w-60 shrink-0 flex-col border-r border-white/[0.06] lg:flex"
+        >
       <div className="flex h-16 items-center justify-between px-5">
         <Logo to="/home" />
         <button
@@ -428,6 +441,8 @@ export function Sidebar() {
         onOpenChange={setSettingsOpen}
         onSignOut={handleSignOut}
       />
-    </aside>
+        </motion.aside>
+      )}
+    </AnimatePresence>
   );
 }
