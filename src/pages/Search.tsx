@@ -110,7 +110,7 @@ function MixCard({ mix }: { mix: (typeof POPULAR_MIXES)[number] }) {
       type="button"
       onClick={() => void play()}
       className={cn(
-        "group relative flex h-36 w-36 shrink-0 flex-col justify-end overflow-hidden rounded-2xl bg-gradient-to-br p-3.5 text-left ring-1 ring-white/10 transition-transform hover:scale-[1.03] sm:w-44",
+        "group relative flex h-36 w-36 shrink-0 flex-col justify-end overflow-hidden rounded-2xl border border-white/20 bg-gradient-to-br p-3.5 text-left outline outline-1 outline-white/10 ring-1 ring-white/10 transition-[transform,border-color,outline-color,box-shadow] hover:scale-[1.03] hover:border-white/40 hover:outline-white/20 hover:ring-white/25 sm:w-44",
         mix.gradient,
       )}
     >
@@ -411,7 +411,7 @@ function BrowseView({
               key={mood}
               type="button"
               onClick={() => onPick(MOOD_QUERIES[mood] ?? mood)}
-              className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-1.5 text-sm font-medium text-foreground/90 transition-all hover:border-[rgb(var(--tint)_/_0.5)] hover:bg-[rgb(var(--tint)_/_0.1)]"
+              className="rounded-full border border-white/20 bg-white/[0.06] px-4 py-1.5 text-sm font-medium text-foreground/90 outline outline-1 outline-white/10 transition-all hover:border-[rgb(var(--tint)_/_0.65)] hover:bg-[rgb(var(--tint)_/_0.12)] hover:outline-[rgb(var(--tint)_/_0.3)]"
             >
               {mood}
             </button>
@@ -429,7 +429,7 @@ function BrowseView({
               key={genre}
               type="button"
               onClick={() => onPick(`${genre} music hits`)}
-              className="rounded-full border border-white/10 bg-gradient-to-br from-white/[0.07] to-white/[0.02] px-4 py-1.5 text-sm font-medium text-foreground/90 transition-all hover:border-[rgb(var(--tint)_/_0.5)] hover:from-[rgb(var(--tint)_/_0.12)]"
+              className="rounded-full border border-white/20 bg-gradient-to-br from-white/[0.09] to-white/[0.025] px-4 py-1.5 text-sm font-medium text-foreground/90 outline outline-1 outline-white/10 transition-all hover:border-[rgb(var(--tint)_/_0.65)] hover:from-[rgb(var(--tint)_/_0.14)] hover:outline-[rgb(var(--tint)_/_0.3)]"
             >
               {genre}
             </button>
