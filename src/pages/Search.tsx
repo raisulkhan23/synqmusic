@@ -122,20 +122,20 @@ function MixCard({ mix }: { mix: (typeof POPULAR_MIXES)[number] }) {
 }
 
 export default function Search() {
-  const [query, setQuery] = useState("");
+  // Shared links open with ?q=… pre-filled — share → open → play.
+  // Seeded during the initial render (not in an effect) so the shared query
+  // is available on the very first search without a cascading render.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const sharedQuery = searchParams.get("q");
+  const [query, setQuery] = useState(() => sharedQuery ?? "");
   const [ytResults, setYtResults] = useState<YtItem[] | null>(null);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
 
-  // Shared links open with ?q=… pre-filled — share → open → play.
-  const [searchParams, setSearchParams] = useSearchParams();
-  const sharedQuery = searchParams.get("q");
+  // Drop ?q= from the URL after it has been consumed (no setState in effect).
   useEffect(() => {
-    if (sharedQuery && !query) {
-      setQuery(sharedQuery);
-      setSearchParams({}, { replace: true });
-    }
+    if (sharedQuery) setSearchParams({}, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sharedQuery]);
   const startRadio = usePlayerStore((s) => s.startRadio);
@@ -151,8 +151,9 @@ export default function Search() {
       return [];
     }
   });
-  useEffect(() => {
-    const q = debouncedQuery.trim();
+  /** Record a query in the local search history (called when a search runs). */
+  const rememberQuery = useCallback((raw: string) => {
+    const q = raw.trim();
     if (q.length < 2) return;
     setSearchHistory((prev) => {
       const next = [q, ...prev.filter((h) => h !== q)].slice(0, 8);
@@ -163,7 +164,7 @@ export default function Search() {
       }
       return next;
     });
-  }, [debouncedQuery]);
+  }, []);
   const clearSearchHistory = () => {
     setSearchHistory([]);
     localStorage.removeItem("ss.searchHistory");
@@ -182,6 +183,7 @@ export default function Search() {
       let cancelled = false;
       setSearching(true);
       setSearchError(null);
+      rememberQuery(q);
       searchYt({ query: q })
         .then(({ items }) => {
           if (!cancelled) setYtResults(items);
@@ -202,7 +204,7 @@ export default function Search() {
       };
     };
     run();
-  }, [debouncedQuery, searchYt, retryKey]);
+  }, [debouncedQuery, searchYt, retryKey, rememberQuery]);
 
   const playRemote = useCallback(
     (item: YtItem) => {
