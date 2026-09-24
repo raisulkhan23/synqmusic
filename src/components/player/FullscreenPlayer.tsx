@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { api } from "@/convex/_generated/api";
 import { formatTime } from "@/lib/format";
-import { dismissVideo, getLoadedVideoId, presentOverlay, trackFrame } from "@/lib/youtubePlayer";
+import { dismissVideo, ensureVideoPlaying, getLoadedVideoId, presentOverlay, trackFrame } from "@/lib/youtubePlayer";
 import { AUDIO_FILTERS as FILTER_DEFS } from "@/lib/audio";
 import { usePlayerStore } from "@/store/player";
 import { toast } from "sonner";
@@ -377,6 +377,16 @@ export function FullscreenPlayer() {
   // re-presents the same live player. Catalog tracks keep their artwork.
 
   const videoFrameRef = useRef<HTMLDivElement | null>(null);
+  /** Mirror of videoReady for the retry loop (state updates are async). */
+  const videoReadyRef = useRef(false);
+  /** Latest playback position, read inside the async retry loop. */
+  const currentTimeRef = useRef(0);
+  // Mirror the live position so the async video-retry loop can seek without
+  // re-subscribing (and without stale-closure positions).
+  useEffect(() => {
+    currentTimeRef.current = currentTime;
+  }, [currentTime]);
+
   const [videoReady, setVideoReady] = useState(false);
   /** Set when the overlaid live player can't present — we fall back to an inline iframe. */
   const [embedFallback, setEmbedFallback] = useState(false);
@@ -393,23 +403,29 @@ export function FullscreenPlayer() {
     // filtered <audio> element, video from the engine). The engine still has
     // the video loaded, so the overlay can present normally. Skipping the
     // overlay here used to leave the video frame showing only the thumbnail.
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset overlay state on re-present
+    videoReadyRef.current = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset overlay state when re-presenting
     setVideoReady(false);
     setEmbedFallback(false);
     let stopTracking: (() => void) | null = null;
     let tries = 0;
     let timer: ReturnType<typeof setTimeout>;
     const attempt = () => {
-      // The engine may not have this video loaded YET (the effect path loads
-      // the muted visual slave asynchronously) — but "not loaded yet" is not
-      // "impossible": only give up AFTER the slave has had time to start.
-      // Checking once and instantly swapping to the dead inline embed used to
-      // make the video a black frame whenever any effect was active.
-      const engineVideo = getLoadedVideoId();
-      if (engineVideo !== current.youtubeId) {
-        if (++tries < 25) {
-          // ~2.5s total for the slave load; if it still isn't there, embed.
-          timer = setTimeout(attempt, 100);
+      // Don't just WAIT for the video — actively make the engine play it.
+      // It is frequently loaded on a different video, or loaded but paused,
+      // which is exactly what produced a frozen thumbnail. We drive it until
+      // it reports PLAYING (or we run out of attempts and fall back).
+      if (getLoadedVideoId() !== current.youtubeId || !videoReadyRef.current) {
+        if (++tries < 30) {
+          void ensureVideoPlaying(current.youtubeId!, currentTimeRef.current, audioFilter !== "off")
+            .then((playing) => {
+              if (playing) {
+                videoReadyRef.current = true;
+                setVideoReady(true);
+              }
+            })
+            .catch(() => undefined);
+          timer = setTimeout(attempt, 350);
           return;
         }
         setEmbedFallback(true);

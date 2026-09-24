@@ -148,12 +148,12 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
   return (
     <footer
       className={cn(
-        "liquid-glass z-30 flex shrink-0 items-center gap-2 border-t border-white/[0.07] px-2 sm:gap-3 sm:px-4",
+        "liquid-glass z-30 flex w-full min-w-0 shrink-0 items-center gap-2 overflow-hidden border-t border-white/[0.07] px-2 sm:gap-3 sm:px-4",
         compact ? "h-[60px]" : "h-[64px] sm:h-[76px]",
       )}
     >
       {/* now playing */}
-      <div className="flex min-w-0 flex-1 items-center gap-2 sm:w-[30%] sm:flex-none sm:gap-3">
+      <div className="flex min-w-0 flex-1 items-center gap-2 sm:w-[30%] sm:shrink sm:gap-3">
         <div className="relative size-9 shrink-0 overflow-hidden rounded-md shadow-lg ring-1 ring-white/10 sm:size-12">
           <img src={current.coverUrl} alt="" className="size-full object-cover" />
           {isBuffering && (
@@ -162,7 +162,7 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
             </div>
           )}
         </div>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 overflow-hidden">
           <p
             className={cn(
               "truncate text-sm font-semibold",
@@ -220,7 +220,7 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
       {/* right cluster — desktop keeps queue + volume + expand; mobile gets
             just the expand chevron (queue lives in the fullscreen player and
             the bottom tab bar already covers navigation) */}
-      <div className="flex w-auto items-center justify-end gap-0.5 sm:w-[30%]">
+      <div className="flex w-auto shrink-0 items-center justify-end gap-0.5 sm:w-[30%]">
         <button
           type="button"
           aria-label="Open queue"

@@ -275,7 +275,7 @@ interface PlayerStore {
   // actions
   playTrack: (track: Playable, list?: (Playable)[]) => void;
   /** Start an endless related-mix radio from any track (any source). */
-  startRadio: (track: Playable) => void;
+  startRadio: (track: Playable, contextQuery?: string) => void;
   /** Play a YouTube track through the proxy/audio path (rescues non-embeddable videos). */
   playViaStream: (track: Playable, startSeconds?: number) => void;
   playIndex: (index: number) => void;
@@ -679,6 +679,14 @@ const playedSessionIds = new Set<string>();
  * Known genre list used to infer the seed's genre when YouTube doesn't tell us.
  * Checked against the artist name and track title for hints.
  */
+/**
+ * The genre/search context of the session's radio ("dark phonk", "jazz",
+ * ...). Set when the user starts playback from a search; every queue fill
+ * (autofill, end-of-queue, radio) reuses it so the queue never drifts to
+ * unrelated songs.
+ */
+let activeMixContext: string | null = null;
+
 const GENRE_HINTS = [
   "pop", "rock", "hip hop", "rap", "r&b", "soul", "funk", "jazz", "blues",
   "electronic", "edm", "house", "techno", "trance", "dubstep", "drum and bass",
@@ -693,6 +701,22 @@ const GENRE_HINTS = [
  * Returns null when nothing obvious matches — callers then fall back to a
  * broader "similar to X" style query.
  */
+/**
+ * Turn a user-typed search into a usable genre seed, or null when the query
+ * is just the track/artist (in which case genre inference is better).
+ */
+function normalizeContext(q?: string | null): string | null {
+  const t = (q ?? "").trim().toLowerCase();
+  if (t.length < 3) return null;
+  // Strip noise words, keep the meaningful genre-ish phrase.
+  const cleaned = t
+    .replace(/\b(songs?|music|track|playlist|video|official|lyrics?|lyric video|remix|mix|edit|full album|top|best|popular|new|2024|2025|2026|hit|hits|vibe|mood|playlist)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (cleaned.length < 3) return null;
+  return cleaned;
+}
+
 function inferGenre(seed: Playable): string | null {
   const hay = `${seed.artistName} ${seed.title}`.toLowerCase();
   for (const g of GENRE_HINTS) {
@@ -706,7 +730,7 @@ function inferGenre(seed: Playable): string | null {
 /**
  * Fetch a related-mix from YouTube Music based on the seed track's GENRE.
  * Returns Playables ready for the queue (empty on failure).
- */async function fetchRelatedMix(seed: Playable, existingQueue: Playable[], count: number): Promise<Playable[]> {
+ */async function fetchRelatedMix(seed: Playable, existingQueue: Playable[], count: number, contextQuery?: string | null): Promise<Playable[]> {
   if (relatedMixInFlight?.seedId === seed.id) return relatedMixInFlight.promise;
   const promise = (async () => {
     try {
@@ -716,7 +740,12 @@ function inferGenre(seed: Playable): string | null {
       // genre (not "mix"/"playlist" compilations, which return whole-video
       // uploads and rehash the same creators). Two queries run per fill and
       // results are INTERLEAVED so the queue draws from many artists.
-      const genre = inferGenre(seed);
+      // Prefer the SEARCH the user actually typed: "dark phonk" / "japanese
+      // jazz" is a far better genre seed than anything we can guess from a
+      // title like "LUZ ROJA (VIP Mix - Slowed)". Without this, playing from
+      // search filled the queue with unrelated "similar to artist" results.
+      const ctx = normalizeContext(contextQuery);
+      const genre = ctx ?? inferGenre(seed);
       const songQueries = genre
         ? [
             `${genre} songs`,
@@ -837,7 +866,7 @@ function handleEnded(): void {
   // so the music never stops, for ANY source.
   if (s.autoplay && s.current) {
     const seed = s.current;
-    void fetchRelatedMix(seed, s.queue, 5).then((related) => {
+    void fetchRelatedMix(seed, s.queue, 5, activeMixContext).then((related) => {
       // Filter INSIDE the updater: maybeAutofillQueue may have appended the
       // same related mix while this fetch was in flight — filtering against a
       // stale queue snapshot used to double-append the same tracks.
@@ -1063,7 +1092,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     autofillInFlight = true;
     autofillSeedId = s.current.id;
     const seed = s.current;
-    void fetchRelatedMix(seed, s.queue, 8)
+    void fetchRelatedMix(seed, s.queue, 8, activeMixContext)
       .then((related) => {
         if (usePlayerStore.getState().current?.id !== seed.id) return; // song changed meanwhile
         // Filter against the LATEST queue inside the updater — the end-of-
@@ -1181,6 +1210,9 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
   };
 
   const playTrack = (track: Playable, list?: (Playable)[]) => {
+    // Explicit list playback (playlist / liked / home rows) is not a search
+    // context — drop any genre left over from a previous search.
+    activeMixContext = null;
     const list2 =
       list && list.length > 0 ? list.map(norm) : [norm(track)];
     const t = norm(track);
@@ -1221,14 +1253,17 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     loadTrack(queue[index]);
   };
 
-  const startRadio = (track: Playable) => {
+  const startRadio = (track: Playable, contextQuery?: string) => {
     const seed = norm(track);
+    // Remember what the user searched so every later queue fill (autofill,
+    // end-of-queue) stays in the SAME genre instead of drifting.
+    activeMixContext = normalizeContext(contextQuery) ?? activeMixContext;
     // Start the seed immediately; the related mix (same vibe/genre) is
     // fetched in the background and appended as it arrives.
     const initial: Playable[] = [seed];
     set({ queue: initial, queueIndex: 0 });
     loadTrack(seed);
-    void fetchRelatedMix(seed, initial, 15).then((related) => {
+    void fetchRelatedMix(seed, initial, 15, contextQuery).then((related) => {
       // Dedupe against the latest queue inside the updater (see autofill note).
       usePlayerStore.setState((st) => {
         const fresh = related.filter((t) => !st.queue.some((q) => q.id === t.id));

@@ -206,12 +206,12 @@ export default function Search() {
 
   const playRemote = useCallback(
     (item: YtItem) => {
-      // Start the clicked song, then fill the queue with RELATED songs from
-      // across our sources — never the raw search results (those contain
-      // duplicates and near-identical uploads of the same track).
-      void startRadio(toPlayableYoutube(item, item.id));
+      // Start the clicked song, then fill the queue with songs from the SAME
+      // search (same genre/vibe) — never the raw result list, which is full
+      // of duplicate uploads, and never generic "similar artist" filler.
+      void startRadio(toPlayableYoutube(item, item.id), debouncedQuery || query);
     },
-    [startRadio],
+    [startRadio, debouncedQuery, query],
   );
 
   const hasQuery = query.trim().length > 0;

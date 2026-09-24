@@ -471,6 +471,63 @@ export function isSlaveMode(): boolean {
   return slaveMode;
 }
 
+/**
+ * Make sure the engine is actually PLAYING `videoId` (muted when the audio
+ * element owns the sound). The fullscreen player calls this while it waits
+ * for the video to appear: the player is frequently left on a different
+ * video, or loaded but paused/buffering, which is what made the fullscreen
+ * player show a frozen thumbnail instead of motion. Returns true once the
+ * engine reports it is playing this video.
+ */
+export async function ensureVideoPlaying(
+  videoId: string,
+  startSeconds: number,
+  muted: boolean,
+): Promise<boolean> {
+  const p = await ensurePlayer();
+  if (loadedVideoId !== videoId) {
+    loadedVideoId = videoId;
+    slaveMode = muted;
+    p.setVolume(muted ? 0 : 100);
+    if (muted) p.mute();
+    else p.unMute();
+    p.loadVideoById(videoId, Math.max(0, startSeconds));
+  } else {
+    // Same video already loaded — make sure it is actually running.
+    let state = -1;
+    try {
+      state = p.getPlayerState?.() ?? -1;
+    } catch {
+      state = -1;
+    }
+    // 5 = cued, -1 = unstarted, 2 = paused, 3 = buffering.
+    if (state === -1 || state === 2 || state === 5) {
+      if (startSeconds > 0) {
+        try {
+          p.seekTo(startSeconds, true);
+        } catch {
+          /* not ready */
+        }
+      }
+      p.playVideo();
+    }
+  }
+  // Poll briefly: the state flips to PLAYING a moment after loadVideoById.
+  for (let i = 0; i < 25; i++) {
+    await new Promise((r) => setTimeout(r, 120));
+    let state = -1;
+    try {
+      state = p.getPlayerState?.() ?? -1;
+    } catch {
+      state = -1;
+    }
+    if (state === 1) return true;
+    // 100/101/150 — this video can never play in the iframe.
+    if (state === 0) break;
+  }
+  return false;
+}
+
 /** Current playback position of the engine (for drift resync). */
 export function getEngineTime(): number {
   try {
