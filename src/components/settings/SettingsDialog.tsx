@@ -1196,10 +1196,11 @@ export function SettingsDialog({
           </p>
         </section>
 
-        <Separator className="bg-white/[0.07]" />
+        <Separator className="hidden bg-white/[0.07] sm:block" />
 
-        {/* keyboard shortcuts */}
-        <section className="flex flex-col gap-2">
+        {/* Keyboard shortcuts remain available on larger screens only; the
+            phone settings UI stays focused on touch-native controls. */}
+        <section className="hidden flex-col gap-2 sm:flex">
           <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
             <Keyboard className="size-3.5" />
             Keyboard shortcuts
