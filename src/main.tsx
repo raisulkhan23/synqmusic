@@ -47,6 +47,7 @@ const Stats = lazy(() => import("./pages/Stats.tsx"));
 const Recent = lazy(() => import("./pages/Recent.tsx"));
 const Social = lazy(() => import("./pages/Social.tsx"));
 const Profile = lazy(() => import("./pages/Profile.tsx"));
+const Settings = lazy(() => import("./pages/Settings.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
 // Simple loading fallback for route transitions
@@ -248,6 +249,14 @@ createRoot(document.getElementById("root")!).render(
                   element={
                     <PageSuspense>
                       <Profile />
+                    </PageSuspense>
+                  }
+                />
+                <Route
+                  path="/settings"
+                  element={
+                    <PageSuspense>
+                      <Settings />
                     </PageSuspense>
                   }
                 />

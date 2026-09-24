@@ -184,7 +184,7 @@ export function Sidebar() {
             type="button"
             aria-label="Settings"
             title="Settings"
-            onClick={() => setSettingsOpen(true)}
+            onClick={() => void navigate("/settings")}
             className="flex size-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
           >
             <Settings className="size-4" />
@@ -402,7 +402,7 @@ export function Sidebar() {
           type="button"
           aria-label="Settings"
           title="Settings"
-          onClick={() => setSettingsOpen(true)}
+          onClick={() => void navigate("/settings")}
           className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
         >
           <Settings className="size-4" />

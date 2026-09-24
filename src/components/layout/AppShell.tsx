@@ -621,7 +621,7 @@ export function AppShell() {
           <button
             type="button"
             aria-label="Settings"
-            onClick={() => setSettingsOpen(true)}
+            onClick={() => void navigate("/settings")}
             className="rounded-full p-2 text-muted-foreground transition-colors hover:text-foreground"
           >
             <Settings className="size-[18px]" />

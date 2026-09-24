@@ -44,6 +44,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
+import { Link } from "react-router";
 import { toast } from "sonner";
 import {
   deleteAllWallpaperFiles,
@@ -119,11 +120,14 @@ export function SettingsDialog({
   open,
   onOpenChange,
   onSignOut,
+  pageMode = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Called after the user signs out (navigates away from the app). */
   onSignOut?: () => void | Promise<void>;
+  /** Render the same controls as a full authenticated page at /settings. */
+  pageMode?: boolean;
 }) {
   const { user } = useAuth();
   const updateName = useMutation(api.users.updateName);
@@ -525,9 +529,25 @@ export function SettingsDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="glass-card !fixed max-h-[85vh] max-w-md overflow-y-auto">
+    <Dialog open={open} onOpenChange={onOpenChange} modal={pageMode ? false : undefined}>
+      <DialogContent
+        hideOverlay={pageMode}
+        showCloseButton={!pageMode}
+        className={
+          pageMode
+            ? "!static !top-auto !left-auto !z-10 !mx-auto !grid !min-h-dvh !w-full !max-w-3xl !translate-x-0 !translate-y-0 !gap-0 !overflow-y-auto !rounded-none !border-0 !bg-background !p-5 !shadow-none sm:!p-8"
+            : "glass-card !fixed max-h-[85vh] max-w-md overflow-y-auto"
+        }
+      >
         <DialogHeader>
+          {pageMode && (
+            <Link
+              to="/home"
+              className="mb-1 inline-flex w-fit items-center text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
+            >
+              ← Back to listening
+            </Link>
+          )}
           <DialogTitle className="font-display">Settings</DialogTitle>
           <DialogDescription>
             Profile, playback and data preferences.
