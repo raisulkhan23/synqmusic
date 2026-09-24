@@ -409,6 +409,7 @@ html,
      visible even when the compact app surfaces have glass disabled. */
   .settings-liquid-glass {
     position: relative;
+    isolation: isolate;
     background: color-mix(in oklab, var(--card) 58%, transparent) !important;
     backdrop-filter: blur(30px) saturate(1.85) brightness(1.06) !important;
     -webkit-backdrop-filter: blur(30px) saturate(1.85) brightness(1.06) !important;
@@ -420,6 +421,7 @@ html,
   }
   .settings-liquid-glass::before {
     content: "";
+    z-index: 0;
     position: absolute;
     inset: 0;
     border-radius: inherit;
@@ -437,11 +439,16 @@ html,
   }
   .settings-liquid-glass::after {
     content: "";
+    z-index: 0;
     position: absolute;
     inset: 0;
     border-radius: inherit;
     pointer-events: none;
     background: radial-gradient(120% 90% at 12% 0%, rgb(var(--tint) / 0.09), transparent 58%);
+  }
+  .settings-liquid-glass > * {
+    position: relative;
+    z-index: 1;
   }
   .settings-liquid-glass.settings-glass-still::before {
     animation: none;
