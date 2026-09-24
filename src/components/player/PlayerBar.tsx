@@ -149,11 +149,11 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
     <footer
       className={cn(
         "liquid-glass z-30 flex w-full min-w-0 shrink-0 items-center gap-2 overflow-hidden border-t border-white/[0.07] px-2 sm:gap-3 sm:px-4",
-        compact ? "h-[60px]" : "h-[64px] sm:h-[76px]",
+        compact ? "min-h-[60px]" : "min-h-[64px] sm:min-h-[76px]",
       )}
     >
       {/* now playing */}
-      <div className="flex min-w-0 flex-1 items-center gap-2 sm:w-[30%] sm:shrink sm:gap-3">
+      <div className="flex min-w-0 flex-1 basis-0 items-center gap-2 sm:max-w-[34%] sm:gap-3">
         <div className="relative size-9 shrink-0 overflow-hidden rounded-md shadow-lg ring-1 ring-white/10 sm:size-12">
           <img src={current.coverUrl} alt="" className="size-full object-cover" />
           {isBuffering && (
@@ -187,7 +187,7 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
             setTimeout(() => setLikePulse(false), 400);
           }}
           className={cn(
-            "hidden shrink-0 rounded-full p-1.5 transition-all hover:scale-110 sm:block",
+            "hidden shrink-0 rounded-full p-1.5 transition-all hover:scale-110 lg:block",
             isLiked ? "text-[rgb(var(--tint))]" : "text-muted-foreground hover:text-foreground",
           )}
         >
@@ -203,7 +203,7 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
 
       {/* transport + seek — timestamps are desktop-only; on mobile the
             seekbar sits alone so prev/play/next never collide with them */}
-      <div className="flex min-w-0 flex-col items-center gap-0.5 sm:flex-1">
+      <div className="flex min-w-0 flex-1 basis-0 flex-col items-center gap-0.5">
         <TransportControls className="sm:hidden" compact />
         <TransportControls className="hidden sm:flex" />
         <div className="hidden w-full max-w-xl items-center gap-2 sm:flex">
@@ -220,7 +220,7 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
       {/* right cluster — desktop keeps queue + volume + expand; mobile gets
             just the expand chevron (queue lives in the fullscreen player and
             the bottom tab bar already covers navigation) */}
-      <div className="flex w-auto shrink-0 items-center justify-end gap-0.5 sm:w-[30%]">
+      <div className="flex w-auto shrink-0 items-center justify-end gap-0.5">
         <button
           type="button"
           aria-label="Open queue"

@@ -400,15 +400,23 @@ export function presentOverlay(frame: HTMLElement): boolean {
   hostEl.style.cssText =
     OVERLAY_BASE +
     `left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;`;
+  hostEl.style.visibility = "visible";
   return true;
 }
 
-/** Return the player to its off-screen parking spot (audio-only mode). */
+/**
+ * Return the player to its off-screen parking spot (audio-only mode).
+ * Also forces click-through: an overlay left over the UI would swallow every
+ * click, which is what made the app feel "frozen" until an effect was
+ * toggled again.
+ */
 export function dismissVideo(): void {
   if (!hostEl) return;
   // Never touch the parent — only reset the styling. Re-parenting would
   // reload the iframe and stop playback.
   hostEl.style.cssText = OFFSCREEN_STYLE;
+  hostEl.style.pointerEvents = "none";
+  hostEl.style.visibility = "hidden";
 }
 
 /** The engine's player host element, so consumers can check containment. */

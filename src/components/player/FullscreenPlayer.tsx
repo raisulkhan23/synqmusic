@@ -410,7 +410,14 @@ export function FullscreenPlayer() {
     let stopTracking: (() => void) | null = null;
     let tries = 0;
     let timer: ReturnType<typeof setTimeout>;
+    // Guards every async continuation: the video retry kicks off a promise
+    // AND schedules the next timer, so without this flag both can fire AFTER
+    // cleanup and re-present the fixed-position player overlay
+    // (pointer-events:auto, z-71) over the whole UI — which is exactly what
+    // made the mouse "bug" whenever an effect was toggled.
+    let stopped = false;
     const attempt = () => {
+      if (stopped) return;
       // Don't just WAIT for the video — actively make the engine play it.
       // It is frequently loaded on a different video, or loaded but paused,
       // which is exactly what produced a frozen thumbnail. We drive it until
@@ -419,13 +426,14 @@ export function FullscreenPlayer() {
         if (++tries < 30) {
           void ensureVideoPlaying(current.youtubeId!, currentTimeRef.current, audioFilter !== "off")
             .then((playing) => {
+              if (stopped) return;
               if (playing) {
                 videoReadyRef.current = true;
                 setVideoReady(true);
               }
             })
             .catch(() => undefined);
-          timer = setTimeout(attempt, 350);
+          if (!stopped) timer = setTimeout(attempt, 350);
           return;
         }
         setEmbedFallback(true);
@@ -449,9 +457,12 @@ export function FullscreenPlayer() {
     // load through the engine before the overlay can present it.
     timer = setTimeout(attempt, audioFilter !== "off" ? 900 : 250);
     return () => {
+      stopped = true;
       clearTimeout(timer);
       stopTracking?.();
       setVideoReady(false);
+      // Park the player off-screen AND make it click-through immediately, so
+      // no invisible overlay can ever swallow clicks again.
       dismissVideo();
     };
   }, [fullscreen, current?.id, videoEnabled, isYoutube, audioFilter]);
