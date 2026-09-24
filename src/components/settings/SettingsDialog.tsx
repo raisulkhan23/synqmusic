@@ -65,6 +65,8 @@ import {
 
 const MAX_WALLPAPER_BYTES = 100_000_000;
 const MAX_LIVE_WALLPAPER_BYTES = 100_000_000;
+const DEFAULT_WALLPAPER_BLUR_AMOUNT = 24;
+const MAX_WALLPAPER_BLUR_AMOUNT = 48;
 
 type WallpaperLibraryEntry = StoredWallpaper & { url: string; kind: WallpaperKind };
 
@@ -144,9 +146,13 @@ export function SettingsDialog({
       ? saved
       : "";
   });
-  const [wallpaperBlur, setWallpaperBlur] = useState(
-    () => localStorage.getItem("ss.wallpaperBlur") !== "0",
-  );
+  const [wallpaperBlurAmount, setWallpaperBlurAmount] = useState(() => {
+    const storedAmount = Number(localStorage.getItem("ss.wallpaperBlurAmount"));
+    if (Number.isFinite(storedAmount) && storedAmount > 0) {
+      return Math.min(MAX_WALLPAPER_BLUR_AMOUNT, Math.round(storedAmount));
+    }
+    return localStorage.getItem("ss.wallpaperBlur") === "0" ? 0 : DEFAULT_WALLPAPER_BLUR_AMOUNT;
+  });
   const [lowMemoryWallpaperPreviews, setLowMemoryWallpaperPreviews] = useState(
     () => localStorage.getItem("ss.lowMemoryWallpaperPreviews") !== "0",
   );
@@ -1094,15 +1100,51 @@ export function SettingsDialog({
           <ToggleRow
             label="Wallpaper blur"
             description="Keep the personal wallpaper softly blurred behind the UI"
-            on={wallpaperBlur}
+            on={wallpaperBlurAmount > 0}
             onToggle={() => {
-              const next = !wallpaperBlur;
-              setWallpaperBlur(next);
-              localStorage.setItem("ss.wallpaperBlur", next ? "1" : "0");
-              window.dispatchEvent(new CustomEvent("ss:wallpaper-blur-change", { detail: next }));
-              toast(next ? "Wallpaper blur on" : "Wallpaper blur off");
+              const nextAmount = wallpaperBlurAmount > 0 ? 0 : DEFAULT_WALLPAPER_BLUR_AMOUNT;
+              setWallpaperBlurAmount(nextAmount);
+              localStorage.setItem("ss.wallpaperBlur", nextAmount > 0 ? "1" : "0");
+              localStorage.setItem("ss.wallpaperBlurAmount", String(nextAmount));
+              window.dispatchEvent(
+                new CustomEvent("ss:wallpaper-blur-change", { detail: nextAmount }),
+              );
+              toast(nextAmount > 0 ? "Wallpaper blur on" : "Wallpaper blur off");
             }}
           />
+
+          <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">Blur intensity</p>
+                <p className="text-xs text-muted-foreground">Adjust the softness of your live or image wallpaper</p>
+              </div>
+              <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                {wallpaperBlurAmount === 0 ? "Off" : `${wallpaperBlurAmount}px`}
+              </span>
+            </div>
+            <Slider
+              value={[wallpaperBlurAmount]}
+              min={0}
+              max={MAX_WALLPAPER_BLUR_AMOUNT}
+              step={2}
+              onValueChange={([value]) => {
+                const nextAmount = Math.max(0, Math.min(MAX_WALLPAPER_BLUR_AMOUNT, value));
+                setWallpaperBlurAmount(nextAmount);
+                localStorage.setItem("ss.wallpaperBlur", nextAmount > 0 ? "1" : "0");
+                localStorage.setItem("ss.wallpaperBlurAmount", String(nextAmount));
+                window.dispatchEvent(
+                  new CustomEvent("ss:wallpaper-blur-change", { detail: nextAmount }),
+                );
+              }}
+              className="mt-2"
+              aria-label="Wallpaper blur intensity"
+            />
+            <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
+              <span>None</span>
+              <span>Strong</span>
+            </div>
+          </div>
 
           <ToggleRow
             label="Low-memory wallpaper previews"

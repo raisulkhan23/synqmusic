@@ -30,6 +30,8 @@ const MOBILE_NAV = [
 ];
 
 const DEFAULT_TINT = "203 244 143";
+const DEFAULT_WALLPAPER_BLUR_AMOUNT = 24;
+const MAX_WALLPAPER_BLUR_AMOUNT = 48;
 
 export function AppShell() {
   const navigate = useNavigate();
@@ -37,9 +39,13 @@ export function AppShell() {
   const { signOut } = useAuth();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [offline, setOffline] = useState(!navigator.onLine);
-  const [wallpaperBlur, setWallpaperBlur] = useState(
-    () => localStorage.getItem("ss.wallpaperBlur") !== "0",
-  );
+  const [wallpaperBlurAmount, setWallpaperBlurAmount] = useState(() => {
+    const storedAmount = Number(localStorage.getItem("ss.wallpaperBlurAmount"));
+    if (Number.isFinite(storedAmount) && storedAmount > 0) {
+      return Math.min(MAX_WALLPAPER_BLUR_AMOUNT, Math.round(storedAmount));
+    }
+    return localStorage.getItem("ss.wallpaperBlur") === "0" ? 0 : DEFAULT_WALLPAPER_BLUR_AMOUNT;
+  });
   const rippleLayerRef = useRef<HTMLDivElement>(null);
   const cursorTrailRefs = useRef<Array<HTMLSpanElement | null>>([]);
   const touchGlowTimeoutRef = useRef<number | null>(null);
@@ -75,7 +81,10 @@ export function AppShell() {
 
   useEffect(() => {
     const onWallpaperBlurChange = (event: Event) => {
-      setWallpaperBlur((event as CustomEvent<boolean>).detail);
+      const nextAmount = (event as CustomEvent<number>).detail;
+      if (typeof nextAmount === "number" && Number.isFinite(nextAmount)) {
+        setWallpaperBlurAmount(Math.max(0, Math.min(MAX_WALLPAPER_BLUR_AMOUNT, nextAmount)));
+      }
     };
     window.addEventListener("ss:wallpaper-blur-change", onWallpaperBlurChange);
     return () => window.removeEventListener("ss:wallpaper-blur-change", onWallpaperBlurChange);
@@ -432,13 +441,15 @@ export function AppShell() {
               muted
               loop
               playsInline
-              className={`size-full scale-110 object-cover ${wallpaperBlur ? "blur-3xl" : ""}`}
+              className="size-full scale-110 object-cover"
+              style={{ filter: wallpaperBlurAmount > 0 ? `blur(${wallpaperBlurAmount}px)` : undefined }}
             />
           ) : (
             <img
               src={wallpaper}
               alt=""
-              className={`size-full scale-110 object-cover ${wallpaperBlur ? "blur-3xl" : ""}`}
+              className="size-full scale-110 object-cover"
+              style={{ filter: wallpaperBlurAmount > 0 ? `blur(${wallpaperBlurAmount}px)` : undefined }}
             />
           )}
           <div className="absolute inset-0 bg-background/45" />
