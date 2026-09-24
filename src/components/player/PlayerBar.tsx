@@ -157,17 +157,26 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
   if (!current) return null;
 
   const isLiked = liked[current.id] !== undefined;
+  const rawDuration = duration || current.duration;
+  const playbackDuration = Number.isFinite(rawDuration) && rawDuration > 0 ? rawDuration : 0;
+  const safeCurrentTime = Number.isFinite(currentTime) ? Math.max(0, currentTime) : 0;
+  const playbackProgress = playbackDuration > 0
+    ? Math.min(100, (safeCurrentTime / playbackDuration) * 100)
+    : 0;
 
   return (
     <footer
+      data-playing={isPlaying}
       className={cn(
-        "mobile-player liquid-glass dynamic-island z-40 flex w-full min-w-0 shrink-0 items-center gap-2 overflow-hidden border-t border-white/[0.07] px-2 transition-all duration-300 sm:gap-3 sm:px-4 lg:mx-auto lg:mb-3 lg:w-[min(92vw,760px)] lg:rounded-[2rem] lg:border lg:border-white/10 lg:px-3 lg:py-2 lg:shadow-[0_18px_60px_rgba(0,0,0,0.38)] lg:hover:scale-[1.01]",
-        compact ? "min-h-[60px] lg:min-h-0" : "min-h-[64px] sm:min-h-[76px] lg:min-h-0",
+        "mobile-player liquid-glass dynamic-island isolate z-40 mx-auto my-2 flex h-[68px] w-auto min-w-0 max-w-[28rem] shrink-0 items-center gap-2 overflow-hidden rounded-[1.6rem] border border-white/[0.1] px-2.5 transition-all duration-300 sm:mx-0 sm:my-0 sm:h-auto sm:max-w-none sm:rounded-none sm:border-x-0 sm:border-b-0 sm:px-4 sm:gap-3 lg:mb-3 lg:w-[min(92vw,760px)] lg:rounded-[2rem] lg:border lg:border-white/10 lg:px-3 lg:py-2 lg:shadow-[0_18px_60px_rgba(0,0,0,0.38)] lg:hover:scale-[1.01]",
+        compact ? "sm:min-h-[60px] lg:min-h-0" : "sm:min-h-[76px] lg:min-h-0",
       )}
     >
+      <div className="mobile-island-aura pointer-events-none absolute inset-0" aria-hidden="true" />
+
       {/* now playing */}
-      <div className="flex min-w-0 flex-1 basis-0 items-center gap-2 sm:max-w-[34%] sm:gap-3 lg:max-w-[230px] lg:flex-none lg:basis-[230px]">
-        <div className="mobile-player-art relative size-9 shrink-0 overflow-hidden rounded-full shadow-lg ring-1 ring-white/15 sm:size-11 lg:size-10">
+      <div className="relative z-10 flex min-w-0 flex-1 items-center gap-2 sm:max-w-[34%] sm:gap-3 lg:max-w-[230px] lg:flex-none lg:basis-[230px]">
+        <div className="mobile-player-art relative size-10 shrink-0 overflow-hidden rounded-[0.9rem] shadow-lg ring-1 ring-white/15 sm:size-11 lg:size-10 lg:rounded-md">
           <img src={current.coverUrl} alt="" className="size-full object-cover" />
           {isBuffering && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/40">
@@ -176,14 +185,21 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
           )}
         </div>
         <div className="min-w-0 flex-1 overflow-hidden">
-          <p
-            className={cn(
-              "truncate text-sm font-semibold",
-              isPlaying && "text-[rgb(var(--tint))]",
-            )}
-          >
-            {current.title}
-          </p>
+          <div className="flex min-w-0 items-center gap-1.5">
+            <p
+              className={cn(
+                "min-w-0 flex-1 truncate text-sm font-semibold",
+                isPlaying && "text-[rgb(var(--tint))]",
+              )}
+            >
+              {current.title}
+            </p>
+            <span className="mobile-live-cue" aria-hidden="true">
+              <i />
+              <i />
+              <i />
+            </span>
+          </div>
           <p className="block truncate text-xs text-muted-foreground">
             {current.artistName}
           </p>
@@ -216,7 +232,7 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
 
       {/* transport + seek — timestamps are desktop-only; on mobile the
             seekbar sits alone so prev/play/next never collide with them */}
-      <div className="flex min-w-0 flex-1 basis-0 flex-col items-center gap-0.5 lg:min-w-0">
+      <div className="relative z-10 flex w-auto shrink-0 flex-col items-center gap-0.5 sm:min-w-0 sm:flex-1 sm:basis-0 lg:min-w-0">
         <TransportControls className="sm:hidden" compact />
         <TransportControls className="hidden sm:flex" />
         <div className="hidden w-full max-w-xl items-center gap-2 sm:flex">
@@ -233,7 +249,7 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
       {/* right cluster — desktop keeps queue + volume + expand; mobile gets
             just the expand chevron (queue lives in the fullscreen player and
             the bottom tab bar already covers navigation) */}
-      <div className="flex w-auto shrink-0 items-center justify-end gap-0.5">
+      <div className="relative z-10 flex w-auto shrink-0 items-center justify-end gap-0.5">
         <button
           type="button"
           aria-label="Open queue"
@@ -250,10 +266,22 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
           type="button"
           aria-label="Open full-screen player"
           onClick={() => setFullscreen(true)}
-          className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
+          className="mobile-expand-button touch-manipulation rounded-full p-2 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground active:scale-90"
         >
           <Maximize2 className="size-4" />
         </button>
+      </div>
+
+      <div
+        className="mobile-player-progress"
+        role="progressbar"
+        aria-label="Playback progress"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(playbackProgress)}
+        aria-valuetext={`${formatTime(safeCurrentTime)} of ${formatTime(playbackDuration)}`}
+      >
+        <span style={{ transform: `scaleX(${playbackProgress / 100})` }} />
       </div>
     </footer>
   );

@@ -490,7 +490,7 @@ export function AppShell() {
         <PlayerBar compact={compactMode} />
 
         {/* mobile bottom nav */}
-        <nav className="mobile-bottom-nav liquid-glass z-30 flex h-14 shrink-0 items-center justify-around border-t border-white/[0.06] pb-[env(safe-area-inset-bottom)] lg:hidden">
+        <nav className="mobile-bottom-nav liquid-glass z-30 flex h-[calc(3.5rem+env(safe-area-inset-bottom))] shrink-0 items-center justify-around border-t border-white/[0.06] pb-[env(safe-area-inset-bottom)] lg:hidden">
           {MOBILE_NAV.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
