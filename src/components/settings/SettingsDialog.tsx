@@ -21,7 +21,7 @@ import {
   AUDIO_FILTERS,
 } from "@/lib/audio";
 import { useAuth } from "@/hooks/use-auth";
-import { clearPlayHistory, usePlayerStore } from "@/store/player";
+import { clearPlayHistory, prewarmYoutubeStream, usePlayerStore } from "@/store/player";
 import { cn } from "@/lib/utils";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -127,6 +127,7 @@ export function SettingsDialog({
   const setWallpaperType = usePlayerStore((s) => s.setWallpaperType);
   const hideSidebarEmail = usePlayerStore((s) => s.hideSidebarEmail);
   const toggleHideSidebarEmail = usePlayerStore((s) => s.toggleHideSidebarEmail);
+  const currentTrack = usePlayerStore((s) => s.current);
 
   const [name, setName] = useState("");
   const wallpaperInputRef = useRef<HTMLInputElement>(null);
@@ -222,6 +223,13 @@ export function SettingsDialog({
     const id = requestAnimationFrame(() => setName(user?.name ?? ""));
     return () => cancelAnimationFrame(id);
   }, [open, user?.name]);
+
+  // Resolve the current YouTube stream as soon as Settings opens. EQ playback
+  // can then switch to the filtered audio path without waiting on a second
+  // network round-trip when the user moves a slider.
+  useEffect(() => {
+    if (open && currentTrack?.youtubeId) prewarmYoutubeStream(currentTrack.youtubeId);
+  }, [open, currentTrack?.youtubeId]);
 
   const displayName =
     user?.name ?? (user?.isAnonymous ? "Guest" : "Listener");

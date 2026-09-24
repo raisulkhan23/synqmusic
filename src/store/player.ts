@@ -17,7 +17,7 @@ import {
 import type { RGB } from "@/lib/covers";
 import { toPlayableYoutube, type Playable } from "@/lib/playable";
 import * as ytEngine from "@/lib/youtubePlayer";
-import type { YtItem } from "@/lib/youtube";
+import { cacheStream, getCachedStream, type YtItem } from "@/lib/youtube";
 import { api } from "@/convex/_generated/api";
 import { ConvexClient } from "convex/browser";
 import { toast } from "sonner";
@@ -37,7 +37,7 @@ let ytResolveClient: ConvexClient | null = null;
 let ytSearchClient: ConvexClient | null = null;
 const convexSiteUrl = ((import.meta.env.VITE_CONVEX_URL as string) ?? "").replace(".cloud", ".site");
 const audioProxyBase = `${convexSiteUrl}/audio-proxy`;
-const ytResolve = async (videoId: string): Promise<string | null> => {
+const resolveYoutubeStream = async (videoId: string): Promise<string | null> => {
   // 1) Browser-side InnerTube resolution. Runs from the USER's IP, which is
   //    NOT subject to YouTube's datacenter bot-check (cloud functions get
   //    "Sign in to confirm you're not a bot" for most videos, which is what
@@ -164,6 +164,29 @@ const ytResolve = async (videoId: string): Promise<string | null> => {
   }
   return null;
 };
+
+const ytResolveCache = new Map<string, Promise<string | null>>();
+
+/** Resolve once per track, then reuse the stream while EQ/effects are adjusted. */
+const ytResolve = (videoId: string): Promise<string | null> => {
+  const cached = getCachedStream(videoId);
+  if (cached) return Promise.resolve(cached);
+  const existing = ytResolveCache.get(videoId);
+  if (existing) return existing;
+
+  const pending = resolveYoutubeStream(videoId).then((url) => {
+    if (url) cacheStream(videoId, url);
+    else ytResolveCache.delete(videoId);
+    return url;
+  });
+  ytResolveCache.set(videoId, pending);
+  return pending;
+};
+
+/** Start EQ stream resolution before the user changes a slider. */
+export function prewarmYoutubeStream(videoId: string): void {
+  void ytResolve(videoId);
+}
 
 export type RepeatMode = "off" | "all" | "one";
 
