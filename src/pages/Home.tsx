@@ -36,6 +36,15 @@ type RemoteMap = Record<string, YtItem[] | undefined>;
 const DISCOVERY_REFRESH_INTERVAL = 24 * 60 * 60 * 1000;
 const DISCOVERY_REFRESH_KEY = "synq:discovery-refreshed-at";
 
+const MOOD_LAUNCHES = [
+  { label: "Focus", query: "focus concentration music", tone: "from-sky-500/25 to-cyan-500/5" },
+  { label: "Slow morning", query: "soft acoustic morning songs", tone: "from-amber-500/25 to-orange-500/5" },
+  { label: "Workout", query: "high energy workout songs", tone: "from-rose-500/25 to-pink-500/5" },
+  { label: "Late night", query: "late night lofi chill beats", tone: "from-violet-500/25 to-indigo-500/5" },
+  { label: "Good vibes", query: "feel good upbeat songs", tone: "from-emerald-500/25 to-lime-500/5" },
+  { label: "Bengali moods", query: "Bengali acoustic songs", tone: "from-teal-500/25 to-cyan-500/5" },
+] as const;
+
 function markDiscoveryRefreshed() {
   try {
     window.localStorage.setItem(DISCOVERY_REFRESH_KEY, String(Date.now()));
@@ -380,6 +389,42 @@ export default function Home() {
             <p className="mt-0.5 truncate text-xs text-muted-foreground">{detail}</p>
           </Link>
         ))}
+      </section>
+
+      {/* one-tap mood launcher */}
+      <section>
+        <div className="mb-3 flex items-end justify-between gap-4">
+          <div>
+            <h2 className="font-display text-lg font-bold tracking-tight sm:text-xl">
+              Set the mood
+            </h2>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              Start a focused listening session without typing a thing.
+            </p>
+          </div>
+          <Link
+            to="/search"
+            className="hidden items-center gap-1 text-xs font-semibold text-[rgb(var(--tint))] transition-colors hover:text-foreground sm:flex"
+          >
+            Browse all <Search className="size-3.5" />
+          </Link>
+        </div>
+        <div className="slider-rail -mx-4 flex gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 lg:grid-cols-6">
+          {MOOD_LAUNCHES.map(({ label, query, tone }) => (
+            <Link
+              key={label}
+              to={`/search?q=${encodeURIComponent(query)}`}
+              className={cn(
+                "group relative flex h-24 w-36 shrink-0 flex-col justify-end overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-br p-3 transition-all hover:-translate-y-0.5 hover:border-[rgb(var(--tint)_/_0.35)] sm:w-auto",
+                tone,
+              )}
+            >
+              <span className="absolute -top-5 -right-4 size-20 rounded-full bg-white/[0.06] blur-xl transition-transform duration-500 group-hover:scale-125" />
+              <span className="relative text-sm font-semibold text-foreground">{label}</span>
+              <span className="relative mt-0.5 text-[10px] text-muted-foreground">Open mix →</span>
+            </Link>
+          ))}
+        </div>
       </section>
 
       {/* Songs of the week — global chart */}

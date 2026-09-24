@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 import { usePlayerStore } from "@/store/player";
-import { Loader2, Pause, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward } from "lucide-react";
+import { Loader2, Pause, Play, Repeat, Repeat1, RotateCcw, RotateCw, Shuffle, SkipBack, SkipForward } from "lucide-react";
 import type { ReactNode } from "react";
 
 function IconButton({
@@ -44,6 +44,8 @@ export function TransportControls({ className, compact = false }: { className?: 
   const prev = usePlayerStore((s) => s.prev);
   const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
   const cycleRepeat = usePlayerStore((s) => s.cycleRepeat);
+  const seek = usePlayerStore((s) => s.seek);
+  const currentTime = usePlayerStore((s) => s.currentTime);
 
   return (
     <div className={cn("flex items-center gap-0.5", className)}>
@@ -55,6 +57,16 @@ export function TransportControls({ className, compact = false }: { className?: 
       <IconButton disabled={!current} onClick={prev} label="Previous">
         <SkipBack className="size-4 fill-current" />
       </IconButton>
+      {!compact && (
+        <IconButton
+          disabled={!current}
+          onClick={() => seek(Math.max(0, currentTime - 10))}
+          label="Rewind 10 seconds"
+        >
+          <RotateCcw className="size-4" />
+          <span className="sr-only">10</span>
+        </IconButton>
+      )}
       <button
         type="button"
         aria-label={isPlaying ? "Pause" : "Play"}
@@ -73,6 +85,16 @@ export function TransportControls({ className, compact = false }: { className?: 
       <IconButton disabled={!current} onClick={next} label="Next">
         <SkipForward className="size-4 fill-current" />
       </IconButton>
+      {!compact && (
+        <IconButton
+          disabled={!current}
+          onClick={() => seek(currentTime + 10)}
+          label="Forward 10 seconds"
+        >
+          <RotateCw className="size-4" />
+          <span className="sr-only">10</span>
+        </IconButton>
+      )}
       {!compact && (
         <IconButton
           active={repeat !== "off"}
