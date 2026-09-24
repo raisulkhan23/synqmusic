@@ -113,7 +113,22 @@ function jumpToSetting(id: string) {
     if (id === "settings-data") return section.textContent?.includes("Your data") === true;
     return false;
   });
-  (directTarget ?? fallbackTarget)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const target = directTarget ?? fallbackTarget;
+  if (!target) return;
+
+  // The authenticated shell owns the scroll container. Scrolling that element
+  // directly avoids moving the whole document behind the fixed player/nav.
+  const scrollContainer = target.closest("main");
+  if (scrollContainer instanceof HTMLElement) {
+    const targetTop = target.getBoundingClientRect().top;
+    const containerTop = scrollContainer.getBoundingClientRect().top;
+    scrollContainer.scrollTo({
+      top: scrollContainer.scrollTop + targetTop - containerTop - 88,
+      behavior: "smooth",
+    });
+    return;
+  }
+  target.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 export function SettingsDialog({
@@ -535,7 +550,7 @@ export function SettingsDialog({
         showCloseButton={!pageMode}
         className={
           pageMode
-            ? "!static !top-auto !left-auto !z-10 !mx-auto !grid !w-full !max-w-3xl !translate-x-0 !translate-y-0 !gap-0 !rounded-none !border-0 !bg-background !p-5 !shadow-none sm:!p-8"
+            ? "liquid-glass !static !top-auto !left-auto !z-10 !mx-auto !grid !w-full !max-w-3xl !translate-x-0 !translate-y-0 !gap-0 !rounded-3xl !border !border-white/10 !p-5 !shadow-xl sm:!p-8"
             : "glass-card !fixed max-h-[85vh] max-w-md overflow-y-auto"
         }
       >

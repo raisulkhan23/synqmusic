@@ -76,10 +76,17 @@ function DialogContent({
     </DialogPrimitive.Content>
   )
 
-  // Page-mode dialogs must render in the route's React tree. A Radix portal
-  // can otherwise leave the page content behind the authenticated app shell,
-  // especially when the shell owns its own overflow and stacking contexts.
-  if (hideOverlay) return content
+  // Page-mode dialogs are regular route content, not floating dialogs. Keeping
+  // them out of Radix's Content primitive avoids its fixed positioning and
+  // hidden focus-scope styles, which can fight the authenticated app shell's
+  // own scroll container.
+  if (hideOverlay) {
+    return (
+      <div data-slot="dialog-content" className={className} {...props}>
+        {children}
+      </div>
+    )
+  }
 
   return (
     <DialogPortal data-slot="dialog-portal">
