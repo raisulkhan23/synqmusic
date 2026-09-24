@@ -111,7 +111,7 @@ function VisualizerDemo() {
 }
 
 const EXPERIENCE_TRACKS = [
-  { title: "Afterglow", artist: "Neon Fields", tone: "from-brand/80 via-lime-300/35 to-transparent", rotate: "-12" },
+  { title: "Show Me Love", artist: "Robin S", tone: "from-brand/80 via-lime-300/35 to-transparent", rotate: "-12" },
   { title: "Khusir Anek Range", artist: "Rp Creation", tone: "from-violet-500/75 via-fuchsia-400/25 to-transparent", rotate: "10" },
   { title: "Mahe Mahe Tobo", artist: "Nure Al Miskat", tone: "from-cyan-400/70 via-blue-500/25 to-transparent", rotate: "-7" },
 ];
@@ -152,7 +152,7 @@ function ListeningExperience() {
             className="absolute left-1/2 top-1/2 z-10 size-[122px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/20 bg-[#11151a] p-2 shadow-[0_20px_50px_rgba(0,0,0,0.55),0_0_45px_rgba(203,244,143,0.16)] sm:size-[164px]"
           >
             <div className="relative size-full overflow-hidden rounded-full border border-white/10">
-              <img src="/afterglow-cover.svg" alt="" className="size-full object-cover" />
+              <img src="/show-me-love-cover.svg" alt="" className="size-full object-cover" />
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,transparent_30%,rgba(0,0,0,0.45))]" />
               <div className="absolute left-1/2 top-1/2 size-7 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/40 bg-[#11151a] shadow-[0_0_0_5px_rgba(255,255,255,0.06)] sm:size-9" />
             </div>
@@ -341,7 +341,7 @@ export default function Landing() {
             <div className="flex items-center gap-4">
               <div className="relative shrink-0">
                 <img
-                  src="/afterglow-cover.svg"
+                  src="/show-me-love-cover.svg"
                   alt="Now playing cover"
                   onError={(e) => { (e.target as HTMLImageElement).style.visibility = "hidden"; }}
                   className="spin-slow size-16 rounded-full object-cover ring-4 ring-white/10"
@@ -350,9 +350,9 @@ export default function Landing() {
               </div>
               <div className="min-w-0">
                 <p className="font-display text-[15px] font-bold tracking-tight">
-                  Afterglow
+                  Show Me Love
                 </p>
-                <p className="text-xs text-muted-foreground">Neon Fields</p>
+                <p className="text-xs text-muted-foreground">Robin S</p>
               </div>
               <Heart className="ml-auto size-4 shrink-0 fill-brand text-brand" />
             </div>
