@@ -69,7 +69,7 @@ export function TransportControls({ className, compact = false }: { className?: 
           label="Rewind 10 seconds"
         >
           <RotateCcw className="size-[18px] stroke-[1.9]" />
-          <span className="absolute text-[7px] font-bold leading-none">10</span>
+          <span className="sr-only">10 seconds</span>
         </IconButton>
       )}
       <IconButton disabled={!current} onClick={prev} label="Previous">
@@ -103,7 +103,7 @@ export function TransportControls({ className, compact = false }: { className?: 
           label="Forward 10 seconds"
         >
           <RotateCw className="size-[18px] stroke-[1.9]" />
-          <span className="absolute text-[7px] font-bold leading-none">10</span>
+          <span className="sr-only">10 seconds</span>
         </IconButton>
       )}
       {!compact && (
