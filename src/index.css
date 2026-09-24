@@ -295,8 +295,17 @@ html,
   filter: saturate(0.75) brightness(0.9);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  html,
+  html.reduce-motion *,
+  html.reduce-motion *::before,
+  html.reduce-motion *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html,
   .theme-surface,
   .bg-background,
   .bg-card,
