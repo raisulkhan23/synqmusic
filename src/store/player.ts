@@ -999,10 +999,9 @@ function wireAudio() {
     if (typeof eq.treble === "number") setEqTrebleLib(eq.treble);
     if (typeof eq.balance === "number") setEqBalanceLib(eq.balance);
     if (eq.mono) setEqMonoLib(true);
-    if (eq.filter && eq.filter !== "off") {
-      // Applied lazily — the Web Audio graph only exists after a user gesture.
-      setTimeout(() => setAudioFilter(eq.filter as AudioFilterId), 800);
-    }
+    // Sound effects are intentionally session-only. Applying a persisted
+    // effect after startup made Bass Boost appear at random while a track was
+    // already playing; the user must explicitly enable it again.
   } catch {
     /* ignore */
   }
@@ -1039,13 +1038,6 @@ function wireAudio() {
     handleEnded();
   });
 
-  audio.addEventListener("error", () => {
-    usePlayerStore.setState((s) => ({
-      isBuffering: false,
-      isPlaying: false,
-      errorNonce: s.errorNonce + 1,
-    }));
-  });
 }
 
 // --- youtube iframe engine wiring --------------------------------------------
@@ -1089,6 +1081,10 @@ function wireYoutubeEngine() {
       onTimeUpdate(currentTime, duration);
     },
     onError: (code) => {
+      const current = usePlayerStore.getState().current;
+      // Ignore late errors from a previous YouTube load. Otherwise the
+      // fallback UI can replace the newly selected song with another upload.
+      if (!current?.youtubeId || ytEngine.getLoadedVideoId() !== current.youtubeId) return;
       if (ytEngine.isFatalError(code)) {
         clearYtLoadWatchdog();
         usePlayerStore.setState((s) => ({
@@ -1157,6 +1153,22 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
   let lastRemoved: { item: Playable; index: number } | null = null;
   /** Increments on every track load; stale async results are discarded. */
   let loadSeq = 0;
+
+  const watchAudioErrors = (audio: HTMLAudioElement, token: number, trackId: string) => {
+    const onError = () => {
+      // Ignore errors from a previous source that arrive after the user has
+      // already switched tracks. Without this guard they increment errorNonce
+      // and PlayerBar mistakes them for a failure of the new song, then
+      // searches for and swaps in a completely different upload.
+      if (token !== loadSeq || get().current?.id !== trackId) return;
+      set((state) => ({
+        isBuffering: false,
+        isPlaying: false,
+        errorNonce: state.errorNonce + 1,
+      }));
+    };
+    audio.addEventListener("error", onError, { once: true });
+  };
 
   /**
    * Keep the queue topped up: when autoplay is on and fewer than 3 upcoming
@@ -1270,7 +1282,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
         .catch(() => {
           clearYtLoadWatchdog();
           if (seq !== loadSeq) return;
-          set({ isPlaying: false, isBuffering: false, errorNonce: get().errorNonce + 1 });
+            set({ isPlaying: false, isBuffering: false, errorNonce: get().errorNonce + 1 });
         });
     } else {
       ytEngine.pause();
@@ -1284,8 +1296,9 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       }
       audio.src = track.audioUrl;
       audio.playbackRate = get().rate;
-      audio.load();
-      if (resumeAt > 0) {
+      watchAudioErrors(audio, seq, track.id);watchAudioErrors(audio, seq, track.id);
+        audio.load();
+        if (resumeAt > 0) {
         const applyResume = () => {
           audio.currentTime = resumeAt;
           usePlayerStore.setState({ currentTime: resumeAt });

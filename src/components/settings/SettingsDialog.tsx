@@ -190,15 +190,18 @@ export function SettingsDialog({
   // Audio settings — persisted locally, applied live to the Web Audio graph.
   const [eq, setEq] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem("ss.eq") ?? "{}") as {
+      const saved = JSON.parse(localStorage.getItem("ss.eq") ?? "{}") as {
         bass?: number;
         treble?: number;
         balance?: number;
         mono?: boolean;
         filter?: AudioFilterId;
       };
+      // Effects are session-scoped. Do not resurrect a previous Bass Boost
+      // from localStorage while a new track is already playing.
+      return { ...saved, filter: usePlayerStore.getState().audioFilter };
     } catch {
-      return {};
+      return { filter: usePlayerStore.getState().audioFilter };
     }
   });
   const persistEq = (next: typeof eq) => {
