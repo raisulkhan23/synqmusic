@@ -37,8 +37,11 @@ import {
   LogOut,
   Moon,
   Palette,
+  Pause,
   Pencil,
+  Play,
   SlidersHorizontal,
+  SkipForward,
   Sparkles,
   RotateCcw,
   Trash2,
@@ -172,6 +175,9 @@ export function SettingsDialog({
   const hideSidebarEmail = usePlayerStore((s) => s.hideSidebarEmail);
   const toggleHideSidebarEmail = usePlayerStore((s) => s.toggleHideSidebarEmail);
   const currentTrack = usePlayerStore((s) => s.current);
+  const isPlaying = usePlayerStore((s) => s.isPlaying);
+  const togglePlay = usePlayerStore((s) => s.togglePlay);
+  const next = usePlayerStore((s) => s.next);
 
   const [trackPalettes, setTrackPalettes] = useState(
     () => localStorage.getItem("ss.trackPalettes") !== "0",
@@ -761,6 +767,48 @@ export function SettingsDialog({
             <Gauge className="size-3.5" />
             Playback
           </p>
+
+          {currentTrack && (
+            <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-3">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium">Now playing</p>
+                  <p className="text-xs text-muted-foreground">Quick controls without leaving Settings</p>
+                </div>
+                <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-[rgb(var(--tint))]">
+                  <span className={cn("size-1.5 rounded-full", isPlaying ? "animate-pulse bg-[rgb(var(--tint))]" : "bg-white/30")} />
+                  {isPlaying ? "Live" : "Paused"}
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                {currentTrack.coverUrl ? (
+                  <img src={currentTrack.coverUrl} alt="" className="size-12 shrink-0 rounded-lg object-cover shadow-md" />
+                ) : (
+                  <div className="size-12 shrink-0 rounded-lg bg-white/[0.08]" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold">{currentTrack.title}</p>
+                  <p className="truncate text-xs text-muted-foreground">{currentTrack.artistName}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={togglePlay}
+                  aria-label={isPlaying ? "Pause current track" : "Play current track"}
+                  className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[rgb(var(--tint))] text-black transition-transform hover:scale-105 active:scale-95"
+                >
+                  {isPlaying ? <Pause className="size-4 fill-current" /> : <Play className="size-4 fill-current" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={next}
+                  aria-label="Skip to next track"
+                  className="flex size-9 shrink-0 items-center justify-center rounded-full border border-white/10 text-muted-foreground transition-colors hover:border-white/25 hover:text-foreground"
+                >
+                  <SkipForward className="size-4" />
+                </button>
+              </div>
+            </div>
+          )}
 
           <ToggleRow
             label="Shuffle by default"
