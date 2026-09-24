@@ -44,9 +44,15 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { toast } from "sonner";
+import {
+  deleteLiveWallpaperFile,
+  getLiveWallpaperUrl,
+  saveLiveWallpaperFile,
+  LIVE_WALLPAPER_MARKER,
+} from "@/lib/wallpaperStorage";
 
 const MAX_WALLPAPER_BYTES = 3_000_000;
-const MAX_LIVE_WALLPAPER_BYTES = 3_000_000;
+const MAX_LIVE_WALLPAPER_BYTES = 25_000_000;
 
 const SHORTCUTS: [string, string][] = [
   ["Space", "Play / pause"],
@@ -269,10 +275,11 @@ export function SettingsDialog({
       return;
     }
     setWallpaper(value, "video");
+    localStorage.setItem("ss.savedVideoUrl", value);
     toast.success("Live wallpaper applied");
   };
 
-  const handleLiveWallpaperFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+  const handleLiveWallpaperFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const input = event.currentTarget;
     const file = input.files?.[0];
     input.value = "";
@@ -282,23 +289,24 @@ export function SettingsDialog({
       return;
     }
     if (file.size > MAX_LIVE_WALLPAPER_BYTES) {
-      toast.error("Live wallpaper videos must be smaller than 3 MB");
+      toast.error("Live wallpaper videos must be smaller than 25 MB");
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result !== "string") {
-        toast.error("Couldn't read that video");
-        return;
-      }
-      setWallpaper(reader.result, "video");
+    try {
+      await saveLiveWallpaperFile(file);
+      if (wallpaper?.startsWith("blob:")) URL.revokeObjectURL(wallpaper);
+      const url = URL.createObjectURL(file);
+      setWallpaper(url, "video");
+      localStorage.removeItem("ss.savedVideoUrl");
+      // Keep a durable marker instead of the session-only blob URL.
+      localStorage.setItem("ss.wallpaper", LIVE_WALLPAPER_MARKER);
       setLiveWallpaperFileName(file.name);
       setLiveWallpaperUrl("");
       toast.success("Live wallpaper file applied");
-    };
-    reader.onerror = () => toast.error("Couldn't read that video");
-    reader.readAsDataURL(file);
+    } catch {
+      toast.error("Couldn't save that video — try a smaller file");
+    }
   };
 
   const handleWallpaperChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -321,6 +329,7 @@ export function SettingsDialog({
         toast.error("Couldn't read that image");
         return;
       }
+      localStorage.setItem("ss.savedImageWallpaper", reader.result);
       setWallpaper(reader.result);
       toast.success("Wallpaper applied");
     };
@@ -329,6 +338,10 @@ export function SettingsDialog({
   };
 
   const clearWallpaper = () => {
+    if (wallpaper?.startsWith("blob:")) URL.revokeObjectURL(wallpaper);
+    void deleteLiveWallpaperFile();
+    localStorage.removeItem("ss.savedImageWallpaper");
+    localStorage.removeItem("ss.savedVideoUrl");
     setWallpaper(null);
     setLiveWallpaperFileName("");
     toast("Wallpaper removed");
@@ -709,9 +722,9 @@ export function SettingsDialog({
           <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
             <div className="flex items-center gap-3">
               <div className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-black/20">
-                {wallpaper && wallpaperType === "video" ? (
+                {wallpaper && wallpaperType === "video" && wallpaper !== LIVE_WALLPAPER_MARKER ? (
                   <video src={wallpaper} muted loop autoPlay playsInline className="size-full object-cover" />
-                ) : wallpaper ? (
+                ) : wallpaper && wallpaper !== LIVE_WALLPAPER_MARKER ? (
                   <img src={wallpaper} alt="Wallpaper preview" className="size-full object-cover" />
                 ) : (
                   <ImagePlus className="size-5 text-muted-foreground" />
@@ -734,12 +747,49 @@ export function SettingsDialog({
                   type="button"
                   onClick={() => {
                     if (type === wallpaperType) return;
-                    const switchingFromImage = type === "video" && wallpaper?.startsWith("data:image/");
-                    const switchingFromVideo = type === "image" && wallpaper?.startsWith("http");
-                    if (wallpaper && (switchingFromImage || switchingFromVideo)) {
-                      setWallpaper(null, type);
+                    const hasVideoWallpaper = Boolean(
+                      wallpaper &&
+                        (wallpaper.startsWith("http") ||
+                          wallpaper.startsWith("blob:") ||
+                          wallpaper.startsWith("data:video/") ||
+                          wallpaper === LIVE_WALLPAPER_MARKER),
+                    );
+                    if (type === "video") {
+                      // Restore the uploaded file when switching back from Photo;
+                      // switching modes must not delete the saved live wallpaper.
+                      void getLiveWallpaperUrl().then((url) => {
+                        if (url) {
+                          if (wallpaper?.startsWith("blob:")) URL.revokeObjectURL(wallpaper);
+                          setWallpaper(url, "video");
+                          localStorage.setItem("ss.wallpaper", LIVE_WALLPAPER_MARKER);
+                          return;
+                        }
+                        if (wallpaper && !hasVideoWallpaper) {
+                          localStorage.setItem("ss.savedImageWallpaper", wallpaper);
+                          setWallpaper(null, "video");
+                        } else {
+                          const savedVideoUrl = localStorage.getItem("ss.savedVideoUrl");
+                          if (savedVideoUrl) setWallpaper(savedVideoUrl, "video");
+                          else setWallpaperType("video");
+                        }
+                      }).catch(() => {
+                        if (wallpaper && !hasVideoWallpaper) {
+                          localStorage.setItem("ss.savedImageWallpaper", wallpaper);
+                          setWallpaper(null, "video");
+                        } else {
+                          const savedVideoUrl = localStorage.getItem("ss.savedVideoUrl");
+                          if (savedVideoUrl) setWallpaper(savedVideoUrl, "video");
+                          else setWallpaperType("video");
+                        }
+                      });
+                    } else if (wallpaper && hasVideoWallpaper) {
+                      if (wallpaper.startsWith("blob:")) URL.revokeObjectURL(wallpaper);
+                      if (wallpaper.startsWith("http")) localStorage.setItem("ss.savedVideoUrl", wallpaper);
+                      const savedImage = localStorage.getItem("ss.savedImageWallpaper");
+                      if (savedImage) setWallpaper(savedImage, "image");
+                      else setWallpaper(null, "image");
                     } else {
-                      setWallpaperType(type);
+                      setWallpaperType("image");
                     }
                   }}
                   className={cn(
@@ -818,7 +868,7 @@ export function SettingsDialog({
                     </span>
                   )}
                 </div>
-                <p className="mt-2 text-[11px] text-muted-foreground">MP4, WebM or OGG · up to 3 MB</p>
+                <p className="mt-2 text-[11px] text-muted-foreground">MP4, WebM or OGG · up to 25 MB</p>
               </>
             )}
 

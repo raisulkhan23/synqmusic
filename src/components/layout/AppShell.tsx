@@ -15,6 +15,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { House, ListMusic, Search, Settings, UserRound, WifiOff } from "lucide-react";
 import { usePlayerStore, type RemoteLikeSnapshot } from "@/store/player";
 import { track } from "@/lib/analytics";
+import { getLiveWallpaperUrl, LIVE_WALLPAPER_MARKER } from "@/lib/wallpaperStorage";
 
 const MOBILE_NAV = [
   { to: "/home", label: "Home", icon: House },
@@ -33,6 +34,30 @@ export function AppShell() {
   const [offline, setOffline] = useState(!navigator.onLine);
   const rippleLayerRef = useRef<HTMLDivElement>(null);
   const cursorTrailRefs = useRef<Array<HTMLSpanElement | null>>([]);
+
+  // Restore an uploaded live wallpaper from IndexedDB after a page reload.
+  useEffect(() => {
+    const initial = usePlayerStore.getState();
+    if (initial.wallpaper !== LIVE_WALLPAPER_MARKER || initial.wallpaperType !== "video") return;
+
+    let restoredUrl: string | null = null;
+    void getLiveWallpaperUrl()
+      .then((url) => {
+        if (!url) {
+          initial.setWallpaper(null, "video");
+          return;
+        }
+        restoredUrl = url;
+        initial.setWallpaper(url, "video");
+        // setWallpaper receives a session-only blob URL; keep only the marker.
+        localStorage.setItem("ss.wallpaper", LIVE_WALLPAPER_MARKER);
+      })
+      .catch(() => initial.setWallpaper(null, "video"));
+
+    return () => {
+      if (restoredUrl) URL.revokeObjectURL(restoredUrl);
+    };
+  }, []);
 
   // Offline mode banner — react to connectivity changes live.
   useEffect(() => {
@@ -334,7 +359,7 @@ export function AppShell() {
           <div ref={rippleLayerRef} className="pointer-events-none absolute inset-0 -z-[4] overflow-hidden" aria-hidden="true" />
         </>
       )}
-      {wallpaper && (
+      {wallpaper && wallpaper !== LIVE_WALLPAPER_MARKER && (
         <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden bg-background/35" aria-hidden="true">
           {wallpaperType === "video" ? (
             <video
