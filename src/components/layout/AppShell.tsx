@@ -5,6 +5,7 @@ import * as ytEngine from "@/lib/youtubePlayer";
 import { FullscreenPlayer } from "@/components/player/FullscreenPlayer";
 import { PlayerBar } from "@/components/player/PlayerBar";
 import { QueuePanel } from "@/components/player/QueuePanel";
+import { VerificationDialog } from "@/components/player/VerificationDialog";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { SettingsDialog } from "@/components/settings/SettingsDialog";
 import { Logo } from "@/components/brand/Logo";
@@ -279,6 +280,7 @@ export function AppShell() {
       </div>
 
       <QueuePanel />
+      <VerificationDialog />
       <FullscreenPlayer />
       <SettingsDialog
         open={settingsOpen}

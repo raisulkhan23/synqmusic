@@ -32,6 +32,14 @@ let ytResolveClient: ConvexClient | null = null;
 let ytSearchClient: ConvexClient | null = null;
 const convexSiteUrl = ((import.meta.env.VITE_CONVEX_URL as string) ?? "").replace(".cloud", ".site");
 const audioProxyBase = `${convexSiteUrl}/audio-proxy`;
+/**
+ * True when the last resolution attempt for this video failed specifically
+ * because YouTube wants a human verification (not because of a network
+ * hiccup). Tracked from the server resolver's `reason` field.
+ */
+let botCheckVideoId: string | null = null;
+const isBotCheckPending = (videoId: string) => botCheckVideoId === videoId;
+
 const ytResolve = async (videoId: string): Promise<string | null> => {
   // 1) Browser-side InnerTube resolution. Runs from the USER's IP, which is
   //    NOT subject to YouTube's datacenter bot-check (cloud functions get
@@ -109,6 +117,15 @@ const ytResolve = async (videoId: string): Promise<string | null> => {
     const slow = net?.effectiveType === "2g" || net?.effectiveType === "slow-2g" || net?.effectiveType === "3g";
     const res = await ytResolveClient.action(api.youtube.resolveStream, { videoId, quality: slow ? "low" : "high" });
     if (res?.url) return `${audioProxyBase}?u=${encodeURIComponent(res.url)}`;
+    // YouTube's "Sign in to confirm you're not a bot" check — the user can
+    // clear it in the in-app verification dialog, then we retry.
+    const reason = res?.reason ?? "";
+    if (/not a bot|sign in to confirm|login_required/i.test(reason)) {
+      botCheckVideoId = videoId;
+      usePlayerStore.getState().openHumanVerification();
+    } else if (res?.url) {
+      botCheckVideoId = null;
+    }
   } catch {
     /* fall through to browser-side resolution */
   }
@@ -194,6 +211,14 @@ interface PlayerStore {
   duration: number;
   bufferedEnd: number;
   errorNonce: number;
+  /**
+   * YouTube showed a "confirm you're not a bot" check for the current track.
+   * The user can clear it in the verification dialog; we then retry the
+   * stream resolution so effects/EQ start working.
+   */
+  needsHumanVerification: boolean;
+  openHumanVerification: () => void;
+  closeHumanVerification: () => void;
 
   // preferences
   volume: number;
@@ -1657,6 +1682,11 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
             description: "Resolving an audio stream \u2014 it kicks in automatically",
           });
           scheduleEffectRetry(videoId);
+          // If YouTube is asking for a human check, surface it in-app so the
+          // user can clear it once and the EQ works for the whole session.
+          if (isBotCheckPending(videoId)) {
+            usePlayerStore.getState().openHumanVerification();
+          }
         }
         getAudio().pause();
         ytEngine
@@ -1751,6 +1781,9 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     duration: 0,
     bufferedEnd: 0,
     errorNonce: 0,
+    needsHumanVerification: false,
+    openHumanVerification: () => set({ needsHumanVerification: true }),
+    closeHumanVerification: () => set({ needsHumanVerification: false }),
 
     volume: initialVolume,
     muted: initialMuted,
