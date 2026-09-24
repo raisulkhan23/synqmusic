@@ -24,7 +24,7 @@ function IconButton({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "touch-manipulation flex size-9 items-center justify-center rounded-full text-foreground/70 transition-[color,background-color,transform,opacity] duration-200 hover:bg-white/[0.07] hover:text-foreground active:scale-90 disabled:pointer-events-none disabled:opacity-35",
+        "relative touch-manipulation flex size-9 items-center justify-center rounded-full text-foreground/70 transition-[color,background-color,transform,opacity] duration-200 hover:bg-white/[0.07] hover:text-foreground active:scale-90 disabled:pointer-events-none disabled:opacity-35",
         active && "bg-[rgb(var(--tint)_/_0.1)] text-[rgb(var(--tint))] hover:bg-[rgb(var(--tint)_/_0.16)]",
       )}
     >
@@ -62,9 +62,6 @@ export function TransportControls({ className, compact = false }: { className?: 
           <Shuffle className="size-[18px] stroke-[1.9]" />
         </IconButton>
       )}
-      <IconButton disabled={!current} onClick={prev} label="Previous">
-        <SkipBack className="size-[19px] fill-current stroke-[1.6]" />
-      </IconButton>
       {!compact && (
         <IconButton
           disabled={!current}
@@ -72,9 +69,12 @@ export function TransportControls({ className, compact = false }: { className?: 
           label="Rewind 10 seconds"
         >
           <RotateCcw className="size-[18px] stroke-[1.9]" />
-          <span className="sr-only">10</span>
+          <span className="absolute text-[7px] font-bold leading-none">10</span>
         </IconButton>
       )}
+      <IconButton disabled={!current} onClick={prev} label="Previous">
+        <SkipBack className="size-[19px] fill-current stroke-[1.6]" />
+      </IconButton>
       <button
         type="button"
         aria-label={isPlaying ? "Pause" : "Play"}
@@ -103,7 +103,7 @@ export function TransportControls({ className, compact = false }: { className?: 
           label="Forward 10 seconds"
         >
           <RotateCw className="size-[18px] stroke-[1.9]" />
-          <span className="sr-only">10</span>
+          <span className="absolute text-[7px] font-bold leading-none">10</span>
         </IconButton>
       )}
       {!compact && (
