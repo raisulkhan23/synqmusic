@@ -535,7 +535,7 @@ export function SettingsDialog({
         showCloseButton={!pageMode}
         className={
           pageMode
-            ? "!static !top-auto !left-auto !z-10 !mx-auto !grid !min-h-dvh !w-full !max-w-3xl !translate-x-0 !translate-y-0 !gap-0 !overflow-y-auto !rounded-none !border-0 !bg-background !p-5 !shadow-none sm:!p-8"
+            ? "!static !top-auto !left-auto !z-10 !mx-auto !grid !w-full !max-w-3xl !translate-x-0 !translate-y-0 !gap-0 !rounded-none !border-0 !bg-background !p-5 !shadow-none sm:!p-8"
             : "glass-card !fixed max-h-[85vh] max-w-md overflow-y-auto"
         }
       >
