@@ -147,8 +147,6 @@ export function SettingsDialog({
   const setRate = usePlayerStore((s) => s.setRate);
   const autoplay = usePlayerStore((s) => s.autoplay);
   const toggleAutoplay = usePlayerStore((s) => s.toggleAutoplay);
-  const videoEnabled = usePlayerStore((s) => s.videoEnabled);
-  const toggleVideo = usePlayerStore((s) => s.toggleVideo);
   const shuffle = usePlayerStore((s) => s.shuffle);
   const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
   const accentTheme = usePlayerStore((s) => s.accentTheme);
@@ -764,15 +762,6 @@ export function SettingsDialog({
             Playback
           </p>
 
-          <ToggleRow
-            label="Video in full-screen player"
-            description="Show the music video when maximizing"
-            on={videoEnabled}
-            onToggle={() => {
-              toggleVideo();
-              toast(videoEnabled ? "Video off" : "Video on");
-            }}
-          />
           <ToggleRow
             label="Shuffle by default"
             description="Start queues shuffled"
