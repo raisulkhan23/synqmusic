@@ -27,6 +27,7 @@ import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import {
   Check,
+  Database,
   Film,
   Gauge,
   ImageOff,
@@ -102,6 +103,16 @@ type FocusLayout = (typeof FOCUS_LAYOUTS)[number]["id"];
 
 function isFocusLayout(value: string | null): value is FocusLayout {
   return FOCUS_LAYOUTS.some((layout) => layout.id === value);
+}
+
+function jumpToSetting(id: string) {
+  const directTarget = document.getElementById(id);
+  const fallbackTarget = Array.from(document.querySelectorAll("section")).find((section) => {
+    if (id === "settings-shortcuts") return section.querySelector("kbd") !== null;
+    if (id === "settings-data") return section.textContent?.includes("Your data") === true;
+    return false;
+  });
+  (directTarget ?? fallbackTarget)?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 export function SettingsDialog({
@@ -523,8 +534,40 @@ export function SettingsDialog({
           </DialogDescription>
         </DialogHeader>
 
+        <nav className="sticky top-0 z-20 -mx-1 border-y border-white/[0.07] bg-card/90 px-1 py-2 backdrop-blur-xl" aria-label="Settings sections">
+          <div className="flex items-center gap-2">
+            <span className="shrink-0 px-1 text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">
+              Jump to
+            </span>
+            <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto pb-0.5">
+              {([
+                ["Profile", "settings-profile", UserRound],
+                ["Playback", "settings-playback", Gauge],
+                ["Audio", "settings-audio", SlidersHorizontal],
+                ["Appearance", "settings-appearance", Palette],
+                ["Personalize", "settings-personalization", Sparkles],
+                ["Shortcuts", "settings-shortcuts", Keyboard],
+                ["Data", "settings-data", Database],
+              ] as const).map(([label, id, Icon]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => jumpToSetting(id as string)}
+                  className={cn(
+                    "inline-flex shrink-0 items-center gap-1.5 rounded-full border border-transparent px-2.5 py-1.5 text-[11px] font-semibold text-muted-foreground transition-colors hover:border-white/10 hover:bg-white/[0.05] hover:text-foreground",
+                    label === "Shortcuts" && "hidden sm:inline-flex",
+                  )}
+                >
+                  <Icon className="size-3" />
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </nav>
+
         {/* profile */}
-        <section className="flex flex-col gap-2.5">
+        <section id="settings-profile" className="scroll-mt-20 flex flex-col gap-2.5">
           <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
             <UserRound className="size-3.5" />
             Profile
@@ -644,7 +687,7 @@ export function SettingsDialog({
         <Separator className="bg-white/[0.07]" />
 
         {/* playback */}
-        <section className="flex flex-col gap-2.5">
+        <section id="settings-playback" className="scroll-mt-20 flex flex-col gap-2.5">
           <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
             <Gauge className="size-3.5" />
             Playback
@@ -697,7 +740,7 @@ export function SettingsDialog({
         <Separator className="bg-white/[0.07]" />
 
         {/* audio */}
-        <section className="flex flex-col gap-2.5">
+        <section id="settings-audio" className="scroll-mt-20 flex flex-col gap-2.5">
           <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
             <SlidersHorizontal className="size-3.5" />
             Audio
@@ -807,7 +850,7 @@ export function SettingsDialog({
         <Separator className="bg-white/[0.07]" />
 
         {/* appearance */}
-        <section className="flex flex-col gap-2.5">
+        <section id="settings-appearance" className="scroll-mt-20 flex flex-col gap-2.5">
           <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
             <Palette className="size-3.5" />
             Appearance
@@ -1384,7 +1427,7 @@ export function SettingsDialog({
         <Separator className="bg-white/[0.07]" />
 
         {/* personalization */}
-        <section className="flex flex-col gap-2">
+        <section id="settings-personalization" className="scroll-mt-20 flex flex-col gap-2">
           <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
             <Sparkles className="size-3.5" />
             Personalization
