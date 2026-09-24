@@ -348,6 +348,15 @@ function hasMusicEvidence(item: YtItem): boolean {
     MUSIC_VIDEO_MARKER_RE.test(`${item.title} ${item.artist}`);
 }
 
+function matchesSearchQuery(item: YtItem, query: string): boolean {
+  const terms = normalizeMatchText(query)
+    .split(" ")
+    .filter((term) => term.length > 1 && !QUERY_NOISE_RE.test(term));
+  if (terms.length === 0) return false;
+  const result = normalizeMatchText(`${item.title} ${item.artist}`);
+  return terms.every((term) => result.includes(term));
+}
+
 function extractMusicResults(data: Record<string, unknown>): YtItem[] {
   const out: YtItem[] = [];
   const others: YtItem[] = [];
@@ -577,7 +586,15 @@ export const searchYoutube = action({
     // be stricter than the primary path: no duration-less or marker-less
     // uploads, otherwise a generic vlog can appear to be a song result.
     return {
-      items: dedupeMusicItems(extractSearchResults(data).filter(isMusicTrack).filter(hasMusicEvidence)),
+      items: dedupeMusicItems(
+        extractSearchResults(data).filter(
+          (item) =>
+            isMusicTrack(item) &&
+            item.duration >= 30 &&
+            item.duration <= 900 &&
+            (hasMusicEvidence(item) || matchesSearchQuery(item, query)),
+        ),
+      ),
     };
   },
 });
