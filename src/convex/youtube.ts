@@ -256,7 +256,7 @@ function isMusicTrack(item: YtItem): boolean {
 // marker, a song-like duration, and a close match to the user's query so a
 // video that merely mentions a song can never leak into this list.
 const MUSIC_VIDEO_MARKER_RE =
-  /\b(lyrics?|lyrical|lofi|lo-fi|music\s*video|audio|song|official\s*(audio|video)|remix|version)\b/i;
+  /\b(lyrics?|lyrical|lofi|lo-fi|music\s*video|official\s*(audio|video))\b/i;
 const QUERY_NOISE_RE =
   /\b(song|songs|music|track|video|official|lyrics?|lyrical|lofi|lo-fi|remix|version|full|album|audio)\b/i;
 

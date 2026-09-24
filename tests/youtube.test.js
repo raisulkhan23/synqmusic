@@ -30,8 +30,32 @@ describe("supplemental lyric-video filtering", () => {
     ...overrides,
   });
 
-  test("accepts a matching lyric upload", () => {
+  test("accepts the attached lo-fi music-video shape", () => {
+    expect(
+      isLyricVideoTrack(
+        {
+          id: "lofi-1",
+          title: "This’ll Kill Me Yet | Mahe Mahe Tobo | LoFi Version | NURE AL MISKAT | MUSIC VIDEO",
+          artist: "NURE AL MISKAT",
+          duration: 304,
+          thumbnail: "",
+        },
+        "This’ll Kill Me Yet",
+      ),
+    ).toBe(true);
+  });
+
+  test("accepts the attached Bengali lyric-video shape", () => {
     expect(isLyricVideoTrack(item(), "Khusir Anek Range Achena Atithi")).toBe(true);
+  });
+
+  test("does not treat a generic version label as music evidence", () => {
+    expect(
+      isLyricVideoTrack(
+        item({ title: "Khusir Anek Range Achena Atithi Version", artist: "Random Uploads" }),
+        "Khusir Anek Range Achena Atithi",
+      ),
+    ).toBe(false);
   });
 
   test("rejects a random video even when it mentions music", () => {
