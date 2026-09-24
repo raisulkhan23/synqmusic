@@ -69,14 +69,20 @@ const ytResolve = async (videoId: string): Promise<string | null> => {
           .filter((s) => !!s.url && (!s.mimeType || s.mimeType.includes("audio")))
           .sort((a, b) => (b.bitrate ?? 0) - (a.bitrate ?? 0));
         if (audioStreams[0]?.url) return audioStreams[0].url;
-        // Fallback: the muxed itag-18 360p MP4 (video+audio). Piped's proxy
-        // serves it with CORS headers, and Web Audio can decode the audio
-        // track of an MP4 just fine — so effects still get real audio even
-        // when YouTube strips audio-only formats for this video.
-        const muxed = (data.videoStreams ?? []).find(
-          (s) => !!s.url && s.videoOnly === false && s.quality === "360p",
-        );
-        if (muxed?.url) return muxed.url;
+        // Fallback: ANY muxed (video+audio) stream, not just exact "360p".
+        // Piped now strips audio-only formats for many videos (verified live:
+        // audioStreams comes back EMPTY), so muxed is often the only source.
+        // Web Audio decodes its audio track fine, and Piped's proxy serves
+        // CORS headers. Sort by lowest resolution — we only need the audio.
+        const muxed = (data.videoStreams ?? [])
+          .filter(
+            (s) =>
+              !!s.url &&
+              s.videoOnly === false &&
+              (!s.mimeType || s.mimeType.includes("mp4") || s.mimeType.includes("webm")),
+          )
+          .sort((a, b) => (parseInt(a.quality ?? "0", 10) || 9999) - (parseInt(b.quality ?? "0", 10) || 9999));
+        if (muxed[0]?.url) return muxed[0].url;
       } catch {
         continue;
       }

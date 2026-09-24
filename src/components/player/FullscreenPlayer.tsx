@@ -400,11 +400,18 @@ export function FullscreenPlayer() {
     let tries = 0;
     let timer: ReturnType<typeof setTimeout>;
     const attempt = () => {
-      // The engine may not even have this video loaded (e.g. the track is
-      // playing through the filtered <audio> path) — no overlay is possible.
-      // Show the inline embed immediately instead of spinning forever.
+      // The engine may not have this video loaded YET (the effect path loads
+      // the muted visual slave asynchronously) — but "not loaded yet" is not
+      // "impossible": only give up AFTER the slave has had time to start.
+      // Checking once and instantly swapping to the dead inline embed used to
+      // make the video a black frame whenever any effect was active.
       const engineVideo = getLoadedVideoId();
       if (engineVideo !== current.youtubeId) {
+        if (++tries < 25) {
+          // ~2.5s total for the slave load; if it still isn't there, embed.
+          timer = setTimeout(attempt, 100);
+          return;
+        }
         setEmbedFallback(true);
         return;
       }
@@ -422,8 +429,8 @@ export function FullscreenPlayer() {
       if (++tries < 40) timer = setTimeout(attempt, 100); // ~4s
       else setEmbedFallback(true); // overlaid live player failed — show an inline embed instead
     };
-    // Give the slave a beat to load when an effect is active — the engine
-    // load is async, so the very first check can race it.
+    // Longer warm-up when an effect is active: the muted video slave has to
+    // load through the engine before the overlay can present it.
     timer = setTimeout(attempt, audioFilter !== "off" ? 900 : 250);
     return () => {
       clearTimeout(timer);
