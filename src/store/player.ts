@@ -7,6 +7,7 @@ import {
   setEqBalance as setEqBalanceLib,
   setEqMono as setEqMonoLib,
   ensureGraph,
+  AUDIO_FILTERS,
   type AudioFilterId,
 } from "@/lib/audio";
 import type { RGB } from "@/lib/covers";
@@ -1504,6 +1505,63 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
    * audio element so the Web Audio effect chain applies. Falls back to the
    * IFrame engine when resolution fails.
    */
+  /**
+   * Stream resolution is the fragile part of the EQ chain: YouTube
+   * bot-blocks datacenter IPs and public Piped instances intermittently
+   * return nothing. A single failed attempt used to kill the effect
+   * ("Effect unavailable"). Retry a few times with backoff instead, then
+   * schedule a background retry that swaps the song onto the filtered path
+   * as soon as ANY resolver succeeds.
+   */
+  let effectRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  const scheduleEffectRetry = (videoId: string) => {
+    if (effectRetryTimer) clearTimeout(effectRetryTimer);
+    let attempts = 0;
+    const tryResolve = () => {
+      attempts += 1;
+      void ytResolve(videoId).then((url) => {
+        if (url) {
+          const s = usePlayerStore.getState();
+          // Only swap if this song is still playing AND the effect is still
+          // wanted — never hijack playback after the user moved on.
+          if (s.current?.youtubeId !== videoId || s.audioFilter === "off") return;
+          swapToFilteredStream(s.current, s.currentTime);
+          const label = AUDIO_FILTERS.find((f) => f.id === s.audioFilter)?.label ?? "Effect";
+          toast.success(`${label} applied`, { id: "fx-retry" });
+          return;
+        }
+        if (attempts < 8) effectRetryTimer = setTimeout(tryResolve, 15_000);
+      });
+    };
+    effectRetryTimer = setTimeout(tryResolve, 12_000);
+  };
+
+  /** Play a resolved stream through the <audio> element at `at` seconds. */
+  const swapToFilteredStream = (track: Playable, at: number) => {
+    const videoId = track.youtubeId;
+    if (!videoId) return;
+    const seq = ++loadSeq;
+    void ytResolve(videoId).then((url) => {
+      if (!url || seq !== loadSeq) return;
+      const audio = getAudio();
+      ytEngine.pause();
+      audio.src = url;
+      audio.playbackRate = get().rate;
+      audio.load();
+      if (at > 0) {
+        const applyResume = () => {
+          audio.currentTime = at;
+          usePlayerStore.setState({ currentTime: at });
+        };
+        if (audio.readyState >= 1) applyResume();
+        else audio.addEventListener("loadedmetadata", applyResume, { once: true });
+      }
+      void audio.play().catch(() => undefined);
+      usePlayerStore.setState({ current: { ...track, audioUrl: url }, currentTime: at });
+      syncVideoSlave();
+    });
+  };
+
   const resolveAndPlayWithFilter = (track: Playable, resumeAt: number, forEffect = false) => {
     const videoId = track.youtubeId;
     if (!videoId) return;
@@ -1555,8 +1613,15 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
         // Only tell the user the effect failed when one was actually requested;
         // rescue-loads (playViaStream) use this same path without an effect.
         if (forEffect) {
-          toast.error("Effect unavailable for this song — playing without it", { id: "fx-fallback" });
-          usePlayerStore.setState({ audioFilter: "off" });
+          // Keep the effect SELECTED and keep retrying in the background:
+          // the moment any resolver succeeds the song is swapped onto the
+          // filtered path automatically. Turning the effect off here (and
+          // toasting "unavailable") is what made the EQ look broken.
+          toast("Applying effect\u2026", {
+            id: "fx-fallback",
+            description: "Resolving an audio stream \u2014 it kicks in automatically",
+          });
+          scheduleEffectRetry(videoId);
         }
         getAudio().pause();
         ytEngine
