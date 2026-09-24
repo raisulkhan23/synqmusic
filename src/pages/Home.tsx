@@ -29,7 +29,7 @@ import {
   Sun,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type RemoteMap = Record<string, YtItem[] | undefined>;
 
@@ -149,7 +149,6 @@ export default function Home() {
   }, [continueTrack?.title, continueArtistName, timeLabel, season, favArtist]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [remote, setRemote] = useState<RemoteMap>({});
-  const fetchedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -158,8 +157,7 @@ export default function Home() {
     (async () => {
       await Promise.all(
         remoteQueries.map(async ({ key, query, fallback }) => {
-          if (cancelled || fetchedRef.current.has(key)) return;
-          fetchedRef.current.add(key);
+          if (cancelled) return;
           for (const q of [query, fallback]) {
             if (!q) continue;
             try {
