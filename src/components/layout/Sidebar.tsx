@@ -284,9 +284,6 @@ export function Sidebar() {
               )
             }
           >
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-indigo-500 to-violet-300">
-              <Heart className="size-4 fill-current text-white" />
-            </span>
             <span className="min-w-0">
               <span className="block truncate">Liked Songs</span>
               <span className="block text-xs text-muted-foreground">Playlist</span>
@@ -302,9 +299,6 @@ export function Sidebar() {
               )
             }
           >
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-emerald-600 to-teal-300">
-              <History className="size-4 text-white" />
-            </span>
             <span className="min-w-0">
               <span className="block truncate">Recently Played</span>
               <span className="block text-xs text-muted-foreground">History</span>
