@@ -11,13 +11,15 @@ const TRUSTED_ORIGINS = [
   SITE_URL_ENV,
   "https://synqmusic.freebuff.app",
   "https://synq-music.freebuff.app",
+  "https://freebuff.com",
+  "https://www.freebuff.com",
 ].filter((x): x is string => !!x).map((x) => x.replace(/\/$/, ""));
 
 function isTrustedOrigin(origin: string): boolean {
   const normalized = origin.replace(/\/$/, "");
   return (
     TRUSTED_ORIGINS.includes(normalized) ||
-    /^https:\/\/[a-z0-9-]+\.freebuff\.app$/i.test(normalized) ||
+    /^https:\/\/(?:[a-z0-9-]+\.)*freebuff\.(?:app|com)$/i.test(normalized) ||
     /^https:\/\/[a-z0-9-]+\.vly\.sh$/i.test(normalized)
   );
 }
