@@ -24,8 +24,8 @@ function IconButton({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "touch-manipulation rounded-full p-2 text-muted-foreground transition-all active:scale-90 hover:text-foreground disabled:pointer-events-none disabled:opacity-40",
-        active && "text-[rgb(var(--tint))]",
+        "touch-manipulation flex size-9 items-center justify-center rounded-full text-foreground/70 transition-[color,background-color,transform,opacity] duration-200 hover:bg-white/[0.07] hover:text-foreground active:scale-90 disabled:pointer-events-none disabled:opacity-35",
+        active && "bg-[rgb(var(--tint)_/_0.1)] text-[rgb(var(--tint))] hover:bg-[rgb(var(--tint)_/_0.16)]",
       )}
     >
       {children}
@@ -48,14 +48,22 @@ export function TransportControls({ className, compact = false }: { className?: 
   const currentTime = usePlayerStore((s) => s.currentTime);
 
   return (
-    <div className={cn("flex items-center gap-0.5", className)}>
+    <div
+      className={cn(
+        "grid items-center justify-items-center",
+        compact
+          ? "grid-cols-[repeat(3,2.25rem)] gap-1"
+          : "grid-cols-[repeat(7,2.25rem)] gap-0.5",
+        className,
+      )}
+    >
       {!compact && (
         <IconButton active={shuffle} onClick={toggleShuffle} label="Shuffle">
-          <Shuffle className="size-4" />
+          <Shuffle className="size-[18px] stroke-[1.9]" />
         </IconButton>
       )}
       <IconButton disabled={!current} onClick={prev} label="Previous">
-        <SkipBack className="size-4 fill-current" />
+        <SkipBack className="size-[19px] fill-current stroke-[1.6]" />
       </IconButton>
       {!compact && (
         <IconButton
@@ -63,7 +71,7 @@ export function TransportControls({ className, compact = false }: { className?: 
           onClick={() => seek(Math.max(0, currentTime - 10))}
           label="Rewind 10 seconds"
         >
-          <RotateCcw className="size-4" />
+          <RotateCcw className="size-[18px] stroke-[1.9]" />
           <span className="sr-only">10</span>
         </IconButton>
       )}
@@ -72,18 +80,21 @@ export function TransportControls({ className, compact = false }: { className?: 
         aria-label={isPlaying ? "Pause" : "Play"}
         onClick={togglePlay}
         disabled={!current}
-        className="touch-manipulation mx-1 flex size-9 shrink-0 items-center justify-center rounded-full bg-white text-black shadow-[0_4px_20px_rgba(255,255,255,0.18)] transition-transform hover:scale-105 active:scale-90 disabled:pointer-events-none disabled:opacity-40"
+        className={cn(
+          "touch-manipulation flex size-10 shrink-0 items-center justify-center self-center rounded-full bg-[rgb(var(--tint))] text-black shadow-[0_5px_22px_rgb(var(--tint)_/_0.2)] ring-1 ring-white/20 transition-[transform,background-color,opacity] duration-200 hover:scale-105 hover:brightness-105 active:scale-90 disabled:pointer-events-none disabled:opacity-35",
+          !compact && "col-start-4",
+        )}
       >
         {isBuffering && current ? (
-          <Loader2 className="size-4 animate-spin" />
+          <Loader2 className="size-[18px] animate-spin" />
         ) : isPlaying ? (
-          <Pause className="size-4 fill-current" />
+          <Pause className="size-[18px] stroke-[2.4]" />
         ) : (
-          <Play className="ml-0.5 size-4 fill-current" />
+          <Play className="ml-0.5 size-[18px] fill-current stroke-[1.8]" />
         )}
       </button>
       <IconButton disabled={!current} onClick={next} label="Next">
-        <SkipForward className="size-4 fill-current" />
+        <SkipForward className="size-[19px] fill-current stroke-[1.6]" />
       </IconButton>
       {!compact && (
         <IconButton
@@ -91,7 +102,7 @@ export function TransportControls({ className, compact = false }: { className?: 
           onClick={() => seek(currentTime + 10)}
           label="Forward 10 seconds"
         >
-          <RotateCw className="size-4" />
+          <RotateCw className="size-[18px] stroke-[1.9]" />
           <span className="sr-only">10</span>
         </IconButton>
       )}
@@ -101,7 +112,11 @@ export function TransportControls({ className, compact = false }: { className?: 
           onClick={cycleRepeat}
           label={repeat === "one" ? "Repeat one" : repeat === "all" ? "Repeat all" : "Repeat off"}
         >
-          {repeat === "one" ? <Repeat1 className="size-4" /> : <Repeat className="size-4" />}
+          {repeat === "one" ? (
+            <Repeat1 className="size-[18px] stroke-[1.9]" />
+          ) : (
+            <Repeat className="size-[18px] stroke-[1.9]" />
+          )}
         </IconButton>
       )}
     </div>

@@ -373,7 +373,7 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
             seekbar sits alone so prev/play/next never collide with them */}
       <div className="relative z-10 flex w-auto shrink-0 flex-col items-center gap-0.5 sm:min-w-0 sm:flex-1 sm:basis-0 lg:min-w-0">
         <TransportControls className="sm:hidden" compact />
-        <TransportControls className="hidden sm:flex" />
+        <TransportControls className="hidden sm:grid" />
         <div className="hidden w-full max-w-xl items-center gap-2 sm:flex">
           <span className="w-11 shrink-0 text-right text-[10px] font-medium tabular-nums text-muted-foreground">
             {formatTime(currentTime)}
