@@ -15,7 +15,12 @@ import { useAuth } from "@/hooks/use-auth";
 import { House, ListMusic, Search, Settings, UserRound, WifiOff } from "lucide-react";
 import { usePlayerStore, type RemoteLikeSnapshot } from "@/store/player";
 import { track } from "@/lib/analytics";
-import { getLiveWallpaperUrl, LIVE_WALLPAPER_MARKER } from "@/lib/wallpaperStorage";
+import {
+  getImageWallpaperUrl,
+  getLiveWallpaperUrl,
+  IMAGE_WALLPAPER_MARKER,
+  LIVE_WALLPAPER_MARKER,
+} from "@/lib/wallpaperStorage";
 
 const MOBILE_NAV = [
   { to: "/home", label: "Home", icon: House },
@@ -38,24 +43,27 @@ export function AppShell() {
   const rippleLayerRef = useRef<HTMLDivElement>(null);
   const cursorTrailRefs = useRef<Array<HTMLSpanElement | null>>([]);
 
-  // Restore an uploaded live wallpaper from IndexedDB after a page reload.
+  // Restore an uploaded wallpaper from IndexedDB after a page reload.
   useEffect(() => {
     const initial = usePlayerStore.getState();
-    if (initial.wallpaper !== LIVE_WALLPAPER_MARKER || initial.wallpaperType !== "video") return;
+    const isLiveFile = initial.wallpaper === LIVE_WALLPAPER_MARKER && initial.wallpaperType === "video";
+    const isImageFile = initial.wallpaper === IMAGE_WALLPAPER_MARKER && initial.wallpaperType === "image";
+    if (!isLiveFile && !isImageFile) return;
 
     let restoredUrl: string | null = null;
-    void getLiveWallpaperUrl()
+    const restore = isLiveFile ? getLiveWallpaperUrl() : getImageWallpaperUrl();
+    void restore
       .then((url) => {
         if (!url) {
-          initial.setWallpaper(null, "video");
+          initial.setWallpaper(null, initial.wallpaperType);
           return;
         }
         restoredUrl = url;
-        initial.setWallpaper(url, "video");
+        initial.setWallpaper(url, initial.wallpaperType);
         // setWallpaper receives a session-only blob URL; keep only the marker.
-        localStorage.setItem("ss.wallpaper", LIVE_WALLPAPER_MARKER);
+        localStorage.setItem("ss.wallpaper", isLiveFile ? LIVE_WALLPAPER_MARKER : IMAGE_WALLPAPER_MARKER);
       })
-      .catch(() => initial.setWallpaper(null, "video"));
+      .catch(() => initial.setWallpaper(null, initial.wallpaperType));
 
     return () => {
       if (restoredUrl) URL.revokeObjectURL(restoredUrl);
@@ -370,7 +378,7 @@ export function AppShell() {
           <div ref={rippleLayerRef} className="pointer-events-none absolute inset-0 -z-[4] overflow-hidden" aria-hidden="true" />
         </>
       )}
-      {wallpaper && wallpaper !== LIVE_WALLPAPER_MARKER && (
+      {wallpaper && wallpaper !== LIVE_WALLPAPER_MARKER && wallpaper !== IMAGE_WALLPAPER_MARKER && (
         <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden bg-background/35" aria-hidden="true">
           {wallpaperType === "video" ? (
             <video

@@ -45,14 +45,18 @@ import {
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { toast } from "sonner";
 import {
+  deleteImageWallpaperFile,
   deleteLiveWallpaperFile,
+  getImageWallpaperUrl,
   getLiveWallpaperUrl,
+  saveImageWallpaperFile,
   saveLiveWallpaperFile,
+  IMAGE_WALLPAPER_MARKER,
   LIVE_WALLPAPER_MARKER,
 } from "@/lib/wallpaperStorage";
 
-const MAX_WALLPAPER_BYTES = 3_000_000;
-const MAX_LIVE_WALLPAPER_BYTES = 25_000_000;
+const MAX_WALLPAPER_BYTES = 100_000_000;
+const MAX_LIVE_WALLPAPER_BYTES = 100_000_000;
 
 const SHORTCUTS: [string, string][] = [
   ["Space", "Play / pause"],
@@ -292,7 +296,7 @@ export function SettingsDialog({
       return;
     }
     if (file.size > MAX_LIVE_WALLPAPER_BYTES) {
-      toast.error("Live wallpaper videos must be smaller than 25 MB");
+      toast.error("Live wallpaper videos must be smaller than 100 MB");
       return;
     }
 
@@ -312,7 +316,7 @@ export function SettingsDialog({
     }
   };
 
-  const handleWallpaperChange = (event: ChangeEvent<HTMLInputElement>) => {
+  const handleWallpaperChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const input = event.currentTarget;
     const file = input.files?.[0];
     input.value = "";
@@ -322,27 +326,26 @@ export function SettingsDialog({
       return;
     }
     if (file.size > MAX_WALLPAPER_BYTES) {
-      toast.error("Wallpaper must be smaller than 3 MB");
+      toast.error("Wallpapers must be smaller than 100 MB");
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result !== "string") {
-        toast.error("Couldn't read that image");
-        return;
-      }
-      localStorage.setItem("ss.savedImageWallpaper", reader.result);
-      setWallpaper(reader.result);
+    try {
+      await saveImageWallpaperFile(file);
+      if (wallpaper?.startsWith("blob:")) URL.revokeObjectURL(wallpaper);
+      const url = URL.createObjectURL(file);
+      setWallpaper(url, "image");
+      localStorage.setItem("ss.wallpaper", IMAGE_WALLPAPER_MARKER);
       toast.success("Wallpaper applied");
-    };
-    reader.onerror = () => toast.error("Couldn't read that image");
-    reader.readAsDataURL(file);
+    } catch {
+      toast.error("Couldn't save that image — try a smaller file");
+    }
   };
 
   const clearWallpaper = () => {
     if (wallpaper?.startsWith("blob:")) URL.revokeObjectURL(wallpaper);
     void deleteLiveWallpaperFile();
+    void deleteImageWallpaperFile();
     localStorage.removeItem("ss.savedImageWallpaper");
     localStorage.removeItem("ss.savedVideoUrl");
     setWallpaper(null);
@@ -727,7 +730,7 @@ export function SettingsDialog({
               <div className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-black/20">
                 {wallpaper && wallpaperType === "video" && wallpaper !== LIVE_WALLPAPER_MARKER ? (
                   <video src={wallpaper} muted loop autoPlay playsInline className="size-full object-cover" />
-                ) : wallpaper && wallpaper !== LIVE_WALLPAPER_MARKER ? (
+                ) : wallpaper && wallpaper !== LIVE_WALLPAPER_MARKER && wallpaper !== IMAGE_WALLPAPER_MARKER ? (
                   <img src={wallpaper} alt="Wallpaper preview" className="size-full object-cover" />
                 ) : (
                   <ImagePlus className="size-5 text-muted-foreground" />
@@ -767,8 +770,10 @@ export function SettingsDialog({
                           localStorage.setItem("ss.wallpaper", LIVE_WALLPAPER_MARKER);
                           return;
                         }
-                        if (wallpaper && !hasVideoWallpaper) {
+                        if (wallpaper && !hasVideoWallpaper && !wallpaper.startsWith("blob:")) {
                           localStorage.setItem("ss.savedImageWallpaper", wallpaper);
+                        }
+                        if (wallpaper && !hasVideoWallpaper) {
                           setWallpaper(null, "video");
                         } else {
                           const savedVideoUrl = localStorage.getItem("ss.savedVideoUrl");
@@ -776,23 +781,26 @@ export function SettingsDialog({
                           else setWallpaperType("video");
                         }
                       }).catch(() => {
-                        if (wallpaper && !hasVideoWallpaper) {
-                          localStorage.setItem("ss.savedImageWallpaper", wallpaper);
-                          setWallpaper(null, "video");
-                        } else {
-                          const savedVideoUrl = localStorage.getItem("ss.savedVideoUrl");
-                          if (savedVideoUrl) setWallpaper(savedVideoUrl, "video");
-                          else setWallpaperType("video");
-                        }
+                        if (wallpaper && !hasVideoWallpaper) setWallpaper(null, "video");
+                        else setWallpaperType("video");
                       });
-                    } else if (wallpaper && hasVideoWallpaper) {
-                      if (wallpaper.startsWith("blob:")) URL.revokeObjectURL(wallpaper);
-                      if (wallpaper.startsWith("http")) localStorage.setItem("ss.savedVideoUrl", wallpaper);
-                      const savedImage = localStorage.getItem("ss.savedImageWallpaper");
-                      if (savedImage) setWallpaper(savedImage, "image");
-                      else setWallpaper(null, "image");
                     } else {
-                      setWallpaperType("image");
+                      // Restore the saved image file when switching back from Live video.
+                      void getImageWallpaperUrl().then((url) => {
+                        if (url) {
+                          if (wallpaper?.startsWith("blob:")) URL.revokeObjectURL(wallpaper);
+                          setWallpaper(url, "image");
+                          localStorage.setItem("ss.wallpaper", IMAGE_WALLPAPER_MARKER);
+                          return;
+                        }
+                        const savedImage = localStorage.getItem("ss.savedImageWallpaper");
+                        if (savedImage) setWallpaper(savedImage, "image");
+                        else if (wallpaper && hasVideoWallpaper) setWallpaper(null, "image");
+                        else setWallpaperType("image");
+                      }).catch(() => {
+                        if (wallpaper && hasVideoWallpaper) setWallpaper(null, "image");
+                        else setWallpaperType("image");
+                      });
                     }
                   }}
                   className={cn(
@@ -826,7 +834,7 @@ export function SettingsDialog({
                     {wallpaper ? "Replace image" : "Choose image"}
                   </button>
                 </div>
-                <p className="mt-2 text-[11px] text-muted-foreground">PNG, JPG, WebP or AVIF · up to 3 MB</p>
+                <p className="mt-2 text-[11px] text-muted-foreground">PNG, JPG, WebP or AVIF · up to 100 MB</p>
               </>
             ) : (
               <>
@@ -871,7 +879,7 @@ export function SettingsDialog({
                     </span>
                   )}
                 </div>
-                <p className="mt-2 text-[11px] text-muted-foreground">MP4, WebM or OGG · up to 25 MB</p>
+                <p className="mt-2 text-[11px] text-muted-foreground">MP4, WebM or OGG · up to 100 MB</p>
               </>
             )}
 

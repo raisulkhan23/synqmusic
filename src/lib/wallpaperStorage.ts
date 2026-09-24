@@ -2,7 +2,9 @@ const DATABASE_NAME = "soniq-wallpapers";
 const DATABASE_VERSION = 1;
 const STORE_NAME = "files";
 export const LIVE_WALLPAPER_KEY = "live-wallpaper";
+export const IMAGE_WALLPAPER_KEY = "image-wallpaper";
 export const LIVE_WALLPAPER_MARKER = "idb:live-wallpaper";
+export const IMAGE_WALLPAPER_MARKER = "idb:image-wallpaper";
 
 type StoredWallpaper = {
   key: string;
@@ -21,13 +23,13 @@ const openDatabase = (): Promise<IDBDatabase> =>
     request.onerror = () => reject(request.error ?? new Error("Could not open wallpaper storage"));
   });
 
-export async function saveLiveWallpaperFile(file: File): Promise<void> {
+async function saveWallpaperFile(key: string, file: File): Promise<void> {
   const database = await openDatabase();
   try {
     await new Promise<void>((resolve, reject) => {
       const transaction = database.transaction(STORE_NAME, "readwrite");
       transaction.objectStore(STORE_NAME).put({
-        key: LIVE_WALLPAPER_KEY,
+        key,
         blob: file,
         name: file.name,
         type: file.type,
@@ -40,7 +42,7 @@ export async function saveLiveWallpaperFile(file: File): Promise<void> {
   }
 }
 
-export async function getLiveWallpaperUrl(): Promise<string | null> {
+async function getWallpaperUrl(key: string): Promise<string | null> {
   if (typeof indexedDB === "undefined") return null;
   const database = await openDatabase();
   try {
@@ -48,7 +50,7 @@ export async function getLiveWallpaperUrl(): Promise<string | null> {
       const request = database
         .transaction(STORE_NAME, "readonly")
         .objectStore(STORE_NAME)
-        .get(LIVE_WALLPAPER_KEY);
+        .get(key);
       request.onsuccess = () => resolve(request.result as StoredWallpaper | undefined);
       request.onerror = () => reject(request.error ?? new Error("Could not read wallpaper file"));
     });
@@ -58,13 +60,13 @@ export async function getLiveWallpaperUrl(): Promise<string | null> {
   }
 }
 
-export async function deleteLiveWallpaperFile(): Promise<void> {
+async function deleteWallpaperFile(key: string): Promise<void> {
   if (typeof indexedDB === "undefined") return;
   const database = await openDatabase();
   try {
     await new Promise<void>((resolve, reject) => {
       const transaction = database.transaction(STORE_NAME, "readwrite");
-      transaction.objectStore(STORE_NAME).delete(LIVE_WALLPAPER_KEY);
+      transaction.objectStore(STORE_NAME).delete(key);
       transaction.oncomplete = () => resolve();
       transaction.onerror = () => reject(transaction.error ?? new Error("Could not remove wallpaper file"));
     });
@@ -72,3 +74,10 @@ export async function deleteLiveWallpaperFile(): Promise<void> {
     database.close();
   }
 }
+
+export const saveLiveWallpaperFile = (file: File) => saveWallpaperFile(LIVE_WALLPAPER_KEY, file);
+export const saveImageWallpaperFile = (file: File) => saveWallpaperFile(IMAGE_WALLPAPER_KEY, file);
+export const getLiveWallpaperUrl = () => getWallpaperUrl(LIVE_WALLPAPER_KEY);
+export const getImageWallpaperUrl = () => getWallpaperUrl(IMAGE_WALLPAPER_KEY);
+export const deleteLiveWallpaperFile = () => deleteWallpaperFile(LIVE_WALLPAPER_KEY);
+export const deleteImageWallpaperFile = () => deleteWallpaperFile(IMAGE_WALLPAPER_KEY);
