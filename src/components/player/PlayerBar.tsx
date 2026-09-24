@@ -161,7 +161,7 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
   return (
     <footer
       className={cn(
-        "liquid-glass z-40 flex w-full min-w-0 shrink-0 items-center gap-2 overflow-hidden border-t border-white/[0.07] px-2 transition-all duration-300 sm:gap-3 sm:px-4 lg:mx-auto lg:mb-3 lg:w-[min(92vw,760px)] lg:rounded-[2rem] lg:border lg:border-white/10 lg:px-3 lg:py-2 lg:shadow-[0_18px_60px_rgba(0,0,0,0.38)] lg:hover:scale-[1.01]",
+        "liquid-glass dynamic-island z-40 flex w-full min-w-0 shrink-0 items-center gap-2 overflow-hidden border-t border-white/[0.07] px-2 transition-all duration-300 sm:gap-3 sm:px-4 lg:mx-auto lg:mb-3 lg:w-[min(92vw,760px)] lg:rounded-[2rem] lg:border lg:border-white/10 lg:px-3 lg:py-2 lg:shadow-[0_18px_60px_rgba(0,0,0,0.38)] lg:hover:scale-[1.01]",
         compact ? "min-h-[60px] lg:min-h-0" : "min-h-[64px] sm:min-h-[76px] lg:min-h-0",
       )}
     >

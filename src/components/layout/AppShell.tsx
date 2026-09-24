@@ -257,6 +257,7 @@ export function AppShell() {
       className="relative isolate flex h-dvh overflow-hidden bg-background text-foreground"
       style={{ "--tint": tint } as React.CSSProperties}
     >
+      <div className="ambient-grid pointer-events-none absolute inset-0 -z-20 opacity-70" aria-hidden="true" />
       {wallpaper && (
         <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden bg-background/35" aria-hidden="true">
           <img

@@ -47,3 +47,24 @@ export const updateName = mutation({
     return trimmed;
   },
 });
+
+/** Update the signed-in user's profile picture with a small data URL. */
+export const updateImage = mutation({
+  args: { image: v.optional(v.string()) },
+  handler: async (ctx, { image }) => {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) throw new ConvexError("Sign in first");
+    if (image !== undefined) {
+      if (!/^data:image\/(png|jpeg|jpg|webp|gif);base64,/i.test(image)) {
+        throw new ConvexError("Profile picture must be an image data URL");
+      }
+      // Convex documents are limited to 1 MiB; leave room for the document
+      // metadata and keep the avatar responsive rather than storing huge art.
+      if (image.length > 700_000) {
+        throw new ConvexError("Profile picture must be smaller than 700 KB");
+      }
+    }
+    await ctx.db.patch(userId, { image });
+    return image ?? null;
+  },
+});

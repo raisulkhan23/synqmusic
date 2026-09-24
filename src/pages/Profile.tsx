@@ -46,8 +46,8 @@ export default function Profile() {
   return (
     <div className="flex flex-col gap-8">
       <header className="flex flex-wrap items-center gap-5">
-        <div className="flex size-20 items-center justify-center rounded-full bg-[rgb(var(--tint))] font-display text-2xl font-bold text-black">
-          {initials}
+        <div className="flex size-20 items-center justify-center overflow-hidden rounded-full bg-[rgb(var(--tint))] font-display text-2xl font-bold text-black ring-2 ring-white/10">
+          {user?.image ? <img src={user.image} alt="Your profile picture" className="size-full object-cover" /> : initials}
         </div>
         <div className="min-w-0">
           {editing ? (

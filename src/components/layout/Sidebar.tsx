@@ -167,9 +167,9 @@ export function Sidebar() {
           <NavLink
             to="/profile"
             title="Profile"
-            className="flex size-10 items-center justify-center rounded-full bg-[rgb(var(--tint))] text-sm font-bold text-black"
+            className="flex size-10 items-center justify-center overflow-hidden rounded-full bg-[rgb(var(--tint))] text-sm font-bold text-black ring-2 ring-white/10"
           >
-            {initials}
+            {user?.image ? <img src={user.image} alt="" className="size-full object-cover" /> : initials}
           </NavLink>
           <button
             type="button"
@@ -223,7 +223,7 @@ export function Sidebar() {
       </nav>
 
       {/* Spotify-style Library card */}
-      <div className="mx-3 mt-4 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.03]">
+      <div className="glass-card mx-3 mt-4 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl">
         <div className="flex items-center justify-between px-4 py-3">
           <button
             type="button"
@@ -368,8 +368,8 @@ export function Sidebar() {
       </p>
 
       <div className="flex items-center gap-2.5 border-t border-white/[0.06] px-4 py-3">
-        <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[rgb(var(--tint))] text-sm font-bold text-black">
-          {initials}
+        <div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[rgb(var(--tint))] text-sm font-bold text-black ring-2 ring-white/10">
+          {user?.image ? <img src={user.image} alt="" className="size-full object-cover" /> : initials}
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold">

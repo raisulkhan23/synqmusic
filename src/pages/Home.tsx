@@ -285,7 +285,7 @@ export default function Home() {
             <button
               type="button"
               onClick={() => playTrack(continueTrack)}
-              className="group flex min-w-0 flex-1 items-center gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.03] p-3 text-left transition-all hover:border-[rgb(var(--tint)_/_0.35)] hover:bg-white/[0.05]"
+              className="glass-card group flex min-w-0 flex-1 items-center gap-3 rounded-2xl p-3 text-left"
             >
               <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[rgb(var(--tint)_/_0.14)] text-[rgb(var(--tint))] transition-transform group-hover:scale-105">
                 <Play className="size-4 fill-current" />
@@ -308,7 +308,7 @@ export default function Home() {
           <button
             type="button"
             onClick={surpriseMe}
-            className="flex items-center gap-2 rounded-2xl border border-white/[0.07] bg-white/[0.03] px-5 py-3 text-sm font-semibold transition-all hover:border-[rgb(var(--tint)_/_0.35)] hover:bg-white/[0.05]"
+            className="glass-card flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold"
           >
             <Dices className={cn("size-4 text-[rgb(var(--tint))]", surprising && "animate-pulse")} />
             Play something random
@@ -316,7 +316,7 @@ export default function Home() {
           <button
             type="button"
             onClick={feelingLucky}
-            className="flex items-center gap-2 rounded-2xl border border-white/[0.07] bg-white/[0.03] px-5 py-3 text-sm font-semibold transition-all hover:border-[rgb(var(--tint)_/_0.35)] hover:bg-white/[0.05]"
+            className="glass-card flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold"
           >
             <Sparkles className={cn("size-4 text-[rgb(var(--tint))]", luckyBusy && "animate-pulse")} />
             I'm feeling lucky
@@ -331,7 +331,7 @@ export default function Home() {
           <Link
             key={to}
             to={to}
-            className="group rounded-2xl border border-white/[0.07] bg-white/[0.03] p-4 transition-all hover:border-[rgb(var(--tint)_/_0.35)] hover:bg-white/[0.05]"
+            className="glass-card group rounded-2xl p-4"
           >
             <span className="flex size-9 items-center justify-center rounded-xl bg-[rgb(var(--tint)_/_0.14)] text-[rgb(var(--tint))] transition-transform group-hover:scale-105">
               <Icon className="size-[18px]" />

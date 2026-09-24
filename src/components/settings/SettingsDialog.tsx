@@ -72,6 +72,7 @@ export function SettingsDialog({
 }) {
   const { user } = useAuth();
   const updateName = useMutation(api.users.updateName);
+  const updateImage = useMutation(api.users.updateImage);
   const clearHistory = useMutation(api.history.clearHistory);
 
   const rate = usePlayerStore((s) => s.rate);
@@ -103,7 +104,9 @@ export function SettingsDialog({
 
   const [name, setName] = useState("");
   const wallpaperInputRef = useRef<HTMLInputElement>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
+  const [savingAvatar, setSavingAvatar] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
 
@@ -142,6 +145,12 @@ export function SettingsDialog({
 
   const displayName =
     user?.name ?? (user?.isAnonymous ? "Guest" : "Listener");
+  const avatarInitials = displayName
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
   const saveName = async () => {
     const trimmed = name.trim();
@@ -184,6 +193,52 @@ export function SettingsDialog({
     }
   };
 
+  const handleAvatarChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    input.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Choose an image file for your profile picture");
+      return;
+    }
+    if (file.size > 700_000) {
+      toast.error("Profile picture must be smaller than 700 KB");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      if (typeof reader.result !== "string") {
+        toast.error("Couldn't read that image");
+        return;
+      }
+      setSavingAvatar(true);
+      try {
+        await updateImage({ image: reader.result });
+        toast.success("Profile picture updated");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Couldn't update your profile picture");
+      } finally {
+        setSavingAvatar(false);
+      }
+    };
+    reader.onerror = () => toast.error("Couldn't read that image");
+    reader.readAsDataURL(file);
+  };
+
+  const clearAvatar = async () => {
+    setSavingAvatar(true);
+    try {
+      await updateImage({});
+      toast("Profile picture removed");
+    } catch {
+      toast.error("Couldn't remove your profile picture");
+    } finally {
+      setSavingAvatar(false);
+    }
+  };
+
   const handleWallpaperChange = (event: ChangeEvent<HTMLInputElement>) => {
     const input = event.currentTarget;
     const file = input.files?.[0];
@@ -218,7 +273,7 @@ export function SettingsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] max-w-md overflow-y-auto border-white/10 bg-[#0b0c11]/95 backdrop-blur-xl">
+      <DialogContent className="glass-card max-h-[85vh] max-w-md overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-display">Settings</DialogTitle>
           <DialogDescription>
@@ -232,6 +287,58 @@ export function SettingsDialog({
             <UserRound className="size-3.5" />
             Profile
           </p>
+          <div className="flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.03] p-3">
+            <button
+              type="button"
+              onClick={() => avatarInputRef.current?.click()}
+              className="group relative flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[rgb(var(--tint))] text-lg font-bold text-black ring-2 ring-white/10 transition-transform hover:scale-105"
+              aria-label="Change profile picture"
+            >
+              {user?.image ? (
+                <img src={user.image} alt="Your profile picture" className="size-full object-cover" />
+              ) : (
+                <span>{avatarInitials}</span>
+              )}
+              {savingAvatar && (
+                <span className="absolute inset-0 flex items-center justify-center bg-black/45">
+                  <Loader2 className="size-5 animate-spin text-white" />
+                </span>
+              )}
+            </button>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium">Profile picture</p>
+              <p className="text-xs leading-5 text-muted-foreground">
+                Choose a square image for your avatar across the app.
+              </p>
+              <div className="mt-1.5 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => avatarInputRef.current?.click()}
+                  disabled={savingAvatar}
+                  className="rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1 text-[11px] font-semibold transition-colors hover:border-white/25 hover:bg-white/[0.1] disabled:opacity-50"
+                >
+                  Change photo
+                </button>
+                {user?.image && (
+                  <button
+                    type="button"
+                    onClick={() => void clearAvatar()}
+                    disabled={savingAvatar}
+                    className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:border-red-400/30 hover:text-red-300 disabled:opacity-50"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                className="hidden"
+                onChange={handleAvatarChange}
+              />
+            </div>
+          </div>
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
               <Pencil className="absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground" />
