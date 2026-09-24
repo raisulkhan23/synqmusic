@@ -418,7 +418,9 @@ const initialSmartShuffle = readBool("ss.smartShuffle", false);
 const initialRepeat = (localStorage.getItem("ss.repeat") as RepeatMode | null) ?? "off";
 const initialRate = Math.min(2, Math.max(0.5, readNum("ss.rate", 1)));
 const initialAutoplay = readBool("ss.autoplay", true);
-const initialVideoEnabled = readBool("ss.video", true);
+// Video presentation is temporarily disabled while the YouTube overlay is
+// unreliable. Audio playback remains fully supported.
+const initialVideoEnabled = false;
 const initialAccentTheme = localStorage.getItem("ss.accentTheme") ?? "auto";
 const initialCompact = readBool("ss.compact", false);
 const initialGlow = readBool("ss.ambientGlow", true);

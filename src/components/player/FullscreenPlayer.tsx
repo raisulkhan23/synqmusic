@@ -22,7 +22,6 @@ import { usePlayerStore } from "@/store/player";
 import { toast } from "sonner";
 import {
   ChevronDown,
-  Film,
   Gauge,
   Heart,
   ListMusic,
@@ -372,8 +371,9 @@ export function FullscreenPlayer() {
   const [wallpaperBlur, setWallpaperBlur] = useState(
     () => localStorage.getItem("ss.wallpaperBlur") !== "0",
   );
-  const videoEnabled = usePlayerStore((s) => s.videoEnabled);
-  const toggleVideo = usePlayerStore((s) => s.toggleVideo);
+  // Video presentation is temporarily disabled while the YouTube overlay is
+  // unreliable. Keep the audio player fully functional and use cover art.
+  const videoEnabled = false;
   const wallpaper = usePlayerStore((s) => s.wallpaper);
   const wallpaperType = usePlayerStore((s) => s.wallpaperType);
 
@@ -930,23 +930,7 @@ export function FullscreenPlayer() {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {/* video toggle */}
-              <button
-                type="button"
-                title="Toggle video in fullscreen player"
-                onClick={toggleVideo}
-                className={cn(
-                  "flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[11px] font-semibold transition-colors hover:bg-white/[0.08] sm:px-3 sm:py-1 sm:tracking-wide sm:uppercase",
-                  videoEnabled
-                    ? "border-[rgb(var(--tint)_/_0.5)] text-[rgb(var(--tint))]"
-                    : "text-muted-foreground",
-                )}
-              >
-                <Film className="size-3.5" />
-                <span className="hidden sm:inline">Video</span> {videoEnabled ? "on" : "off"}
-              </button>
-
-              {/* lyrics toggle */}
+              {/* Video presentation is temporarily disabled; cover art is used instead. */}
               <button
                 type="button"
                 title="Lyrics"
