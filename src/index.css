@@ -442,8 +442,8 @@ html.light img {
   /* A restrained pointer-down ripple confirms clicks without adding a noisy overlay. */
   .click-ripple {
     position: absolute;
-    width: 18px;
-    height: 18px;
+    width: 24px;
+    height: 24px;
     border: 1px solid rgb(var(--tint) / 0.55);
     border-radius: 9999px;
     background: radial-gradient(circle, rgb(var(--tint) / 0.2), transparent 68%);
@@ -459,7 +459,7 @@ html.light img {
     }
     100% {
       opacity: 0;
-      transform: translate(-50%, -50%) scale(4.5);
+      transform: translate(-50%, -50%) scale(5.2);
     }
   }
 
