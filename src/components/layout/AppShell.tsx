@@ -16,8 +16,8 @@ import { House, ListMusic, Search, Settings, UserRound, WifiOff } from "lucide-r
 import { usePlayerStore, type RemoteLikeSnapshot } from "@/store/player";
 import { track } from "@/lib/analytics";
 import {
-  getImageWallpaperUrl,
-  getLiveWallpaperUrl,
+  getWallpaperKey,
+  getWallpaperUrl,
   IMAGE_WALLPAPER_MARKER,
   LIVE_WALLPAPER_MARKER,
 } from "@/lib/wallpaperStorage";
@@ -47,12 +47,13 @@ export function AppShell() {
   // Restore an uploaded wallpaper from IndexedDB after a page reload.
   useEffect(() => {
     const initial = usePlayerStore.getState();
-    const isLiveFile = initial.wallpaper === LIVE_WALLPAPER_MARKER && initial.wallpaperType === "video";
-    const isImageFile = initial.wallpaper === IMAGE_WALLPAPER_MARKER && initial.wallpaperType === "image";
+    const storedWallpaperKey = getWallpaperKey(initial.wallpaper);
+    const isLiveFile = initial.wallpaperType === "video" && storedWallpaperKey !== null;
+    const isImageFile = initial.wallpaperType === "image" && storedWallpaperKey !== null;
     if (!isLiveFile && !isImageFile) return;
 
     let restoredUrl: string | null = null;
-    const restore = isLiveFile ? getLiveWallpaperUrl() : getImageWallpaperUrl();
+    const restore = getWallpaperUrl(storedWallpaperKey);
     void restore
       .then((url) => {
         if (!url) {

@@ -42,21 +42,31 @@ import {
   Trash2,
   UserRound,
 } from "lucide-react";
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { toast } from "sonner";
 import {
-  deleteImageWallpaperFile,
-  deleteLiveWallpaperFile,
+  deleteAllWallpaperFiles,
+  deleteWallpaperFile,
   getImageWallpaperUrl,
   getLiveWallpaperUrl,
-  saveImageWallpaperFile,
-  saveLiveWallpaperFile,
+  getWallpaperKey,
+  getWallpaperUrl,
+  listWallpaperFiles,
+  saveWallpaperLibraryFile,
+  wallpaperKind,
+  wallpaperMarker,
+  type StoredWallpaper,
+  type WallpaperKind,
+  IMAGE_WALLPAPER_KEY,
+  LIVE_WALLPAPER_KEY,
   IMAGE_WALLPAPER_MARKER,
   LIVE_WALLPAPER_MARKER,
 } from "@/lib/wallpaperStorage";
 
 const MAX_WALLPAPER_BYTES = 100_000_000;
 const MAX_LIVE_WALLPAPER_BYTES = 100_000_000;
+
+type WallpaperLibraryEntry = StoredWallpaper & { url: string; kind: WallpaperKind };
 
 const SHORTCUTS: [string, string][] = [
   ["Space", "Play / pause"],
@@ -122,6 +132,11 @@ export function SettingsDialog({
   const wallpaperInputRef = useRef<HTMLInputElement>(null);
   const liveWallpaperInputRef = useRef<HTMLInputElement>(null);
   const [liveWallpaperFileName, setLiveWallpaperFileName] = useState("");
+  const [wallpaperLibrary, setWallpaperLibrary] = useState<WallpaperLibraryEntry[]>([]);
+  const [activeWallpaperKey, setActiveWallpaperKey] = useState<string | null>(() =>
+    getWallpaperKey(localStorage.getItem("ss.wallpaper")),
+  );
+  const wallpaperLibraryUrlsRef = useRef<string[]>([]);
   const [liveWallpaperUrl, setLiveWallpaperUrl] = useState(() => {
     const saved = localStorage.getItem("ss.wallpaper");
     return localStorage.getItem("ss.wallpaperType") === "video" && saved?.startsWith("http")
@@ -131,6 +146,38 @@ export function SettingsDialog({
   const [wallpaperBlur, setWallpaperBlur] = useState(
     () => localStorage.getItem("ss.wallpaperBlur") !== "0",
   );
+
+  const loadWallpaperLibrary = useCallback(async () => {
+    const records = await listWallpaperFiles();
+    const current = usePlayerStore.getState().wallpaper;
+    const activeKey = getWallpaperKey(localStorage.getItem("ss.wallpaper"));
+    const next = records.map((record) => ({
+      ...record,
+      kind: wallpaperKind(record),
+      url: activeKey === record.key && current?.startsWith("blob:")
+        ? current
+        : URL.createObjectURL(record.blob),
+    }));
+    wallpaperLibraryUrlsRef.current.forEach((url) => {
+      if (url !== current) URL.revokeObjectURL(url);
+    });
+    wallpaperLibraryUrlsRef.current = next.map((entry) => entry.url);
+    setWallpaperLibrary(next);
+    setActiveWallpaperKey(getWallpaperKey(localStorage.getItem("ss.wallpaper")));
+  }, []);
+
+  useEffect(() => {
+    if (open) void loadWallpaperLibrary().catch(() => toast.error("Couldn't load saved wallpapers"));
+  }, [open, loadWallpaperLibrary]);
+
+  useEffect(() => {
+    return () => {
+      const current = usePlayerStore.getState().wallpaper;
+      wallpaperLibraryUrlsRef.current.forEach((url) => {
+        if (url !== current) URL.revokeObjectURL(url);
+      });
+    };
+  }, []);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
   const [savingAvatar, setSavingAvatar] = useState(false);
@@ -301,16 +348,19 @@ export function SettingsDialog({
     }
 
     try {
-      await saveLiveWallpaperFile(file);
-      if (wallpaper?.startsWith("blob:")) URL.revokeObjectURL(wallpaper);
-      const url = URL.createObjectURL(file);
+      const record = await saveWallpaperLibraryFile(file);
+      const url = await getWallpaperUrl(record.key);
+      if (!url) throw new Error("Wallpaper file was not found after saving");
+      if (wallpaper?.startsWith("blob:") && !wallpaperLibraryUrlsRef.current.includes(wallpaper)) {
+        URL.revokeObjectURL(wallpaper);
+      }
       setWallpaper(url, "video");
-      localStorage.removeItem("ss.savedVideoUrl");
-      // Keep a durable marker instead of the session-only blob URL.
-      localStorage.setItem("ss.wallpaper", LIVE_WALLPAPER_MARKER);
+      localStorage.setItem("ss.wallpaper", wallpaperMarker(record.key));
+      setActiveWallpaperKey(record.key);
       setLiveWallpaperFileName(file.name);
       setLiveWallpaperUrl("");
-      toast.success("Live wallpaper file applied");
+      await loadWallpaperLibrary();
+      toast.success("Live wallpaper saved to your library");
     } catch {
       toast.error("Couldn't save that video — try a smaller file");
     }
@@ -330,28 +380,63 @@ export function SettingsDialog({
       return;
     }
 
-    void saveImageWallpaperFile(file)
-      .then(() => {
-        if (wallpaper?.startsWith("blob:")) URL.revokeObjectURL(wallpaper);
-        const url = URL.createObjectURL(file);
+    void saveWallpaperLibraryFile(file)
+      .then(async (record) => {
+        const url = await getWallpaperUrl(record.key);
+        if (!url) throw new Error("Wallpaper file was not found after saving");
+        if (wallpaper?.startsWith("blob:") && !wallpaperLibraryUrlsRef.current.includes(wallpaper)) {
+          URL.revokeObjectURL(wallpaper);
+        }
         setWallpaper(url, "image");
-        localStorage.setItem("ss.wallpaper", IMAGE_WALLPAPER_MARKER);
-        toast.success("Wallpaper applied");
+        localStorage.setItem("ss.wallpaper", wallpaperMarker(record.key));
+        setActiveWallpaperKey(record.key);
+        await loadWallpaperLibrary();
+        toast.success("Wallpaper saved to your library");
       })
       .catch(() => {
         toast.error("Couldn't save that image — try a smaller file");
       });
   };
 
+  const activateWallpaperEntry = (entry: WallpaperLibraryEntry) => {
+    if (wallpaper?.startsWith("blob:") && !wallpaperLibraryUrlsRef.current.includes(wallpaper)) {
+      URL.revokeObjectURL(wallpaper);
+    }
+    setWallpaper(entry.url, entry.kind);
+    localStorage.setItem("ss.wallpaper", wallpaperMarker(entry.key));
+    setActiveWallpaperKey(entry.key);
+    toast.success(`${entry.name} applied`);
+  };
+
+  const removeWallpaperEntry = async (entry: WallpaperLibraryEntry) => {
+    await deleteWallpaperFile(entry.key);
+    if (wallpaperLibraryUrlsRef.current.includes(entry.url)) {
+      URL.revokeObjectURL(entry.url);
+      wallpaperLibraryUrlsRef.current = wallpaperLibraryUrlsRef.current.filter((url) => url !== entry.url);
+    }
+    if (activeWallpaperKey === entry.key) {
+      setWallpaper(null, entry.kind);
+      setActiveWallpaperKey(null);
+      localStorage.removeItem("ss.wallpaper");
+    }
+    await loadWallpaperLibrary();
+    toast.success(`${entry.name} removed`);
+  };
+
   const clearWallpaper = () => {
-    if (wallpaper?.startsWith("blob:")) URL.revokeObjectURL(wallpaper);
-    void deleteLiveWallpaperFile();
-    void deleteImageWallpaperFile();
+    if (wallpaper?.startsWith("blob:") && !wallpaperLibraryUrlsRef.current.includes(wallpaper)) {
+      URL.revokeObjectURL(wallpaper);
+    }
+    wallpaperLibraryUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    wallpaperLibraryUrlsRef.current = [];
+    setWallpaperLibrary([]);
+    setActiveWallpaperKey(null);
+    void deleteAllWallpaperFiles();
     localStorage.removeItem("ss.savedImageWallpaper");
     localStorage.removeItem("ss.savedVideoUrl");
-    setWallpaper(null);
+    setWallpaper(null, wallpaperType);
     setLiveWallpaperFileName("");
-    toast("Wallpaper removed");
+    toast("Wallpaper library removed");
   };
 
   return (
@@ -762,13 +847,21 @@ export function SettingsDialog({
                           wallpaper === LIVE_WALLPAPER_MARKER),
                     );
                     if (type === "video") {
-                      // Restore the uploaded file when switching back from Photo;
-                      // switching modes must not delete the saved live wallpaper.
+                      const savedEntry = wallpaperLibrary.find((entry) => entry.kind === "video");
+                      if (savedEntry) {
+                        activateWallpaperEntry(savedEntry);
+                        return;
+                      }
+                      // Restore the legacy single uploaded file when switching
+                      // back from Photo; switching modes never deletes it.
                       void getLiveWallpaperUrl().then((url) => {
                         if (url) {
-                          if (wallpaper?.startsWith("blob:")) URL.revokeObjectURL(wallpaper);
+                          if (wallpaper?.startsWith("blob:") && !wallpaperLibraryUrlsRef.current.includes(wallpaper)) {
+                            URL.revokeObjectURL(wallpaper);
+                          }
                           setWallpaper(url, "video");
                           localStorage.setItem("ss.wallpaper", LIVE_WALLPAPER_MARKER);
+                          setActiveWallpaperKey(LIVE_WALLPAPER_KEY);
                           return;
                         }
                         if (wallpaper && !hasVideoWallpaper && !wallpaper.startsWith("blob:")) {
@@ -786,12 +879,21 @@ export function SettingsDialog({
                         else setWallpaperType("video");
                       });
                     } else {
-                      // Restore the saved image file when switching back from Live video.
+                      const savedEntry = wallpaperLibrary.find((entry) => entry.kind === "image");
+                      if (savedEntry) {
+                        activateWallpaperEntry(savedEntry);
+                        return;
+                      }
+                      // Restore the legacy single image file when switching back
+                      // from Live video.
                       void getImageWallpaperUrl().then((url) => {
                         if (url) {
-                          if (wallpaper?.startsWith("blob:")) URL.revokeObjectURL(wallpaper);
+                          if (wallpaper?.startsWith("blob:") && !wallpaperLibraryUrlsRef.current.includes(wallpaper)) {
+                            URL.revokeObjectURL(wallpaper);
+                          }
                           setWallpaper(url, "image");
                           localStorage.setItem("ss.wallpaper", IMAGE_WALLPAPER_MARKER);
+                          setActiveWallpaperKey(IMAGE_WALLPAPER_KEY);
                           return;
                         }
                         const savedImage = localStorage.getItem("ss.savedImageWallpaper");
@@ -832,7 +934,7 @@ export function SettingsDialog({
                     className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-white/25 hover:bg-white/[0.1]"
                   >
                     <ImagePlus className="size-3.5" />
-                    {wallpaper ? "Replace image" : "Choose image"}
+                    {wallpaper ? "Add another image" : "Choose image"}
                   </button>
                 </div>
                 <p className="mt-2 text-[11px] text-muted-foreground">PNG, JPG, WebP or AVIF · up to 100 MB</p>
@@ -872,7 +974,7 @@ export function SettingsDialog({
                     className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-white/25 hover:bg-white/[0.1]"
                   >
                     <Film className="size-3.5" />
-                    Choose video file
+                    Add video file
                   </button>
                   {liveWallpaperFileName && (
                     <span className="max-w-full truncate py-1.5 text-xs text-[rgb(var(--tint))]">
@@ -884,14 +986,72 @@ export function SettingsDialog({
               </>
             )}
 
-            {wallpaper && (
+            {wallpaperLibrary.length > 0 && (
+              <div className="mt-3 border-t border-white/[0.07] pt-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <p className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
+                    Saved wallpapers
+                  </p>
+                  <span className="text-[10px] text-muted-foreground">
+                    {wallpaperLibrary.length} {wallpaperLibrary.length === 1 ? "file" : "files"}
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {wallpaperLibrary.map((entry) => {
+                    const selected = activeWallpaperKey === entry.key;
+                    return (
+                      <div key={entry.key} className="group relative">
+                        <button
+                          type="button"
+                          onClick={() => activateWallpaperEntry(entry)}
+                          className={cn(
+                            "relative aspect-square w-full overflow-hidden rounded-lg border bg-black/20 transition-all hover:scale-[1.03]",
+                            selected
+                              ? "border-[rgb(var(--tint))] ring-2 ring-[rgb(var(--tint)_/_0.35]"
+                              : "border-white/10 hover:border-white/30",
+                          )}
+                          aria-label={`Use ${entry.name}`}
+                        >
+                          {entry.kind === "video" ? (
+                            <video src={entry.url} muted loop autoPlay playsInline className="size-full object-cover" />
+                          ) : (
+                            <img src={entry.url} alt="" className="size-full object-cover" />
+                          )}
+                          {selected && (
+                            <span className="absolute right-1.5 top-1.5 flex size-5 items-center justify-center rounded-full bg-[rgb(var(--tint))] text-black shadow-lg">
+                              <Check className="size-3" />
+                            </span>
+                          )}
+                        </button>
+                        <p className="mt-1 truncate text-[10px] text-muted-foreground" title={entry.name}>
+                          {entry.name}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => void removeWallpaperEntry(entry)}
+                          className="absolute right-1 top-1 hidden size-6 items-center justify-center rounded-full bg-black/70 text-red-300 backdrop-blur transition hover:bg-red-500/80 hover:text-white group-hover:flex"
+                          aria-label={`Remove ${entry.name}`}
+                        >
+                          <Trash2 className="size-3" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  Click any saved wallpaper to switch instantly. Files stay in this browser.
+                </p>
+              </div>
+            )}
+
+            {(wallpaper || wallpaperLibrary.length > 0) && (
               <button
                 type="button"
                 onClick={clearWallpaper}
                 className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-red-400/30 hover:bg-red-400/[0.08] hover:text-red-300"
               >
                 <ImageOff className="size-3.5" />
-                Remove wallpaper
+                Remove wallpaper library
               </button>
             )}
           </div>
