@@ -32,6 +32,9 @@ export function AppShell() {
   const { signOut } = useAuth();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [offline, setOffline] = useState(!navigator.onLine);
+  const [wallpaperBlur, setWallpaperBlur] = useState(
+    () => localStorage.getItem("ss.wallpaperBlur") !== "0",
+  );
   const rippleLayerRef = useRef<HTMLDivElement>(null);
   const cursorTrailRefs = useRef<Array<HTMLSpanElement | null>>([]);
 
@@ -57,6 +60,14 @@ export function AppShell() {
     return () => {
       if (restoredUrl) URL.revokeObjectURL(restoredUrl);
     };
+  }, []);
+
+  useEffect(() => {
+    const onWallpaperBlurChange = (event: Event) => {
+      setWallpaperBlur((event as CustomEvent<boolean>).detail);
+    };
+    window.addEventListener("ss:wallpaper-blur-change", onWallpaperBlurChange);
+    return () => window.removeEventListener("ss:wallpaper-blur-change", onWallpaperBlurChange);
   }, []);
 
   // Offline mode banner — react to connectivity changes live.
@@ -368,13 +379,13 @@ export function AppShell() {
               muted
               loop
               playsInline
-              className="size-full scale-110 object-cover blur-3xl"
+              className={`size-full scale-110 object-cover ${wallpaperBlur ? "blur-3xl" : ""}`}
             />
           ) : (
             <img
               src={wallpaper}
               alt=""
-              className="size-full scale-110 object-cover blur-3xl"
+              className={`size-full scale-110 object-cover ${wallpaperBlur ? "blur-3xl" : ""}`}
             />
           )}
           <div className="absolute inset-0 bg-background/45" />

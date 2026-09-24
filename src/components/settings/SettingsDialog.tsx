@@ -124,6 +124,9 @@ export function SettingsDialog({
       ? saved
       : "";
   });
+  const [wallpaperBlur, setWallpaperBlur] = useState(
+    () => localStorage.getItem("ss.wallpaperBlur") !== "0",
+  );
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
   const [savingAvatar, setSavingAvatar] = useState(false);
@@ -883,6 +886,19 @@ export function SettingsDialog({
               </button>
             )}
           </div>
+
+          <ToggleRow
+            label="Wallpaper blur"
+            description="Keep the personal wallpaper softly blurred behind the UI"
+            on={wallpaperBlur}
+            onToggle={() => {
+              const next = !wallpaperBlur;
+              setWallpaperBlur(next);
+              localStorage.setItem("ss.wallpaperBlur", next ? "1" : "0");
+              window.dispatchEvent(new CustomEvent("ss:wallpaper-blur-change", { detail: next }));
+              toast(next ? "Wallpaper blur on" : "Wallpaper blur off");
+            }}
+          />
 
           <ToggleRow
             label="Hide explicit content"
