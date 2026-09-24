@@ -31,6 +31,7 @@ export function AppShell() {
   const { signOut } = useAuth();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [offline, setOffline] = useState(!navigator.onLine);
+  const rippleLayerRef = useRef<HTMLDivElement>(null);
 
   // Offline mode banner — react to connectivity changes live.
   useEffect(() => {
@@ -271,12 +272,24 @@ export function AppShell() {
     event.currentTarget.style.setProperty("--pointer-opacity", "0");
   };
 
+  const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    if (!pointerEffects || event.pointerType === "touch" || !rippleLayerRef.current) return;
+    const layer = rippleLayerRef.current;
+    const ripple = document.createElement("span");
+    ripple.className = "click-ripple";
+    ripple.style.left = `${event.clientX}px`;
+    ripple.style.top = `${event.clientY}px`;
+    layer.appendChild(ripple);
+    window.setTimeout(() => ripple.remove(), 720);
+  };
+
   return (
     <div
       className="relative isolate flex h-dvh overflow-hidden bg-background text-foreground"
       onPointerMove={handlePointerMove}
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
+      onPointerDown={handlePointerDown}
       style={
         {
           "--tint": tint,
@@ -290,7 +303,10 @@ export function AppShell() {
       <div className="aurora-orb aurora-orb-one pointer-events-none absolute -top-48 -left-32 -z-10 size-[34rem] rounded-full" aria-hidden="true" />
       <div className="aurora-orb aurora-orb-two pointer-events-none absolute -right-48 bottom-[-16rem] -z-10 size-[42rem] rounded-full" aria-hidden="true" />
       {pointerEffects && (
-        <div className="pointer-glow pointer-events-none absolute inset-0 -z-[5]" aria-hidden="true" />
+        <>
+          <div className="pointer-glow pointer-events-none absolute inset-0 -z-[5]" aria-hidden="true" />
+          <div ref={rippleLayerRef} className="pointer-events-none absolute inset-0 -z-[4] overflow-hidden" aria-hidden="true" />
+        </>
       )}
       {wallpaper && (
         <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden bg-background/35" aria-hidden="true">
