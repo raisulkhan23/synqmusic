@@ -1003,6 +1003,43 @@ function onTimeUpdate(t: number, duration: number): void {
 // --- audio element wiring (catalog playback) ---------------------------------
 
 let wired = false;
+let audioBufferWatchdog: ReturnType<typeof setTimeout> | null = null;
+
+function clearAudioBufferWatchdog(): void {
+  if (audioBufferWatchdog !== null) clearTimeout(audioBufferWatchdog);
+  audioBufferWatchdog = null;
+}
+
+function armAudioBufferWatchdog(audio: HTMLAudioElement): void {
+  clearAudioBufferWatchdog();
+  const trackId = usePlayerStore.getState().current?.id;
+  if (!trackId) return;
+
+  audioBufferWatchdog = setTimeout(() => {
+    const state = usePlayerStore.getState();
+    if (state.current?.id !== trackId || !state.isBuffering) return;
+    if (!audioElementIsSource(state.current)) return;
+    if (audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+      usePlayerStore.setState({ isBuffering: false });
+      return;
+    }
+
+    // Retry the same source in place. Do not increment errorNonce here: that
+    // would trigger PlayerBar's alternate-upload fallback and could replace
+    // the user's song just because the network briefly stalled.
+    const resumeAt = audio.currentTime;
+    audio.load();
+    if (resumeAt > 0) {
+      const restorePosition = () => {
+        audio.currentTime = resumeAt;
+        usePlayerStore.setState({ currentTime: resumeAt });
+      };
+      if (audio.readyState >= HTMLMediaElement.HAVE_METADATA) restorePosition();
+      else audio.addEventListener("loadedmetadata", restorePosition, { once: true });
+    }
+    void audio.play().catch(() => undefined);
+  }, 8_000);
+}
 function wireAudio() {
   if (wired) return;
   wired = true;
@@ -1054,12 +1091,26 @@ function wireAudio() {
     }
   });
 
-  audio.addEventListener("waiting", () => usePlayerStore.setState({ isBuffering: true }));
-  audio.addEventListener("playing", () => usePlayerStore.setState({ isBuffering: false, isPlaying: true }));
-  audio.addEventListener("pause", () => usePlayerStore.setState({ isPlaying: false, isBuffering: false }));
+  audio.addEventListener("waiting", () => {
+    usePlayerStore.setState({ isBuffering: true });
+    armAudioBufferWatchdog(audio);
+  });
+  audio.addEventListener("stalled", () => {
+    usePlayerStore.setState({ isBuffering: true });
+    armAudioBufferWatchdog(audio);
+  });
+  audio.addEventListener("playing", () => {
+    clearAudioBufferWatchdog();
+    usePlayerStore.setState({ isBuffering: false, isPlaying: true });
+  });
+  audio.addEventListener("pause", () => {
+    clearAudioBufferWatchdog();
+    usePlayerStore.setState({ isPlaying: false, isBuffering: false });
+  });
   audio.addEventListener("play", () => usePlayerStore.setState({ isPlaying: true }));
 
   audio.addEventListener("ended", () => {
+    clearAudioBufferWatchdog();
     handleEnded();
   });
 
@@ -1321,9 +1372,9 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       }
       audio.src = track.audioUrl;
       audio.playbackRate = get().rate;
-      watchAudioErrors(audio, seq, track.id);watchAudioErrors(audio, seq, track.id);
-        audio.load();
-        if (resumeAt > 0) {
+      watchAudioErrors(audio, seq, track.id);
+      audio.load();
+      if (resumeAt > 0) {
         const applyResume = () => {
           audio.currentTime = resumeAt;
           usePlayerStore.setState({ currentTime: resumeAt });
