@@ -378,7 +378,7 @@ export function AppShell() {
         <>
           <div className="pointer-glow pointer-events-none absolute inset-0 -z-[5]" aria-hidden="true" />
           <div
-            className="cursor-trail-layer pointer-events-none absolute inset-0 -z-[4] overflow-hidden"
+            className="cursor-trail-layer pointer-events-none absolute inset-0 z-[90] overflow-hidden"
             aria-hidden="true"
           >
             {Array.from({ length: 5 }, (_, index) => (

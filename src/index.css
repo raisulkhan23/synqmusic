@@ -389,54 +389,63 @@ html.light img {
     mix-blend-mode: screen;
   }
 
-  /* Soft liquid-glass motes trail the pointer with slightly delayed motion. */
+  /* Bright liquid-glass motes trail the pointer with slightly delayed motion. */
   .cursor-trail-layer {
     opacity: var(--pointer-opacity, 0);
-    transition: opacity 300ms ease;
+    transition: opacity 180ms ease;
   }
   .cursor-trail {
     position: absolute;
     display: block;
-    width: 8px;
-    height: 8px;
-    border: 1px solid rgb(255 255 255 / 0.42);
-    border-radius: 9999px;
-    background: rgb(var(--tint) / 0.16);
-    box-shadow: 0 0 16px rgb(var(--tint) / 0.22);
-    opacity: 0.55;
-    transform: translate(-50%, -50%);
-    transition:
-      left 150ms cubic-bezier(0.22, 1, 0.36, 1),
-      top 150ms cubic-bezier(0.22, 1, 0.36, 1),
-      opacity 240ms ease;
-  }
-  .cursor-trail:nth-child(2) {
     width: 10px;
     height: 10px;
-    opacity: 0.42;
-    filter: blur(1px);
-    transition-duration: 210ms, 210ms, 240ms;
+    border: 1px solid rgb(255 255 255 / 0.92);
+    border-radius: 9999px;
+    background: radial-gradient(
+      circle,
+      rgb(255 255 255 / 0.98) 0 18%,
+      rgb(var(--tint) / 0.9) 38%,
+      rgb(var(--tint) / 0.42) 68%,
+      transparent 72%
+    );
+    box-shadow:
+      0 0 0 1px rgb(var(--tint) / 0.24),
+      0 0 12px 3px rgb(var(--tint) / 0.72),
+      0 0 28px 6px rgb(var(--tint) / 0.24);
+    opacity: 0.98;
+    transform: translate(-50%, -50%);
+    transition:
+      left 120ms cubic-bezier(0.22, 1, 0.36, 1),
+      top 120ms cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 180ms ease;
+  }
+  .cursor-trail:nth-child(2) {
+    width: 12px;
+    height: 12px;
+    opacity: 0.7;
+    filter: blur(0.5px);
+    transition-duration: 180ms, 180ms, 220ms;
   }
   .cursor-trail:nth-child(3) {
-    width: 14px;
-    height: 14px;
-    opacity: 0.3;
-    filter: blur(2px);
-    transition-duration: 270ms, 270ms, 240ms;
+    width: 17px;
+    height: 17px;
+    opacity: 0.5;
+    filter: blur(1.5px);
+    transition-duration: 240ms, 240ms, 220ms;
   }
   .cursor-trail:nth-child(4) {
-    width: 20px;
-    height: 20px;
-    opacity: 0.2;
-    filter: blur(4px);
-    transition-duration: 330ms, 330ms, 240ms;
+    width: 24px;
+    height: 24px;
+    opacity: 0.32;
+    filter: blur(3px);
+    transition-duration: 300ms, 300ms, 220ms;
   }
   .cursor-trail:nth-child(5) {
-    width: 28px;
-    height: 28px;
-    opacity: 0.12;
-    filter: blur(7px);
-    transition-duration: 390ms, 390ms, 240ms;
+    width: 34px;
+    height: 34px;
+    opacity: 0.18;
+    filter: blur(6px);
+    transition-duration: 370ms, 370ms, 220ms;
   }
 
   /* A restrained pointer-down ripple confirms clicks without adding a noisy overlay. */
