@@ -32,6 +32,7 @@ export function AppShell() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [offline, setOffline] = useState(!navigator.onLine);
   const rippleLayerRef = useRef<HTMLDivElement>(null);
+  const cursorTrailRefs = useRef<Array<HTMLSpanElement | null>>([]);
 
   // Offline mode banner — react to connectivity changes live.
   useEffect(() => {
@@ -258,8 +259,19 @@ export function AppShell() {
   const handlePointerMove = (event: PointerEvent<HTMLDivElement>) => {
     if (!pointerEffects || event.pointerType === "touch") return;
     const rect = event.currentTarget.getBoundingClientRect();
-    event.currentTarget.style.setProperty("--pointer-x", `${event.clientX - rect.left}px`);
-    event.currentTarget.style.setProperty("--pointer-y", `${event.clientY - rect.top}px`);
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    event.currentTarget.style.setProperty("--pointer-x", `${x}px`);
+    event.currentTarget.style.setProperty("--pointer-y", `${y}px`);
+
+    // Move a small trail of glass motes imperatively so cursor tracking stays
+    // smooth without causing a React render on every pointer event.
+    for (let index = 0; index < cursorTrailRefs.current.length; index += 1) {
+      const mote = cursorTrailRefs.current[index];
+      if (!mote) continue;
+      mote.style.left = `${x}px`;
+      mote.style.top = `${y}px`;
+    }
   };
 
   const handlePointerEnter = (event: PointerEvent<HTMLDivElement>) => {
@@ -305,6 +317,20 @@ export function AppShell() {
       {pointerEffects && (
         <>
           <div className="pointer-glow pointer-events-none absolute inset-0 -z-[5]" aria-hidden="true" />
+          <div
+            className="cursor-trail-layer pointer-events-none absolute inset-0 -z-[4] overflow-hidden"
+            aria-hidden="true"
+          >
+            {Array.from({ length: 5 }, (_, index) => (
+              <span
+                key={index}
+                ref={(node) => {
+                  cursorTrailRefs.current[index] = node;
+                }}
+                className="cursor-trail"
+              />
+            ))}
+          </div>
           <div ref={rippleLayerRef} className="pointer-events-none absolute inset-0 -z-[4] overflow-hidden" aria-hidden="true" />
         </>
       )}

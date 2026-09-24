@@ -389,6 +389,56 @@ html.light img {
     mix-blend-mode: screen;
   }
 
+  /* Soft liquid-glass motes trail the pointer with slightly delayed motion. */
+  .cursor-trail-layer {
+    opacity: var(--pointer-opacity, 0);
+    transition: opacity 300ms ease;
+  }
+  .cursor-trail {
+    position: absolute;
+    display: block;
+    width: 8px;
+    height: 8px;
+    border: 1px solid rgb(255 255 255 / 0.42);
+    border-radius: 9999px;
+    background: rgb(var(--tint) / 0.16);
+    box-shadow: 0 0 16px rgb(var(--tint) / 0.22);
+    opacity: 0.55;
+    transform: translate(-50%, -50%);
+    transition:
+      left 150ms cubic-bezier(0.22, 1, 0.36, 1),
+      top 150ms cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 240ms ease;
+  }
+  .cursor-trail:nth-child(2) {
+    width: 10px;
+    height: 10px;
+    opacity: 0.42;
+    filter: blur(1px);
+    transition-duration: 210ms, 210ms, 240ms;
+  }
+  .cursor-trail:nth-child(3) {
+    width: 14px;
+    height: 14px;
+    opacity: 0.3;
+    filter: blur(2px);
+    transition-duration: 270ms, 270ms, 240ms;
+  }
+  .cursor-trail:nth-child(4) {
+    width: 20px;
+    height: 20px;
+    opacity: 0.2;
+    filter: blur(4px);
+    transition-duration: 330ms, 330ms, 240ms;
+  }
+  .cursor-trail:nth-child(5) {
+    width: 28px;
+    height: 28px;
+    opacity: 0.12;
+    filter: blur(7px);
+    transition-duration: 390ms, 390ms, 240ms;
+  }
+
   /* A restrained pointer-down ripple confirms clicks without adding a noisy overlay. */
   .click-ripple {
     position: absolute;
@@ -429,8 +479,13 @@ html.light img {
       animation: none !important;
     }
     .glass-card,
-    .pointer-glow {
+    .pointer-glow,
+    .cursor-trail-layer,
+    .cursor-trail {
       transition: none !important;
+    }
+    .cursor-trail-layer {
+      display: none !important;
     }
     .click-ripple {
       animation: none !important;
