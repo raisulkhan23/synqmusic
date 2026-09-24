@@ -35,6 +35,7 @@ import {
   Waves,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { IMAGE_WALLPAPER_MARKER, LIVE_WALLPAPER_MARKER } from "@/lib/wallpaperStorage";
 
 const SLEEP_OPTIONS: { label: string; value: number | "end" }[] = [
   { label: "5 minutes", value: 5 },
@@ -366,8 +367,21 @@ export function FullscreenPlayer() {
   const a = accent ?? { r: 196, g: 246, b: 152 };
 
   const [lyricsOpen, setLyricsOpen] = useState(false);
+  const [wallpaperBlur, setWallpaperBlur] = useState(
+    () => localStorage.getItem("ss.wallpaperBlur") !== "0",
+  );
   const videoEnabled = usePlayerStore((s) => s.videoEnabled);
   const toggleVideo = usePlayerStore((s) => s.toggleVideo);
+  const wallpaper = usePlayerStore((s) => s.wallpaper);
+  const wallpaperType = usePlayerStore((s) => s.wallpaperType);
+
+  useEffect(() => {
+    const onWallpaperBlurChange = (event: Event) => {
+      setWallpaperBlur((event as CustomEvent<boolean>).detail);
+    };
+    window.addEventListener("ss:wallpaper-blur-change", onWallpaperBlurChange);
+    return () => window.removeEventListener("ss:wallpaper-blur-change", onWallpaperBlurChange);
+  }, []);
 
   // True when the current track plays through the YouTube IFrame engine.
   const isYoutube = current?.source === "youtube" || !!current?.youtubeId;
@@ -500,23 +514,50 @@ export function FullscreenPlayer() {
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.22 }}
-        className="fixed inset-0 z-[70] overflow-hidden bg-[#090a0f]"
+        className="fixed inset-0 z-[70] isolate overflow-hidden bg-[#090a0f]"
       >
+        {/* User wallpaper stays behind the maximized player, with the same
+            blur preference and glass treatment as the main app. */}
+        {wallpaper && wallpaper !== LIVE_WALLPAPER_MARKER && wallpaper !== IMAGE_WALLPAPER_MARKER && (
+          <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden bg-background/35" aria-hidden="true">
+            {wallpaperType === "video" ? (
+              <video
+                src={wallpaper}
+                autoPlay
+                muted
+                loop
+                playsInline
+                className={`size-full scale-110 object-cover ${wallpaperBlur ? "blur-3xl" : ""}`}
+              />
+            ) : (
+              <img
+                src={wallpaper}
+                alt=""
+                className={`size-full scale-110 object-cover ${wallpaperBlur ? "blur-3xl" : ""}`}
+              />
+            )}
+            <div className="absolute inset-0 bg-[#090a0f]/45" />
+            <div className="absolute inset-0 bg-gradient-to-b from-[#090a0f]/20 via-transparent to-[#090a0f]/70" />
+          </div>
+        )}
+        <div className="ambient-grid pointer-events-none absolute inset-0 z-[1] opacity-35" aria-hidden="true" />
+        <div className="pointer-events-none absolute inset-0 z-[1] bg-[#090a0f]/20" aria-hidden="true" />
+
         {/* ambient accent glows */}
         <div
-          className="glow-pulse pointer-events-none absolute -top-48 left-1/2 h-[520px] w-[780px] -translate-x-1/2 rounded-full blur-3xl"
+          className="glow-pulse pointer-events-none absolute -top-48 left-1/2 z-[1] h-[520px] w-[780px] -translate-x-1/2 rounded-full blur-3xl"
           style={{
             background: `radial-gradient(closest-side, rgb(${a.r} ${a.g} ${a.b} / 0.2), transparent)`,
           }}
         />
         <div
-          className="pointer-events-none absolute -bottom-56 -left-32 size-[560px] rounded-full blur-3xl"
+          className="pointer-events-none absolute -bottom-56 -left-32 z-[1] size-[560px] rounded-full blur-3xl"
           style={{
             background: `radial-gradient(closest-side, rgb(${a.r} ${a.g} ${a.b} / 0.12), transparent)`,
           }}
         />
 
-        <VisualizerCanvas className="absolute inset-x-0 bottom-0 h-[44vh] w-full opacity-70" />
+        <VisualizerCanvas className="absolute inset-x-0 bottom-0 z-[1] h-[44vh] w-full opacity-70" />
 
         <div className="relative z-10 flex h-full flex-col px-4 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-10 sm:pt-4 sm:pb-5">
           {/* top row */}
