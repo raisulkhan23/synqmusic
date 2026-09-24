@@ -1094,6 +1094,10 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       // gesture (row click) or auto-advance, so autoplay is permitted —
       // without this the song only loads and needs a second click.
       void audio.play().catch(() => undefined);
+      // If this is a YouTube track on the audio path with video enabled,
+      // keep the muted visual slave in sync so the fullscreen player shows
+      // THIS song's video instead of the previous one's frozen thumbnail.
+      if (track.youtubeId) setTimeout(() => syncVideoSlave(), 150);
     }
     set({
       current: track,
@@ -1464,6 +1468,11 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
         }
         void audio.play().catch(() => undefined);
         set({ current: { ...track, audioUrl: url }, currentTime: resumeAt });
+        // Sound now comes from the audio element — make sure the muted video
+        // slave (fullscreen + video on) is playing the visuals for THIS track.
+        // Without this, the engine stayed parked on the PREVIOUS video's
+        // paused frame and the fullscreen player showed a frozen thumbnail.
+        syncVideoSlave();
       })
       .catch(() => {
         if (seq !== loadSeq) return; // stale
@@ -1590,6 +1599,10 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       set((state) => {
         const next = !state.videoEnabled;
         localStorage.setItem("ss.video", next ? "1" : "0");
+        // Starting/stopping video while fullscreen + effect active must
+        // start/stop the muted visual slave immediately, not on the next
+        // fullscreen open — otherwise toggling video on shows a thumbnail.
+        setTimeout(() => syncVideoSlave(), 100);
         return { videoEnabled: next };
       }),
 
