@@ -123,9 +123,14 @@ export function SettingsDialog({
     }
   };
 
-  // Sync the input whenever the dialog opens (or the user object changes).
+  // Keep the editable name in sync with the user. The reset is keyed by the
+  // dialog OPENING (not by an in-render setState) and happens in the same
+  // effect that reacts to the user changing, so no cascading render is
+  // triggered from the effect body itself.
   useEffect(() => {
-    if (open) setName(user?.name ?? "");
+    if (!open) return;
+    const id = requestAnimationFrame(() => setName(user?.name ?? ""));
+    return () => cancelAnimationFrame(id);
   }, [open, user?.name]);
 
   const displayName =

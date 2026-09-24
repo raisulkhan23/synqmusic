@@ -1,6 +1,7 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { mutation, query, MutationCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 
 const requireUser = async (ctx: MutationCtx) => {
   const userId = await getAuthUserId(ctx);
@@ -12,8 +13,8 @@ const requireUser = async (ctx: MutationCtx) => {
 
 async function logEvent(
   ctx: MutationCtx,
-  userId: any,
-  playlistId: any,
+  userId: Id<"users">,
+  playlistId: Id<"playlists">,
   playlistName: string,
   kind: string,
   detail?: string,

@@ -918,11 +918,31 @@ function handleEnded(): void {
   usePlayerStore.setState({ isPlaying: false, currentTime: 0 });
 }
 
+/**
+ * TRUE when the current track's audio is coming from the <audio> element
+ * (effect/EQ active or a stream rescue) rather than the YouTube IFrame.
+ * Playback controls MUST follow this, or play/pause/seek address a paused
+ * engine while the real audio keeps playing.
+ */
+function audioElementIsSource(t: Playable | null | undefined): boolean {
+  if (!t) return false;
+  return (
+    t.audioUrl === "stream" ||
+    t.audioUrl.includes("audio-proxy") ||
+    t.audioUrl.includes("googlevideo") ||
+    t.audioUrl.includes("videoplayback") ||
+    t.audioUrl.includes("piped") ||
+    t.audioUrl.includes("odycdn") ||
+    // A non-YouTube direct URL (catalog tracks) also plays via the element.
+    (!t.youtubeId && /^https?:\/\//.test(t.audioUrl))
+  );
+}
+
 /** A-B repeat + resume-position bookkeeping, run on every time update. */
 function onTimeUpdate(t: number, duration: number): void {
   const s = usePlayerStore.getState();
   if (s.abA !== null && s.abB !== null && t >= s.abB) {
-    if (s.current?.youtubeId) ytEngine.seek(s.abA);
+    if (s.current?.youtubeId && !audioElementIsSource(s.current)) ytEngine.seek(s.abA);
     else getAudio().currentTime = s.abA;
     usePlayerStore.setState({ currentTime: s.abA });
     return;
@@ -1339,7 +1359,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
   const togglePlay = () => {
     const s = get();
     if (s.current) {
-      if (s.current.youtubeId) {
+      if (s.current.youtubeId && !audioElementIsSource(s.current)) {
         // The engine emits state events, so just nudge it in the right direction.
         if (s.isPlaying) ytEngine.pause();
         else ytEngine.resume();
@@ -1395,7 +1415,8 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     const s = get();
     const duration = s.duration;
     const t = Math.max(0, Math.min(time, duration || time));
-    if (s.current?.youtubeId) {
+    // Seek whichever engine actually owns the sound (see audioElementIsSource).
+    if (s.current?.youtubeId && !audioElementIsSource(s.current)) {
       ytEngine.seek(t);
     } else {
       getAudio().currentTime = t;
@@ -1533,8 +1554,16 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       void resolveAndPlayWithFilter(s.current, resumeAt, true);
     }
     // If the effect was turned off while a YouTube track is on the audio
-    // element, swap back to the IFrame engine (better quality/reliability).
-    if (id === "off" && s.current?.youtubeId && onStreamPath(s.current)) {
+    // element, swap back to the IFrame engine (better quality/reliability) —
+    // but ONLY when no other processing is configured. With the EQ still
+    // active this used to hand playback back to the untappable IFrame, so
+    // the bass/treble settings went silent the moment you picked "None".
+    if (
+      id === "off" &&
+      !hasAudioProcessing() &&
+      s.current?.youtubeId &&
+      onStreamPath(s.current)
+    ) {
       const resumeAt = s.currentTime;
       getAudio().pause();
       void ytEngine
@@ -1553,8 +1582,15 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
    */
   const syncVideoSlave = () => {
     const s = get();
+    // The visual slave is needed whenever sound comes from the audio element
+    // — that includes EQ-only playback, not just preset effects (which is
+    // why the video showed a frozen thumbnail with the sliders but no preset).
     const wantSlave =
-      s.fullscreen && s.videoEnabled && !!s.current?.youtubeId && s.audioFilter !== "off";
+      s.fullscreen &&
+      s.videoEnabled &&
+      !!s.current?.youtubeId &&
+      (s.audioFilter !== "off" || hasAudioProcessing()) &&
+      audioElementIsSource(s.current);
     if (wantSlave && s.current?.youtubeId) {
       void ytEngine.startSlave(s.current.youtubeId, s.currentTime);
     } else if (ytEngine.isSlaveMode()) {

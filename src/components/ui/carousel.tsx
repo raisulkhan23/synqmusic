@@ -93,12 +93,19 @@ function Carousel({
 
   React.useEffect(() => {
     if (!api) return
-    onSelect(api)
+    // Notify the parent from a frame callback rather than synchronously in the
+    // effect body: calling onSelect() during commit re-rendered the parent and
+    // could drop the first selection.
+    const raf = requestAnimationFrame(() => onSelect(api))
     api.on("reInit", onSelect)
     api.on("select", onSelect)
 
     return () => {
-      api?.off("select", onSelect)
+      cancelAnimationFrame(raf)
+      // Both listeners must be removed: only "select" used to be detached, so
+      // every remount leaked a "reInit" handler that kept firing forever.
+      api.off("reInit", onSelect)
+      api.off("select", onSelect)
     }
   }, [api, onSelect])
 

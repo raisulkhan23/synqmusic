@@ -25,16 +25,12 @@ export function VerificationDialog() {
   const close = usePlayerStore((s) => s.closeHumanVerification);
   const current = usePlayerStore((s) => s.current);
   const setQueueOpen = usePlayerStore((s) => s.setQueueOpen);
-  const setQueueOpenAction = usePlayerStore((s) => s.setQueueOpen);
   const [checking, setChecking] = useState(false);
 
   // Clear the queue panel so it can't sit on top of the check.
   useEffect(() => {
-    if (open) {
-      setQueueOpen(false);
-      setQueueOpenAction(false);
-    }
-  }, [open, setQueueOpen, setQueueOpenAction]);
+    if (open) setQueueOpen(false);
+  }, [open, setQueueOpen]);
 
   const videoId = current?.youtubeId;
 

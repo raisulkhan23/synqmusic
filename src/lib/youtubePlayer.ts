@@ -352,7 +352,11 @@ export function seek(seconds: number): void {
 /** volume in [0,1] */
 export function setVolume(v: number): void {
   try {
-    player?.setVolume(Math.round(Math.min(1, Math.max(0, v)) * 100));
+    // In slave mode the <audio> element owns ALL the sound. Letting the
+    // engine take volume would unbalance the mix, and unmuting it (below)
+    // would play a second audio source over the filtered one.
+    const value = slaveMode ? 0 : Math.min(1, Math.max(0, v));
+    player?.setVolume(Math.round(value * 100));
   } catch {
     /* not ready yet */
   }
@@ -360,8 +364,16 @@ export function setVolume(v: number): void {
 
 export function setMuted(muted: boolean): void {
   try {
-    if (muted) player?.mute();
-    else player?.unMute();
+    if (muted) {
+      player?.mute();
+    } else if (slaveMode) {
+      // Never unmute the visual slave — the filtered <audio> element is the
+      // only source of sound while effects are active.
+      player?.setVolume(0);
+      player?.mute();
+    } else {
+      player?.unMute();
+    }
   } catch {
     /* not ready yet */
   }
@@ -465,7 +477,18 @@ export function getLoadedVideoId(): string | null {
  */
 export function startSlave(videoId: string, startSeconds: number): Promise<void> {
   slaveMode = true;
-  return play(videoId, { volume: 0, muted: true, startSeconds: Math.max(0, startSeconds) });
+  return play(videoId, { volume: 0, muted: true, startSeconds: Math.max(0, startSeconds) }).finally(
+    () => {
+      // Re-assert silence: play() may have run before slaveMode was observed
+      // by a concurrent volume/mute call, leaving the slave audible.
+      try {
+        player?.setVolume(0);
+        player?.mute();
+      } catch {
+        /* not ready */
+      }
+    },
+  );
 }
 
 /** Exit slave mode: events resume, video pauses. */

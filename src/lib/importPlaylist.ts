@@ -67,7 +67,7 @@ function parseDuration(raw: string | undefined): number | undefined {
   return undefined;
 }
 
-const CLEAN_DURATION = /\s*[\[(]\s*\d{1,2}:\d{2}(?::\d{2})?\s*[\))]\s*/g;
+const CLEAN_DURATION = /\s*[[(]\s*\d{1,2}:\d{2}(?::\d{2})?\s*[)\]]\s*/g;
 const CLEAN_PARENS = /\((?:feat|ft|with)\.?[^)]*\)/gi;
 
 function cleanTitle(raw: string): string {

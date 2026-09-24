@@ -114,7 +114,7 @@ async function thumbnailFor(trackId: string): Promise<string> {
  */
 export const spotifyChart = action({
   args: {},
-  handler: async (_ctx): Promise<{ items: ChartItem[] }> => {
+  handler: async (): Promise<{ items: ChartItem[] }> => {
     if (cache && Date.now() - cache.at < CACHE_MS) {
       return { items: cache.items };
     }

@@ -16,6 +16,7 @@ import {
 import { api } from "@/convex/_generated/api";
 import { formatTime } from "@/lib/format";
 import { dismissVideo, ensureVideoPlaying, getLoadedVideoId, presentOverlay, trackFrame } from "@/lib/youtubePlayer";
+import { hasAudioProcessing } from "@/lib/audio";
 import { AUDIO_FILTERS as FILTER_DEFS } from "@/lib/audio";
 import { usePlayerStore } from "@/store/player";
 import { toast } from "sonner";
@@ -387,6 +388,13 @@ export function FullscreenPlayer() {
     currentTimeRef.current = currentTime;
   }, [currentTime]);
 
+  /**
+   * TRUE when sound comes from the filtered <audio> element (effect preset OR
+   * EQ). The video then has to be a MUTED slave, and the loader must still
+   * show while it loads — previously both were keyed only on the effect
+   * preset, so an EQ-only session looked frozen on a thumbnail.
+   */
+
   const [videoReady, setVideoReady] = useState(false);
   /** Set when the overlaid live player can't present — we fall back to an inline iframe. */
   const [embedFallback, setEmbedFallback] = useState(false);
@@ -424,7 +432,14 @@ export function FullscreenPlayer() {
       // it reports PLAYING (or we run out of attempts and fall back).
       if (getLoadedVideoId() !== current.youtubeId || !videoReadyRef.current) {
         if (++tries < 30) {
-          void ensureVideoPlaying(current.youtubeId!, currentTimeRef.current, audioFilter !== "off")
+          void ensureVideoPlaying(
+            current.youtubeId!,
+            currentTimeRef.current,
+            // Read the CURRENT processing state, not a value captured when the
+            // effect last ran: toggling the EQ changes it without changing
+            // audioFilter, and a stale value left the video unmuted.
+            hasAudioProcessing(),
+          )
             .then((playing) => {
               if (stopped) return;
               if (playing) {
@@ -455,7 +470,7 @@ export function FullscreenPlayer() {
     };
     // Longer warm-up when an effect is active: the muted video slave has to
     // load through the engine before the overlay can present it.
-    timer = setTimeout(attempt, audioFilter !== "off" ? 900 : 250);
+    timer = setTimeout(attempt, hasAudioProcessing() ? 900 : 250);
     return () => {
       stopped = true;
       clearTimeout(timer);
@@ -636,7 +651,7 @@ export function FullscreenPlayer() {
                   </span>
                 )}
                 <AnimatePresence>
-                  {!videoReady && audioFilter === "off" && (
+                  {!videoReady && !embedFallback && (
                     <motion.div
                       initial={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
