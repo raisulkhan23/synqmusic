@@ -173,6 +173,44 @@ html.light img {
   --tint: 203 244 143;
 }
 
+/* Signature scenes coordinate the full accent system without overriding the
+   listener's Dark, Light, or AMOLED preference. */
+html[data-scene="aurora"] {
+  --primary: oklch(0.76 0.17 294);
+  --primary-foreground: oklch(0.16 0.03 294);
+  --ring: oklch(0.76 0.17 294 / 58%);
+  --chart-1: oklch(0.7 0.18 294);
+  --sidebar-primary: oklch(0.76 0.17 294);
+  --sidebar-ring: oklch(0.76 0.17 294 / 48%);
+  --brand: oklch(0.76 0.17 294);
+  --brand-foreground: oklch(0.16 0.03 294);
+  --tint: 167 139 250;
+}
+
+html[data-scene="ember"] {
+  --primary: oklch(0.79 0.17 54);
+  --primary-foreground: oklch(0.18 0.04 38);
+  --ring: oklch(0.79 0.17 54 / 58%);
+  --chart-1: oklch(0.76 0.18 52);
+  --sidebar-primary: oklch(0.79 0.17 54);
+  --sidebar-ring: oklch(0.79 0.17 54 / 48%);
+  --brand: oklch(0.79 0.17 54);
+  --brand-foreground: oklch(0.18 0.04 38);
+  --tint: 251 146 60;
+}
+
+html[data-scene="tide"] {
+  --primary: oklch(0.78 0.13 189);
+  --primary-foreground: oklch(0.15 0.03 210);
+  --ring: oklch(0.78 0.13 189 / 58%);
+  --chart-1: oklch(0.73 0.12 192);
+  --sidebar-primary: oklch(0.78 0.13 189);
+  --sidebar-ring: oklch(0.78 0.13 189 / 48%);
+  --brand: oklch(0.78 0.13 189);
+  --brand-foreground: oklch(0.15 0.03 210);
+  --tint: 45 212 191;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

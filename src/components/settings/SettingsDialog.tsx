@@ -84,6 +84,13 @@ const SHORTCUTS: [string, string][] = [
   ["/", "Search"],
 ];
 
+const SCENES = [
+  { id: "studio", accent: "lime", name: "Studio", detail: "SYNQ signal lime", swatch: "linear-gradient(135deg, #20342e, #cbf48f)" },
+  { id: "aurora", accent: "violet", name: "Aurora", detail: "Violet after dark", swatch: "linear-gradient(135deg, #211b3d, #a78bfa)" },
+  { id: "ember", accent: "orange", name: "Ember", detail: "Warm studio glow", swatch: "linear-gradient(135deg, #3b211a, #fb923c)" },
+  { id: "tide", accent: "teal", name: "Tide", detail: "Clear cyan air", swatch: "linear-gradient(135deg, #102f36, #2dd4bf)" },
+] as const;
+
 export function SettingsDialog({
   open,
   onOpenChange,
@@ -131,6 +138,12 @@ export function SettingsDialog({
   const toggleHideSidebarEmail = usePlayerStore((s) => s.toggleHideSidebarEmail);
   const currentTrack = usePlayerStore((s) => s.current);
 
+  const [sceneTheme, setSceneTheme] = useState(
+    () => localStorage.getItem("ss.sceneTheme") ?? "studio",
+  );
+  const [focusMode, setFocusMode] = useState(
+    () => localStorage.getItem("ss.focusMode") === "1",
+  );
   const [name, setName] = useState("");
   const wallpaperInputRef = useRef<HTMLInputElement>(null);
   const liveWallpaperInputRef = useRef<HTMLInputElement>(null);
@@ -179,6 +192,23 @@ export function SettingsDialog({
   useEffect(() => {
     if (open) void loadWallpaperLibrary().catch(() => toast.error("Couldn't load saved wallpapers"));
   }, [open, loadWallpaperLibrary]);
+
+  useEffect(() => {
+    const onSceneChange = (event: Event) => {
+      const next = (event as CustomEvent<string>).detail;
+      if (typeof next === "string" && next) setSceneTheme(next);
+    };
+    const onFocusChange = (event: Event) => {
+      const next = (event as CustomEvent<boolean>).detail;
+      if (typeof next === "boolean") setFocusMode(next);
+    };
+    window.addEventListener("synq:scene-change", onSceneChange);
+    window.addEventListener("synq:focus-change", onFocusChange);
+    return () => {
+      window.removeEventListener("synq:scene-change", onSceneChange);
+      window.removeEventListener("synq:focus-change", onFocusChange);
+    };
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -759,6 +789,58 @@ export function SettingsDialog({
             Appearance
           </p>
 
+          {/* signature scenes */}
+          <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium">Signature scene</p>
+                <p className="text-xs leading-5 text-muted-foreground">
+                  A coordinated color atmosphere that respects your light or dark mode
+                </p>
+              </div>
+              <Sparkles className="mt-0.5 size-4 shrink-0 text-[rgb(var(--tint))]" />
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              {SCENES.map((scene) => {
+                const selected = sceneTheme === scene.id;
+                return (
+                  <button
+                    key={scene.id}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => {
+                      setSceneTheme(scene.id);
+                      setAccentTheme(scene.accent);
+                      localStorage.setItem("ss.sceneTheme", scene.id);
+                      window.dispatchEvent(
+                        new CustomEvent("synq:scene-change", { detail: scene.id }),
+                      );
+                      toast(`${scene.name} scene applied`);
+                    }}
+                    className={cn(
+                      "group relative overflow-hidden rounded-lg border p-2.5 text-left transition-all hover:-translate-y-0.5 hover:border-white/30",
+                      selected
+                        ? "border-[rgb(var(--tint))] ring-2 ring-[rgb(var(--tint)_/_0.22)]"
+                        : "border-white/10",
+                    )}
+                  >
+                    <span
+                      className="mb-2 block h-8 rounded-md border border-white/15 shadow-inner"
+                      style={{ background: scene.swatch }}
+                    />
+                    <span className="block text-xs font-semibold text-foreground">{scene.name}</span>
+                    <span className="mt-0.5 block text-[10px] text-muted-foreground">{scene.detail}</span>
+                    {selected && (
+                      <span className="absolute top-2 right-2 flex size-5 items-center justify-center rounded-full bg-[rgb(var(--tint))] text-black shadow-lg">
+                        <Check className="size-3" />
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* accent color */}
           <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
             <div className="flex items-center justify-between gap-3">
@@ -1174,6 +1256,18 @@ export function SettingsDialog({
             onToggle={() => {
               toggleCompactMode();
               toast(compactMode ? "Compact mode off" : "Compact mode on");
+            }}
+          />
+          <ToggleRow
+            label="Focus mode"
+            description="Hide navigation and ambient effects for distraction-free listening"
+            on={focusMode}
+            onToggle={() => {
+              const next = !focusMode;
+              setFocusMode(next);
+              localStorage.setItem("ss.focusMode", next ? "1" : "0");
+              window.dispatchEvent(new CustomEvent("synq:focus-change", { detail: next }));
+              toast(next ? "Focus mode on" : "Focus mode off");
             }}
           />
           <ToggleRow

@@ -12,7 +12,7 @@ import { api } from "@/convex/_generated/api";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { useAuth } from "@/hooks/use-auth";
-import { House, ListMusic, Search, Settings, UserRound, WifiOff } from "lucide-react";
+import { House, ListMusic, Minimize2, Search, Settings, UserRound, WifiOff } from "lucide-react";
 import { usePlayerStore, type RemoteLikeSnapshot } from "@/store/player";
 import { track } from "@/lib/analytics";
 import {
@@ -39,6 +39,12 @@ export function AppShell() {
   const { signOut } = useAuth();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [offline, setOffline] = useState(!navigator.onLine);
+  const [sceneTheme, setSceneTheme] = useState(
+    () => localStorage.getItem("ss.sceneTheme") ?? "studio",
+  );
+  const [focusMode, setFocusMode] = useState(
+    () => localStorage.getItem("ss.focusMode") === "1",
+  );
   const [wallpaperBlurAmount, setWallpaperBlurAmount] = useState(() => {
     const storedAmount = Number(localStorage.getItem("ss.wallpaperBlurAmount"));
     if (Number.isFinite(storedAmount) && storedAmount > 0) {
@@ -78,6 +84,27 @@ export function AppShell() {
       if (restoredUrl) URL.revokeObjectURL(restoredUrl);
     };
   }, []);
+
+  useEffect(() => {
+    const onSceneChange = (event: Event) => {
+      const next = (event as CustomEvent<string>).detail;
+      if (typeof next === "string" && next) setSceneTheme(next);
+    };
+    const onFocusChange = (event: Event) => {
+      const next = (event as CustomEvent<boolean>).detail;
+      if (typeof next === "boolean") setFocusMode(next);
+    };
+    window.addEventListener("synq:scene-change", onSceneChange);
+    window.addEventListener("synq:focus-change", onFocusChange);
+    return () => {
+      window.removeEventListener("synq:scene-change", onSceneChange);
+      window.removeEventListener("synq:focus-change", onFocusChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.scene = sceneTheme;
+  }, [sceneTheme]);
 
   useEffect(() => {
     const onWallpaperBlurChange = (event: Event) => {
@@ -408,10 +435,14 @@ export function AppShell() {
         } as React.CSSProperties
       }
     >
-      <div className="ambient-grid pointer-events-none absolute inset-0 -z-20 opacity-70" aria-hidden="true" />
-      <div className="aurora-orb aurora-orb-one pointer-events-none absolute -top-48 -left-32 -z-10 size-[34rem] rounded-full" aria-hidden="true" />
-      <div className="aurora-orb aurora-orb-two pointer-events-none absolute -right-48 bottom-[-16rem] -z-10 size-[42rem] rounded-full" aria-hidden="true" />
-      {pointerEffects && (
+      {!focusMode && (
+        <>
+          <div className="ambient-grid pointer-events-none absolute inset-0 -z-20 opacity-70" aria-hidden="true" />
+          <div className="aurora-orb aurora-orb-one pointer-events-none absolute -top-48 -left-32 -z-10 size-[34rem] rounded-full" aria-hidden="true" />
+          <div className="aurora-orb aurora-orb-two pointer-events-none absolute -right-48 bottom-[-16rem] -z-10 size-[42rem] rounded-full" aria-hidden="true" />
+        </>
+      )}
+      {pointerEffects && !focusMode && (
         <>
           <div className="pointer-glow pointer-events-none absolute inset-0 -z-[5]" aria-hidden="true" />
           <div
@@ -456,7 +487,23 @@ export function AppShell() {
           <div className="absolute inset-0 bg-gradient-to-b from-background/20 via-background/10 to-background/55" />
         </div>
       )}
-      <Sidebar />
+      {!focusMode && <Sidebar />}
+
+      {focusMode && (
+        <button
+          type="button"
+          onClick={() => {
+            const next = false;
+            setFocusMode(next);
+            localStorage.setItem("ss.focusMode", "0");
+            window.dispatchEvent(new CustomEvent("synq:focus-change", { detail: next }));
+          }}
+          className="liquid-glass fixed top-20 left-4 z-40 inline-flex items-center gap-2 rounded-full border border-white/15 px-3.5 py-2 text-xs font-semibold text-foreground shadow-lg transition hover:scale-[1.02] hover:border-[rgb(var(--tint)_/_0.5)] sm:top-4"
+        >
+          <Minimize2 className="size-3.5 text-[rgb(var(--tint))]" />
+          Exit focus mode
+        </button>
+      )}
 
       <div className="flex min-w-0 flex-1 flex-col">
         {offline && (
@@ -480,7 +527,7 @@ export function AppShell() {
 
         <main className="relative min-h-0 flex-1 overflow-y-auto">
           {/* ambient accent glow follows the current album art */}
-          {ambientGlow && (
+          {ambientGlow && !focusMode && (
             <div
               className="pointer-events-none absolute inset-x-0 top-0 h-[380px] opacity-60"
               style={{

@@ -23,6 +23,7 @@ if (localStorage.getItem("ss.liquidGlass") === "0") {
   document.documentElement.classList.add("no-glass");
 }
 const savedTheme = localStorage.getItem("ss.themeMode");
+document.documentElement.dataset.scene = localStorage.getItem("ss.sceneTheme") ?? "studio";
 if (savedTheme === "light") {
   document.documentElement.classList.remove("dark");
   document.documentElement.classList.add("light");
