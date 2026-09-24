@@ -300,7 +300,7 @@ export function SettingsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="glass-card max-h-[85vh] max-w-md overflow-y-auto">
+      <DialogContent className="glass-card !fixed max-h-[85vh] max-w-md overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-display">Settings</DialogTitle>
           <DialogDescription>
