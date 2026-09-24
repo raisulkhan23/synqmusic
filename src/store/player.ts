@@ -1099,6 +1099,11 @@ function wireYoutubeEngine() {
       }
     },
   });
+
+  // Initialize the hidden YouTube player before the first click. This removes
+  // the API/iframe startup delay while keeping playback lazy for the track
+  // itself.
+  ytEngine.warmup();
 }
 
 // --- media session (lock screen / hardware keys) ------------------------------

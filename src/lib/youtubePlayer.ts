@@ -249,6 +249,14 @@ export function setHandlers(next: YtEngineHandlers): void {
   handlers = next;
 }
 
+/**
+ * Create the hidden player during idle time so the first track click only
+ * has to load the video, not initialize the entire IFrame API/player.
+ */
+export function warmup(): void {
+  void ensurePlayer().catch(() => undefined);
+}
+
 /** Load a video and start playing. Safe to call repeatedly (reuses the player). */
 export async function play(
   videoId: string,

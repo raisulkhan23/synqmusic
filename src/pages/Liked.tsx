@@ -26,6 +26,26 @@ export default function Liked() {
 
   const playRemoteLike = (row: (typeof remoteLikes)[number]) => {
     if (resolvingRemoteId) return;
+
+    // Liked remote rows already carry the resolved YouTube id. Use it
+    // directly instead of making the user wait for a second search request.
+    const knownYoutubeId = row.youtubeId ?? (row.source === "youtube" ? row.trackId : undefined);
+    if (knownYoutubeId) {
+      const item: YtItem = {
+        id: row.trackId,
+        title: row.title,
+        artist: row.artistName,
+        thumbnail: row.coverUrl,
+        duration: row.duration,
+      };
+      const playable: Playable = {
+        ...toPlayableYoutube(item, `https://youtu.be/${knownYoutubeId}`),
+        youtubeId: knownYoutubeId,
+      };
+      playTrack(playable, buildLikedQueue(playable, row.trackId));
+      return;
+    }
+
     setResolvingRemoteId(row.trackId);
     searchYt({ query: `${row.title} ${row.artistName.split(",")[0]?.trim() ?? row.artistName}` })
       .then(({ items }) => {
