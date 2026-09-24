@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAction } from "convex/react";
 import { SeekBar } from "@/components/player/SeekBar";
@@ -368,6 +368,7 @@ export function FullscreenPlayer() {
   const a = accent ?? { r: 196, g: 246, b: 152 };
 
   const [lyricsOpen, setLyricsOpen] = useState(false);
+  const pointerEffects = usePlayerStore((s) => s.pointerEffects);
   const [wallpaperBlur, setWallpaperBlur] = useState(
     () => localStorage.getItem("ss.wallpaperBlur") !== "0",
   );
@@ -393,6 +394,8 @@ export function FullscreenPlayer() {
   // re-presents the same live player. Catalog tracks keep their artwork.
 
   const videoFrameRef = useRef<HTMLDivElement | null>(null);
+  const rippleLayerRef = useRef<HTMLDivElement>(null);
+  const cursorTrailRefs = useRef<Array<HTMLSpanElement | null>>([]);
   /** Mirror of videoReady for the retry loop (state updates are async). */
   const videoReadyRef = useRef(false);
   /** Latest playback position, read inside the async retry loop. */
@@ -505,6 +508,43 @@ export function FullscreenPlayer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lyricsOpen]);
 
+  const handlePointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    if (!pointerEffects || event.pointerType === "touch") return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    event.currentTarget.style.setProperty("--pointer-x", `${x}px`);
+    event.currentTarget.style.setProperty("--pointer-y", `${y}px`);
+    for (let index = 0; index < cursorTrailRefs.current.length; index += 1) {
+      const mote = cursorTrailRefs.current[index];
+      if (!mote) continue;
+      mote.style.left = `${x}px`;
+      mote.style.top = `${y}px`;
+    }
+  };
+
+  const handlePointerEnter = (event: PointerEvent<HTMLDivElement>) => {
+    if (pointerEffects && event.pointerType !== "touch") {
+      event.currentTarget.style.setProperty("--pointer-opacity", "1");
+    }
+  };
+
+  const handlePointerLeave = (event: PointerEvent<HTMLDivElement>) => {
+    event.currentTarget.style.setProperty("--pointer-opacity", "0");
+  };
+
+  const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    if (!pointerEffects || event.pointerType === "touch" || !rippleLayerRef.current) return;
+    const layer = rippleLayerRef.current;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const ripple = document.createElement("span");
+    ripple.className = "click-ripple";
+    ripple.style.left = `${event.clientX - rect.left}px`;
+    ripple.style.top = `${event.clientY - rect.top}px`;
+    layer.appendChild(ripple);
+    window.setTimeout(() => ripple.remove(), 720);
+  };
+
   if (!fullscreen || !current) return <AnimatePresence />;
 
   return (
@@ -516,6 +556,17 @@ export function FullscreenPlayer() {
         exit={{ opacity: 0 }}
         transition={{ duration: 0.22 }}
         className="fixed inset-0 z-[70] isolate overflow-hidden bg-[#090a0f]"
+        onPointerMove={handlePointerMove}
+        onPointerEnter={handlePointerEnter}
+        onPointerLeave={handlePointerLeave}
+        onPointerDown={handlePointerDown}
+        style={
+          {
+            "--pointer-x": "50%",
+            "--pointer-y": "50%",
+            "--pointer-opacity": "0",
+          } as React.CSSProperties
+        }
       >
         {/* User wallpaper stays behind the maximized player, with the same
             blur preference and glass treatment as the main app. */}
@@ -543,6 +594,23 @@ export function FullscreenPlayer() {
         )}
         <div className="ambient-grid pointer-events-none absolute inset-0 z-[1] opacity-35" aria-hidden="true" />
         <div className="pointer-events-none absolute inset-0 z-[1] bg-[#090a0f]/20" aria-hidden="true" />
+        {pointerEffects && (
+          <>
+            <div className="pointer-glow pointer-events-none absolute inset-0 z-[2]" aria-hidden="true" />
+            <div className="cursor-trail-layer pointer-events-none absolute inset-0 z-[2] overflow-hidden" aria-hidden="true">
+              {Array.from({ length: 5 }, (_, index) => (
+                <span
+                  key={index}
+                  ref={(node) => {
+                    cursorTrailRefs.current[index] = node;
+                  }}
+                  className="cursor-trail"
+                />
+              ))}
+            </div>
+            <div ref={rippleLayerRef} className="pointer-events-none absolute inset-0 z-[2] overflow-hidden" aria-hidden="true" />
+          </>
+        )}
 
         {/* ambient accent glows */}
         <div
