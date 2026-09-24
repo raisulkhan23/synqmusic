@@ -414,6 +414,37 @@ function rememberTrack(id: string): void {
   if (recentTrackIds.length > 20) recentTrackIds.pop();
 }
 
+/**
+ * Pick a random queue index for shuffle, avoiding: the current track, the
+ * track that just played before it, and (when smart shuffle is on) the last
+ * ~10 heard tracks. Falls back to any other index when the exclusions cover
+ * the whole queue, so shuffle never dead-ends on a short queue.
+ */
+function pickShuffleIndex(queueLen: number, currentIndex: number, smart: boolean): number {
+  const candidates: number[] = [];
+  const recent = smart ? new Set(recentTrackIds) : null;
+  for (let i = 0; i < queueLen; i++) {
+    if (i === currentIndex) continue;
+    // Never land straight back on the song that just ended — the previous
+    // queue entry plays right before this pick.
+    if (i === (currentIndex + 1) % queueLen && queueLen > 2) continue;
+    if (recent) {
+      const t = usePlayerStore.getState().queue[i];
+      if (t && recent.has(t.id)) continue;
+    }
+    candidates.push(i);
+  }
+  if (candidates.length === 0) {
+    // Everything excluded (tiny queue / everything recently heard) — any
+    // other track is better than repeating or stopping.
+    const fallback: number[] = [];
+    for (let i = 0; i < queueLen; i++) if (i !== currentIndex) fallback.push(i);
+    if (fallback.length === 0) return currentIndex;
+    return fallback[Math.floor(Math.random() * fallback.length)];
+  }
+  return candidates[Math.floor(Math.random() * candidates.length)];
+}
+
 // --- last-played memory (any source) ------------------------------------------
 
 const LAST_PLAYED_KEY = "ss.lastPlayed";
@@ -712,20 +743,8 @@ function handleEnded(): void {
   if (s.queue.length > 0) {
     // Shuffle ON: jump to a RANDOM upcoming track, not the next in line.
     if (s.shuffle && s.queue.length > 1) {
-      if (s.queueIndex < s.queue.length - 1) {
-        const exclude = s.queueIndex;
-        let i = Math.floor(Math.random() * s.queue.length);
-        if (i === exclude) i = (i + 1) % s.queue.length;
-        s.playIndex(i);
-        return;
-      }
-      if (s.repeat === "all") {
-        const exclude = s.queueIndex;
-        let i = Math.floor(Math.random() * s.queue.length);
-        if (i === exclude) i = (i + 1) % s.queue.length;
-        s.playIndex(i);
-        return;
-      }
+      s.playIndex(pickShuffleIndex(s.queue.length, s.queueIndex, s.smartShuffle));
+      return;
     }
     // Normal: advance in order.
     if (s.queueIndex < s.queue.length - 1) {
@@ -743,16 +762,18 @@ function handleEnded(): void {
   if (s.autoplay && s.current) {
     const seed = s.current;
     void fetchRelatedMix(seed, s.queue, 5).then((related) => {
-      const state = usePlayerStore.getState();
-      const fresh = related.filter((t) => !state.queue.some((q) => q.id === t.id));
-      if (fresh.length === 0) return;
-      usePlayerStore.setState((st) => ({
-        queue: [...st.queue, ...fresh],
-      }));
+      // Filter INSIDE the updater: maybeAutofillQueue may have appended the
+      // same related mix while this fetch was in flight — filtering against a
+      // stale queue snapshot used to double-append the same tracks.
+      usePlayerStore.setState((st) => {
+        const fresh = related.filter((t) => !st.queue.some((q) => q.id === t.id));
+        if (fresh.length === 0) return st;
+        return { queue: [...st.queue, ...fresh] };
+      });
       // Only auto-advance if nothing else started playing meanwhile.
       const after = usePlayerStore.getState();
       if (after.current?.id === seed.id && !after.isPlaying) {
-        after.playIndex(after.queue.length - fresh.length);
+        after.playIndex(after.queue.length - related.length);
       }
     });
     return;
@@ -968,17 +989,20 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     const seed = s.current;
     void fetchRelatedMix(seed, s.queue, 8)
       .then((related) => {
-        const state = usePlayerStore.getState();
-        if (state.current?.id !== seed.id) return; // song changed meanwhile
-        const fresh = related.filter((t) => !state.queue.some((q) => q.id === t.id));
-        if (fresh.length > 0) {
-          usePlayerStore.setState((st) => ({
+        if (usePlayerStore.getState().current?.id !== seed.id) return; // song changed meanwhile
+        // Filter against the LATEST queue inside the updater — the end-of-
+        // queue auto-advance path in handleEnded can append the same mix
+        // concurrently, and a stale snapshot would duplicate the tracks.
+        usePlayerStore.setState((st) => {
+          const fresh = related.filter((t) => !st.queue.some((q) => q.id === t.id));
+          if (fresh.length === 0) return st;
+          return {
             queue: [...st.queue, ...fresh],
             unshuffledQueue: st.unshuffledQueue ? [...st.unshuffledQueue, ...fresh] : null,
-          }));
-          const after = usePlayerStore.getState();
-          saveQueue(after.queue, after.queueIndex, after.current?.id ?? null);
-        }
+          };
+        });
+        const after = usePlayerStore.getState();
+        saveQueue(after.queue, after.queueIndex, after.current?.id ?? null);
       })
       .finally(() => {
         autofillInFlight = false;
@@ -1125,9 +1149,12 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     set({ queue: initial, queueIndex: 0 });
     loadTrack(seed);
     void fetchRelatedMix(seed, initial, 15).then((related) => {
-      const fresh = related.filter((t) => !get().queue.some((q) => q.id === t.id));
-      if (fresh.length === 0) return;
-      usePlayerStore.setState((st) => ({ queue: [...st.queue, ...fresh] }));
+      // Dedupe against the latest queue inside the updater (see autofill note).
+      usePlayerStore.setState((st) => {
+        const fresh = related.filter((t) => !st.queue.some((q) => q.id === t.id));
+        if (fresh.length === 0) return st;
+        return { queue: [...st.queue, ...fresh] };
+      });
       saveQueue(
         usePlayerStore.getState().queue,
         usePlayerStore.getState().queueIndex,
@@ -1190,9 +1217,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     if (s.queue.length === 0) return;
     // Shuffle ON: play a RANDOM other track (not the one directly below).
     if (s.shuffle && s.queue.length > 1) {
-      let i = Math.floor(Math.random() * s.queue.length);
-      if (i === s.queueIndex) i = (i + 1) % s.queue.length;
-      playIndex(i);
+      playIndex(pickShuffleIndex(s.queue.length, s.queueIndex, get().smartShuffle));
       return;
     }
     if (s.queueIndex < s.queue.length - 1) {
