@@ -296,7 +296,7 @@ function ensureShields(): void {
       // Dark gradient strips mask YouTube's own title bar (top) and control
       // strip (bottom) so they're never visible, while the middle of the
       // video stays fully clear.
-      "position:absolute;inset:0;pointer-events:auto;z-index:5;" +
+      "position:absolute;inset:0;pointer-events:none;z-index:5;" +
       "background:linear-gradient(180deg, rgba(5,6,10,0.92) 0%, rgba(5,6,10,0) 16%, rgba(5,6,10,0) 74%, rgba(5,6,10,0.92) 100%);";
     hostEl.appendChild(shieldEl);
   }
@@ -385,8 +385,13 @@ export function setRate(rate: number): void {
  */
 const OVERLAY_BASE =
   // Above the fullscreen player layer (z-[70]) so the video is visible;
-  // it's sized exactly over the video frame, never covering the controls.
-  "position:fixed;z-index:71;pointer-events:auto;border:0;overflow:hidden;opacity:1;border-radius:16px;";
+  // sized exactly over the video frame, never covering the controls.
+  // pointer-events:none is deliberate and load-bearing: the iframe is a live
+  // YouTube page, so letting clicks through to it made the app feel frozen
+  // and clicking the video area triggered YouTube's own title-bar link,
+  // which started ANOTHER video of the same song over our playback. Clicks
+  // must belong to our own UI, always.
+  "position:fixed;z-index:71;pointer-events:none;border:0;overflow:hidden;opacity:1;border-radius:16px;";
 
 /**
  * Overlay the live player over the given fullscreen frame element (measured

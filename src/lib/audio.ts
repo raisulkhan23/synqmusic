@@ -175,6 +175,46 @@ export function ensureGraph(): boolean {
   }
 }
 
+/**
+ * RMS level (0..1) currently flowing through the graph. Used to PROVE the
+ * EQ is actually processing audio instead of guessing: if this stays at ~0
+ * while music is playing, the audio element is not in the graph (or the
+ * context never resumed) and the effect is a silent no-op.
+ */
+let levelProbe: Uint8Array<ArrayBuffer> | null = null;
+export function getSignalLevel(): number {
+  if (!analyser) return -1; // graph not built
+  if (!levelProbe || levelProbe.length !== analyser.frequencyBinCount) {
+    levelProbe = new Uint8Array(analyser.frequencyBinCount);
+  }
+  analyser.getByteTimeDomainData(levelProbe as Uint8Array<ArrayBuffer>);
+  let sum = 0;
+  for (let i = 0; i < levelProbe.length; i++) {
+    const v = (levelProbe[i] - 128) / 128;
+    sum += v * v;
+  }
+  return Math.sqrt(sum / levelProbe.length);
+}
+
+/**
+ * Ensure the graph exists AND the context is actually running. Browsers can
+ * refuse `resume()` on the first call after a gesture, so retry across a few
+ * frames — a suspended context means total silence and a useless EQ.
+ */
+export async function resumeGraph(attempts = 4): Promise<boolean> {
+  for (let i = 0; i < attempts; i++) {
+    if (!ensureGraph()) return false;
+    if (audioCtx?.state === "running") return true;
+    try {
+      await audioCtx?.resume();
+    } catch {
+      /* try again next frame */
+    }
+    await new Promise((r) => setTimeout(r, 60));
+  }
+  return audioCtx?.state === "running";
+}
+
 /** True when the Web Audio graph exists and the audio element flows through it. */
 export function isGraphReady(): boolean {
   return !!audioCtx && !!filterSource;

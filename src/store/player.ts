@@ -8,6 +8,8 @@ import {
   setEqMono as setEqMonoLib,
   ensureGraph,
   hasAudioProcessing,
+  getSignalLevel,
+  resumeGraph,
   onEqChange,
   AUDIO_FILTERS,
   type AudioFilterId,
@@ -1584,6 +1586,8 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
    * as soon as ANY resolver succeeds.
    */
   let effectRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Monotonic token for filtered-stream loads: only the newest may start. */
+  let filterLoadSeq = 0;
   const scheduleEffectRetry = (videoId: string) => {
     if (effectRetryTimer) clearTimeout(effectRetryTimer);
     let attempts = 0;
@@ -1611,10 +1615,17 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     const videoId = track.youtubeId;
     if (!videoId) return;
     const seq = ++loadSeq;
+    const myFilterSeq = ++filterLoadSeq;
+    // Invalidate any other filtered-load in flight so we never end up with two
+    // sources playing the same song at once (which sounds like the effect
+    // "does nothing" because the dry IFrame audio is mixed on top).
+    ytEngine.pause();
+    getAudio().pause();
     void ytResolve(videoId).then((url) => {
-      if (!url || seq !== loadSeq) return;
+      if (!url || seq !== loadSeq || myFilterSeq !== filterLoadSeq) return;
       const audio = getAudio();
       ytEngine.pause();
+      audio.pause();
       audio.src = url;
       audio.playbackRate = get().rate;
       audio.load();
@@ -1630,6 +1641,48 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       usePlayerStore.setState({ current: { ...track, audioUrl: url }, currentTime: at });
       syncVideoSlave();
     });
+  };
+
+  /**
+   * Prove the effect is actually doing something: once the filtered stream is
+   * playing, sample the graph's analyser. Silence while audio is playing
+   * means the EQ is NOT in the path (suspended context, or the element is
+   * still dry), so we resume the context and re-route before giving up.
+   */
+  let verifyTimer: ReturnType<typeof setTimeout> | null = null;
+  const verifyEffectIsLive = (videoId: string) => {
+    if (verifyTimer) clearTimeout(verifyTimer);
+    const check = (attempt: number) => {
+      const s = usePlayerStore.getState();
+      if (s.current?.youtubeId !== videoId) return;
+      if (!s.isPlaying) {
+        verifyTimer = setTimeout(() => check(attempt), 500);
+        return;
+      }
+      const level = getSignalLevel();
+      if (level < 0) return; // graph not built yet
+      if (level > 0.004) return; // audio IS flowing through the EQ chain
+      if (attempt >= 2) {
+        toast("Effect still not processing", {
+          id: "fx-verify",
+          description: "This song's stream resists processing \u2014 try another track",
+        });
+        return;
+      }
+      void resumeGraph().then((ok) => {
+        if (!ok) {
+          toast("Tap play once to activate audio processing", {
+            id: "fx-verify",
+            description: "Your browser needs a click before the EQ can start",
+          });
+          return;
+        }
+        const t = usePlayerStore.getState().current;
+        if (t?.youtubeId) swapToFilteredStream(t, usePlayerStore.getState().currentTime);
+      });
+      verifyTimer = setTimeout(() => check(attempt + 1), 2500);
+    };
+    verifyTimer = setTimeout(() => check(0), 1800);
   };
 
   const resolveAndPlayWithFilter = (track: Playable, resumeAt: number, forEffect = false) => {
@@ -1652,9 +1705,14 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     });
     syncMediaSession(track, true);
     const seq = ++loadSeq;
+    const myFilterSeq = ++filterLoadSeq;
+    // Only one source at a time: stop the IFrame engine before the filtered
+    // stream takes over, or both play and the effect is inaudible.
+    ytEngine.pause();
+    getAudio().pause();
     ytResolve(videoId)
       .then((url) => {
-        if (seq !== loadSeq) return; // a newer track was loaded meanwhile
+        if (seq !== loadSeq || myFilterSeq !== filterLoadSeq) return; // superseded
         if (!url) throw new Error("no stream");
         const audio = getAudio();
         ytEngine.pause();
@@ -1676,6 +1734,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
         // Without this, the engine stayed parked on the PREVIOUS video's
         // paused frame and the fullscreen player showed a frozen thumbnail.
         syncVideoSlave();
+        verifyEffectIsLive(videoId);
       })
       .catch(() => {
         if (seq !== loadSeq) return; // stale
