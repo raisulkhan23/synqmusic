@@ -46,6 +46,7 @@ import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { toast } from "sonner";
 
 const MAX_WALLPAPER_BYTES = 3_000_000;
+const MAX_LIVE_WALLPAPER_BYTES = 3_000_000;
 
 const SHORTCUTS: [string, string][] = [
   ["Space", "Play / pause"],
@@ -109,9 +110,14 @@ export function SettingsDialog({
 
   const [name, setName] = useState("");
   const wallpaperInputRef = useRef<HTMLInputElement>(null);
-  const [liveWallpaperUrl, setLiveWallpaperUrl] = useState(
-    () => localStorage.getItem("ss.wallpaperType") === "video" ? localStorage.getItem("ss.wallpaper") ?? "" : "",
-  );
+  const liveWallpaperInputRef = useRef<HTMLInputElement>(null);
+  const [liveWallpaperFileName, setLiveWallpaperFileName] = useState("");
+  const [liveWallpaperUrl, setLiveWallpaperUrl] = useState(() => {
+    const saved = localStorage.getItem("ss.wallpaper");
+    return localStorage.getItem("ss.wallpaperType") === "video" && saved?.startsWith("http")
+      ? saved
+      : "";
+  });
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
   const [savingAvatar, setSavingAvatar] = useState(false);
@@ -266,6 +272,35 @@ export function SettingsDialog({
     toast.success("Live wallpaper applied");
   };
 
+  const handleLiveWallpaperFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    input.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("video/")) {
+      toast.error("Choose a video file for your live wallpaper");
+      return;
+    }
+    if (file.size > MAX_LIVE_WALLPAPER_BYTES) {
+      toast.error("Live wallpaper videos must be smaller than 3 MB");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== "string") {
+        toast.error("Couldn't read that video");
+        return;
+      }
+      setWallpaper(reader.result, "video");
+      setLiveWallpaperFileName(file.name);
+      setLiveWallpaperUrl("");
+      toast.success("Live wallpaper file applied");
+    };
+    reader.onerror = () => toast.error("Couldn't read that video");
+    reader.readAsDataURL(file);
+  };
+
   const handleWallpaperChange = (event: ChangeEvent<HTMLInputElement>) => {
     const input = event.currentTarget;
     const file = input.files?.[0];
@@ -295,6 +330,7 @@ export function SettingsDialog({
 
   const clearWallpaper = () => {
     setWallpaper(null);
+    setLiveWallpaperFileName("");
     toast("Wallpaper removed");
   };
 
@@ -758,8 +794,31 @@ export function SettingsDialog({
                   </Button>
                 </div>
                 <p className="mt-2 text-[11px] leading-4 text-muted-foreground">
-                  Use a direct MP4/WebM URL. It autoplays muted behind the UI.
+                  Use a direct MP4/WebM URL, or choose a video file from your device.
                 </p>
+                <input
+                  ref={liveWallpaperInputRef}
+                  type="file"
+                  accept="video/mp4,video/webm,video/ogg"
+                  className="hidden"
+                  onChange={handleLiveWallpaperFileChange}
+                />
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => liveWallpaperInputRef.current?.click()}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-white/25 hover:bg-white/[0.1]"
+                  >
+                    <Film className="size-3.5" />
+                    Choose video file
+                  </button>
+                  {liveWallpaperFileName && (
+                    <span className="max-w-full truncate py-1.5 text-xs text-[rgb(var(--tint))]">
+                      {liveWallpaperFileName}
+                    </span>
+                  )}
+                </div>
+                <p className="mt-2 text-[11px] text-muted-foreground">MP4, WebM or OGG · up to 3 MB</p>
               </>
             )}
 
