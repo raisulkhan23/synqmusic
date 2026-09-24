@@ -13,6 +13,15 @@ const TRUSTED_ORIGINS = [
   "https://synq-music.freebuff.app",
 ].filter((x): x is string => !!x).map((x) => x.replace(/\/$/, ""));
 
+function isTrustedOrigin(origin: string): boolean {
+  const normalized = origin.replace(/\/$/, "");
+  return (
+    TRUSTED_ORIGINS.includes(normalized) ||
+    /^https:\/\/[a-z0-9-]+\.freebuff\.app$/i.test(normalized) ||
+    /^https:\/\/[a-z0-9-]+\.vly\.sh$/i.test(normalized)
+  );
+}
+
 export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
   providers: [
     emailOtp,
@@ -34,7 +43,7 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
       }
       // Absolute URL — only allow trusted origins.
       const origin = new URL(redirectTo).origin.replace(/\/$/, "");
-      if (!TRUSTED_ORIGINS.includes(origin)) {
+      if (!isTrustedOrigin(origin)) {
         throw new Error(`Untrusted redirect origin: ${origin}`);
       }
       return redirectTo;
