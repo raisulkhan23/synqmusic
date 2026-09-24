@@ -111,7 +111,7 @@ function VisualizerDemo() {
 }
 
 const EXPERIENCE_TRACKS = [
-  { title: "Show Me Love", artist: "Robin S", tone: "from-brand/80 via-lime-300/35 to-transparent", rotate: "-12" },
+  { title: "Show Me Love", artist: "WizTheMc", tone: "from-brand/80 via-lime-300/35 to-transparent", rotate: "-12" },
   { title: "Khusir Anek Range", artist: "Rp Creation", tone: "from-violet-500/75 via-fuchsia-400/25 to-transparent", rotate: "10" },
   { title: "Mahe Mahe Tobo", artist: "Nure Al Miskat", tone: "from-cyan-400/70 via-blue-500/25 to-transparent", rotate: "-7" },
 ];
@@ -352,7 +352,7 @@ export default function Landing() {
                 <p className="font-display text-[15px] font-bold tracking-tight">
                   Show Me Love
                 </p>
-                <p className="text-xs text-muted-foreground">Robin S</p>
+                <p className="text-xs text-muted-foreground">WizTheMc</p>
               </div>
               <Heart className="ml-auto size-4 shrink-0 fill-brand text-brand" />
             </div>
