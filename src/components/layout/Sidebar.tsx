@@ -284,6 +284,11 @@ export function Sidebar() {
               )
             }
           >
+            <span className="relative flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-md border border-white/10 bg-[#111b1b]">
+              <span className="absolute -left-2 -top-2 size-8 rounded-full bg-[rgb(var(--tint)/0.5)] blur-md" />
+              <span className="absolute -bottom-3 -right-2 size-9 rounded-full bg-emerald-400/20 blur-md" />
+              <Heart className="relative z-10 size-4 text-[rgb(var(--tint))]" />
+            </span>
             <span className="min-w-0">
               <span className="block truncate">Liked Songs</span>
               <span className="block text-xs text-muted-foreground">Playlist</span>
@@ -299,6 +304,11 @@ export function Sidebar() {
               )
             }
           >
+            <span className="relative flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-md border border-white/10 bg-[#17151e]">
+              <span className="absolute -right-2 -top-2 size-8 rounded-full bg-violet-400/25 blur-md" />
+              <span className="absolute -bottom-3 -left-2 size-9 rounded-full bg-amber-300/20 blur-md" />
+              <History className="relative z-10 size-4 text-violet-200" />
+            </span>
             <span className="min-w-0">
               <span className="block truncate">Recently Played</span>
               <span className="block text-xs text-muted-foreground">History</span>
