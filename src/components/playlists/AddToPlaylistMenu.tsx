@@ -42,16 +42,20 @@ export function AddToPlaylistMenu({
         track: {
           id: track.id,
           title: track.title,
-          artist: track.artistName,
+          artist: track.artistName || "Unknown artist",
           album: track.albumName || undefined,
-          coverUrl: track.coverUrl,
+          coverUrl: track.coverUrl ?? "",
           duration: Number.isFinite(track.duration) ? track.duration : 0,
-          youtubeId: track.youtubeId,
+          youtubeId: track.youtubeId || undefined,
         },
       });
-      toast.success(`Added to ${name}`);
-    } catch {
-      toast.error(`Couldn't add "${track.title}" to ${name}`);
+      toast.success(`Added "${track.title}" to ${name}`);
+    } catch (error) {
+      // Surface the real reason instead of a generic failure so auth or
+      // validation problems are actually debuggable.
+      const message =
+        error instanceof Error && error.message ? error.message : "Unknown error";
+      toast.error(`Couldn't add to ${name}`, { description: message });
     }
   };
 
@@ -101,7 +105,7 @@ export function AddToPlaylistMenu({
       <PlaylistDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        onCreate={(id) => void handleAdd(id, "new playlist")}
+        onCreate={(id, name) => void handleAdd(id, name)}
       />
     </>
   );

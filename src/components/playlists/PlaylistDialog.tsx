@@ -22,7 +22,7 @@ export function PlaylistDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCreate?: (id: Id<"playlists">) => void;
+  onCreate?: (id: Id<"playlists">, name: string) => void;
 }) {
   const createPlaylist = useMutation(api.playlists.create);
   const [name, setName] = useState("");
@@ -38,9 +38,10 @@ export function PlaylistDialog({
       toast.success(`Created "${trimmed}"`);
       setName("");
       onOpenChange(false);
-      onCreate?.(id);
-    } catch {
-      toast.error("Could not create the playlist");
+      onCreate?.(id, trimmed);
+    } catch (error) {
+      const message = error instanceof Error && error.message ? error.message : "Unknown error";
+      toast.error("Could not create the playlist", { description: message });
     } finally {
       setSubmitting(false);
     }

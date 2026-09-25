@@ -37,6 +37,8 @@ export default function PlaylistDetail() {
 
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   if (playlist === undefined) {
     return (
@@ -186,12 +188,21 @@ export default function PlaylistDetail() {
   };
 
   const handleDelete = async () => {
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+    setDeleting(true);
     try {
       await removePlaylist({ playlistId: playlist._id });
       toast.success(`Deleted "${playlist.name}"`);
       navigate("/playlists");
-    } catch {
-      toast.error("Could not delete the playlist");
+    } catch (error) {
+      const message = error instanceof Error && error.message ? error.message : "Unknown error";
+      toast.error("Could not delete the playlist", { description: message });
+      setConfirmDelete(false);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -256,26 +267,32 @@ export default function PlaylistDetail() {
               {resolvingId === "__all__" ? "Loading…" : "Play all"}
             </button>
             {rows.length > 0 && (
-              <>
-                <button
-                  type="button"
-                  onClick={shuffleAll}
-                  className="flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.05] px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-white/[0.1]"
-                >
-                  <Shuffle className="size-4" />
-                  Shuffle
-                </button>
-                <button
-                  type="button"
-                  aria-label="Delete playlist"
-                  onClick={() => void handleDelete()}
-                  className="flex items-center gap-1.5 rounded-full border border-white/10 px-3.5 py-2 text-sm text-muted-foreground transition-colors hover:border-red-500/40 hover:text-red-400"
-                >
-                  <Trash2 className="size-4" />
-                  Delete
-                </button>
-              </>
+              <button
+                type="button"
+                onClick={shuffleAll}
+                className="flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.05] px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-white/[0.1]"
+              >
+                <Shuffle className="size-4" />
+                Shuffle
+              </button>
             )}
+            {/* Delete stays available even for an empty playlist. */}
+            <button
+              type="button"
+              aria-label="Delete playlist"
+              disabled={deleting}
+              onClick={() => void handleDelete()}
+              onBlur={() => setConfirmDelete(false)}
+              className={cn(
+                "flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-sm transition-colors disabled:opacity-60",
+                confirmDelete
+                  ? "border-red-500 bg-red-500/20 text-red-300"
+                  : "border-white/10 text-muted-foreground hover:border-red-500/40 hover:text-red-400",
+              )}
+            >
+              <Trash2 className="size-4" />
+              {confirmDelete ? "Click to confirm" : "Delete"}
+            </button>
           </div>
         </div>
       </div>

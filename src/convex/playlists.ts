@@ -8,8 +8,10 @@ const trackSnapshotValidator = v.object({
   title: v.string(),
   artist: v.string(),
   album: v.optional(v.string()),
-  coverUrl: v.string(),
-  duration: v.number(),
+  // Accepted as optional so a partially-resolved remote track can still be
+  // added; the handler normalizes it to the stored (non-optional) shape.
+  coverUrl: v.optional(v.string()),
+  duration: v.optional(v.number()),
   youtubeId: v.optional(v.string()),
 });
 
@@ -22,6 +24,19 @@ type TrackSnapshot = {
   duration: number;
   youtubeId?: string;
 };
+
+/** Coerce a client-supplied snapshot into the exact shape stored on a doc. */
+function normalizeSnapshot(track: TrackSnapshot): TrackSnapshot {
+  return {
+    id: track.id,
+    title: track.title,
+    artist: track.artist,
+    ...(track.album ? { album: track.album } : {}),
+    coverUrl: typeof track.coverUrl === "string" ? track.coverUrl : "",
+    duration: typeof track.duration === "number" && Number.isFinite(track.duration) ? track.duration : 0,
+    ...(typeof track.youtubeId === "string" && track.youtubeId ? { youtubeId: track.youtubeId } : {}),
+  };
+}
 
 const requireUser = async (ctx: MutationCtx) => {
   const userId = await getAuthUserId(ctx);
@@ -62,8 +77,13 @@ export const create = mutation({
     const userId = await requireUser(ctx);
     const now = Date.now();
     const playlistName = name.trim() || "New playlist";
-    const snapshots = tracks?.filter((track) => track.id.trim()) ?? [];
-    const uniqueSnapshots = [...new Map(snapshots.map((track) => [track.id, track])).values()];
+    const snapshots = (tracks ?? []).filter((track) => track.id.trim());
+    const uniqueSnapshots = [
+      ...new Map(
+        snapshots
+          .map((track) => [track.id, normalizeSnapshot(track as TrackSnapshot)] as const),
+      ).values(),
+    ];
     const uniqueIds = uniqueSnapshots.map((track) => track.id);
     const id = await ctx.db.insert("playlists", {
       userId,
@@ -134,7 +154,7 @@ export const addTrack = mutation({
     if (!playlist.trackIds.includes(trackId)) {
       const snapshots = playlist.trackSnapshots ?? [];
       const nextSnapshots = track
-        ? [...snapshots.filter((snapshot) => snapshot.id !== trackId), track]
+        ? [...snapshots.filter((snapshot) => snapshot.id !== trackId), normalizeSnapshot(track as TrackSnapshot)]
         : snapshots;
       await ctx.db.patch(playlistId, {
         trackIds: [...playlist.trackIds, trackId],
