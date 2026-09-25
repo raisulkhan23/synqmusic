@@ -4,7 +4,6 @@ import { useAction, useMutation, useQuery } from "convex/react";
 import { ListMusic, Play, Search as SearchIcon, Shuffle, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
-import { AddToPlaylistMenu } from "@/components/playlists/AddToPlaylistMenu";
 import { RemoteTrackRow } from "@/components/tracks/RemoteTrackRow";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -309,24 +308,18 @@ export default function PlaylistDetail() {
                 onPlay={() => void playRow(track)}
                 source="youtube"
                 trailing={
-                  <div className="flex items-center gap-1">
-                    <AddToPlaylistMenu
-                      track={toPlayable(track)}
-                      className="opacity-100 lg:opacity-0 lg:group-hover:opacity-100 lg:focus:opacity-100"
-                    />
-                    <button
-                      type="button"
-                      aria-label={`Remove ${track.title} from playlist`}
-                      title="Remove from playlist"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        void handleRemove(track);
-                      }}
-                      className="rounded-full p-1.5 text-muted-foreground/70 transition-colors hover:bg-white/10 hover:text-foreground"
-                    >
-                      <X className="size-4" />
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    aria-label={`Remove ${track.title} from playlist`}
+                    title="Remove from playlist"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void handleRemove(track);
+                    }}
+                    className="rounded-full p-1.5 text-muted-foreground/70 transition-colors hover:bg-white/10 hover:text-foreground"
+                  >
+                    <X className="size-4" />
+                  </button>
                 }
               />
             ))
@@ -359,20 +352,6 @@ function toYtItem(track: PlaylistRow): YtItem {
     artist: cleanArtistName(track.artist, track.title),
     thumbnail: track.thumbnail,
     duration: track.duration,
-  };
-}
-
-function toPlayable(track: PlaylistRow): Playable {
-  return {
-    id: track.id,
-    title: track.title,
-    artistName: cleanArtistName(track.artist, track.title),
-    albumName: "",
-    coverUrl: track.thumbnail,
-    duration: track.duration,
-    audioUrl: `https://youtu.be/${track.youtubeId ?? track.id}`,
-    source: "youtube",
-    youtubeId: track.youtubeId ?? track.id,
   };
 }
 

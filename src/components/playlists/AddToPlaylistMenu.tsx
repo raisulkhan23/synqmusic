@@ -62,6 +62,7 @@ export function AddToPlaylistMenu({
           <button
             type="button"
             aria-label={`Add ${track.title} to a playlist`}
+            onClick={(event) => event.stopPropagation()}
             className={cn(
               "rounded-full p-1.5 text-muted-foreground/70 transition-colors hover:bg-white/10 hover:text-foreground",
               className,

@@ -12,6 +12,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
+import { AddToPlaylistMenu } from "@/components/playlists/AddToPlaylistMenu";
+
+const isRowActionTarget = (target: EventTarget | null) =>
+  target instanceof Element && Boolean(target.closest("button, [role='menuitem']"));
 
 export function RemoteTrackRow({
   item,
@@ -51,6 +55,8 @@ export function RemoteTrackRow({
     });
 
   const asPlayable = () => toPlayableYoutube(item, "");
+  const playlistTrack = () =>
+    source === "youtube" ? asPlayable() : { ...asPlayable(), youtubeId: undefined };
 
   const playNext = () => {
     const s = usePlayerStore.getState();
@@ -68,8 +74,17 @@ export function RemoteTrackRow({
     <div
       role="button"
       tabIndex={0}
-      onClick={() => onPlay(item)}
+      onClick={(e) => {
+        // Dropdown menu items render in a portal, but the trigger and its
+        // controls still live inside this row. Never let an action button
+        // activate the row and start playback as a side effect.
+        if (isRowActionTarget(e.target)) return;
+        onPlay(item);
+      }}
       onKeyDown={(e) => {
+        // Only the row itself owns Enter/Space. Buttons and menu controls
+        // handle their own keyboard activation.
+        if (e.target !== e.currentTarget) return;
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           onPlay(item);
@@ -132,6 +147,10 @@ export function RemoteTrackRow({
 
       <div className="ml-auto flex shrink-0 items-center gap-2">
         {trailing}
+        <AddToPlaylistMenu
+          track={playlistTrack()}
+          className="opacity-100 lg:opacity-0 lg:group-hover:opacity-100 lg:focus:opacity-100"
+        />
         <button
           type="button"
           aria-label={`Start ${displayTitle} radio`}
@@ -166,11 +185,23 @@ export function RemoteTrackRow({
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-52">
-            <DropdownMenuItem className="gap-2" onSelect={playNext}>
+            <DropdownMenuItem
+              className="gap-2"
+              onSelect={(event) => {
+                event.stopPropagation();
+                playNext();
+              }}
+            >
               <ListStart className="size-4" />
               Play next
             </DropdownMenuItem>
-            <DropdownMenuItem className="gap-2" onSelect={addQueued}>
+            <DropdownMenuItem
+              className="gap-2"
+              onSelect={(event) => {
+                event.stopPropagation();
+                addQueued();
+              }}
+            >
               <ListEnd className="size-4" />
               Add to queue
             </DropdownMenuItem>
