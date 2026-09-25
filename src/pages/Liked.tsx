@@ -124,8 +124,10 @@ export default function Liked() {
         <div className="absolute inset-0 bg-gradient-to-br from-rose-500/25 via-fuchsia-500/10 to-transparent" />
         <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent opacity-70" />
         <div className="relative flex items-end gap-5">
-          <div className="flex size-24 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-rose-500 to-fuchsia-600 shadow-2xl sm:size-32">
-            <Heart className="size-12 fill-white text-white sm:size-16" />
+          <div className="relative flex size-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-[#111b1b] shadow-2xl sm:size-32">
+            <span className="absolute -left-8 -top-8 size-24 rounded-full bg-[rgb(var(--tint)/0.5)] blur-2xl" />
+            <span className="absolute -bottom-10 -right-6 size-28 rounded-full bg-emerald-400/20 blur-2xl" />
+            <Heart className="relative z-10 size-12 text-[rgb(var(--tint))] sm:size-16" />
           </div>
           <div className="min-w-0">
             <p className="text-[11px] font-semibold tracking-[0.2em] text-white/60 uppercase">
