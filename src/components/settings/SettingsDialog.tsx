@@ -1044,6 +1044,9 @@ export function SettingsDialog({
           <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
             <p className="text-sm font-medium">Sound effects</p>
             <p className="text-xs text-muted-foreground">Applies to what's playing right now</p>
+            <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground/80">
+              Turning on sound effects may add a small delay before music starts.
+            </p>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {AUDIO_FILTERS.map((f) => (
                 <button
@@ -1092,6 +1095,9 @@ export function SettingsDialog({
                   toast(next ? "Settings sheen on" : "Settings sheen paused");
                 }}
               />
+              <p className="px-1 text-[11px] leading-relaxed text-muted-foreground/80">
+                The animated sheen may pause or appear static when Reduce motion is turned on.
+              </p>
               <ToggleRow
                 label="Deep surface depth"
                 description="Add a softer floating shadow beneath the glass"
