@@ -248,9 +248,9 @@ async function musicSearch(query: string): Promise<YtItem[]> {
 const GAMING_CONTENT_RE =
   /\b(clash of clans|coc|gameplay|gaming|gamer|video game|mobile game|walkthrough|let'?s play|inferno tower|inferno dragon|super witch|new troops?|max troops?|max single|home village|builder base|base layout|attack strategy|defen[cs]e strategy|troop|army|raid|multiplayer|super troops?|inferno dragon|hog rider|barbarian|archer queen|spell caster)\b/i;
 const NON_MUSIC_RE =
-  /\b(podcast|episode|interview|full album|mix(?:ed)? by|megamix|dj set|live set|1 hour|10 hours|hours of|asmr|reaction|tutorial|karaoke|cover\s*\?*|how to deal with)\b/i;
+  /\b(podcast|episode|interview|full album|mix(?:ed)? by|megamix|dj set|live set|1 hour|10 hours|hours of|asmr|reaction|tutorial|karaoke|cover\s*\?*|how to deal with|sports?|sport|football|soccer|basketball|tennis|golf|wta|atp|nba|nfl|ufc|formula 1|grand prix|china open|penalty|press conference|breaking news|news update|match review|match result|highlights?|tournament|championship|playoffs?|transfer news|sports news)\b/i;
 
-function isMusicTrack(item: YtItem): boolean {
+export function isMusicTrack(item: YtItem): boolean {
   if (item.duration > 0 && (item.duration < 30 || item.duration > 900)) return false;
   const hay = `${item.title} ${item.artist}`;
   return !GAMING_CONTENT_RE.test(hay) && !NON_MUSIC_RE.test(hay);
@@ -380,7 +380,10 @@ function extractMusicResults(data: Record<string, unknown>): YtItem[] {
     const card = get(section, ["musicCardShelfRenderer"]);
     if (card && typeof card === "object") {
       const entry = parseMusicCardShelf(card as Record<string, unknown>);
-      if (entry) push(entry);
+      // Top-result cards do not carry reliable song metadata. Do not let a
+      // sports/news upload enter the music catalog just because YouTube
+      // Music placed it in the search response.
+      if (entry && hasMusicEvidence(entry)) push(entry);
     }
     const isrItems = get(section, ["itemSectionRenderer", "contents"]);
     if (Array.isArray(isrItems)) {

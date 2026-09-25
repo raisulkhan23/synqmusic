@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   dedupeMusicItems,
   isLyricVideoTrack,
+  isMusicTrack,
   isPrimaryMusicResult,
   parseMusicListItem,
 } from "../src/convex/youtube";
@@ -99,6 +100,18 @@ describe("primary music result filtering", () => {
         "inferno clash",
       ),
     ).toBe(true);
+  });
+
+  test("rejects sports and news videos even when they are labeled as singles", () => {
+    const sportsVideo = {
+      id: "sports-1",
+      title: "Skip China Open, No WTA Penalty? Alex Eala Ma... | Music",
+      artist: "Crowd Favorite",
+      duration: 221,
+      thumbnail: "",
+    };
+    expect(isMusicTrack(sportsVideo)).toBe(false);
+    expect(isPrimaryMusicResult(sportsVideo, "China Open")).toBe(false);
   });
 
   test("rejects Clash of Clans gaming results even when they match the query", () => {
