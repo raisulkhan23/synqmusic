@@ -52,20 +52,32 @@ function formatRemaining(ms: number): string {
   return m > 0 ? `${m}:${String(s).padStart(2, "0")}` : `${s}s`;
 }
 
+function useSleepCountdown(sleepEndsAt: number | null): number {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (sleepEndsAt === null) return;
+    const tick = () => {
+      const remaining = sleepEndsAt - Date.now();
+      // Update only when the displayed second changes. This avoids a global
+      // fullscreen-player render every 250ms while the timer is idle.
+      if (remaining <= 0) setNow(Date.now());
+      else setNow((previous) => (Math.floor(previous / 1000) === Math.floor(Date.now() / 1000) ? previous : Date.now()));
+    };
+    const timer = window.setInterval(tick, 250);
+    return () => window.clearInterval(timer);
+  }, [sleepEndsAt]);
+
+  return now;
+}
+
 function SleepTimerButton() {
   const sleepEndsAt = usePlayerStore((s) => s.sleepEndsAt);
   const sleepAtSongEnd = usePlayerStore((s) => s.sleepAtSongEnd);
   const setSleepTimer = usePlayerStore((s) => s.setSleepTimer);
-  const [now, setNow] = useState(() => Date.now());
+  const now = useSleepCountdown(sleepEndsAt);
 
   const active = sleepEndsAt !== null || sleepAtSongEnd;
-
-  // tick the countdown
-  useEffect(() => {
-    if (sleepEndsAt === null) return;
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, [sleepEndsAt]);
 
   return (
     <DropdownMenu modal={false}>
