@@ -709,7 +709,7 @@ export default function Home() {
             <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-4">
               <h3 className="font-display flex items-center gap-2 text-base font-bold tracking-tight">
                 <Sun className="size-4 text-[rgb(var(--tint))]" />
-                When you listen · {localTime}
+                Right now for you · {localTime}
               </h3>
               <RemoteRows
                 items={remote.timeOfDay}
