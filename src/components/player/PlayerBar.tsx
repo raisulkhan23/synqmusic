@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useNavigate } from "react-router";
 import { useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -11,9 +11,16 @@ import { toPlayableYoutube } from "@/lib/playable";
 import { getAudio } from "@/lib/audio";
 import { usePlayerStore } from "@/store/player";
 import {
+  clearDiscordPresence,
+  getDiscordBridgeStatus,
+  publishDiscordPresence,
+  subscribeDiscordBridge,
+} from "@/lib/discordPresence";
+import {
   Heart,
   House,
   ListMusic,
+  Cable,
   Copy,
   Loader2,
   Maximize2,
@@ -98,6 +105,11 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
   const replaceCurrentStream = usePlayerStore((s) => s.replaceCurrentStream);
   const playViaStream = usePlayerStore((s) => s.playViaStream);
   const searchSameSong = useAction(api.youtube.searchYoutube);
+  const discordBridgeStatus = useSyncExternalStore(
+    subscribeDiscordBridge,
+    getDiscordBridgeStatus,
+    getDiscordBridgeStatus,
+  );
 
   // Sample the current artwork and tint the whole app with its dominant color.
   // Remote (YouTube) art can't be sampled cross-origin, so derive a stable,
@@ -313,6 +325,18 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!current) {
+      clearDiscordPresence();
+      return;
+    }
+    publishDiscordPresence({
+      details: "Listening to SYNQ",
+      state: `${current.title} — ${current.artistName}`.slice(0, 128),
+    });
+    return () => clearDiscordPresence();
+  }, [current]);
+
   // Publish now-playing metadata so iOS/Safari can show SYNQ in Control Center
   // and expose the app as the active AirPods media session.
   useEffect(() => {
@@ -474,6 +498,26 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
             just the expand chevron (queue lives in the fullscreen player and
             the bottom tab bar already covers navigation) */}
       <div className="relative z-10 flex w-auto shrink-0 items-center justify-end gap-0.5">
+        <button
+          type="button"
+          aria-label={discordBridgeStatus === "connected" ? "Discord bridge connected" : "Discord bridge offline"}
+          title={discordBridgeStatus === "connected" ? "Discord bridge connected" : "Start the local Discord bridge to enable automatic presence"}
+          onClick={() => {
+            if (discordBridgeStatus === "connected") {
+              toast.success("Discord bridge connected — your now-playing activity is being sent");
+            } else {
+              toast("Start the bridge with: bun run discord-bridge");
+            }
+          }}
+          className={cn(
+            "hidden rounded-full p-2 transition-colors hover:bg-white/[0.06] sm:block lg:p-1.5",
+            discordBridgeStatus === "connected"
+              ? "text-[rgb(var(--tint))]"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          <Cable className="size-4" />
+        </button>
         <button
           type="button"
           aria-label="Copy now playing for Discord"
