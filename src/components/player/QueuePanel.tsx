@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Reorder } from "framer-motion";
+import { Reorder, useDragControls } from "framer-motion";
 import { useMutation } from "convex/react";
 
 import {
@@ -28,6 +28,82 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+type QueueReorderRowProps = {
+  track: Playable;
+  rowIndex: number;
+  queueIndex: number;
+  playIndex: (index: number) => void;
+  removeFromQueue: (index: number) => void;
+  undoRemoveFromQueue: () => void;
+};
+
+function QueueReorderRow({
+  track,
+  rowIndex,
+  queueIndex,
+  playIndex,
+  removeFromQueue,
+  undoRemoveFromQueue,
+}: QueueReorderRowProps) {
+  const controls = useDragControls();
+
+  return (
+    <Reorder.Item
+      value={`${track.id}#${rowIndex}`}
+      dragListener={false}
+      className="group flex items-center gap-2 rounded-lg px-1 py-1.5 transition-colors hover:bg-white/[0.05]"
+    >
+      <button
+        type="button"
+        aria-label={`Drag ${track.title} to reorder`}
+        title="Drag to reorder"
+        onPointerDown={(event) => {
+          // Only the grip starts reordering. The rest of the row keeps the
+          // browser's native touch scrolling behavior.
+          event.stopPropagation();
+          controls.start(event);
+        }}
+        onClick={(event) => event.stopPropagation()}
+        className="flex size-6 shrink-0 touch-none cursor-grab items-center justify-center rounded text-muted-foreground/50 active:cursor-grabbing hover:text-muted-foreground"
+      >
+        <GripVertical className="size-4" />
+      </button>
+      <img
+        src={track.coverUrl}
+        alt=""
+        className="size-10 shrink-0 rounded-md object-cover"
+      />
+      <div
+        className="min-w-0 flex-1 touch-pan-y"
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={() => playIndex(queueIndex + 1 + rowIndex)}
+      >
+        <p className="truncate text-sm font-medium">{track.title}</p>
+        <p className="truncate text-xs text-muted-foreground">{track.artistName}</p>
+      </div>
+      <span className="shrink-0 text-xs tabular-nums text-muted-foreground/70">
+        {formatTime(track.duration)}
+      </span>
+      <button
+        type="button"
+        aria-label={`Remove ${track.title} from queue`}
+        onClick={() => {
+          removeFromQueue(queueIndex + 1 + rowIndex);
+          toast("Removed from queue", {
+            action: {
+              label: "Undo",
+              onClick: () => undoRemoveFromQueue(),
+            },
+          });
+        }}
+        className="shrink-0 rounded-full p-1.5 text-muted-foreground/60 transition-colors hover:bg-white/10 hover:text-foreground"
+      >
+        <X className="size-3.5" />
+      </button>
+    </Reorder.Item>
+  );
+}
 
 /** Fetch a related-mix for the current track (any source) as suggestions. */
 async function fetchRelatedSuggestions(seed: Playable): Promise<Playable[]> {
@@ -295,46 +371,15 @@ export function QueuePanel() {
                 className="max-h-[42vh] space-y-1 overflow-y-auto overscroll-contain pr-1"
               >
                 {upcoming.map((track, rowIndex) => (
-                  <Reorder.Item
+                  <QueueReorderRow
                     key={`${track.id}#${rowIndex}`}
-                    value={upcomingKeys[rowIndex]}
-                    className="group flex cursor-grab items-center gap-2 rounded-lg px-1 py-1.5 transition-colors hover:bg-white/[0.05] active:cursor-grabbing"
-                  >
-                    <GripVertical className="size-4 shrink-0 text-muted-foreground/50 group-hover:text-muted-foreground" />
-                    <img
-                      src={track.coverUrl}
-                      alt=""
-                      className="size-10 shrink-0 rounded-md object-cover"
-                    />
-                    <div
-                      className="min-w-0 flex-1"
-                      onClick={() => playIndex(queueIndex + 1 + rowIndex)}
-                    >
-                      <p className="truncate text-sm font-medium">{track.title}</p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {track.artistName}
-                      </p>
-                    </div>
-                    <span className="shrink-0 text-xs tabular-nums text-muted-foreground/70">
-                      {formatTime(track.duration)}
-                    </span>
-                    <button
-                      type="button"
-                      aria-label={`Remove ${track.title} from queue`}
-                      onClick={() => {
-                        removeFromQueue(queueIndex + 1 + rowIndex);
-                        toast("Removed from queue", {
-                          action: {
-                            label: "Undo",
-                            onClick: () => undoRemoveFromQueue(),
-                          },
-                        });
-                      }}
-                      className="shrink-0 rounded-full p-1.5 text-muted-foreground/60 transition-colors hover:bg-white/10 hover:text-foreground"
-                    >
-                      <X className="size-3.5" />
-                    </button>
-                  </Reorder.Item>
+                    track={track}
+                    rowIndex={rowIndex}
+                    queueIndex={queueIndex}
+                    playIndex={playIndex}
+                    removeFromQueue={removeFromQueue}
+                    undoRemoveFromQueue={undoRemoveFromQueue}
+                  />
                 ))}
               </Reorder.Group>
             </section>
