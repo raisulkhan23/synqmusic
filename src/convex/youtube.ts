@@ -242,13 +242,15 @@ async function musicSearch(query: string): Promise<YtItem[]> {
  * - duration must be between 30s and 15 min (filters streams, mixes, livesets)
  * - title/owner must not look like a podcast, interview, mix, etc.
  */
+const GAMING_CONTENT_RE =
+  /\b(clash of clans|coc|gameplay|gaming|gamer|video game|mobile game|walkthrough|let'?s play|inferno tower|inferno dragon|super witch|new troops?|max troops?|max single|home village|builder base|base layout|attack strategy|defen[cs]e strategy|troop|army|raid|multiplayer|super troops?|inferno dragon|hog rider|barbarian|archer queen|spell caster)\b/i;
 const NON_MUSIC_RE =
-  /\b(podcast|episode|interview|full album|mix(?:ed)? by|megamix|dj set|live set|1 hour|10 hours|hours of|asmr|reaction|tutorial|karaoke|cover\s*\?*|clash of clans|coc|gameplay|gaming|super troops?|inferno tower|witch|dragon|home village|new troops?|how to deal with)\b/i;
+  /\b(podcast|episode|interview|full album|mix(?:ed)? by|megamix|dj set|live set|1 hour|10 hours|hours of|asmr|reaction|tutorial|karaoke|cover\s*\?*|how to deal with)\b/i;
 
 function isMusicTrack(item: YtItem): boolean {
   if (item.duration > 0 && (item.duration < 30 || item.duration > 900)) return false;
   const hay = `${item.title} ${item.artist}`;
-  return !NON_MUSIC_RE.test(hay);
+  return !GAMING_CONTENT_RE.test(hay) && !NON_MUSIC_RE.test(hay);
 }
 
 // Lyric/lo-fi uploads are a separate source, not interchangeable with the
@@ -257,6 +259,8 @@ function isMusicTrack(item: YtItem): boolean {
 // video that merely mentions a song can never leak into this list.
 const MUSIC_VIDEO_MARKER_RE =
   /\b(lyrics?|lyrical|lofi|lo-fi|music\s*video|official\s*(audio|video))\b/i;
+const MUSIC_RESULT_MARKER_RE =
+  /\b(music|song|audio|lyrics?|lyrical|lofi|lo-fi|music\s*video|official\s*(audio|video)|remix|instrumental|soundtrack|feat\.?|ft\.?|vinyl|topic|records)\b/i;
 const QUERY_NOISE_RE =
   /\b(song|songs|music|track|video|official|lyrics?|lyrical|lofi|lo-fi|remix|version|full|album|audio)\b/i;
 
@@ -355,6 +359,17 @@ function matchesSearchQuery(item: YtItem, query: string): boolean {
   if (terms.length === 0) return false;
   const result = normalizeMatchText(`${item.title} ${item.artist}`);
   return terms.every((term) => result.includes(term));
+}
+
+/**
+ * Strict gate for the regular-web fallback. A matching title alone is not
+ * enough: gaming walkthroughs and commentary often match the same words as a
+ * song. Only rows with an explicit music marker can enter primary Songs.
+ */
+export function isPrimaryMusicResult(item: YtItem, query: string): boolean {
+  if (!isMusicTrack(item) || item.duration < 30 || item.duration > 900) return false;
+  if (!matchesSearchQuery(item, query)) return false;
+  return MUSIC_RESULT_MARKER_RE.test(`${item.title} ${item.artist}`);
 }
 
 function extractMusicResults(data: Record<string, unknown>): YtItem[] {
@@ -587,13 +602,7 @@ export const searchYoutube = action({
     // uploads, otherwise a generic vlog can appear to be a song result.
     return {
       items: dedupeMusicItems(
-        extractSearchResults(data).filter(
-          (item) =>
-            isMusicTrack(item) &&
-            item.duration >= 30 &&
-            item.duration <= 900 &&
-            (hasMusicEvidence(item) || matchesSearchQuery(item, query)),
-        ),
+        extractSearchResults(data).filter((item) => isPrimaryMusicResult(item, query)),
       ),
     };
   },

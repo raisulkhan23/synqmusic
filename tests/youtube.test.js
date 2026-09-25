@@ -3,6 +3,7 @@ import {
   dedupeMusicItems,
   isCreatorUploadRelevant,
   isLyricVideoTrack,
+  isPrimaryMusicResult,
   parseMusicListItem,
 } from "../src/convex/youtube";
 
@@ -111,6 +112,50 @@ describe("creator upload relevance", () => {
   test("rejects fan, reaction, and karaoke noise unless explicitly requested", () => {
     expect(isCreatorUploadRelevant(item({ title: "nombra101 fan reaction" }), "nombra101")).toBe(false);
     expect(isCreatorUploadRelevant(item({ title: "nombra101 karaoke cover" }), "nombra101")).toBe(false);
+  });
+});
+
+describe("primary music result filtering", () => {
+  test("keeps a matching music result", () => {
+    expect(
+      isPrimaryMusicResult(
+        {
+          id: "music-1",
+          title: "Inferno Clash - Music for FlameFrags",
+          artist: "FlameFrags",
+          duration: 204,
+          thumbnail: "",
+        },
+        "inferno clash",
+      ),
+    ).toBe(true);
+  });
+
+  test("rejects Clash of Clans gaming results even when they match the query", () => {
+    expect(
+      isPrimaryMusicResult(
+        {
+          id: "game-1",
+          title: "Introducing The Inferno Tower | Clash of Clans",
+          artist: "Clash of Clans",
+          duration: 512,
+          thumbnail: "",
+        },
+        "inferno clash",
+      ),
+    ).toBe(false);
+    expect(
+      isPrimaryMusicResult(
+        {
+          id: "game-2",
+          title: "New Max Single Inferno Tower vs All Max Troop!",
+          artist: "Gaming channel",
+          duration: 734,
+          thumbnail: "",
+        },
+        "inferno clash",
+      ),
+    ).toBe(false);
   });
 });
 
