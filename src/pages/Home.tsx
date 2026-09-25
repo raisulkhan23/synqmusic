@@ -67,10 +67,6 @@ export default function Home() {
   const searchYt = useAction(api.youtube.searchYoutube);
 
   const [resolvingId, setResolvingId] = useState<string | null>(null);
-  const surpriseMood = useMemo(
-    () => MOOD_LAUNCHES[Math.floor(Math.random() * MOOD_LAUNCHES.length)],
-    [],
-  );
   const [remote, setRemote] = useState<RemoteMap>({});
   const [remoteRefreshToken, setRemoteRefreshToken] = useState(0);
 
@@ -497,13 +493,6 @@ export default function Home() {
           <Dices className="size-5 text-[rgb(var(--tint))]" />
         </div>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          <Link
-            to={`/search?q=${encodeURIComponent(surpriseMood.query)}`}
-            className="group flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 transition-colors hover:border-[rgb(var(--tint)_/_0.4)] hover:bg-white/[0.06]"
-          >
-            <span className="flex size-9 items-center justify-center rounded-lg bg-[rgb(var(--tint)_/_0.12)] text-[rgb(var(--tint))]"><Dices className="size-4" /></span>
-            <span className="min-w-0"><span className="block text-sm font-semibold">Surprise me</span><span className="block truncate text-xs text-muted-foreground">{surpriseMood.label} mix</span></span>
-          </Link>
           <button
             type="button"
             onClick={() => setQueueOpen(true)}

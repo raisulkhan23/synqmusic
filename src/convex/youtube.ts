@@ -279,44 +279,6 @@ function queryTerms(query: string): string[] {
     .filter((term) => term.length > 1 && !QUERY_NOISE_RE.test(term));
 }
 
-const CREATOR_QUERY_NOISE_RE =
-  /\b(latest|popular|upload|uploads|official|video|videos|music|song|songs|artist|singer|writer|lyrics?|lyrical|live|channel)\b/i;
-const CREATOR_RESULT_NOISE_TERMS = [
-  "short",
-  "shorts",
-  "fan",
-  "reaction",
-  "karaoke",
-  "compilation",
-  "mix",
-  "remix",
-  "cover",
-  "podcast",
-  "episode",
-  "unboxing",
-  "gameplay",
-  "trailer",
-  "review",
-  "asmr",
-];
-
-/** Require a creator result to actually match the typed creator name. */
-export function isCreatorUploadRelevant(item: YtItem, query: string): boolean {
-  const terms = normalizeMatchText(query)
-    .split(" ")
-    .map((term) => term.trim())
-    .filter((term) => term.length > 1 && !CREATOR_QUERY_NOISE_RE.test(term));
-  if (terms.length === 0) return false;
-
-  const resultText = normalizeMatchText(`${item.title} ${item.artist}`);
-  if (!terms.every((term) => resultText.includes(term))) return false;
-
-  const normalizedQuery = normalizeMatchText(query);
-  return !CREATOR_RESULT_NOISE_TERMS.some(
-    (term) => resultText.includes(term) && !normalizedQuery.includes(term),
-  );
-}
-
 /** Strict gate for the supplemental lyric/lo-fi source. */
 export function isLyricVideoTrack(item: YtItem, query: string): boolean {
   if (!isMusicTrack(item)) return false;
@@ -521,56 +483,6 @@ function parseMusicCardShelf(card: Record<string, unknown>): YtItem | null {
 
   return { id: videoId, title, artist, duration: 0, thumbnail };
 }
-
-async function webVideoSearch(query: string): Promise<YtItem[]> {
-  const data = await innerTube("search", WEB, {
-    context: clientContext(WEB),
-    query,
-    params: "EgIQAQ%3D%3D",
-  });
-  return extractSearchResults(data);
-}
-
-function dedupeCreatorItems(items: YtItem[], seen: Set<string>): YtItem[] {
-  return dedupeMusicItems(items).filter((item) => {
-    if (seen.has(item.id)) return false;
-    seen.add(item.id);
-    return true;
-  });
-}
-
-/**
- * Search channel-style uploads separately from the primary Songs results.
- * This is intentionally not filtered through isMusicTrack: singer and writer
- * searches can legitimately include spoken-word, live, and video uploads.
- */
-export const searchCreatorUploads = action({
-  args: { query: v.string() },
-  handler: async (_ctx, { query }): Promise<{ recent: YtItem[]; popular: YtItem[] }> => {
-    const rawQuery = query.trim();
-    if (!rawQuery) return { recent: [], popular: [] };
-
-    try {
-      const [recentResults, popularResults] = await Promise.all([
-        webVideoSearch(`${rawQuery} latest upload`),
-        webVideoSearch(`${rawQuery} popular uploads`),
-      ]);
-      const seen = new Set<string>();
-      return {
-        recent: dedupeCreatorItems(
-          recentResults.filter((item) => isCreatorUploadRelevant(item, rawQuery)),
-          seen,
-        ).slice(0, 6),
-        popular: dedupeCreatorItems(
-          popularResults.filter((item) => isCreatorUploadRelevant(item, rawQuery)),
-          seen,
-        ).slice(0, 6),
-      };
-    } catch {
-      return { recent: [], popular: [] };
-    }
-  },
-});
 
 /**
  * Search YouTube for music. Uses the YouTube Music endpoint so ONLY music

@@ -9,7 +9,6 @@ import { track as trackEvent } from "@/lib/analytics";
 import { GravitySponsor } from "@/components/ads/GravitySponsor";
 import { useAction } from "convex/react";
 import {
-  ChevronDown,
   Dices,
   Loader2,
   RefreshCw,
@@ -18,8 +17,6 @@ import {
   Globe,
   Music2,
   Play,
-  Upload,
-  UsersRound,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -137,14 +134,6 @@ function usePopularMixCycle() {
   return cycle;
 }
 
-function creatorQueryLooksLikeName(query: string, artist?: string): boolean {
-  const normalizedQuery = query.toLocaleLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-  const handleLike = /^[a-z0-9][a-z0-9_.:-]{2,}$/.test(query.trim()) && /[0-9_.:-]/.test(query.trim());
-  const terms = normalizedQuery.split(" ").filter(Boolean);
-  const normalizedArtist = (artist ?? "").toLocaleLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-  return handleLike || Boolean(normalizedArtist && terms.length > 0 && terms.every((term) => normalizedArtist.includes(term)));
-}
-
 function MixCard({ mix }: { mix: (typeof POPULAR_MIXES)[number] }) {
   const searchYt = useAction(api.youtube.searchYoutube);
   const playTrack = usePlayerStore((s) => s.playTrack);
@@ -201,13 +190,6 @@ export default function Search() {
   // must never be merged into the first result list or its radio queue.
   const [lyricResults, setLyricResults] = useState<YtItem[] | null>(null);
   const [lyricSearching, setLyricSearching] = useState(false);
-  const [creatorResults, setCreatorResults] = useState<{ recent: YtItem[]; popular: YtItem[] }>({
-    recent: [],
-    popular: [],
-  });
-  const [creatorSearching, setCreatorSearching] = useState(false);
-  const [creatorSearchEnabled, setCreatorSearchEnabled] = useState(false);
-  const [creatorExpanded, setCreatorExpanded] = useState(false);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
@@ -220,19 +202,8 @@ export default function Search() {
   const startRadio = usePlayerStore((s) => s.startRadio);
   const searchYt = useAction(api.youtube.searchYoutube);
   const searchLyricVideos = useAction(api.youtube.searchLyricVideos);
-  const searchCreatorUploads = useAction(api.youtube.searchCreatorUploads);
 
   const debouncedQuery = useDebounced(query, 450);
-
-  // Creator uploads are opt-in by default. This prevents a song/title query
-  // such as "inferno clash" from showing unrelated gaming uploads. The user
-  // explicitly enables the separate channel search from the disclosure below.
-  useEffect(() => {
-    setCreatorSearchEnabled(false);
-    setCreatorExpanded(false);
-    setCreatorResults({ recent: [], popular: [] });
-    setCreatorSearching(false);
-  }, [debouncedQuery]);
 
   // Search history — persisted locally, capped at 8 entries.
   const [searchHistory, setSearchHistory] = useState<string[]>(() => {
@@ -268,11 +239,9 @@ export default function Search() {
       if (!q) {
         setYtResults(null);
         setLyricResults(null);
-        setCreatorResults({ recent: [], popular: [] });
         setSearchError(null);
         setSearching(false);
         setLyricSearching(false);
-        setCreatorSearching(false);
         return;
       }
       let cancelled = false;
@@ -331,31 +300,6 @@ export default function Search() {
     run();
   }, [debouncedQuery, searchYt, searchLyricVideos, retryKey, rememberQuery]);
 
-  // Keep creator loading independent from the primary Songs request. This
-  // makes the opt-in action reliable instead of coupling it to search state.
-  useEffect(() => {
-    const q = debouncedQuery.trim();
-    if (!creatorSearchEnabled || !q) {
-      setCreatorSearching(false);
-      return;
-    }
-    let cancelled = false;
-    setCreatorSearching(true);
-    searchCreatorUploads({ query: q })
-      .then((results) => {
-        if (!cancelled) setCreatorResults(results);
-      })
-      .catch(() => {
-        if (!cancelled) setCreatorResults({ recent: [], popular: [] });
-      })
-      .finally(() => {
-        if (!cancelled) setCreatorSearching(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [debouncedQuery, creatorSearchEnabled, searchCreatorUploads]);
-
   const playRemote = useCallback(
     (item: YtItem) => {
       // Start the clicked song, then fill the queue with songs from the SAME
@@ -378,15 +322,6 @@ export default function Search() {
     setQuery(pick);
     toast.success(`Surprise mix: ${pick}`);
   };
-  const creatorItems = Array.from(
-    new Map(
-      [...creatorResults.recent, ...creatorResults.popular].map((item) => [
-        `${item.id}:${item.title.toLocaleLowerCase()}:${item.artist.toLocaleLowerCase()}`,
-        item,
-      ]),
-    ).values(),
-  ).slice(0, 12);
-
   return (
     <div className="flex flex-col gap-8">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -570,79 +505,6 @@ export default function Search() {
             </section>
           )}
 
-          {hasQuery && (
-            <section className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035]" aria-labelledby="creator-uploads-heading">
-              <button
-                type="button"
-                className="flex w-full items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-white/[0.04] sm:px-5"
-                aria-expanded={creatorExpanded}
-                aria-controls="creator-uploads-content"
-                onClick={() => setCreatorExpanded((expanded) => !expanded)}
-              >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-cyan-300/10 text-cyan-300">
-                  <UsersRound className="h-4 w-4" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span id="creator-uploads-heading" className="block text-sm font-semibold">Creator uploads</span>
-                  <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                    {creatorSearchEnabled
-                      ? creatorSearching
-                        ? "Searching the community…"
-                        : "Unified creator search"
-                      : "Optional — load uploads from the artist’s community"}
-                  </span>
-                </span>
-                {creatorSearchEnabled && creatorItems.length > 0 && (
-                  <span className="hidden text-xs text-muted-foreground sm:block">{creatorItems.length} videos</span>
-                )}
-                <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${creatorExpanded ? "rotate-180" : ""}`} />
-              </button>
-              {creatorExpanded && (
-                <div id="creator-uploads-content" className="border-t border-white/10 px-4 py-4 sm:px-5 sm:py-5">
-                  {!creatorSearchEnabled ? (
-                    <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
-                      <div>
-                        <p className="text-sm font-semibold">Looking for a singer or writer?</p>
-                        <p className="mt-1 max-w-xl text-xs leading-5 text-muted-foreground">
-                          Search their channel separately for a unified list of recent and popular uploads. This stays out of the Songs list.
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setCreatorSearchEnabled(true)}
-                        className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full border border-[rgb(var(--tint)_/_0.35)] bg-[rgb(var(--tint)_/_0.1)] px-3.5 py-2 text-xs font-semibold text-[rgb(var(--tint))] transition-colors hover:bg-[rgb(var(--tint)_/_0.18)]"
-                      >
-                        <UsersRound className="h-3.5 w-3.5" />
-                        Load creator uploads
-                      </button>
-                    </div>
-                  ) : creatorSearching ? (
-                    <div className="flex flex-col gap-0.5" aria-label="Loading creator uploads">
-                      {Array.from({ length: 3 }).map((_, i) => (
-                        <div key={i} className="flex items-center gap-3 rounded-xl px-2 py-2">
-                          <div className="h-10 w-10 animate-pulse rounded-lg bg-white/[0.06]" />
-                          <div className="flex-1 space-y-2">
-                            <div className="h-3.5 w-2/3 animate-pulse rounded bg-white/[0.06]" />
-                            <div className="h-3 w-1/3 animate-pulse rounded bg-white/[0.05]" />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : creatorItems.length > 0 ? (
-                    <div className="flex flex-col gap-0.5">
-                      {creatorItems.map((item, i) => (
-                        <RemoteTrackRow key={`creator-${item.id}`} item={item} index={i + 1} onPlay={playRemote} />
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="rounded-2xl border border-dashed border-white/10 px-4 py-5 text-sm text-muted-foreground">
-                      No relevant creator uploads found for this search.
-                    </p>
-                  )}
-                </div>
-              )}
-            </section>
-          )}
         </div>
       )}
     </div>
