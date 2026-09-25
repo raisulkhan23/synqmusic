@@ -364,9 +364,10 @@ function hasMusicEvidence(item: YtItem): boolean {
 }
 
 const DISCOVERY_QUERY_RE =
-  /\b(songs?|music|hits|mix|playlist|chill|happy|sad|energetic|focus|workout|party|sleep|romantic|nostalgic|pop|rock|jazz|classical|ambient|funk|metal|country|reggaeton|afrobeats|k-pop|indie|electronic|lo-fi|r\s*(?:&|and)\s*b|hip-hop)\b/i;
+  /\b(songs?|music|hits|mix|playlist|chill|happy|sad|energetic|focus|workout|party|sleep|romantic|nostalgic|pop|rock|jazz|classical|ambient|funk|metal|country|reggaeton|afrobeats|k[\s-]?pop|indie|electronic|lo-fi|r\s*(?:&|and)\s*b|hip-hop)\b/i;
 
-const DISCOVERY_SEEDS: Array<[RegExp, string]> = [
+const DISCOVERY_SEEDS: Array<[RegExp, string | string[]]> = [
+  [/\bk[\s-]?pop\b/i, ["BLACKPINK songs", "TWICE songs", "Stray Kids songs"]],
   [/\bpop\b/i, "Taylor Swift songs"],
   [/\bhip[\s-]?hop\b/i, "Kendrick Lamar songs"],
   [/\brock\b/i, "Foo Fighters songs"],
@@ -380,7 +381,6 @@ const DISCOVERY_SEEDS: Array<[RegExp, string]> = [
   [/\bcountry\b/i, "Morgan Wallen songs"],
   [/\breggaeton\b/i, "Bad Bunny songs"],
   [/\bafrobeats\b/i, "Burna Boy songs"],
-  [/\bk[\s-]?pop\b/i, "BLACKPINK songs"],
   [/\bambient\b/i, "Brian Eno songs"],
   [/\bfunk\b/i, "Jamiroquai songs"],
   [/\bchill\b/i, "Frank Ocean songs"],
@@ -396,7 +396,9 @@ const DISCOVERY_SEEDS: Array<[RegExp, string]> = [
 ];
 
 function discoverySeedQueries(query: string): string[] {
-  const seeds = DISCOVERY_SEEDS.filter(([pattern]) => pattern.test(query)).map(([, seed]) => seed);
+  const seeds = DISCOVERY_SEEDS
+    .filter(([pattern]) => pattern.test(query))
+    .flatMap(([, categorySeeds]) => Array.isArray(categorySeeds) ? categorySeeds : [categorySeeds]);
   return [...new Set([...seeds, "top songs"])];
 }
 
@@ -601,6 +603,21 @@ export const searchYoutube = action({
   handler: async (_ctx, { query }): Promise<{ items: YtItem[] }> => {
     if (!query.trim()) return { items: [] };
 
+    // Category/mood searches are discovery requests, not literal title
+    // searches. Prefer concrete artist-backed seeds BEFORE the broad shelf
+    // response: YouTube Music often answers "K-pop songs" with soundtrack or
+    // animation tracks even though it has plenty of actual K-pop songs.
+    if (DISCOVERY_QUERY_RE.test(query)) {
+      for (const seedQuery of discoverySeedQueries(query)) {
+        try {
+          const items = await musicSearch(seedQuery);
+          if (items.length > 0) return { items };
+        } catch {
+          // Try the next seed / original query / regular-web fallback.
+        }
+      }
+    }
+
     // Preferred: YouTube Music — returns real studio tracks (Songs shelf),
     // never random YouTube videos.
     try {
@@ -608,20 +625,6 @@ export const searchYoutube = action({
       if (items.length > 0) return { items };
     } catch {
       // fall through to the video-filter retry below
-    }
-
-    // Category/mood searches often return long playlists or mixes in the
-    // music shelf. Resolve those requests against concrete artist-backed
-    // seeds so a browse chip always produces playable songs when possible.
-    if (DISCOVERY_QUERY_RE.test(query)) {
-      for (const seedQuery of discoverySeedQueries(query)) {
-        try {
-          const items = await musicSearch(seedQuery);
-          if (items.length > 0) return { items };
-        } catch {
-          // Try the next seed / regular-web fallback.
-        }
-      }
     }
 
     // Fallback: regular YouTube search restricted to the "video" result type,
