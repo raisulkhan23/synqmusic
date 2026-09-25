@@ -655,7 +655,7 @@ export default function Admin() {
                 {listeningStats.daily.map((d) => {
                   const max = Math.max(1, ...listeningStats.daily.map((x) => x.plays));
                   return (
-                    <div key={d.day} className="group flex min-w-0 flex-1 flex-col items-center gap-1">
+                    <div key={d.day} className="group flex h-full min-w-0 flex-1 flex-col items-center gap-1">
                       <div
                         className="w-full rounded-t bg-[rgb(var(--tint)_/_0.55)] transition-colors group-hover:bg-[rgb(var(--tint))]"
                         style={{ height: `${Math.max(2, (d.plays / max) * 100)}%` }}

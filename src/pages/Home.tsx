@@ -24,7 +24,6 @@ import {
   Heart,
   ListMusic,
   Play,
-  Radio,
   Repeat2,
   Search,
   Sparkles,
@@ -188,7 +187,6 @@ export default function Home() {
   const remoteQueries = useMemo(() => {
     const q: Array<{ key: string; query: string; fallback?: string }> = [
       { key: "discover", query: "new music friday", fallback: "fresh music this week" },
-      { key: "radar", query: "new releases this week", fallback: "new songs this week" },
       { key: "topTracks", query: "top hits right now", fallback: "top hits" },
       { key: "newReleases", query: "new songs just released", fallback: "latest hits" },
     ];
@@ -687,15 +685,6 @@ export default function Home() {
         items={remote.discover}
       >
         {(items) => <RemoteRows items={items} max={6} onPlay={playRemoteItem} resolvingId={resolvingId} />}
-      </RemoteSection>
-
-      <RemoteSection
-        title="Release Radar"
-        subtitle="The newest releases, matched to your taste."
-        icon={<Radio className="size-5 text-[rgb(var(--tint))]" />}
-        items={remote.radar}
-      >
-        {(items) => <RemoteRows items={items} onPlay={playRemoteItem} resolvingId={resolvingId} />}
       </RemoteSection>
 
       {/* Because you listened to... */}

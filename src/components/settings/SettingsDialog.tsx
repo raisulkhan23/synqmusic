@@ -603,7 +603,7 @@ export function SettingsDialog({
             : "glass-card !fixed max-h-[85vh] max-w-md overflow-y-auto"
         }
       >
-        <DialogHeader className={cn(pageMode && "pt-16 sm:pt-14")}>
+        <DialogHeader>
           {pageMode && (
             <Link
               to="/home"
@@ -620,9 +620,9 @@ export function SettingsDialog({
 
         <nav
           className={cn(
-            "z-30 -mx-1 rounded-2xl border border-white/[0.07] px-1 py-2",
+            "settings-jump-bar z-30 -mx-1 rounded-2xl border border-white/[0.08] px-1 py-2",
             pageMode
-              ? "!sticky top-3 z-40 bg-[#101218]/90 shadow-[0_18px_50px_rgba(0,0,0,0.35)] backdrop-blur-xl"
+              ? "!sticky top-3 z-50"
               : "sticky top-0 bg-white/[0.03]",
           )}
           aria-label="Settings sections"
