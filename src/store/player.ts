@@ -38,6 +38,21 @@ let ytSearchClient: ConvexClient | null = null;
 const convexSiteUrl = ((import.meta.env.VITE_CONVEX_URL as string) ?? "").replace(".cloud", ".site");
 const audioProxyBase = `${convexSiteUrl}/audio-proxy`;
 const resolveYoutubeStream = async (videoId: string): Promise<string | null> => {
+  // EQ-only playback uses the same resolver as preset effects. Start the
+  // already-warm YouTube IFrame immediately so the user hears the dry track
+  // while the direct stream is being resolved, then swap to Web Audio only
+  // after that stream is ready. Initial track loads already start this path
+  // in loadTrack, so the current-track guard avoids a duplicate load there.
+  if (hasAudioProcessing() && usePlayerStore.getState().current?.youtubeId === videoId) {
+    const state = usePlayerStore.getState();
+    void ytEngine
+      .play(videoId, {
+        volume: state.volume,
+        muted: state.muted,
+        startSeconds: state.currentTime || undefined,
+      })
+      .catch(() => undefined);
+  }
   // 1) Browser-side InnerTube resolution. Runs from the USER's IP, which is
   //    NOT subject to YouTube's datacenter bot-check (cloud functions get
   //    "Sign in to confirm you're not a bot" for most videos, which is what
@@ -961,17 +976,6 @@ function audioElementIsSource(t: Playable | null | undefined): boolean {
     // A non-YouTube direct URL (catalog tracks) also plays via the element.
     (!t.youtubeId && /^https?:\/\//.test(t.audioUrl))
   );
-}
-
-/**
- * IFrame players are commonly suspended when a mobile browser is minimized.
- * Prefer the persistent HTML audio path on phones/tablets, with the existing
- * IFrame as an automatic fallback if a direct stream cannot be resolved.
- */
-function prefersBackgroundAudio(): boolean {
-  if (typeof window === "undefined") return false;
-  return window.matchMedia?.("(max-width: 767px)").matches === true ||
-    /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 }
 
 /** A-B repeat + resume-position bookkeeping, run on every time update. */
