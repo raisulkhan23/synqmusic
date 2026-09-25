@@ -532,12 +532,11 @@ export function parseMusicListItem(renderer: Record<string, unknown>): (YtItem &
   const artistIndex = typeIndex >= 0 ? typeIndex + 1 : 0;
   const typeRun = typeIndex >= 0 ? metaRuns[typeIndex] : "";
   // The Songs shelf often omits the explicit "Song" metadata run and returns
-  // only [artist, album, duration]. Those rows are still single playable
-  // tracks, so only reject rows when YouTube explicitly identifies them as a
-  // playlist/album/artist/episode. Treating an omitted type as "other" made
-  // valid category results disappear before they reached the player.
+  // only [artist, album, duration]. Keep those rows conservative: they are
+  // promoted later only when they carry independent music evidence, while
+  // explicitly non-track rows are always rejected.
   const kind: "song" | "other" =
-    /^(playlist|album|artist|episode)$/i.test(typeRun) ? "other" : "song";
+    typeRun === "" || /^(playlist|album|artist|episode)$/i.test(typeRun) ? "other" : "song";
   const artist = firstCreatorName(
     title,
     metaRuns[artistIndex],
