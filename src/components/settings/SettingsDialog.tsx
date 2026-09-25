@@ -248,6 +248,8 @@ export function SettingsDialog({
   }, []);
 
   useEffect(() => {
+    // Wallpaper library loading intentionally refreshes state when Settings opens.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (open) void loadWallpaperLibrary().catch(() => toast.error("Couldn't load saved wallpapers"));
   }, [open, loadWallpaperLibrary]);
 
@@ -267,6 +269,15 @@ export function SettingsDialog({
       window.removeEventListener("synq:focus-layout-change", onFocusLayoutChange);
     };
   }, []);
+
+  useEffect(() => {
+    const onFocusLayoutChange = (event: Event) => {
+      const next = (event as CustomEvent<string>).detail;
+      if (!pageMode && isFocusLayout(next) && next !== "off") onOpenChange(false);
+    };
+    window.addEventListener("synq:focus-layout-change", onFocusLayoutChange);
+    return () => window.removeEventListener("synq:focus-layout-change", onFocusLayoutChange);
+  }, [onOpenChange, pageMode]);
 
   useEffect(() => {
     document.documentElement.classList.toggle("reduce-motion", reduceMotion);
@@ -855,6 +866,8 @@ export function SettingsDialog({
                   ? sleepEndsAt === null && !sleepAtSongEnd
                   : option.value === "end"
                     ? sleepAtSongEnd
+                    // The timer preview is intentionally based on the current time.
+                    // eslint-disable-next-line react-hooks/purity
                     : sleepEndsAt !== null && sleepEndsAt - Date.now() > (option.value - 1) * 60_000 && sleepEndsAt - Date.now() < (option.value + 1) * 60_000;
                 return (
                   <button
