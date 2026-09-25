@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import { RemoteTrackRow } from "@/components/tracks/RemoteTrackRow";
 import { toPlayableYoutube, type Playable } from "@/lib/playable";
 import { cleanArtistName, type YtItem } from "@/lib/youtube";
-import { clearSingleHistoryEntry, readPlayHistory, usePlayerStore, type HistoryEntry } from "@/store/player";
+import { clearSingleHistoryEntry, readPlayHistory, subscribePlayHistory, usePlayerStore, type HistoryEntry } from "@/store/player";
 import { Dices, History, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -35,9 +35,13 @@ function entryToItem(h: HistoryEntry): YtItem {
 }
 
 export default function Recent() {
-  const [historyVersion, setHistoryVersion] = useState(0);
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-read history when an entry is removed
-  const history = useMemo(() => readPlayHistory(), [historyVersion]);
+  // Subscribing replaces the old manual `historyVersion` counter: removes AND
+  // new plays both push a fresh history snapshot now.
+  const history = useSyncExternalStore(
+    subscribePlayHistory,
+    readPlayHistory,
+    readPlayHistory,
+  );
   const playTrack = usePlayerStore((s) => s.playTrack);
   const searchYt = useAction(api.youtube.searchYoutube);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
@@ -93,8 +97,9 @@ export default function Recent() {
   };
 
   const removeFromHistory = (id: string) => {
+    // clearSingleHistoryEntry notifies subscribers, so the list repaints on
+    // its own — no manual version bump needed.
     clearSingleHistoryEntry(id);
-    setHistoryVersion((v) => v + 1);
     toast.success("Removed from recently played");
   };
 

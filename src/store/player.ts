@@ -639,6 +639,34 @@ export interface HistoryEntry extends LastPlayedSnapshot {
 
 let historyCache: HistoryEntry[] | null = null;
 
+/**
+ * Subscribers to the LOCAL play history. localStorage is not reactive and
+ * `readPlayHistory()` used to hand back the same cached array reference, so
+ * pages that snapshotted history at mount (Home, Recent, Profile) never
+ * repainted after a play. Every write now swaps in a NEW array and notifies,
+ * which makes `useSyncExternalStore` re-read correctly.
+ */
+const historyListeners = new Set<() => void>();
+
+function notifyHistoryChange(): void {
+  for (const listener of historyListeners) {
+    try {
+      listener();
+    } catch {
+      /* a bad subscriber must not break playback bookkeeping */
+    }
+  }
+}
+
+/** Subscribe to local play-history writes. Fires immediately with the current value. */
+export function subscribePlayHistory(listener: () => void): () => void {
+  historyListeners.add(listener);
+  listener();
+  return () => {
+    historyListeners.delete(listener);
+  };
+}
+
 function loadHistory(): HistoryEntry[] {
   if (historyCache) return historyCache;
   try {
@@ -661,29 +689,35 @@ export function readPlayHistory(): HistoryEntry[] {
 }
 
 function recordHistory(track: Playable): void {
-  const history = loadHistory();
-  const existing = history.find((h) => h.id === track.id);
-  if (existing) {
-    existing.title = track.title;
-    existing.artistName = cleanArtistName(track.artistName, track.title);
-    existing.albumName = track.albumName;
-    existing.coverUrl = track.coverUrl;
-    existing.youtubeId = track.youtubeId;
-    existing.audioUrl = track.audioUrl;
-    existing.playCount += 1;
-    existing.at = Date.now();
-    const i = history.indexOf(existing);
-    history.splice(i, 1);
-    history.unshift(existing);
-  } else {
-    history.unshift({ ...lastSnapshotOf(track), playCount: 1 });
-  }
-  if (history.length > HISTORY_MAX) history.length = HISTORY_MAX;
+  // Build a NEW array instead of mutating the cached one in place. Returning a
+  // fresh reference is what lets React (and useSyncExternalStore) detect the
+  // change — in-place mutation was the reason the Home pulse looked frozen.
+  const current = loadHistory();
+  const existing = current.find((h) => h.id === track.id);
+  const next: HistoryEntry[] = existing
+    ? [
+        {
+          ...existing,
+          title: track.title,
+          artistName: cleanArtistName(track.artistName, track.title),
+          albumName: track.albumName,
+          coverUrl: track.coverUrl,
+          youtubeId: track.youtubeId,
+          audioUrl: track.audioUrl,
+          playCount: existing.playCount + 1,
+          at: Date.now(),
+        },
+        ...current.filter((h) => h.id !== track.id),
+      ]
+    : [{ ...lastSnapshotOf(track), playCount: 1 }, ...current];
+  if (next.length > HISTORY_MAX) next.length = HISTORY_MAX;
+  historyCache = next;
   try {
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
   } catch {
     /* storage unavailable */
   }
+  notifyHistoryChange();
 }
 
 function lastSnapshotOf(track: Playable): LastPlayedSnapshot {
@@ -710,6 +744,7 @@ export function clearPlayHistory(): void {
   } catch {
     /* storage unavailable */
   }
+  notifyHistoryChange();
 }
 
 /** Remove a single entry from the local play history (by track id). */
@@ -722,6 +757,7 @@ export function clearSingleHistoryEntry(id: string): void {
   } catch {
     /* storage unavailable */
   }
+  notifyHistoryChange();
 }
 
 

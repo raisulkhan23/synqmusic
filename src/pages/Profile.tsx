@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { Link } from "react-router";
 import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/hooks/use-auth";
 import { usePlayerStore } from "@/store/player";
-import { readPlayHistory } from "@/store/player";
+import { readPlayHistory, subscribePlayHistory } from "@/store/player";
 import { BarChart3, Check, Heart, ListMusic, Pencil } from "lucide-react";
 import { toast } from "sonner";
 
@@ -13,7 +13,13 @@ export default function Profile() {
   const currentUser = useQuery(api.users.currentUser);
   const updateName = useMutation(api.users.updateName);
   const likedCount = usePlayerStore((s) => Object.keys(s.liked).length);
-  const history = readPlayHistory();
+  // Subscribed (not a one-shot read) so the "Songs played" stat updates the
+  // moment a track plays instead of only after a full remount.
+  const history = useSyncExternalStore(
+    subscribePlayHistory,
+    readPlayHistory,
+    readPlayHistory,
+  );
   const playlists = useQuery(api.playlists.myPlaylists);
 
   const [editing, setEditing] = useState(false);

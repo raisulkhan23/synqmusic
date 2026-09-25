@@ -502,7 +502,13 @@ html,
     pointer-events: none;
     background: radial-gradient(120% 90% at 12% 0%, rgb(var(--tint) / 0.09), transparent 58%);
   }
-  .settings-liquid-glass > * {
+  /* Lift content above the glass background WITHOUT clobbering children that
+     already opt into their own positioning. The :not(.absolute) guard is
+     load-bearing: decorative `absolute` orbs are direct children, and forcing
+     them back to `relative` put a 14rem block back into normal flow, which
+     stretched the card to ~3x its intended height. */
+  .settings-liquid-glass > *:not(.absolute),
+  .glass-card > :not(.settings-pointer-glow):not(.absolute) {
     position: relative;
     z-index: 1;
   }
@@ -510,10 +516,6 @@ html,
   .glass-card > .settings-pointer-glow {
     position: absolute;
     z-index: 0;
-  }
-  .glass-card > :not(.settings-pointer-glow) {
-    position: relative;
-    z-index: 1;
   }
   /* Keep the settings jump bar above the scrolling surface and give it the
      same quiet glass treatment as the rest of the app. The important

@@ -10,6 +10,7 @@ import { usePlayerStore, peekResumePosition } from "@/store/player";
 import {
   readLastPlayed,
   readPlayHistory,
+  subscribePlayHistory,
   type HistoryEntry,
   type LastPlayedSnapshot,
 } from "@/store/player";
@@ -31,7 +32,7 @@ import {
   UsersRound,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
 type RemoteMap = Record<string, YtItem[] | undefined>;
 
@@ -139,8 +140,14 @@ export default function Home() {
     [lastPlayed],
   );
 
-  // Cross-source play history (all sources alike) — read once at mount.
-  const [history] = useState<HistoryEntry[]>(() => readPlayHistory());
+  // Cross-source play history (all sources alike) — SUBSCRIBED, not snapshotted.
+  // Reading it once at mount meant the listening pulse and the history shelves
+  // stayed frozen at whatever was in localStorage when Home first rendered.
+  const history = useSyncExternalStore(
+    subscribePlayHistory,
+    readPlayHistory,
+    readPlayHistory,
+  ) as HistoryEntry[];
 
   // Saved position for the continue-listening card (resume exactly where stopped).
   const continueResume = useMemo(
