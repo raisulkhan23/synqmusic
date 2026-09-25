@@ -153,6 +153,17 @@ function firstCreatorName(...values: unknown[]): string {
   return "Unknown artist";
 }
 
+function cleanTrackTitle(value: string): string {
+  let title = value.replace(/\s+/g, " ").trim();
+  const suffixPatterns = [
+    /\s+[-–—]\s+music\s+for\s+.*$/i,
+    /\s+[-–—|]\s*(?:official\s+)?(?:music\s+video|music\s+audio|audio|lyrics?|visualizer)\s*$/i,
+    /\s*[\[(]\s*(?:official\s+)?(?:music\s+video|music\s+audio|audio|lyrics?|visualizer)\s*[\])]\s*$/i,
+  ];
+  for (const pattern of suffixPatterns) title = title.replace(pattern, "").trim();
+  return title || value.trim();
+}
+
 // Loose structural helpers — InnerTube responses are deeply nested and typed
 // as unknown, so we traverse defensively.
 // NOTE: numeric segments index LISTS ("tabs" → [tab]) and string segments
@@ -203,7 +214,7 @@ function extractSearchResults(data: Record<string, unknown>): YtItem[] {
         ? ((thumbs[thumbs.length - 1] as { url?: string })?.url ?? "")
         : "";
 
-      out.push({ id: videoId, title, artist, duration: parseLength(lengthText), thumbnail });
+      out.push({ id: videoId, title: cleanTrackTitle(title), artist, duration: parseLength(lengthText), thumbnail });
       if (out.length >= 10) return out;
     }
   }
@@ -448,7 +459,7 @@ export function parseMusicListItem(renderer: Record<string, unknown>): (YtItem &
   const runsOf = (col: unknown) =>
     (get(col, ["musicResponsiveListItemFlexColumnRenderer", "text", "runs"]) as Array<{ text?: string }> | undefined) ?? [];
   const textOf = (col: unknown) => runsOf(col)[0]?.text ?? "";
-  const title = textOf(flex[0]) || "Untitled";
+  const title = cleanTrackTitle(textOf(flex[0]) || "Untitled");
   // Column 1 interleaves metadata and separator runs. Depending on the
   // response shape it can be [artist, " • ", album, " • ", duration] or
   // [type, " • ", artist, " • ", duration], so separators must never be
@@ -497,10 +508,11 @@ function parseMusicCardShelf(card: Record<string, unknown>): YtItem | null {
     (get(card, ["buttons", 0, "buttonRenderer", "command", "watchEndpoint", "videoId"]) as string | undefined);
   if (!videoId) return null;
 
-  const title =
+  const title = cleanTrackTitle(
     (get(card, ["title", "runs", 0, "text"]) as string | undefined) ??
     (get(card, ["header", "musicCardShelfHeaderBasicRenderer", "title", "runs", 0, "text"]) as string | undefined) ??
-    "Top result";
+    "Top result",
+  );
   // Subtitle runs pack artist • song • year.
   const subtitle = (get(card, ["subtitle", "runs"]) as Array<{ text?: string }> | undefined) ?? [];
   const parts = subtitle.map((r) => r.text ?? "").join("").split("•").map((s) => s.trim());

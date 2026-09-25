@@ -1,4 +1,4 @@
-import type { YtItem } from "@/lib/youtube";
+import { cleanTrackTitle, type YtItem } from "@/lib/youtube";
 
 /**
  * A normalized item in the player queue. Every source (YouTube, imports,
@@ -28,7 +28,7 @@ export function toPlayableYoutube(
   const artistName = cleanArtistName(item.artist);
   return {
     id: item.id,
-    title: item.title,
+    title: cleanTrackTitle(item.title),
     artistName,
     albumName: "Single",
     coverUrl: item.thumbnail,

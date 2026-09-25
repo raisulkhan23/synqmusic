@@ -1,4 +1,4 @@
-import type { YtItem } from "@/lib/youtube";
+import { cleanTrackTitle, type YtItem } from "@/lib/youtube";
 import type React from "react";
 import { formatTime } from "@/lib/format";
 import { toPlayableYoutube } from "@/lib/playable";
@@ -37,11 +37,12 @@ export function RemoteTrackRow({
   const startRadio = usePlayerStore((s) => s.startRadio);
   const isCurrent = currentId === item.id;
   const isLiked = liked[item.id] !== undefined;
+  const displayTitle = cleanTrackTitle(item.title);
   const artistName = displayArtistName(item.artist);
 
   const likeThis = () =>
     toggleLike(item.id, {
-      title: item.title,
+      title: displayTitle,
       artistName,
       coverUrl: item.thumbnail,
       duration: item.duration,
@@ -55,7 +56,7 @@ export function RemoteTrackRow({
     const s = usePlayerStore.getState();
     const at = s.queueIndex >= 0 ? s.queueIndex + 1 : s.queue.length;
     s.insertInQueue(asPlayable(), at);
-    toast.success(`Playing "${item.title}" next`);
+    toast.success(`Playing "${displayTitle}" next`);
   };
 
   const addQueued = () => {
@@ -90,7 +91,7 @@ export function RemoteTrackRow({
         {!resolving && (
           <button
             type="button"
-            aria-label={`Play ${item.title}`}
+            aria-label={`Play ${displayTitle}`}
             onClick={(e) => {
               e.stopPropagation();
               onPlay(item);
@@ -122,7 +123,7 @@ export function RemoteTrackRow({
             isCurrent && "text-[rgb(var(--tint))]",
           )}
         >
-          {item.title}
+          {displayTitle}
         </p>
         <p className="truncate text-xs text-muted-foreground">
           {artistName}
@@ -133,13 +134,13 @@ export function RemoteTrackRow({
         {trailing}
         <button
           type="button"
-          aria-label={`Start ${item.title} radio`}
+          aria-label={`Start ${displayTitle} radio`}
           title="Start radio — endless related mix"
           onClick={(e) => {
             e.stopPropagation();
             startRadio({
               id: item.id,
-              title: item.title,
+              title: displayTitle,
               artistName,
               albumName: "",
               coverUrl: item.thumbnail,
@@ -157,7 +158,7 @@ export function RemoteTrackRow({
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              aria-label={`More options for ${item.title}`}
+              aria-label={`More options for ${displayTitle}`}
               onClick={(e) => e.stopPropagation()}
               className="rounded-full p-1.5 text-muted-foreground/70 opacity-0 transition-all group-hover:opacity-100 hover:bg-white/10 hover:text-foreground focus:opacity-100"
             >
@@ -177,7 +178,7 @@ export function RemoteTrackRow({
               className="gap-2"
               onSelect={() => {
                 void navigator.clipboard
-                  .writeText(`${window.location.origin}/search?q=${encodeURIComponent(`${item.title} ${artistName}`)}`)
+                  .writeText(`${window.location.origin}/search?q=${encodeURIComponent(`${displayTitle} ${artistName}`)}`)
                   .then(() => toast.success("Song link copied"));
               }}
             >

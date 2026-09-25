@@ -153,6 +153,13 @@ describe("parseMusicListItem", () => {
     });
   });
 
+  test("removes upload suffixes from the displayed song title", () => {
+    const noisy = renderer(["Song", " • ", "Nombra101", " • ", "3:14"]);
+    noisy.flexColumns[0].musicResponsiveListItemFlexColumnRenderer.text.runs[0].text =
+      "Inferno Clash - Music for FlameFrags";
+    expect(parseMusicListItem(noisy)).toMatchObject({ title: "Inferno Clash" });
+  });
+
   test("replaces placeholder creator metadata instead of rendering '*'", () => {
     expect(parseMusicListItem(renderer(["Song", " • ", "*", " • ", "3:45"]))).toMatchObject({
       artist: "Unknown artist",

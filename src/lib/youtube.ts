@@ -7,6 +7,18 @@ export interface YtItem {
   thumbnail: string;
 }
 
+/** Remove upload metadata while preserving the actual song title. */
+export function cleanTrackTitle(value: string): string {
+  let title = value.replace(/\s+/g, " ").trim();
+  const suffixPatterns = [
+    /\s+[-–—]\s+music\s+for\s+.*$/i,
+    /\s+[-–—|]\s*(?:official\s+)?(?:music\s+video|music\s+audio|audio|lyrics?|visualizer)\s*$/i,
+    /\s*[\[(]\s*(?:official\s+)?(?:music\s+video|music\s+audio|audio|lyrics?|visualizer)\s*[\])]\s*$/i,
+  ];
+  for (const pattern of suffixPatterns) title = title.replace(pattern, "").trim();
+  return title || value.trim();
+}
+
 // Resolved stream URLs are cached for the session so replaying a track never
 // hits the resolver twice.
 const streamCache = new Map<string, string>();
