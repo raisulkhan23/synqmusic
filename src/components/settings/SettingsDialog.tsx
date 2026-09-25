@@ -619,12 +619,12 @@ export function SettingsDialog({
         </DialogHeader>
 
         <nav
-          className="sticky top-0 z-30 -mx-1 rounded-xl border border-white/[0.07] px-1 py-2"
-          style={{
-            backgroundColor: "rgb(255 255 255 / 0.03)",
-            backgroundImage: "none",
-            boxShadow: "none",
-          }}
+          className={cn(
+            "z-30 -mx-1 rounded-2xl border border-white/[0.07] px-1 py-2",
+            pageMode
+              ? "sticky top-3 z-40 bg-[#101218]/90 shadow-[0_18px_50px_rgba(0,0,0,0.35)] backdrop-blur-xl"
+              : "sticky top-0 bg-white/[0.03]",
+          )}
           aria-label="Settings sections"
         >
           <div className="flex items-center gap-2">
