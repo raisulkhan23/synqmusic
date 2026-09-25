@@ -1368,8 +1368,22 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       // Mobile browsers are much more likely to keep a mounted HTML audio
       // element alive when the tab is minimized than a YouTube IFrame. The
       // resolver still falls back to the IFrame if the stream is unavailable.
-      if ((wantFilter || prefersBackgroundAudio()) && track.youtubeId) {
-        void resolveAndPlayWithFilter(track, resumeAt, wantFilter);
+      if (wantFilter && track.youtubeId) {
+        // Start the dry YouTube engine immediately, then resolve the EQ
+        // stream in the background so effects never delay the first sound.
+        void ytEngine
+          .play(track.youtubeId, {
+            volume: get().volume,
+            muted: get().muted,
+            startSeconds: resumeAt || undefined,
+          })
+          .catch(() => undefined);
+        void ytResolve(track.youtubeId).then((url) => {
+          if (!url) return;
+          const state = usePlayerStore.getState();
+          if (state.current?.youtubeId !== track.youtubeId) return;
+          swapToFilteredStream(state.current, state.currentTime);
+        });
         return;
       }
       getAudio().pause();
