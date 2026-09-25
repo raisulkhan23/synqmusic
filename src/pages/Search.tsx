@@ -214,6 +214,7 @@ export default function Search() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sharedQuery]);
   const startRadio = usePlayerStore((s) => s.startRadio);
+  const playTrack = usePlayerStore((s) => s.playTrack);
   const searchYt = useAction(api.youtube.searchYoutube);
   const searchLyricVideos = useAction(api.youtube.searchLyricVideos);
 
@@ -336,7 +337,9 @@ export default function Search() {
   );
 
   const hasQuery = query.trim().length > 0;
-  const surpriseMe = () => {
+  const [surpriseLoading, setSurpriseLoading] = useState(false);
+  const surpriseMe = async () => {
+    if (surpriseLoading) return;
     const pick = MOOD_CHIPS[Math.floor(Math.random() * MOOD_CHIPS.length)];
     // Use the actual search phrase, not just the chip label. The label alone
     // used to leave the search view in a query state that could return no
@@ -347,7 +350,42 @@ export default function Search() {
     // the effect still starts a fresh request instead of relying on a state
     // change that React may bail out of.
     setRetryKey((key) => key + 1);
-    toast.success(`Surprise mix: ${pick}`);
+    setSurpriseLoading(true);
+
+    try {
+      let items: YtItem[] = [];
+      let playedQuery = surpriseQuery;
+      // Keep the first search specific to the mood, but fall back to a broad
+      // catalog query so a temporary empty response never leaves the button
+      // appearing to do nothing.
+      for (const candidate of [surpriseQuery, "top songs"]) {
+        try {
+          const result = await searchYt({ query: candidate });
+          if (result.items.length > 0) {
+            items = result.items;
+            playedQuery = candidate;
+            break;
+          }
+        } catch {
+          // Try the next candidate.
+        }
+      }
+      if (items.length === 0) throw new Error("No playable results");
+
+      const queue = items.slice(0, 15).map((item) => toPlayableYoutube(item, item.id));
+      const selected = queue[Math.floor(Math.random() * queue.length)];
+      trackEvent("surprise_played", {
+        query: playedQuery,
+        track_id: selected.id,
+        title: selected.title.slice(0, 120),
+      });
+      playTrack(selected, queue);
+      toast.success(`Playing ${pick}: ${selected.title}`);
+    } catch {
+      toast.error("Couldn't find a surprise track right now");
+    } finally {
+      setSurpriseLoading(false);
+    }
   };
   return (
     <div className="flex flex-col gap-8">
@@ -362,10 +400,11 @@ export default function Search() {
         </div>
         <button
           type="button"
-          onClick={surpriseMe}
-          className="inline-flex w-fit items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:border-[rgb(var(--tint)_/_0.4)] hover:bg-[rgb(var(--tint)_/_0.1)] hover:text-foreground"
+          onClick={() => void surpriseMe()}
+          disabled={surpriseLoading}
+          className="inline-flex w-fit items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:border-[rgb(var(--tint)_/_0.4)] hover:bg-[rgb(var(--tint)_/_0.1)] hover:text-foreground disabled:cursor-wait disabled:opacity-60"
         >
-          <Dices className="h-3.5 w-3.5 text-[rgb(var(--tint))]" />
+          {surpriseLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin text-[rgb(var(--tint))]" /> : <Dices className="h-3.5 w-3.5 text-[rgb(var(--tint))]" />}
           Surprise me
         </button>
       </header>
