@@ -11,7 +11,7 @@ import { toast } from "sonner";
  * linking or provider passwords needed. Imported playlists appear in the
  * Library and are resolved to playable tracks at play time.
  */
-export function ImportSection({ open }: { open: boolean }) {
+export function ImportSection({ open, className = "" }: { open: boolean; className?: string }) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [lastImported, setLastImported] = useState<string | null>(null);
@@ -49,7 +49,7 @@ export function ImportSection({ open }: { open: boolean }) {
   };
 
   return (
-    <section className="flex flex-col gap-2.5">
+    <section className={`settings-import flex flex-col gap-2.5 ${className}`}>
       <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
         <Music4 className="size-3.5" />
         Import playlists

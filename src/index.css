@@ -500,6 +500,27 @@ html,
       0 16px 38px rgb(0 0 0 / 0.22),
       0 0 28px rgb(var(--tint) / 0.06);
   }
+
+  /* Put the controls people reach for most first: playback, sound, and
+     appearance stay above profile and maintenance tasks. The page remains
+     a single scroll surface, so the jump bar and anchors keep working. */
+  .settings-liquid-glass > .settings-header { order: 0; }
+  .settings-liquid-glass > .settings-jump-bar { order: 1; }
+  .settings-liquid-glass > #settings-playback { order: 2; }
+  .settings-liquid-glass > #settings-playback + [data-slot="separator"] { order: 3; }
+  .settings-liquid-glass > #settings-audio { order: 4; }
+  .settings-liquid-glass > #settings-audio + [data-slot="separator"] { order: 5; }
+  .settings-liquid-glass > #settings-appearance { order: 6; }
+  .settings-liquid-glass > #settings-appearance + [data-slot="separator"] { order: 7; }
+  .settings-liquid-glass > #settings-profile { order: 8; }
+  .settings-liquid-glass > #settings-profile + [data-slot="separator"] { order: 9; }
+  .settings-liquid-glass > #settings-personalization { order: 10; }
+  .settings-liquid-glass > #settings-personalization + [data-slot="separator"] { order: 11; }
+  .settings-liquid-glass > section:nth-of-type(6) { order: 12; }
+  .settings-liquid-glass > section:nth-of-type(6) + [data-slot="separator"] { order: 13; }
+  .settings-liquid-glass > .settings-import { order: 14; }
+  .settings-liquid-glass > .settings-import + [data-slot="separator"] { order: 15; }
+  .settings-liquid-glass > section:nth-of-type(8) { order: 16; }
   .settings-liquid-glass.settings-glass-still::before {
     animation: none;
     opacity: 0.28;

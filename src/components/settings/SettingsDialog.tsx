@@ -101,10 +101,10 @@ const FOCUS_LAYOUTS = [
 ] as const;
 
 const SETTINGS_SECTIONS = [
-  ["Profile", "settings-profile", UserRound],
   ["Playback", "settings-playback", Gauge],
   ["Audio", "settings-audio", SlidersHorizontal],
   ["Appearance", "settings-appearance", Palette],
+  ["Profile", "settings-profile", UserRound],
   ["Personalize", "settings-personalization", Sparkles],
   ["Shortcuts", "settings-shortcuts", Keyboard],
   ["Data", "settings-data", Database],
@@ -616,7 +616,7 @@ export function SettingsDialog({
             : "glass-card !fixed max-h-[85vh] max-w-md overflow-y-auto"
         }
       >
-        <DialogHeader>
+        <DialogHeader className="settings-header">
           {pageMode && (
             <Link
               to="/home"
@@ -698,7 +698,7 @@ export function SettingsDialog({
         </nav>
 
         {/* profile */}
-        <section id="settings-profile" className="scroll-mt-20 flex flex-col gap-2.5">
+        <section id="settings-profile" className="settings-profile scroll-mt-20 flex flex-col gap-2.5">
           <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
             <UserRound className="size-3.5" />
             Profile
