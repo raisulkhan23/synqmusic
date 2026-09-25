@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type PointerEvent, type RefObject } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
 import * as ytEngine from "@/lib/youtubePlayer";
@@ -59,9 +59,8 @@ function parseTint(value: string): [number, number, number] {
   ];
 }
 
-/** Smoothly interpolates between track colors instead of snapping the UI. */
-function useAnimatedTint(target: string): string {
-  const [displayTint, setDisplayTint] = useState(target);
+/** Smoothly interpolates between track colors without re-rendering the app shell. */
+function useAnimatedCssTint(target: string, elementRef: RefObject<HTMLElement | null>) {
   const currentRef = useRef(target);
   const frameRef = useRef<number | null>(null);
 
@@ -70,14 +69,16 @@ function useAnimatedTint(target: string): string {
     const from = parseTint(currentRef.current);
     const to = parseTint(target);
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const element = elementRef.current;
+    if (!element) return;
     if (reducedMotion || from.every((channel, index) => channel === to[index])) {
       currentRef.current = target;
-      setDisplayTint(target);
+      element.style.setProperty("--tint", target);
       return;
     }
 
     const startedAt = performance.now();
-    const duration = 850;
+    const duration = 650;
     const tick = (now: number) => {
       const progress = Math.min(1, (now - startedAt) / duration);
       const eased = 1 - Math.pow(1 - progress, 3);
@@ -85,7 +86,7 @@ function useAnimatedTint(target: string): string {
         Math.round(channel + (to[index] - channel) * eased),
       ).join(" ");
       currentRef.current = next;
-      setDisplayTint(next);
+      element.style.setProperty("--tint", next);
       if (progress < 1) frameRef.current = requestAnimationFrame(tick);
       else frameRef.current = null;
     };
@@ -94,9 +95,7 @@ function useAnimatedTint(target: string): string {
       if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
       frameRef.current = null;
     };
-  }, [target]);
-
-  return displayTint;
+  }, [target, elementRef]);
 }
 
 export function AppShell() {
@@ -128,6 +127,9 @@ export function AppShell() {
   const cursorTrailRefs = useRef<Array<HTMLSpanElement | null>>([]);
   const touchGlowTimeoutRef = useRef<number | null>(null);
   const wallpaperVideoRef = useRef<HTMLVideoElement>(null);
+  const shellRef = useRef<HTMLDivElement>(null);
+  const pointerFrameRef = useRef<number | null>(null);
+  const pointerPositionRef = useRef({ x: 0, y: 0, target: null as HTMLDivElement | null });
 
   // Restore an uploaded wallpaper from IndexedDB after a page reload.
   useEffect(() => {
@@ -200,6 +202,7 @@ export function AppShell() {
       if (touchGlowTimeoutRef.current !== null) {
         window.clearTimeout(touchGlowTimeoutRef.current);
       }
+      if (pointerFrameRef.current !== null) cancelAnimationFrame(pointerFrameRef.current);
     };
   }, []);
 
@@ -313,36 +316,19 @@ export function AppShell() {
     });
   }, [recordPlay, setHistoryRecorder]);
 
-  /**
-   * Self-heal for "the UI won't let me click anything".
-   *
-   * Radix menus/dialogs/sheets lock the page by setting
-   * `document.body.style.pointerEvents = "none"` while they are open. If a
-   * layer is unmounted or re-rendered while open (which happens here when an
-   * effect selection re-renders the player), that lock is sometimes never
-   * released and EVERY click is swallowed until the same button is pressed
-   * again. Nothing in Soniq should hold a body-level click lock with no layer
-   * on screen, so clear the stale lock.
-   */
-  const radixLockWatch = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Self-heal stale Radix body locks only when the user interacts. The old
+  // 300ms interval ran a large selector query forever and caused needless
+  // main-thread work even while the app was idle.
   useEffect(() => {
     const clearStaleBodyLock = () => {
       if (document.body.style.pointerEvents !== "none") return;
-      const hasOpenLayer =
-        document.querySelector(
-          '[data-radix-popper-content-wrapper], [data-radix-menu-content], [data-radix-dialog-content], [data-radix-popover-content], [data-radix-hover-card-content], [data-radix-tooltip-content], [data-radix-select-content], [role="dialog"]:not([hidden]), [role="menu"], [data-slot="sheet-content"], [data-slot="dropdown-menu-content"]',
-        ) !== null;
+      const hasOpenLayer = document.querySelector(
+        '[data-radix-popper-content-wrapper], [data-radix-menu-content], [data-radix-dialog-content], [data-radix-popover-content], [data-radix-hover-card-content], [data-radix-tooltip-content], [data-radix-select-content], [role="dialog"]:not([hidden]), [role="menu"], [data-slot="sheet-content"], [data-slot="dropdown-menu-content"]',
+      ) !== null;
       if (!hasOpenLayer) document.body.style.pointerEvents = "";
     };
-    radixLockWatch.current = setInterval(clearStaleBodyLock, 300);
-    // Also check right after a click, so recovery is instant.
-    const onPointerDown = () => clearStaleBodyLock();
-    window.addEventListener("pointerdown", onPointerDown, true);
-    return () => {
-      if (radixLockWatch.current) clearInterval(radixLockWatch.current);
-      radixLockWatch.current = null;
-      window.removeEventListener("pointerdown", onPointerDown, true);
-    };
+    window.addEventListener("pointerdown", clearStaleBodyLock, true);
+    return () => window.removeEventListener("pointerdown", clearStaleBodyLock, true);
   }, []);
 
   // Session start (one per app load) + a page view on every route change.
@@ -440,7 +426,8 @@ export function AppShell() {
       : accentTheme !== "auto" && FIXED_TINTS[accentTheme]
         ? FIXED_TINTS[accentTheme]
         : DEFAULT_TINT;
-  const tint = useAnimatedTint(targetTint);
+  const tint = targetTint;
+  useAnimatedCssTint(targetTint, shellRef);
   const paletteForeground =
     accent && accent.r * 0.299 + accent.g * 0.587 + accent.b * 0.114 > 155
       ? "rgb(12 15 18)"
@@ -461,19 +448,24 @@ export function AppShell() {
   const handlePointerMove = (event: PointerEvent<HTMLDivElement>) => {
     if (!pointerEffects || event.pointerType === "touch") return;
     const rect = event.currentTarget.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
-    event.currentTarget.style.setProperty("--pointer-x", `${x}px`);
-    event.currentTarget.style.setProperty("--pointer-y", `${y}px`);
-
-    // Move a small trail of glass motes imperatively so cursor tracking stays
-    // smooth without causing a React render on every pointer event.
-    for (let index = 0; index < cursorTrailRefs.current.length; index += 1) {
-      const mote = cursorTrailRefs.current[index];
-      if (!mote) continue;
-      mote.style.left = `${x}px`;
-      mote.style.top = `${y}px`;
-    }
+    pointerPositionRef.current = {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+      target: event.currentTarget,
+    };
+    if (pointerFrameRef.current !== null) return;
+    pointerFrameRef.current = requestAnimationFrame(() => {
+      pointerFrameRef.current = null;
+      const { x, y, target } = pointerPositionRef.current;
+      if (!target) return;
+      target.style.setProperty("--pointer-x", `${x}px`);
+      target.style.setProperty("--pointer-y", `${y}px`);
+      for (const mote of cursorTrailRefs.current) {
+        if (!mote) continue;
+        mote.style.left = `${x}px`;
+        mote.style.top = `${y}px`;
+      }
+    });
   };
 
   const handlePointerEnter = (event: PointerEvent<HTMLDivElement>) => {
@@ -518,6 +510,7 @@ export function AppShell() {
 
   return (
     <div
+      ref={shellRef}
       className={cn(
         "theme-surface relative isolate flex h-dvh overflow-hidden bg-background text-foreground",
         focusLayout === "study" && "focus-study",

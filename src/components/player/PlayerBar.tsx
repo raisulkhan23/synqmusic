@@ -114,9 +114,18 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
     const seededAccent = accentFromString(`${current.title} ${current.artistName}`);
     setAccent(seededAccent);
     if (current.coverUrl) {
-      void dominantColor(current.coverUrl).then((c) => {
-        if (!cancelled && c) setAccent(c);
-      });
+      // Artwork extraction is a secondary enhancement. Keep it off the
+      // critical path and avoid starting another decode for every quick
+      // track change; the deterministic accent is already immediate.
+      const timer = window.setTimeout(() => {
+        void dominantColor(current.coverUrl).then((c) => {
+          if (!cancelled && c) setAccent(c);
+        });
+      }, 180);
+      return () => {
+        cancelled = true;
+        window.clearTimeout(timer);
+      };
     }
 
     return () => {

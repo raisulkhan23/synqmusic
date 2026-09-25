@@ -3,7 +3,7 @@ import { ensureAnalyser, getAudio, readFrequencyData } from "@/lib/audio";
 import { cn } from "@/lib/utils";
 import { usePlayerStore } from "@/store/player";
 
-const BAR_COUNT = 56;
+const BAR_COUNT = 40;
 const FALLBACK_LIME = { r: 196, g: 246, b: 152 };
 
 function sampleBins(freq: Uint8Array, n: number, out: number[]): void {
@@ -81,8 +81,8 @@ export function VisualizerCanvas({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Keep the canvas inexpensive: 1x resolution and 30 FPS are still smooth
-    // for a background visualizer and use far less GPU/CPU than a 2x/60 FPS loop.
+    // Keep the canvas inexpensive: 1x resolution and 24 FPS is still smooth
+    // for a background visualizer and substantially reduces main-thread work.
     const dpr = 1;
     const freq = new Uint8Array(analyserRef.current?.frequencyBinCount ?? 128);
     const sim = new Float32Array(BAR_COUNT);
@@ -111,7 +111,7 @@ export function VisualizerCanvas({
     const draw = (now: number) => {
       const dt = Math.min(0.1, (now - last) / 1000);
       last = now;
-      if (now - lastDraw < 33) {
+      if (now - lastDraw < 42) {
         raf = requestAnimationFrame(draw);
         return;
       }
