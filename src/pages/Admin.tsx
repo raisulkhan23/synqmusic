@@ -650,17 +650,32 @@ export default function Admin() {
             <p className="text-sm font-semibold">Plays per day — last 14 days</p>
             {listeningStats === undefined ? (
               <div className="mt-3 h-32 animate-pulse rounded bg-white/[0.05]" />
+            ) : listeningStats.totalPlays === 0 ? (
+              <div className="mt-3 flex h-32 flex-col items-center justify-center rounded-xl border border-dashed border-white/[0.08] bg-black/10 px-4 text-center">
+                <BarChart3 className="size-6 text-muted-foreground/45" />
+                <p className="mt-2 text-sm font-semibold">No listening activity yet</p>
+                <p className="mt-1 max-w-sm text-xs text-muted-foreground">
+                  Plays from the last 14 days will appear here as people listen.
+                </p>
+              </div>
             ) : (
               <div className="mt-4 flex h-32 items-end gap-1.5">
                 {listeningStats.daily.map((d) => {
                   const max = Math.max(1, ...listeningStats.daily.map((x) => x.plays));
                   return (
-                    <div key={d.day} className="group flex h-full min-w-0 flex-1 flex-col items-center gap-1">
+                    <div key={d.day} className="group relative z-10 flex h-full min-w-0 flex-1 flex-col items-center gap-1 hover:z-20">
                       <div
-                        className="w-full rounded-t bg-[rgb(var(--tint)_/_0.55)] transition-colors group-hover:bg-[rgb(var(--tint))]"
-                        style={{ height: `${Math.max(2, (d.plays / max) * 100)}%` }}
-                        title={`${d.label}: ${d.plays} plays`}
-                      />
+                        className="relative w-full rounded-t bg-[rgb(var(--tint)_/_0.55)] transition-colors group-hover:bg-[rgb(var(--tint))]"
+                        style={{ height: `${Math.max(3, (d.plays / max) * 100)}%` }}
+                        aria-label={`${d.label}: ${d.plays} plays`}
+                      >
+                        <span className="pointer-events-none absolute bottom-[calc(100%+8px)] left-1/2 z-20 hidden w-max -translate-x-1/2 rounded-lg border border-white/10 bg-[#12151d]/95 px-2.5 py-1.5 text-left text-[10px] text-foreground shadow-xl backdrop-blur-xl group-hover:block">
+                          <span className="block font-semibold">{d.label}</span>
+                          <span className="block text-muted-foreground">
+                            {d.plays} {d.plays === 1 ? "play" : "plays"}
+                          </span>
+                        </span>
+                      </div>
                       <span className="w-full truncate text-center text-[9px] text-muted-foreground">
                         {d.label.split(" ")[1]}
                       </span>
