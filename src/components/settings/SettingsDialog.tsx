@@ -121,7 +121,7 @@ function jumpToSetting(id: string) {
     const targetTop = target.getBoundingClientRect().top;
     const containerTop = scrollContainer.getBoundingClientRect().top;
     scrollContainer.scrollTo({
-      top: scrollContainer.scrollTop + targetTop - containerTop - 148,
+      top: scrollContainer.scrollTop + targetTop - containerTop - 96,
       behavior: "smooth",
     });
     return;
@@ -622,20 +622,9 @@ export function SettingsDialog({
           className={cn(
             "z-30 -mx-1 rounded-2xl border border-white/[0.07] px-1 py-2",
             pageMode
-              ? "!fixed top-20 left-1/2 z-50 w-[min(calc(100vw-2rem),48rem)] -translate-x-1/2 bg-[#101218]/90 shadow-[0_18px_50px_rgba(0,0,0,0.35)] backdrop-blur-xl"
+              ? "!sticky top-3 z-40 bg-[#101218]/90 shadow-[0_18px_50px_rgba(0,0,0,0.35)] backdrop-blur-xl"
               : "sticky top-0 bg-white/[0.03]",
           )}
-          style={
-            pageMode
-              ? {
-                  position: "fixed",
-                  top: "5rem",
-                  left: "50%",
-                  transform: "translateX(-50%)",
-                  zIndex: 50,
-                }
-              : undefined
-          }
           aria-label="Settings sections"
         >
           <div className="flex items-center gap-2">
