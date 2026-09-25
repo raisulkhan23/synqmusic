@@ -633,7 +633,7 @@ export function SettingsDialog({
 
         <nav
           className={cn(
-            "settings-jump-bar relative z-30 -mx-1 rounded-2xl border border-white/[0.08] px-1 py-2",
+            "settings-jump-bar settings-jump-glass relative z-30 -mx-1 rounded-2xl border border-white/[0.14] px-1 py-2",
             pageMode
               ? "!sticky top-3 z-50"
               : "sticky top-0 bg-white/[0.03]",
@@ -641,13 +641,13 @@ export function SettingsDialog({
           aria-label="Settings sections"
         >
           <div className="flex items-center gap-2">
-            <span className="hidden shrink-0 px-1 text-[10px] font-semibold tracking-widest text-muted-foreground uppercase sm:block">
+            <span className="hidden shrink-0 px-1 text-[10px] font-semibold tracking-widest text-foreground/70 uppercase sm:block">
               Jump to
             </span>
             <button
               type="button"
               onClick={() => setJumpMenuOpen((open) => !open)}
-              className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded-xl px-2.5 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-white/[0.05] hover:text-foreground sm:hidden"
+              className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded-xl border border-white/[0.06] bg-white/[0.04] px-2.5 py-2 text-xs font-semibold text-foreground/85 shadow-sm transition-colors hover:border-[rgb(var(--tint))]/30 hover:bg-white/[0.08] hover:text-foreground sm:hidden"
               aria-expanded={jumpMenuOpen}
               aria-controls="settings-jump-menu"
             >
@@ -664,7 +664,7 @@ export function SettingsDialog({
                   type="button"
                   onClick={() => jumpToSetting(id)}
                   className={cn(
-                    "inline-flex shrink-0 items-center gap-1.5 rounded-full border border-transparent px-2.5 py-1.5 text-[11px] font-semibold text-muted-foreground transition-colors hover:border-white/10 hover:bg-white/[0.05] hover:text-foreground",
+                    "inline-flex shrink-0 items-center gap-1.5 rounded-full border border-transparent px-2.5 py-1.5 text-[11px] font-semibold text-foreground/70 transition-colors hover:border-white/15 hover:bg-white/[0.07] hover:text-foreground",
                     label === "Shortcuts" && "hidden md:inline-flex",
                   )}
                 >
