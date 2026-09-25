@@ -338,7 +338,15 @@ export default function Search() {
   const hasQuery = query.trim().length > 0;
   const surpriseMe = () => {
     const pick = MOOD_CHIPS[Math.floor(Math.random() * MOOD_CHIPS.length)];
-    setQuery(pick);
+    // Use the actual search phrase, not just the chip label. The label alone
+    // used to leave the search view in a query state that could return no
+    // catalog rows; the phrase is also what the discovery search understands.
+    const surpriseQuery = MOOD_QUERIES[pick] ?? `${pick} songs`;
+    setQuery(surpriseQuery);
+    // A repeated random pick can be the current query. Bump the retry key so
+    // the effect still starts a fresh request instead of relying on a state
+    // change that React may bail out of.
+    setRetryKey((key) => key + 1);
     toast.success(`Surprise mix: ${pick}`);
   };
   return (

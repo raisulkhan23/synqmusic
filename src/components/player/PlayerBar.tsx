@@ -14,6 +14,7 @@ import {
   Heart,
   House,
   ListMusic,
+  Copy,
   Loader2,
   Maximize2,
   Minimize2,
@@ -371,6 +372,20 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
     ? Math.min(100, (safeCurrentTime / playbackDuration) * 100)
     : 0;
 
+  const copyDiscordStatus = async () => {
+    // Browsers cannot update a user's Discord custom status directly: Discord
+    // Rich Presence is a desktop-only IPC protocol. Copying a status-sized
+    // line is the reliable web fallback and works with Discord's 128-char cap.
+    const status = `🎵 Now playing: ${current.title} — ${current.artistName} · SYNQ`.slice(0, 128);
+    try {
+      if (!navigator.clipboard) throw new Error("Clipboard unavailable");
+      await navigator.clipboard.writeText(status);
+      toast.success("Copied — paste it into your Discord status");
+    } catch {
+      toast.error("Couldn't copy the now-playing status");
+    }
+  };
+
   return (
     <>
       <ReadingSessionNav />
@@ -459,6 +474,15 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
             just the expand chevron (queue lives in the fullscreen player and
             the bottom tab bar already covers navigation) */}
       <div className="relative z-10 flex w-auto shrink-0 items-center justify-end gap-0.5">
+        <button
+          type="button"
+          aria-label="Copy now playing for Discord"
+          title="Copy now playing for Discord"
+          onClick={() => void copyDiscordStatus()}
+          className="hidden rounded-full p-2 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground sm:block lg:p-1.5"
+        >
+          <Copy className="size-4" />
+        </button>
         <button
           type="button"
           aria-label="Open queue"
