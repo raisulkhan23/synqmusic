@@ -38,6 +38,26 @@ type RemoteMap = Record<string, YtItem[] | undefined>;
 
 const DISCOVERY_REFRESH_INTERVAL = 24 * 60 * 60 * 1000;
 const DISCOVERY_REFRESH_KEY = "synq:discovery-refreshed-at";
+const HOME_REQUEST_TIMEOUT_MS = 12_000;
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs = HOME_REQUEST_TIMEOUT_MS): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(
+      () => reject(new Error("Home shelf request timed out")),
+      timeoutMs,
+    );
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        window.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
 
 const MOOD_LAUNCHES = [
   { label: "Focus", query: "focus concentration music", tone: "from-sky-500/25 to-cyan-500/5" },
@@ -74,7 +94,7 @@ export default function Home() {
   const [trending, setTrending] = useState<YtItem[] | null>(null);
   useEffect(() => {
     let cancelled = false;
-    spotifyChart({})
+    withTimeout(spotifyChart({}))
       .then(({ items }) => {
         if (!cancelled) setTrending(items);
       })
@@ -89,7 +109,7 @@ export default function Home() {
   const playTrending = (item: YtItem) => {
     setResolvingId(item.id);
     const primaryArtist = item.artist.split(",")[0]?.trim() ?? item.artist;
-    searchYt({ query: `${item.title} ${primaryArtist}` })
+    withTimeout(searchYt({ query: `${item.title} ${primaryArtist}` }))
       .then(({ items }) => {
         const best = items[0];
         if (!best) {
@@ -216,7 +236,7 @@ export default function Home() {
           for (const q of [query, fallback]) {
             if (!q) continue;
             try {
-              const { items } = await searchYt({ query: q });
+              const { items } = await withTimeout(searchYt({ query: q }));
               if (cancelled) return;
               if (items.length > 0) {
                 setRemote((prev) => ({ ...prev, [key]: items.slice(0, 6) }));
@@ -255,7 +275,7 @@ export default function Home() {
     if (surprising) return;
     setSurprising(true);
     const seed = surpriseSeeds[Math.floor(Math.random() * surpriseSeeds.length)];
-    searchYt({ query: seed })
+    withTimeout(searchYt({ query: seed }))
       .then(({ items }) => {
         const pool = items.filter((i) => i.duration > 0);
         if (pool.length > 0) {
@@ -286,7 +306,7 @@ export default function Home() {
       "legendary song", "timeless classic",
     ];
     const pick = seeds[Math.floor(Math.random() * seeds.length)];
-    searchYt({ query: pick })
+    withTimeout(searchYt({ query: pick }))
       .then(({ items }) => {
         const pool = items.filter((i) => i.duration > 0);
         const song = pool[Math.floor(Math.random() * pool.length)];
@@ -822,7 +842,9 @@ function RemoteSection({
       </section>
     );
   }
-  if (items.length === 0) return null;
+  if (!Array.isArray(items)) return null;
+  const safeItems = items.filter(isUsableRemoteItem);
+  if (safeItems.length === 0) return null;
   return (
     <section>
       <SectionHeader title={title} subtitle={subtitle} icon={icon} />
@@ -832,7 +854,7 @@ function RemoteSection({
         transition={{ duration: 0.35, ease: "easeOut" }}
         className="stagger mt-1 flex flex-col gap-0.5"
       >
-        {children(items)}
+        {children(safeItems)}
       </motion.div>
     </section>
   );
@@ -871,19 +893,30 @@ function RemoteRows({
   max?: number;
   className?: string;
 }) {
+  const safeItems = Array.isArray(items) ? items.filter(isUsableRemoteItem) : [];
   return (
     <div className={className}>
-      {items.slice(0, max).map((item, i) => (
+      {safeItems.slice(0, max).map((item, i) => (
         <RemoteTrackRow
           key={item.id}
           item={item}
           index={i + 1}
-          onPlay={(it) => onPlay(it, items)}
+          onPlay={(it) => onPlay(it, safeItems)}
           resolving={resolvingId === item.id}
           source="youtube"
         />
       ))}
     </div>
+  );
+}
+
+function isUsableRemoteItem(item: YtItem): boolean {
+  return (
+    !!item &&
+    typeof item.id === "string" &&
+    item.id.length > 0 &&
+    typeof item.title === "string" &&
+    typeof item.artist === "string"
   );
 }
 
