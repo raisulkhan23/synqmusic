@@ -489,6 +489,15 @@ html,
     position: relative;
     z-index: 1;
   }
+  .settings-liquid-glass > .settings-pointer-glow,
+  .glass-card > .settings-pointer-glow {
+    position: absolute;
+    z-index: 0;
+  }
+  .glass-card > :not(.settings-pointer-glow) {
+    position: relative;
+    z-index: 1;
+  }
   /* Keep the settings jump bar above the scrolling surface and give it the
      same quiet glass treatment as the rest of the app. The important
      position rule deliberately overrides the generic settings child rule. */

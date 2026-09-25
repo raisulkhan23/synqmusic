@@ -615,7 +615,33 @@ export function SettingsDialog({
               )
             : "glass-card !fixed max-h-[85vh] max-w-md overflow-y-auto"
         }
+        onPointerEnter={(event) => {
+          if (pointerEffects && event.pointerType !== "touch") {
+            event.currentTarget.style.setProperty("--pointer-opacity", "1");
+          }
+        }}
+        onPointerMove={(event) => {
+          if (!pointerEffects || event.pointerType === "touch") return;
+          const rect = event.currentTarget.getBoundingClientRect();
+          event.currentTarget.style.setProperty(
+            "--pointer-x",
+            `${event.clientX - rect.left}px`,
+          );
+          event.currentTarget.style.setProperty(
+            "--pointer-y",
+            `${event.clientY - rect.top}px`,
+          );
+        }}
+        onPointerLeave={(event) => {
+          event.currentTarget.style.setProperty("--pointer-opacity", "0");
+        }}
       >
+        {pointerEffects && (
+          <div
+            className="settings-pointer-glow pointer-glow pointer-events-none absolute inset-0"
+            aria-hidden="true"
+          />
+        )}
         <DialogHeader className="settings-header">
           {pageMode && (
             <Link
