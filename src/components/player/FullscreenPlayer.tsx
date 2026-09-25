@@ -17,7 +17,7 @@ import { api } from "@/convex/_generated/api";
 import { formatTime } from "@/lib/format";
 import { dismissVideo, ensureVideoPlaying, getLoadedVideoId, presentOverlay, trackFrame } from "@/lib/youtubePlayer";
 import { hasAudioProcessing } from "@/lib/audio";
-import { AUDIO_FILTERS as FILTER_DEFS } from "@/lib/audio";
+import { AUDIO_EFFECT_DELAY_MESSAGE, AUDIO_FILTERS as FILTER_DEFS } from "@/lib/audio";
 import { usePlayerStore } from "@/store/player";
 import { toast } from "sonner";
 import {
@@ -929,6 +929,7 @@ export function FullscreenPlayer() {
                         // shield in place and the whole UI unclickable.
                         try {
                           setAudioFilter(f.id);
+                          if (f.id !== "off") toast(AUDIO_EFFECT_DELAY_MESSAGE);
                         } catch {
                           /* never block the menu from closing */
                         }

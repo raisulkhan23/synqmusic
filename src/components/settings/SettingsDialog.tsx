@@ -19,6 +19,7 @@ import {
   setEqTreble,
   type AudioFilterId,
   AUDIO_FILTERS,
+  AUDIO_EFFECT_DELAY_MESSAGE,
 } from "@/lib/audio";
 import { useAuth } from "@/hooks/use-auth";
 import { clearPlayHistory, prewarmYoutubeStream, usePlayerStore } from "@/store/player";
@@ -1032,6 +1033,7 @@ export function SettingsDialog({
             onChange={(v) => {
               setEqBass(v);
               persistEq({ ...eq, bass: v });
+              if (v !== 0) toast(AUDIO_EFFECT_DELAY_MESSAGE);
             }}
           />
           <EqSlider
@@ -1063,6 +1065,7 @@ export function SettingsDialog({
               const next = !(eq.mono ?? false);
               setEqMono(next);
               persistEq({ ...eq, mono: next });
+              if (next) toast(AUDIO_EFFECT_DELAY_MESSAGE);
             }}
           />
 
@@ -1079,8 +1082,10 @@ export function SettingsDialog({
                   key={f.id}
                   type="button"
                   onClick={() => {
-                    if (setAudioFilter(f.id)) persistEq({ ...eq, filter: f.id });
-                    else toast.error("Effects need a browser with Web Audio");
+                    if (setAudioFilter(f.id)) {
+                      persistEq({ ...eq, filter: f.id });
+                      if (f.id !== "off") toast(AUDIO_EFFECT_DELAY_MESSAGE);
+                    } else toast.error("Effects need a browser with Web Audio");
                   }}
                   className={cn(
                     "flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors",

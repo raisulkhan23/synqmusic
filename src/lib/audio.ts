@@ -35,6 +35,9 @@ export function useAudioRate(rate: number): void {
 
 export type AudioFilterId = "off" | "8d" | "bass" | "vocal" | "night";
 
+export const AUDIO_EFFECT_DELAY_MESSAGE =
+  "Turning on sound effects may add a small delay before music starts.";
+
 export const AUDIO_FILTERS: { id: AudioFilterId; label: string; icon: string; description: string }[] = [
   { id: "off", label: "None", icon: "🎵", description: "Original mix" },
   { id: "8d", label: "8D Audio", icon: "🌀", description: "Surround-style rotating effect" },
