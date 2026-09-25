@@ -18,6 +18,7 @@ export interface YtItem {
 }
 
 const API = "https://www.youtube.com/youtubei/v1/";
+const REQUEST_TIMEOUT_MS = 10_000;
 const INNERTUBE_KEY = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8";
 
 interface InnerTubeClient {
@@ -104,6 +105,7 @@ async function innerTube(
       "X-Origin": "https://www.youtube.com",
     },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
   if (!res.ok) {
     throw new ConvexError(`YouTube API returned ${res.status}`);
@@ -231,6 +233,7 @@ async function musicSearch(query: string): Promise<YtItem[]> {
       // shelf — proper studio tracks/album versions, not random videos.
       params: "Eg-KAQwIARAAGAAgACgAMABqChAEEAMQBBApEAU",
     }),
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
   if (!res.ok) throw new ConvexError(`YouTube Music API returned ${res.status}`);
   const data = (await res.json()) as Record<string, unknown>;

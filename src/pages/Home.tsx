@@ -223,8 +223,11 @@ export default function Home() {
                 return;
               }
             } catch {
-              // try the fallback, then leave the section empty
+              // Try the fallback query, then resolve the section below.
             }
+          }
+          if (!cancelled) {
+            setRemote((prev) => ({ ...prev, [key]: [] }));
           }
         }),
       );
