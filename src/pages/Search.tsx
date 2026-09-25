@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router";
 import { RemoteTrackRow } from "@/components/tracks/RemoteTrackRow";
 import { api } from "@/convex/_generated/api";
 import { toPlayableYoutube } from "@/lib/playable";
-import { type YtItem } from "@/lib/youtube";
+import { cleanArtistName, type YtItem } from "@/lib/youtube";
 import { usePlayerStore } from "@/store/player";
 import { track as trackEvent } from "@/lib/analytics";
 import { GravitySponsor } from "@/components/ads/GravitySponsor";
@@ -309,7 +309,7 @@ export default function Search() {
         query: (debouncedQuery || query).slice(0, 120),
         track_id: item.id,
         title: item.title.slice(0, 120),
-        artist: item.artist.slice(0, 120),
+        artist: cleanArtistName(item.artist, item.title).slice(0, 120),
       });
       void startRadio(toPlayableYoutube(item, item.id), debouncedQuery || query);
     },

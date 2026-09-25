@@ -1,4 +1,4 @@
-import { cleanTrackTitle, type YtItem } from "@/lib/youtube";
+import { cleanArtistName, cleanTrackTitle, type YtItem } from "@/lib/youtube";
 
 /**
  * A normalized item in the player queue. Every source (YouTube, imports,
@@ -25,7 +25,7 @@ export function toPlayableYoutube(
   audioUrl: string,
   alternatives: YtItem[] = [],
 ): Playable {
-  const artistName = cleanArtistName(item.artist);
+  const artistName = cleanArtistName(item.artist, item.title);
   return {
     id: item.id,
     title: cleanTrackTitle(item.title),
@@ -40,10 +40,3 @@ export function toPlayableYoutube(
   };
 }
 
-function cleanArtistName(value: string): string {
-  const name = value.replace(/\s+/g, " ").trim();
-  if (!name || /^(?:unknown artist|artist|song|video|single|album|ep|music|official|unknown)$/i.test(name) || !/[\p{L}\p{N}]/u.test(name)) {
-    return "Unknown artist";
-  }
-  return name;
-}

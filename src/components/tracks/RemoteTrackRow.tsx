@@ -1,4 +1,4 @@
-import { cleanTrackTitle, type YtItem } from "@/lib/youtube";
+import { cleanArtistName, cleanTrackTitle, type YtItem } from "@/lib/youtube";
 import type React from "react";
 import { formatTime } from "@/lib/format";
 import { toPlayableYoutube } from "@/lib/playable";
@@ -38,7 +38,7 @@ export function RemoteTrackRow({
   const isCurrent = currentId === item.id;
   const isLiked = liked[item.id] !== undefined;
   const displayTitle = cleanTrackTitle(item.title);
-  const artistName = displayArtistName(item.artist);
+  const artistName = cleanArtistName(item.artist, item.title);
 
   const likeThis = () =>
     toggleLike(item.id, {
@@ -211,10 +211,3 @@ export function RemoteTrackRow({
   );
 }
 
-function displayArtistName(value: string): string {
-  const name = value.replace(/\s+/g, " ").trim();
-  if (!name || /^(?:unknown artist|artist|song|video|single|album|ep|music|official|unknown)$/i.test(name) || !/[\p{L}\p{N}]/u.test(name)) {
-    return "Unknown artist";
-  }
-  return name;
-}

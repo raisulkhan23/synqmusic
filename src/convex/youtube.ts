@@ -134,21 +134,34 @@ function parseLength(raw?: string): number {
 }
 
 const CREATOR_NAME_PLACEHOLDER_RE =
-  /^(?:unknown artist|artist|song|video|single|album|ep|music|official|unknown)$/i;
+  /^(?:unknown artist|artist|song|video|single|album|ep|music|official|unknown|topic|records?|music video|official video|official audio|lyrics?)$/i;
 
 function cleanCreatorName(value: unknown): string {
   if (typeof value !== "string") return "Unknown artist";
-  const name = value.replace(/\s+/g, " ").trim();
+  const name = value
+    .replace(/\s+/g, " ")
+    .replace(/(?:\(|\[)(?:official|topic|audio|video|lyrics?|visualizer|hd|hq)[^\])]*(?:\)|\])/gi, "")
+    .replace(/\s+(?:topic|vevo)$/i, "")
+    .trim();
   if (!name || CREATOR_NAME_PLACEHOLDER_RE.test(name) || !/[\p{L}\p{N}]/u.test(name)) {
     return "Unknown artist";
   }
   return name;
 }
 
-function firstCreatorName(...values: unknown[]): string {
+function firstCreatorName(title: string, ...values: unknown[]): string {
+  const titleKey = normalizeMatchText(title);
   for (const value of values) {
-    const name = cleanCreatorName(value);
-    if (name !== "Unknown artist") return name;
+    const raw = cleanCreatorName(value);
+    if (raw === "Unknown artist") continue;
+    const candidates = raw
+      .split(/\s*(?:[•·|]|\s+[-–—]\s+)\s*/i)
+      .map((part) => part.replace(/^[\s\-–—|·]+|[\s\-–—|·]+$/g, "").trim())
+      .filter(Boolean);
+    for (const candidate of candidates) {
+      if (CREATOR_NAME_PLACEHOLDER_RE.test(candidate) || !/[\p{L}\p{N}]/u.test(candidate)) continue;
+      if (normalizeMatchText(candidate) !== titleKey) return candidate;
+    }
   }
   return "Unknown artist";
 }
@@ -158,7 +171,7 @@ function cleanTrackTitle(value: string): string {
   const suffixPatterns = [
     /\s+[-–—]\s+music\s+for\s+.*$/i,
     /\s+[-–—|]\s*(?:official\s+)?(?:music\s+video|music\s+audio|audio|lyrics?|visualizer)\s*$/i,
-    /\s*[\[(]\s*(?:official\s+)?(?:music\s+video|music\s+audio|audio|lyrics?|visualizer)\s*[\])]\s*$/i,
+    /\s*(?:\(|\[)\s*(?:official\s+)?(?:music\s+video|music\s+audio|audio|lyrics?|visualizer)\s*(?:\)|\])\s*$/i,
   ];
   for (const pattern of suffixPatterns) title = title.replace(pattern, "").trim();
   return title || value.trim();
@@ -205,6 +218,7 @@ function extractSearchResults(data: Record<string, unknown>): YtItem[] {
         (get(vr, ["title", "simpleText"]) as string) ??
         "Untitled";
       const artist = firstCreatorName(
+        title,
         get(vr, ["ownerText", "runs", 0, "text"]),
         get(vr, ["longBylineText", "runs", 0, "text"]),
       );
@@ -296,8 +310,6 @@ export function isMusicTrack(item: YtItem): boolean {
 // video that merely mentions a song can never leak into this list.
 const MUSIC_VIDEO_MARKER_RE =
   /\b(lyrics?|lyrical|lofi|lo-fi|music\s*video|official\s*(audio|video))\b/i;
-const MUSIC_RESULT_MARKER_RE =
-  /\b(music|song|audio|lyrics?|lyrical|lofi|lo-fi|music\s*video|official\s*(audio|video)|remix|instrumental|soundtrack|feat\.?|ft\.?|vinyl|topic|records)\b/i;
 const QUERY_NOISE_RE =
   /\b(song|songs|music|track|video|official|lyrics?|lyrical|lofi|lo-fi|remix|version|full|album|audio)\b/i;
 
@@ -480,6 +492,7 @@ export function parseMusicListItem(renderer: Record<string, unknown>): (YtItem &
       ? "song"
       : "other";
   const artist = firstCreatorName(
+    title,
     metaRuns[artistIndex],
     get(renderer, ["subtitle", "runs", 0, "text"]),
     get(renderer, ["longBylineText", "runs", 0, "text"]),
@@ -519,7 +532,7 @@ function parseMusicCardShelf(card: Record<string, unknown>): YtItem | null {
   // Subtitle runs pack artist • song • year.
   const subtitle = (get(card, ["subtitle", "runs"]) as Array<{ text?: string }> | undefined) ?? [];
   const parts = subtitle.map((r) => r.text ?? "").join("").split("•").map((s) => s.trim());
-  const artist = firstCreatorName(parts[0], parts[1]);
+  const artist = firstCreatorName(title, parts[0], parts[1]);
   const durationText =
     (get(card, ["lengthText", "simpleText"]) as string | undefined) ??
     parts.find((part) => /^\d{1,2}:\d{2}(?::\d{2})?$/.test(part)) ??

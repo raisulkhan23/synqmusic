@@ -10,7 +10,7 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { formatTime } from "@/lib/format";
 import { toPlayableYoutube, type Playable } from "@/lib/playable";
-import type { YtItem } from "@/lib/youtube";
+import { cleanArtistName, type YtItem } from "@/lib/youtube";
 import { cn } from "@/lib/utils";
 import { usePlayerStore } from "@/store/player";
 
@@ -77,7 +77,7 @@ export default function PlaylistDetail() {
     return {
       id: trackId,
       title: snapshot?.title ?? "Playlist song",
-      artist: snapshot?.artist ?? "",
+      artist: cleanArtistName(snapshot?.artist, snapshot?.title),
       thumbnail: snapshot?.coverUrl ?? "",
       duration: snapshot?.duration ?? 0,
       youtubeId: snapshot?.youtubeId,
@@ -98,7 +98,7 @@ export default function PlaylistDetail() {
     const item: YtItem = {
       id: row.youtubeId ?? row.id,
       title: row.title,
-      artist: row.artist || "Unknown artist",
+      artist: cleanArtistName(row.artist, row.title),
       thumbnail: row.thumbnail,
       duration: row.duration,
     };
@@ -172,10 +172,12 @@ export default function PlaylistDetail() {
 
   const shuffleAll = () => {
     if (directQueue.length > 0) {
+      // eslint-disable-next-line react-hooks/purity -- user-triggered shuffle
       const candidate = directQueue[Math.floor(Math.random() * directQueue.length)];
       if (!candidate) return;
       playTrack(candidate, directQueue);
     } else {
+      // eslint-disable-next-line react-hooks/purity -- user-triggered shuffle
       const candidate = rows[Math.floor(Math.random() * rows.length)];
       if (!candidate) return;
       void playRow(candidate);
@@ -354,7 +356,7 @@ function toYtItem(track: PlaylistRow): YtItem {
   return {
     id: track.youtubeId ?? track.id,
     title: track.title,
-    artist: track.artist,
+    artist: cleanArtistName(track.artist, track.title),
     thumbnail: track.thumbnail,
     duration: track.duration,
   };
@@ -364,7 +366,7 @@ function toPlayable(track: PlaylistRow): Playable {
   return {
     id: track.id,
     title: track.title,
-    artistName: track.artist || "Unknown artist",
+    artistName: cleanArtistName(track.artist, track.title),
     albumName: "",
     coverUrl: track.thumbnail,
     duration: track.duration,

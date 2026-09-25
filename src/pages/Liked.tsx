@@ -4,7 +4,7 @@ import { api } from "@/convex/_generated/api";
 import { formatTime } from "@/lib/format";
 import { toPlayableYoutube } from "@/lib/playable";
 import type { Playable } from "@/lib/playable";
-import type { YtItem } from "@/lib/youtube";
+import { cleanArtistName, type YtItem } from "@/lib/youtube";
 import { toast } from "sonner";
 import { usePlayerStore } from "@/store/player";
 import { useAction, useQuery } from "convex/react";
@@ -34,7 +34,7 @@ export default function Liked() {
       const item: YtItem = {
         id: row.trackId,
         title: row.title,
-        artist: row.artistName,
+        artist: cleanArtistName(row.artistName, row.title),
         thumbnail: row.coverUrl,
         duration: row.duration,
       };
@@ -47,7 +47,7 @@ export default function Liked() {
     }
 
     setResolvingRemoteId(row.trackId);
-    searchYt({ query: `${row.title} ${row.artistName.split(",")[0]?.trim() ?? row.artistName}` })
+    searchYt({ query: `${row.title} ${cleanArtistName(row.artistName, row.title)}` })
       .then(({ items }) => {
         const best = items[0];
         if (!best) {
@@ -57,7 +57,7 @@ export default function Liked() {
         const item: YtItem = {
           id: row.trackId,
           title: row.title,
-          artist: row.artistName,
+          artist: cleanArtistName(row.artistName, row.title),
           thumbnail: row.coverUrl,
           duration: row.duration,
         };
@@ -88,7 +88,7 @@ export default function Liked() {
       const item: YtItem = {
         id: row.trackId,
         title: row.title,
-        artist: row.artistName,
+        artist: cleanArtistName(row.artistName, row.title),
         thumbnail: row.coverUrl,
         duration: row.duration,
       };
@@ -176,7 +176,7 @@ export default function Liked() {
                 item={{
                   id: row.trackId,
                   title: row.title,
-                  artist: row.artistName,
+                  artist: cleanArtistName(row.artistName, row.title),
                   thumbnail: row.coverUrl,
                   duration: row.duration,
                 }}

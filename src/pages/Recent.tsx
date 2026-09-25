@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { RemoteTrackRow } from "@/components/tracks/RemoteTrackRow";
 import { toPlayableYoutube, type Playable } from "@/lib/playable";
-import type { YtItem } from "@/lib/youtube";
+import { cleanArtistName, type YtItem } from "@/lib/youtube";
 import { clearSingleHistoryEntry, readPlayHistory, usePlayerStore, type HistoryEntry } from "@/store/player";
 import { Dices, History, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -28,7 +28,7 @@ function entryToItem(h: HistoryEntry): YtItem {
   return {
     id: h.youtubeId ?? h.id,
     title: h.title,
-    artist: h.artistName,
+    artist: cleanArtistName(h.artistName, h.title),
     duration: h.duration,
     thumbnail: h.coverUrl,
   };
@@ -55,7 +55,8 @@ export default function Recent() {
       if (query) {
         const q = query.toLowerCase();
         return (
-          h.title.toLowerCase().includes(q) || h.artistName.toLowerCase().includes(q)
+          h.title.toLowerCase().includes(q) ||
+          cleanArtistName(h.artistName, h.title).toLowerCase().includes(q)
         );
       }
       return true;
@@ -71,7 +72,7 @@ export default function Recent() {
       return;
     }
     setResolvingId(item.id);
-    const primaryArtist = item.artist.split(",")[0]?.trim() ?? item.artist;
+    const primaryArtist = cleanArtistName(item.artist, item.title);
     searchYt({ query: `${item.title} ${primaryArtist}` })
       .then(({ items: found }) => {
         const best = found.find((f) => f.id === item.id) ?? found[0];
@@ -110,7 +111,7 @@ export default function Recent() {
       return;
     }
     setResolvingId(pick.youtubeId ?? pick.id);
-    const primaryArtist = pick.artistName.split(",")[0]?.trim() ?? pick.artistName;
+    const primaryArtist = cleanArtistName(pick.artistName, pick.title);
     searchYt({ query: `${pick.title} ${primaryArtist}` })
       .then(({ items: found }) => {
         const best = found.find((f) => f.id === pick.youtubeId) ?? found[0];
@@ -230,7 +231,7 @@ function snapshotToPlayable(s: HistoryEntry): Playable {
   return {
     id: s.id,
     title: s.title,
-    artistName: s.artistName,
+    artistName: cleanArtistName(s.artistName, s.title),
     albumName: s.albumName,
     coverUrl: s.coverUrl,
     duration: s.duration,

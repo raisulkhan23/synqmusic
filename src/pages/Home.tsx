@@ -5,7 +5,7 @@ import { api } from "@/convex/_generated/api";
 import { greeting } from "@/lib/format";
 import { toPlayableYoutube, type Playable } from "@/lib/playable";
 
-import type { YtItem } from "@/lib/youtube";
+import { cleanArtistName, type YtItem } from "@/lib/youtube";
 import { usePlayerStore, peekResumePosition } from "@/store/player";
 import {
   readLastPlayed,
@@ -108,7 +108,7 @@ export default function Home() {
 
   const playTrending = (item: YtItem) => {
     setResolvingId(item.id);
-    const primaryArtist = item.artist.split(",")[0]?.trim() ?? item.artist;
+    const primaryArtist = cleanArtistName(item.artist, item.title);
     withTimeout(searchYt({ query: `${item.title} ${primaryArtist}` }))
       .then(({ items }) => {
         const best = items[0];
@@ -153,7 +153,7 @@ export default function Home() {
       history.map((h) => ({
         id: h.youtubeId ?? h.id,
         title: h.title,
-        artist: h.artistName,
+        artist: cleanArtistName(h.artistName, h.title),
         duration: h.duration,
         thumbnail: h.coverUrl,
       })),
@@ -178,8 +178,12 @@ export default function Home() {
     return () => window.clearInterval(timer);
   }, []);
   const season = seasonLabel();
-  const continueArtistName = lastPlayed?.artistName.split(",")[0]?.trim() ?? "";
-  const favArtist = mostPlayedItems[0]?.artist.split(",")[0]?.trim();
+  const continueArtistName = lastPlayed
+    ? cleanArtistName(lastPlayed.artistName, lastPlayed.title)
+    : "";
+  const favArtist = mostPlayedItems[0]
+    ? cleanArtistName(mostPlayedItems[0].artist, mostPlayedItems[0].title)
+    : undefined;
 
   const remoteQueries = useMemo(() => {
     const q: Array<{ key: string; query: string; fallback?: string }> = [
@@ -345,7 +349,9 @@ export default function Home() {
   const artistTrendList = useMemo(() => artistTrend(historyItems), [historyItems]);
   const listeningPulse = useMemo(() => {
     const totalPlays = history.reduce((sum, entry) => sum + entry.playCount, 0);
-    const uniqueArtists = new Set(history.map((entry) => entry.artistName)).size;
+    const uniqueArtists = new Set(
+      history.map((entry) => cleanArtistName(entry.artistName, entry.title)),
+    ).size;
     const topRepeat = history.reduce((max, entry) => Math.max(max, entry.playCount), 0);
     const bars = history.slice(0, 7).map((entry) => entry.playCount);
     const maxBar = Math.max(1, ...bars);
@@ -664,7 +670,9 @@ export default function Home() {
                 />
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-semibold">{item.title}</span>
-                  <span className="block truncate text-xs text-muted-foreground">{item.artist}</span>
+                  <span className="block truncate text-xs text-muted-foreground">
+                    {cleanArtistName(item.artist, item.title)}
+                  </span>
                 </span>
               </button>
             ))}
@@ -930,7 +938,7 @@ function snapshotToPlayable(snap: LastPlayedSnapshot): Playable {
   return {
     id: snap.id,
     title: snap.title,
-    artistName: snap.artistName,
+    artistName: cleanArtistName(snap.artistName, snap.title),
     albumName: snap.albumName,
     coverUrl: snap.coverUrl,
     duration: snap.duration,
@@ -973,7 +981,7 @@ function capitalize(s: string): string {
 function artistTrend(items: YtItem[]): Array<{ artist: string; items: YtItem[] }> {
   const byArtist = new Map<string, YtItem[]>();
   for (const item of items) {
-    const key = item.artist || "Unknown artist";
+    const key = cleanArtistName(item.artist, item.title);
     const list = byArtist.get(key) ?? [];
     list.push(item);
     byArtist.set(key, list);

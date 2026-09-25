@@ -17,7 +17,7 @@ import {
 import type { RGB } from "@/lib/covers";
 import { toPlayableYoutube, type Playable } from "@/lib/playable";
 import * as ytEngine from "@/lib/youtubePlayer";
-import { cacheStream, getCachedStream, type YtItem } from "@/lib/youtube";
+import { cacheStream, cleanArtistName, cleanTrackTitle, getCachedStream, type YtItem } from "@/lib/youtube";
 import { api } from "@/convex/_generated/api";
 import { ConvexClient } from "convex/browser";
 import { toast } from "sonner";
@@ -404,7 +404,7 @@ function readSavedQueue(): { items: Playable[]; queueIndex: number } | null {
           source: "youtube",
           youtubeId: p.youtubeId,
           title: p.title,
-          artistName: p.artistName ?? "Unknown artist",
+          artistName: cleanArtistName(p.artistName, p.title),
           albumName: "",
           coverUrl: p.coverUrl ?? "",
           duration: p.duration ?? 0,
@@ -584,7 +584,9 @@ export function readLastPlayed(): LastPlayedSnapshot | null {
     const raw = localStorage.getItem(LAST_PLAYED_KEY);
     if (!raw) return null;
     const snap = JSON.parse(raw) as LastPlayedSnapshot;
-    return snap && snap.id ? snap : null;
+    return snap && snap.id
+      ? { ...snap, artistName: cleanArtistName(snap.artistName, snap.title) }
+      : null;
   } catch {
     return null;
   }
@@ -626,7 +628,12 @@ function loadHistory(): HistoryEntry[] {
   if (historyCache) return historyCache;
   try {
     const raw = localStorage.getItem(HISTORY_KEY);
-    historyCache = raw ? (JSON.parse(raw) as HistoryEntry[]) : [];
+    historyCache = raw
+      ? (JSON.parse(raw) as HistoryEntry[]).map((entry) => ({
+          ...entry,
+          artistName: cleanArtistName(entry.artistName, entry.title),
+        }))
+      : [];
   } catch {
     historyCache = [];
   }
@@ -642,6 +649,12 @@ function recordHistory(track: Playable): void {
   const history = loadHistory();
   const existing = history.find((h) => h.id === track.id);
   if (existing) {
+    existing.title = track.title;
+    existing.artistName = cleanArtistName(track.artistName, track.title);
+    existing.albumName = track.albumName;
+    existing.coverUrl = track.coverUrl;
+    existing.youtubeId = track.youtubeId;
+    existing.audioUrl = track.audioUrl;
     existing.playCount += 1;
     existing.at = Date.now();
     const i = history.indexOf(existing);
@@ -1235,7 +1248,16 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
   wireYoutubeEngine();
   wireMediaKeys();
 
-  const norm = (t: Playable): Playable => t;
+  const norm = (t: Playable): Playable => ({
+    ...t,
+    title: cleanTrackTitle(t.title),
+    artistName: cleanArtistName(t.artistName, t.title),
+    alternatives: t.alternatives?.map((item) => ({
+      ...item,
+      title: cleanTrackTitle(item.title),
+      artist: cleanArtistName(item.artist, item.title),
+    })),
+  });
 
   let lastRemoved: { item: Playable; index: number } | null = null;
   /** Increments on every track load; stale async results are discarded. */
