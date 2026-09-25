@@ -27,6 +27,7 @@ import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import {
   Check,
+  ChevronDown,
   Clock3,
   Database,
   Film,
@@ -36,6 +37,7 @@ import {
   Keyboard,
   Loader2,
   LogOut,
+  Menu,
   Moon,
   Palette,
   Pause,
@@ -96,6 +98,16 @@ const FOCUS_LAYOUTS = [
   { id: "study", name: "Study", detail: "Wide and calm" },
   { id: "work", name: "Work", detail: "Compact and focused" },
   { id: "sleep", name: "Sleep", detail: "Dim with end-of-song stop" },
+] as const;
+
+const SETTINGS_SECTIONS = [
+  ["Profile", "settings-profile", UserRound],
+  ["Playback", "settings-playback", Gauge],
+  ["Audio", "settings-audio", SlidersHorizontal],
+  ["Appearance", "settings-appearance", Palette],
+  ["Personalize", "settings-personalization", Sparkles],
+  ["Shortcuts", "settings-shortcuts", Keyboard],
+  ["Data", "settings-data", Database],
 ] as const;
 
 type FocusLayout = (typeof FOCUS_LAYOUTS)[number]["id"];
@@ -202,6 +214,7 @@ export function SettingsDialog({
     if (isFocusLayout(saved)) return saved;
     return localStorage.getItem("ss.focusMode") === "1" ? "study" : "off";
   });
+  const [jumpMenuOpen, setJumpMenuOpen] = useState(false);
   const [name, setName] = useState("");
   const wallpaperInputRef = useRef<HTMLInputElement>(null);
   const liveWallpaperInputRef = useRef<HTMLInputElement>(null);
@@ -620,7 +633,7 @@ export function SettingsDialog({
 
         <nav
           className={cn(
-            "settings-jump-bar z-30 -mx-1 rounded-2xl border border-white/[0.08] px-1 py-2",
+            "settings-jump-bar relative z-30 -mx-1 rounded-2xl border border-white/[0.08] px-1 py-2",
             pageMode
               ? "!sticky top-3 z-50"
               : "sticky top-0 bg-white/[0.03]",
@@ -628,26 +641,31 @@ export function SettingsDialog({
           aria-label="Settings sections"
         >
           <div className="flex items-center gap-2">
-            <span className="shrink-0 px-1 text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">
+            <span className="hidden shrink-0 px-1 text-[10px] font-semibold tracking-widest text-muted-foreground uppercase sm:block">
               Jump to
             </span>
-            <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto pb-0.5">
-              {([
-                ["Profile", "settings-profile", UserRound],
-                ["Playback", "settings-playback", Gauge],
-                ["Audio", "settings-audio", SlidersHorizontal],
-                ["Appearance", "settings-appearance", Palette],
-                ["Personalize", "settings-personalization", Sparkles],
-                ["Shortcuts", "settings-shortcuts", Keyboard],
-                ["Data", "settings-data", Database],
-              ] as const).map(([label, id, Icon]) => (
+            <button
+              type="button"
+              onClick={() => setJumpMenuOpen((open) => !open)}
+              className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded-xl px-2.5 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-white/[0.05] hover:text-foreground sm:hidden"
+              aria-expanded={jumpMenuOpen}
+              aria-controls="settings-jump-menu"
+            >
+              <span className="inline-flex items-center gap-2">
+                <Menu className="size-3.5" />
+                Jump to a section
+              </span>
+              <ChevronDown className={cn("size-3.5 transition-transform", jumpMenuOpen && "rotate-180")} />
+            </button>
+            <div className="hidden min-w-0 flex-1 gap-1 overflow-x-auto pb-0.5 sm:flex">
+              {SETTINGS_SECTIONS.map(([label, id, Icon]) => (
                 <button
                   key={id}
                   type="button"
-                  onClick={() => jumpToSetting(id as string)}
+                  onClick={() => jumpToSetting(id)}
                   className={cn(
                     "inline-flex shrink-0 items-center gap-1.5 rounded-full border border-transparent px-2.5 py-1.5 text-[11px] font-semibold text-muted-foreground transition-colors hover:border-white/10 hover:bg-white/[0.05] hover:text-foreground",
-                    label === "Shortcuts" && "hidden sm:inline-flex",
+                    label === "Shortcuts" && "hidden md:inline-flex",
                   )}
                 >
                   <Icon className="size-3" />
@@ -656,6 +674,27 @@ export function SettingsDialog({
               ))}
             </div>
           </div>
+          {jumpMenuOpen && (
+            <div
+              id="settings-jump-menu"
+              className="absolute top-[calc(100%+0.5rem)] right-0 left-0 z-[60] grid gap-1 rounded-2xl border border-white/[0.1] bg-[#12151d]/95 p-1.5 shadow-[0_18px_50px_rgba(0,0,0,0.4)] backdrop-blur-xl sm:hidden"
+            >
+              {SETTINGS_SECTIONS.map(([label, id, Icon]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => {
+                    jumpToSetting(id);
+                    setJumpMenuOpen(false);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground transition-colors hover:bg-white/[0.07] hover:text-foreground"
+                >
+                  <Icon className="size-3.5 shrink-0 text-[rgb(var(--tint))]" />
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
         </nav>
 
         {/* profile */}
