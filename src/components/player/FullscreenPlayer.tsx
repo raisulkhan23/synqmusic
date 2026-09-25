@@ -383,6 +383,9 @@ export function FullscreenPlayer() {
   const [wallpaperBlur, setWallpaperBlur] = useState(
     () => localStorage.getItem("ss.wallpaperBlur") !== "0",
   );
+  const [wallpaperEnabled, setWallpaperEnabled] = useState(
+    () => localStorage.getItem("ss.wallpaperEnabled") !== "0",
+  );
   // Video presentation is temporarily disabled while the YouTube overlay is
   // unreliable. Keep the audio player fully functional and use cover art.
   const videoEnabled = false;
@@ -393,8 +396,16 @@ export function FullscreenPlayer() {
     const onWallpaperBlurChange = (event: Event) => {
       setWallpaperBlur((event as CustomEvent<boolean>).detail);
     };
+    const onWallpaperEnabledChange = (event: Event) => {
+      const enabled = (event as CustomEvent<boolean>).detail;
+      if (typeof enabled === "boolean") setWallpaperEnabled(enabled);
+    };
     window.addEventListener("ss:wallpaper-blur-change", onWallpaperBlurChange);
-    return () => window.removeEventListener("ss:wallpaper-blur-change", onWallpaperBlurChange);
+    window.addEventListener("ss:wallpaper-enabled-change", onWallpaperEnabledChange);
+    return () => {
+      window.removeEventListener("ss:wallpaper-blur-change", onWallpaperBlurChange);
+      window.removeEventListener("ss:wallpaper-enabled-change", onWallpaperEnabledChange);
+    };
   }, []);
 
   // True when the current track plays through the YouTube IFrame engine.
@@ -582,7 +593,7 @@ export function FullscreenPlayer() {
       >
         {/* User wallpaper stays behind the maximized player, with the same
             blur preference and glass treatment as the main app. */}
-        {wallpaper && wallpaper !== LIVE_WALLPAPER_MARKER && wallpaper !== IMAGE_WALLPAPER_MARKER && (
+        {wallpaperEnabled && wallpaper && wallpaper !== LIVE_WALLPAPER_MARKER && wallpaper !== IMAGE_WALLPAPER_MARKER && (
           <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden bg-background/35" aria-hidden="true">
             {wallpaperType === "video" ? (
               <video

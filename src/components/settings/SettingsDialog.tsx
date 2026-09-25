@@ -231,6 +231,9 @@ export function SettingsDialog({
       ? saved
       : "";
   });
+  const [wallpaperEnabled, setWallpaperEnabled] = useState(
+    () => localStorage.getItem("ss.wallpaperEnabled") !== "0",
+  );
   const [wallpaperBlurAmount, setWallpaperBlurAmount] = useState(() => {
     const storedAmount = Number(localStorage.getItem("ss.wallpaperBlurAmount"));
     if (Number.isFinite(storedAmount) && storedAmount > 0) {
@@ -1258,6 +1261,19 @@ export function SettingsDialog({
               ))}
             </div>
           </div>
+
+          <ToggleRow
+            label="Personal wallpaper"
+            description="Show your saved image or video behind the app"
+            on={wallpaperEnabled}
+            onToggle={() => {
+              const next = !wallpaperEnabled;
+              setWallpaperEnabled(next);
+              localStorage.setItem("ss.wallpaperEnabled", next ? "1" : "0");
+              window.dispatchEvent(new CustomEvent("ss:wallpaper-enabled-change", { detail: next }));
+              toast(next ? "Personal wallpaper on" : "Personal wallpaper off");
+            }}
+          />
 
           {/* personal wallpaper */}
           <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">

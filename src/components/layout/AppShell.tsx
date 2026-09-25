@@ -116,6 +116,9 @@ export function AppShell() {
     return localStorage.getItem("ss.focusMode") === "1" ? "study" : "off";
   });
   const focusMode = focusLayout !== "off";
+  const [wallpaperEnabled, setWallpaperEnabled] = useState(
+    () => localStorage.getItem("ss.wallpaperEnabled") !== "0",
+  );
   const [wallpaperBlurAmount, setWallpaperBlurAmount] = useState(() => {
     const storedAmount = Number(localStorage.getItem("ss.wallpaperBlurAmount"));
     if (Number.isFinite(storedAmount) && storedAmount > 0) {
@@ -187,14 +190,22 @@ export function AppShell() {
   }, [sceneTheme]);
 
   useEffect(() => {
+    const onWallpaperEnabledChange = (event: Event) => {
+      const enabled = (event as CustomEvent<boolean>).detail;
+      if (typeof enabled === "boolean") setWallpaperEnabled(enabled);
+    };
     const onWallpaperBlurChange = (event: Event) => {
       const nextAmount = (event as CustomEvent<number>).detail;
       if (typeof nextAmount === "number" && Number.isFinite(nextAmount)) {
         setWallpaperBlurAmount(Math.max(0, Math.min(MAX_WALLPAPER_BLUR_AMOUNT, nextAmount)));
       }
     };
+    window.addEventListener("ss:wallpaper-enabled-change", onWallpaperEnabledChange);
     window.addEventListener("ss:wallpaper-blur-change", onWallpaperBlurChange);
-    return () => window.removeEventListener("ss:wallpaper-blur-change", onWallpaperBlurChange);
+    return () => {
+      window.removeEventListener("ss:wallpaper-enabled-change", onWallpaperEnabledChange);
+      window.removeEventListener("ss:wallpaper-blur-change", onWallpaperBlurChange);
+    };
   }, []);
 
   useEffect(() => {
@@ -513,6 +524,7 @@ export function AppShell() {
       ref={shellRef}
       className={cn(
         "theme-surface relative isolate flex h-dvh overflow-hidden bg-background text-foreground",
+        compactMode && "compact-shell",
         focusLayout === "study" && "focus-study",
         focusLayout === "work" && "focus-work",
         focusLayout === "sleep" && "focus-sleep",
@@ -558,7 +570,7 @@ export function AppShell() {
           <div ref={rippleLayerRef} className="touch-ripple-layer pointer-events-none absolute inset-0 -z-[4] overflow-hidden" aria-hidden="true" />
         </>
       )}
-      {wallpaper && wallpaper !== LIVE_WALLPAPER_MARKER && wallpaper !== IMAGE_WALLPAPER_MARKER && (
+      {wallpaperEnabled && wallpaper && wallpaper !== LIVE_WALLPAPER_MARKER && wallpaper !== IMAGE_WALLPAPER_MARKER && (
         <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden bg-background/35" aria-hidden="true">
           {wallpaperType === "video" ? (
             <video
@@ -649,7 +661,7 @@ export function AppShell() {
           <div
             className={cn(
               "relative mx-auto w-full max-w-6xl px-4 pt-6 pb-10 sm:px-6 lg:px-8 lg:pt-8",
-              compactMode && "max-w-7xl",
+              compactMode && "max-w-5xl",
               focusLayout === "study" && "max-w-7xl",
               focusLayout === "work" && "max-w-5xl",
               focusLayout === "sleep" && "max-w-4xl",

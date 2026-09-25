@@ -82,6 +82,7 @@ export default function Home() {
   const likedCount = usePlayerStore((s) => Object.keys(s.liked).length);
   const likedLoaded = usePlayerStore((s) => s.likedLoaded);
   const playlists = useQuery(api.playlists.myPlaylists);
+  const listeningStats = useQuery(api.history.listeningStats);
   const spotifyChart = useAction(api.spotify.spotifyChart);
   const searchYt = useAction(api.youtube.searchYoutube);
 
@@ -346,21 +347,49 @@ export default function Home() {
 
   const artistTrendList = useMemo(() => artistTrend(historyItems), [historyItems]);
   const listeningPulse = useMemo(() => {
+    // Use signed-in server stats as the source of truth so the pulse remains
+    // stable when navigating between Home and other routes. Local history is
+    // retained only as a fallback while the query is loading.
+    if (listeningStats) {
+      const bars = listeningStats.dailyActivity.slice(-7).map((day) => day.plays);
+      const safeBars = bars.length > 0 ? bars : [1, 1, 1, 1, 1, 1, 1];
+      const uniqueArtists = listeningStats.uniqueArtists;
+      const topRepeat = listeningStats.topTracks.reduce(
+        (max, track) => Math.max(max, track.playCount),
+        0,
+      );
+      return {
+        totalPlays: listeningStats.totalPlays,
+        uniqueArtists,
+        topRepeat,
+        bars: safeBars,
+        maxBar: Math.max(1, ...safeBars),
+      };
+    }
+
     const totalPlays = history.reduce((sum, entry) => sum + entry.playCount, 0);
     const uniqueArtists = new Set(
       history.map((entry) => cleanArtistName(entry.artistName, entry.title)),
     ).size;
     const topRepeat = history.reduce((max, entry) => Math.max(max, entry.playCount), 0);
-    const bars = history.slice(0, 7).map((entry) => entry.playCount);
-    const maxBar = Math.max(1, ...bars);
+    const dayMs = 24 * 60 * 60 * 1000;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const bars = Array.from({ length: 7 }, (_, index) => {
+      const start = today.getTime() - (6 - index) * dayMs;
+      return history.reduce(
+        (count, entry) => count + (entry.at >= start && entry.at < start + dayMs ? entry.playCount : 0),
+        0,
+      );
+    });
     return {
       totalPlays,
       uniqueArtists,
       topRepeat,
-      bars: bars.length > 0 ? bars : [1, 1, 1, 1, 1, 1, 1],
-      maxBar,
+      bars: bars.some((count) => count > 0) ? bars : [1, 1, 1, 1, 1, 1, 1],
+      maxBar: Math.max(1, ...bars),
     };
-  }, [history]);
+  }, [history, listeningStats]);
 
   return (
     <div className="flex flex-col gap-10">
@@ -441,9 +470,8 @@ export default function Home() {
         ))}
       </section>
 
-      {/* Listening pulse — a compact, responsive personal dashboard. It uses
-          local listening history only, so it never blocks or competes with
-          the live recommendation shelves below. */}
+      {/* Listening pulse — server-backed for signed-in listeners, with local
+          history as an offline/loading fallback. */}
       <section aria-labelledby="listening-pulse-title">
         <div className="glass-card relative overflow-hidden rounded-2xl p-4 sm:p-5">
           <div className="pointer-events-none absolute -top-24 -right-16 size-56 rounded-full bg-[rgb(var(--tint)_/_0.1)] blur-3xl" />

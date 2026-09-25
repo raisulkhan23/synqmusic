@@ -274,6 +274,23 @@ html,
     linear-gradient(90deg, transparent calc(50% - 1px), rgb(var(--tint) / 0.018) 50%, transparent calc(50% + 1px)),
     var(--background);
 }
+/* Compact mode reduces the canvas and player chrome without hiding controls. */
+.compact-shell main > div {
+  padding-top: 1rem !important;
+  padding-bottom: 1.5rem !important;
+}
+.compact-shell main > div > section {
+  margin-bottom: 1rem;
+}
+.compact-shell .mobile-player {
+  max-width: 42rem !important;
+}
+@media (min-width: 1024px) {
+  .compact-shell .mobile-player {
+    max-width: 46rem !important;
+  }
+}
+
 /* Work sessions trade visual breathing room for a denser, desktop-first
    listening canvas while keeping the sidebar, search, and queue reachable. */
 .focus-work main > div {

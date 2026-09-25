@@ -1381,7 +1381,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
         void ytResolve(track.youtubeId).then((url) => {
           if (!url) return;
           const state = usePlayerStore.getState();
-          if (state.current?.youtubeId !== track.youtubeId) return;
+          if (state.current?.youtubeId !== track.youtubeId || !state.current) return;
           swapToFilteredStream(state.current, state.currentTime);
         });
         return;
@@ -1403,9 +1403,9 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
         .then(() => {
           // The engine init is async — if the user picked another song while
           // this one was initializing, make sure this load never wins.
-          if (seq !== loadSeq) ytEngine.pause();
-        })
-        .catch(() => {
+        if (seq !== loadSeq) ytEngine.pause();
+      })
+      .catch(() => {
           clearYtLoadWatchdog();
           if (seq !== loadSeq) return;
             set({ isPlaying: false, isBuffering: false, errorNonce: get().errorNonce + 1 });

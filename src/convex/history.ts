@@ -179,6 +179,29 @@ export const listeningStats = query({
       .query("playHistory")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
+    // playHistory is an upsert-per-track summary. It cannot represent the
+    // activity chart correctly because a replay moves that track's single
+    // playedAt timestamp to the newest play. Use the append-only event log
+    // for every time-based statistic, with a legacy fallback for old data.
+    const events = await ctx.db
+      .query("playEvents")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    const eventCounts = new Map<string, number>();
+    for (const event of events) {
+      eventCounts.set(event.trackId, (eventCounts.get(event.trackId) ?? 0) + 1);
+    }
+    // Include any legacy summary plays that predate the append-only event log.
+    // Without this bridge, the first event after deployment would make all
+    // older plays disappear from totals and charts.
+    const legacyPlayedAt = rows.flatMap((row) => {
+      const legacyCount = Math.max(0, row.playCount - (eventCounts.get(row.trackId) ?? 0));
+      return Array.from({ length: legacyCount }, () => row.playedAt);
+    });
+    const playedAt = [
+      ...events.map((event) => event.playedAt),
+      ...legacyPlayedAt,
+    ];
 
     if (rows.length === 0) {
       return {
@@ -186,6 +209,7 @@ export const listeningStats = query({
         uniqueSongs: 0,
         totalSeconds: 0,
         topTracks: [],
+        uniqueArtists: 0,
         dailyActivity: [],
         monthlyActivity: [],
         streak: 0,
@@ -193,13 +217,19 @@ export const listeningStats = query({
       };
     }
 
-    const totalPlays = rows.reduce((sum, r) => sum + r.playCount, 0);
+    const totalPlays = playedAt.length;
     const totalSeconds = rows.reduce(
       (sum, r) => sum + (r.duration ?? 0) * r.playCount,
       0,
     );
 
     // Top tracks by play count, with self-contained display info.
+    const uniqueArtists = new Set(
+      rows
+        .map((row) => row.artistName?.trim() || row.title?.trim() || "Unknown artist")
+        .filter(Boolean),
+    ).size;
+
     const topTracks = [...rows]
       .sort((a, b) => b.playCount - a.playCount)
       .slice(0, 10)
@@ -221,9 +251,7 @@ export const listeningStats = query({
     for (let i = 29; i >= 0; i--) {
       const dayStart = today.getTime() - i * dayMs;
       const next = dayStart + dayMs;
-      const plays = rows
-        .filter((r) => r.playedAt >= dayStart && r.playedAt < next)
-        .reduce((sum, r) => sum + r.playCount, 0);
+      const plays = playedAt.filter((at) => at >= dayStart && at < next).length;
       const d = new Date(dayStart);
       daily.push({
         day: d.toISOString().slice(0, 10),
@@ -238,14 +266,12 @@ export const listeningStats = query({
       const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
       const start = d.getTime();
       const end = new Date(d.getFullYear(), d.getMonth() + 1, 1).getTime();
-      const plays = rows
-        .filter((r) => r.playedAt >= start && r.playedAt < end)
-        .reduce((sum, r) => sum + r.playCount, 0);
+      const plays = playedAt.filter((at) => at >= start && at < end).length;
       monthly.push({ month: d.toLocaleDateString(undefined, { month: "short", year: "2-digit" }), plays });
     }
 
     // Listening streak — consecutive days (ending today or yesterday) with plays.
-    const playedDaySet = new Set(rows.map((r) => new Date(r.playedAt).setHours(0, 0, 0, 0)));
+    const playedDaySet = new Set(playedAt.map((at) => new Date(at).setHours(0, 0, 0, 0)));
     let streak = 0;
     const todayStart = today.getTime();
     const startOffset = playedDaySet.has(todayStart) ? 0 : 1;
@@ -256,8 +282,8 @@ export const listeningStats = query({
 
     // Most active listening hours (0-23 buckets).
     const hourBuckets = new Array(24).fill(0) as number[];
-    for (const r of rows) {
-      hourBuckets[new Date(r.playedAt).getHours()] += r.playCount;
+    for (const at of playedAt) {
+      hourBuckets[new Date(at).getHours()] += 1;
     }
 
     return {
@@ -265,6 +291,7 @@ export const listeningStats = query({
       uniqueSongs: rows.length,
       totalSeconds,
       topTracks,
+      uniqueArtists,
       dailyActivity: daily,
       monthlyActivity: monthly,
       streak,
