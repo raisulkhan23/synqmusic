@@ -65,7 +65,6 @@ export function QueuePanel() {
   const addToQueue = usePlayerStore((s) => s.addToQueue);
   const extendQueueWithSimilar = usePlayerStore((s) => s.extendQueueWithSimilar);
   const createPlaylist = useMutation(api.playlists.create);
-  const addPlaylistTrack = useMutation(api.playlists.addTrack);
 
   const upcoming = queueIndex >= 0 ? queue.slice(queueIndex + 1) : queue;
   // Reorder needs UNIQUE values — the queue can legitimately contain the same
@@ -105,16 +104,25 @@ export function QueuePanel() {
       toast.error("The queue is empty");
       return;
     }
-    // Remote likes are stored as snapshots — save ids that playlists can
-    // resolve; YouTube ids play via search resolution.
-    const ids = queue.map((t) => t.id);
+    // Store metadata with the ids in one mutation. Saving ids alone made the
+    // playlist render placeholders and forced playback to search for a raw
+    // YouTube id, which commonly returned no result.
     try {
       const name = `Queue · ${new Date().toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
-      const playlistId = await createPlaylist({ name, description: "Saved from your queue" });
-      for (const trackId of ids) {
-        await addPlaylistTrack({ playlistId, trackId });
-      }
-      toast.success(`Saved ${ids.length} songs as "${name}"`);
+      await createPlaylist({
+        name,
+        description: "Saved from your queue",
+        tracks: queue.map((track) => ({
+          id: track.id,
+          title: track.title,
+          artist: track.artistName,
+          album: track.albumName || undefined,
+          coverUrl: track.coverUrl,
+          duration: Number.isFinite(track.duration) ? track.duration : 0,
+          youtubeId: track.youtubeId,
+        })),
+      });
+      toast.success(`Saved ${queue.length} songs as "${name}"`);
     } catch {
       toast.error("Couldn't save the queue as a playlist");
     }

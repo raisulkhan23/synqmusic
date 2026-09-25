@@ -1,16 +1,28 @@
-import { useNavigate, useParams, Link } from "react-router";
+import { useState } from "react";
+import { Link, useNavigate, useParams } from "react-router";
+import { useAction, useMutation, useQuery } from "convex/react";
+import { ListMusic, Play, Search as SearchIcon, Shuffle, Trash2, X } from "lucide-react";
+import { toast } from "sonner";
+
+import { AddToPlaylistMenu } from "@/components/playlists/AddToPlaylistMenu";
 import { RemoteTrackRow } from "@/components/tracks/RemoteTrackRow";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { formatTime } from "@/lib/format";
-import { toPlayableYoutube } from "@/lib/playable";
-import { useAction, useMutation, useQuery } from "convex/react";
-import { ListMusic, Play, Search as SearchIcon, Shuffle, Trash2 } from "lucide-react";
-import { useState } from "react";
-import { cn } from "@/lib/utils";
-import { toast } from "sonner";
-import { usePlayerStore } from "@/store/player";
+import { toPlayableYoutube, type Playable } from "@/lib/playable";
 import type { YtItem } from "@/lib/youtube";
+import { cn } from "@/lib/utils";
+import { usePlayerStore } from "@/store/player";
+
+interface PlaylistRow {
+  id: string;
+  title: string;
+  artist: string;
+  thumbnail: string;
+  duration: number;
+  youtubeId?: string;
+  hasSnapshot: boolean;
+}
 
 export default function PlaylistDetail() {
   const { id } = useParams<{ id: string }>();
@@ -19,6 +31,8 @@ export default function PlaylistDetail() {
     playlistId: id as Id<"playlists">,
   });
   const removePlaylist = useMutation(api.playlists.remove);
+  const removeTrack = useMutation(api.playlists.removeTrack);
+  const addTrack = useMutation(api.playlists.addTrack);
   const searchYt = useAction(api.youtube.searchYoutube);
   const playTrack = usePlayerStore((s) => s.playTrack);
 
@@ -55,60 +69,117 @@ export default function PlaylistDetail() {
     );
   }
 
-  // Rows are lightweight snapshots derived from the stored track ids. Track
-  // titles resolve at play time (the stored id is the YouTube video id where
-  // known; the first search hit covers the rest).
-  const rows = playlist.trackIds.map((trackId) => ({
-    id: trackId,
-    title: "",
-    artist: "",
-    thumbnail: "",
-    duration: 0,
-  }));
-  const total = 0;
-  const firstRow = rows[0];
-
-  // In-playlist search — no scrolling through 500 songs. (Titles are resolved
-  // lazily, so this filter matches once a song has been resolved this session.)
-  const visibleTracks = rows
-    .map((track, i) => ({ track, i }))
+  const snapshots = new Map(
+    (playlist.trackSnapshots ?? []).map((snapshot) => [snapshot.id, snapshot]),
+  );
+  const rows: PlaylistRow[] = playlist.trackIds.map((trackId) => {
+    const snapshot = snapshots.get(trackId);
+    return {
+      id: trackId,
+      title: snapshot?.title ?? "Playlist song",
+      artist: snapshot?.artist ?? "",
+      thumbnail: snapshot?.coverUrl ?? "",
+      duration: snapshot?.duration ?? 0,
+      youtubeId: snapshot?.youtubeId,
+      hasSnapshot: snapshot !== undefined,
+    };
+  });
+  const total = rows.reduce((sum, row) => sum + (Number.isFinite(row.duration) ? row.duration : 0), 0);
+  const query = filter.trim().toLocaleLowerCase();
+  const visibleRows = rows
+    .map((track, index) => ({ track, index }))
     .filter(({ track }) => {
-      const q = filter.trim().toLowerCase();
-      return !q || track.title.toLowerCase().includes(q);
+      if (!query) return true;
+      return `${track.title} ${track.artist}`.toLocaleLowerCase().includes(query);
     });
 
-  const playRow = (row: (typeof rows)[number]) => {
-    if (resolvingId) return;
-    setResolvingId(row.id);
-    searchYt({ query: row.title || row.id })
-      .then(({ items }) => {
-        const best = items.find((f) => f.id === row.id) ?? items[0];
-        if (!best) {
-          toast.error(`Couldn't load this song — try again`);
-          return;
-        }
-        const playable = toPlayableYoutube(
-          best,
-          `https://youtu.be/${best.id}`,
-          items.slice(1),
-        );
-        playTrack(playable);
-      })
-      .catch(() => toast.error("Playback failed — try again in a moment"))
-      .finally(() => setResolvingId(null));
+  const directPlayable = (row: PlaylistRow): Playable | null => {
+    if (!row.hasSnapshot) return null;
+    const item: YtItem = {
+      id: row.youtubeId ?? row.id,
+      title: row.title,
+      artist: row.artist || "Unknown artist",
+      thumbnail: row.thumbnail,
+      duration: row.duration,
+    };
+    return toPlayableYoutube(item, `https://youtu.be/${item.id}`);
   };
 
-  const playAll = () => {
-    if (!firstRow) return;
-    playRow(firstRow);
+  const directQueue = rows.flatMap((row) => {
+    const playable = directPlayable(row);
+    return playable ? [playable] : [];
+  });
+
+  const resolveLegacyRow = async (row: PlaylistRow): Promise<Playable | null> => {
+    const direct = directPlayable(row);
+    if (direct) return direct;
+    const searchQuery = row.hasSnapshot
+      ? `${row.title} ${row.artist}`.trim()
+      : row.id;
+    const { items } = await searchYt({ query: searchQuery });
+    const best =
+      items.find((item) => item.id === row.youtubeId || item.id === row.id) ??
+      items.find((item) => item.title.toLocaleLowerCase() === row.title.toLocaleLowerCase()) ??
+      items[0];
+    return best
+      ? toPlayableYoutube(best, `https://youtu.be/${best.id}`, items.filter((item) => item.id !== best.id))
+      : null;
+  };
+
+  const playRow = async (row: PlaylistRow) => {
+    if (resolvingId) return;
+    setResolvingId(row.id);
+    try {
+      const playable = await resolveLegacyRow(row);
+      if (!playable) {
+        toast.error(`Couldn't find a playable version of "${row.title}"`);
+        return;
+      }
+      const queue = directQueue.length > 0 ? directQueue : [playable];
+      playTrack(playable, queue);
+    } catch {
+      toast.error("Playback failed — try again in a moment");
+    } finally {
+      setResolvingId(null);
+    }
+  };
+
+  const playAll = async () => {
+    if (rows.length === 0 || resolvingId) return;
+    setResolvingId("__all__");
+    try {
+      const resolved: Playable[] = [];
+      // New playlists are fully playable without a network round-trip. Only
+      // legacy id-only rows need the compatibility resolver.
+      for (const row of rows) {
+        const playable = await resolveLegacyRow(row);
+        if (playable) resolved.push(playable);
+      }
+      if (resolved.length === 0) {
+        toast.error("None of these tracks could be resolved right now");
+        return;
+      }
+      playTrack(resolved[0], resolved);
+      if (resolved.length < rows.length) {
+        toast.warning(`Playing ${resolved.length} of ${rows.length} available tracks`);
+      }
+    } catch {
+      toast.error("Couldn't start this playlist — try again");
+    } finally {
+      setResolvingId(null);
+    }
   };
 
   const shuffleAll = () => {
-    if (rows.length === 0) return;
-    // Math.random inside a click handler is fine — it's not during render.
-    // eslint-disable-next-line react-hooks/purity
-    const pick = rows[Math.floor(Math.random() * rows.length)];
-    playRow(pick);
+    if (directQueue.length > 0) {
+      const candidate = directQueue[Math.floor(Math.random() * directQueue.length)];
+      if (!candidate) return;
+      playTrack(candidate, directQueue);
+    } else {
+      const candidate = rows[Math.floor(Math.random() * rows.length)];
+      if (!candidate) return;
+      void playRow(candidate);
+    }
     if (!usePlayerStore.getState().shuffle) usePlayerStore.getState().toggleShuffle();
     toast.success("Shuffling the playlist");
   };
@@ -123,9 +194,38 @@ export default function PlaylistDetail() {
     }
   };
 
+  const handleRemove = async (row: PlaylistRow) => {
+    try {
+      await removeTrack({ playlistId: playlist._id, trackId: row.id, detail: row.title });
+      toast("Removed from playlist", {
+        action: {
+          label: "Undo",
+          onClick: () => {
+            void addTrack({
+              playlistId: playlist._id,
+              trackId: row.id,
+              detail: row.title,
+              track: row.hasSnapshot
+                ? {
+                    id: row.id,
+                    title: row.title,
+                    artist: row.artist,
+                    coverUrl: row.thumbnail,
+                    duration: row.duration,
+                    youtubeId: row.youtubeId,
+                  }
+                : undefined,
+            }).catch(() => toast.error("Couldn't restore the song"));
+          },
+        },
+      });
+    } catch {
+      toast.error("Couldn't remove the song");
+    }
+  };
+
   return (
     <div className="flex flex-col gap-6">
-      {/* header */}
       <div className="flex flex-col gap-5 sm:flex-row sm:items-end">
         <div className="flex size-40 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-white/[0.09] to-white/[0.03] shadow-2xl ring-1 ring-white/10 sm:size-48">
           <ListMusic className="size-10 text-muted-foreground/50" />
@@ -137,21 +237,24 @@ export default function PlaylistDetail() {
           <h1 className="mt-1 truncate font-display text-3xl font-bold tracking-tight sm:text-4xl">
             {playlist.name}
           </h1>
+          {playlist.description && (
+            <p className="mt-2 max-w-xl text-sm text-muted-foreground">{playlist.description}</p>
+          )}
           <p className="mt-2 text-sm text-muted-foreground">
-            {playlist.trackIds.length}{" "}
-            {playlist.trackIds.length === 1 ? "song" : "songs"}
+            {rows.length} {rows.length === 1 ? "song" : "songs"}
             {total > 0 && ` · ${formatTime(total)}`}
           </p>
-          <div className="mt-4 flex items-center gap-3">
+          <div className="mt-4 flex flex-wrap items-center gap-3">
             <button
               type="button"
-              onClick={playAll}
-              className="flex items-center gap-2 rounded-full bg-[rgb(var(--tint))] px-5 py-2.5 text-sm font-semibold text-black shadow-[0_8px_30px_rgb(var(--tint)/0.35)] transition-all hover:scale-[1.03] active:scale-95"
+              onClick={() => void playAll()}
+              disabled={resolvingId !== null}
+              className="flex items-center gap-2 rounded-full bg-[rgb(var(--tint))] px-5 py-2.5 text-sm font-semibold text-black shadow-[0_8px_30px_rgb(var(--tint)/0.35)] transition-all hover:scale-[1.03] active:scale-95 disabled:opacity-60"
             >
               <Play className="size-4 fill-current" />
-              Play all
+              {resolvingId === "__all__" ? "Loading…" : "Play all"}
             </button>
-            {playlist.trackIds.length > 0 && (
+            {rows.length > 0 && (
               <>
                 <button
                   type="button"
@@ -176,33 +279,53 @@ export default function PlaylistDetail() {
         </div>
       </div>
 
-      {/* tracks */}
       {rows.length > 0 ? (
         <div className="flex flex-col gap-0.5">
-          {rows.length > 20 && (
+          {rows.length > 5 && (
             <div className="relative mb-3 max-w-sm">
               <SearchIcon className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
               <input
                 value={filter}
-                onChange={(e) => setFilter(e.target.value)}
+                onChange={(event) => setFilter(event.target.value)}
                 placeholder="Search in playlist…"
+                aria-label="Search in playlist"
                 className="h-10 w-full rounded-full border border-white/10 bg-white/[0.05] pr-4 pl-9 text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-[rgb(var(--tint)_/_0.6)] focus:outline-none"
               />
             </div>
           )}
-          {visibleTracks.length === 0 ? (
+          {visibleRows.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
               No songs in this playlist match "{filter}".
             </p>
           ) : (
-            visibleTracks.map(({ track, i }) => (
+            visibleRows.map(({ track, index }) => (
               <RemoteTrackRow
-                key={`${track.id}-${i}`}
+                key={`${track.id}-${index}`}
                 item={toYtItem(track)}
-                index={i + 1}
+                index={index + 1}
                 resolving={resolvingId === track.id}
-                onPlay={(it) => playResolved(it, i)}
+                onPlay={() => void playRow(track)}
                 source="youtube"
+                trailing={
+                  <div className="flex items-center gap-1">
+                    <AddToPlaylistMenu
+                      track={toPlayable(track)}
+                      className="opacity-100 lg:opacity-0 lg:group-hover:opacity-100 lg:focus:opacity-100"
+                    />
+                    <button
+                      type="button"
+                      aria-label={`Remove ${track.title} from playlist`}
+                      title="Remove from playlist"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void handleRemove(track);
+                      }}
+                      className="rounded-full p-1.5 text-muted-foreground/70 transition-colors hover:bg-white/10 hover:text-foreground"
+                    >
+                      <X className="size-4" />
+                    </button>
+                  </div>
+                }
               />
             ))
           )}
@@ -225,33 +348,30 @@ export default function PlaylistDetail() {
       <ChangeHistory playlistId={playlist._id} />
     </div>
   );
+}
 
-  function toYtItem(track: { id: string; title: string; artist: string; thumbnail: string; duration: number }): YtItem {
-    return {
-      id: track.id,
-      title: track.title || "Playlist song",
-      artist: track.artist || "",
-      thumbnail: track.thumbnail,
-      duration: track.duration,
-    };
-  }
+function toYtItem(track: PlaylistRow): YtItem {
+  return {
+    id: track.youtubeId ?? track.id,
+    title: track.title,
+    artist: track.artist,
+    thumbnail: track.thumbnail,
+    duration: track.duration,
+  };
+}
 
-  function playResolved(item: YtItem, index: number) {
-    const row = rows[index];
-    if (resolvingId) return;
-    setResolvingId(item.id);
-    searchYt({ query: row.title || item.id })
-      .then(({ items }) => {
-        const best = items.find((f) => f.id === item.id) ?? items.find((f) => f.title === item.title) ?? items[0];
-        if (!best) {
-          toast.error("Couldn't load this song — try again");
-          return;
-        }
-        playTrack(toPlayableYoutube(best, `https://youtu.be/${best.id}`, items.slice(1)));
-      })
-      .catch(() => toast.error("Playback failed — try again in a moment"))
-      .finally(() => setResolvingId(null));
-  }
+function toPlayable(track: PlaylistRow): Playable {
+  return {
+    id: track.id,
+    title: track.title,
+    artistName: track.artist || "Unknown artist",
+    albumName: "",
+    coverUrl: track.thumbnail,
+    duration: track.duration,
+    audioUrl: `https://youtu.be/${track.youtubeId ?? track.id}`,
+    source: "youtube",
+    youtubeId: track.youtubeId ?? track.id,
+  };
 }
 
 const KIND_LABELS: Record<string, { text: string; className: string }> = {
@@ -270,9 +390,7 @@ function ChangeHistory({ playlistId }: { playlistId: Id<"playlists"> }) {
   return (
     <section className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-4">
       <div className="flex items-center justify-between">
-        <h2 className="font-display text-sm font-bold tracking-tight">
-          Recent activity
-        </h2>
+        <h2 className="font-display text-sm font-bold tracking-tight">Recent activity</h2>
         {events.length > 3 && (
           <button
             type="button"
@@ -284,18 +402,15 @@ function ChangeHistory({ playlistId }: { playlistId: Id<"playlists"> }) {
         )}
       </div>
       <ul className="mt-2 space-y-1.5">
-        {shown.map((e) => {
-          const kind = KIND_LABELS[e.kind] ?? {
-            text: e.kind,
-            className: "text-muted-foreground",
-          };
+        {shown.map((event) => {
+          const kind = KIND_LABELS[event.kind] ?? { text: event.kind, className: "text-muted-foreground" };
           return (
-            <li key={e._id} className="text-xs text-muted-foreground">
+            <li key={event._id} className="text-xs text-muted-foreground">
               <span className={cn("font-semibold", kind.className)}>{kind.text}</span>{" "}
-              {e.detail ? <span className="text-foreground">{e.detail}</span> : null}
-              {e.kind === "renamed" && e.detail ? ` (was "${e.detail}")` : null}
+              {event.detail ? <span className="text-foreground">{event.detail}</span> : null}
+              {event.kind === "renamed" && event.detail ? ` (was "${event.detail}")` : null}
               <span className="ml-2 opacity-60">
-                {new Date(e.at).toLocaleString(undefined, {
+                {new Date(event.at).toLocaleString(undefined, {
                   month: "short",
                   day: "numeric",
                   hour: "numeric",

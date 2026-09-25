@@ -64,6 +64,21 @@ const schema = defineSchema(
       name: v.string(),
       description: v.optional(v.string()),
       trackIds: v.array(v.string()),
+      // Durable display/playback metadata. Optional so existing playlists stay
+      // valid; new saves never rely on a fragile id-only lookup later.
+      trackSnapshots: v.optional(
+        v.array(
+          v.object({
+            id: v.string(),
+            title: v.string(),
+            artist: v.string(),
+            album: v.optional(v.string()),
+            coverUrl: v.string(),
+            duration: v.number(),
+            youtubeId: v.optional(v.string()),
+          }),
+        ),
+      ),
       createdAt: v.number(),
       updatedAt: v.number(),
     }).index("by_user", ["userId"]),

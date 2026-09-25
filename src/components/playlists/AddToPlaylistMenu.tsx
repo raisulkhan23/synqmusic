@@ -27,15 +27,32 @@ export function AddToPlaylistMenu({
   const addTrack = useMutation(api.playlists.addTrack);
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  const handleAdd = (playlistId: Id<"playlists">, name: string) => {
+  const handleAdd = async (playlistId: Id<"playlists">, name: string) => {
     // Duplicate detection: warn if the song is already in this playlist.
     const target = playlists?.find((p) => p._id === playlistId);
     if (target?.trackIds.includes(track.id)) {
       toast.warning(`"${track.title}" is already in ${name}`);
       return;
     }
-    void addTrack({ playlistId, trackId: track.id, detail: track.title });
-    toast.success(`Added to ${name}`);
+    try {
+      await addTrack({
+        playlistId,
+        trackId: track.id,
+        detail: track.title,
+        track: {
+          id: track.id,
+          title: track.title,
+          artist: track.artistName,
+          album: track.albumName || undefined,
+          coverUrl: track.coverUrl,
+          duration: Number.isFinite(track.duration) ? track.duration : 0,
+          youtubeId: track.youtubeId,
+        },
+      });
+      toast.success(`Added to ${name}`);
+    } catch {
+      toast.error(`Couldn't add "${track.title}" to ${name}`);
+    }
   };
 
   return (
@@ -61,7 +78,7 @@ export function AddToPlaylistMenu({
             playlists.slice(0, 10).map((p) => (
               <DropdownMenuItem
                 key={p._id}
-                onSelect={() => handleAdd(p._id, p.name)}
+                onSelect={() => void handleAdd(p._id, p.name)}
                 className="pr-8"
               >
                 <ListMusic className="size-4" />
@@ -83,7 +100,7 @@ export function AddToPlaylistMenu({
       <PlaylistDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        onCreate={(id) => handleAdd(id, "new playlist")}
+        onCreate={(id) => void handleAdd(id, "new playlist")}
       />
     </>
   );

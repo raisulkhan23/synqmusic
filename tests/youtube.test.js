@@ -140,6 +140,57 @@ describe("primary music result filtering", () => {
       ),
     ).toBe(false);
   });
+
+  test("accepts a matching markerless music upload during fallback search", () => {
+    expect(
+      isPrimaryMusicResult(
+        {
+          id: "music-markerless",
+          title: "Weightless",
+          artist: "Marconi Union",
+          duration: 481,
+          thumbnail: "",
+        },
+        "weightless marconi union",
+      ),
+    ).toBe(true);
+  });
+
+  test("does not reject valid songs whose titles use broad gaming or sports words", () => {
+    for (const item of [
+      {
+        id: "army-song",
+        title: "Army",
+        artist: "Gaming outfit",
+        duration: 204,
+        thumbnail: "",
+      },
+      {
+        id: "troop-song",
+        title: "Troop",
+        artist: "Army of One",
+        duration: 198,
+        thumbnail: "",
+      },
+      {
+        id: "sports-song",
+        title: "Sports",
+        artist: "Matchbox",
+        duration: 221,
+        thumbnail: "",
+      },
+      {
+        id: "highlights-song",
+        title: "Highlights",
+        artist: "The Newsroom",
+        duration: 244,
+        thumbnail: "",
+      },
+    ]) {
+      expect(isMusicTrack(item)).toBe(true);
+      expect(isPrimaryMusicResult(item, item.title)).toBe(true);
+    }
+  });
 });
 
 describe("parseMusicListItem", () => {

@@ -276,10 +276,13 @@ async function musicSearch(query: string): Promise<YtItem[]> {
  * - duration must be between 30s and 15 min (filters streams, mixes, livesets)
  * - title/owner must not look like a podcast, interview, mix, etc.
  */
+// Match phrases, not isolated words. Song titles and artist names legitimately
+// contain words such as "army", "troop", "sports", and "highlights"; rejecting
+// those words by themselves made valid catalog tracks disappear.
 const GAMING_CONTENT_RE =
-  /\b(clash of clans|coc|gameplay|gaming|gamer|video game|mobile game|walkthrough|let'?s play|inferno tower|inferno dragon|super witch|new troops?|max troops?|max single|home village|builder base|base layout|attack strategy|defen[cs]e strategy|troop|army|raid|multiplayer|super troops?|inferno dragon|hog rider|barbarian|archer queen|spell caster)\b/i;
+  /\b(clash of clans|coc|gameplay|video game|mobile game|walkthrough|let'?s play|inferno tower|inferno dragon|super witch|new troops?|max troops?|max single|all max troop|home village|builder base|base layout|attack strategy|defen[cs]e strategy|super troops?|hog rider|barbarian|archer queen|spell caster)\b/i;
 const NON_MUSIC_RE =
-  /\b(podcast|episode|interview|full album|mix(?:ed)? by|megamix|dj set|live set|1 hour|10 hours|hours of|asmr|reaction|tutorial|karaoke|cover\s*\?*|how to deal with|sports?|sport|football|soccer|basketball|tennis|golf|wta|atp|nba|nfl|ufc|formula 1|grand prix|china open|penalty|press conference|breaking news|news update|match review|match result|highlights?|tournament|championship|playoffs?|transfer news|sports news)\b/i;
+  /\b(podcast|episode|interview|full album|mix(?:ed)? by|megamix|dj set|live set|1 hour|10 hours|hours of|asmr|reaction|tutorial|karaoke|cover\s*\?*|how to deal with|football highlights?|soccer highlights?|basketball highlights?|sports highlights?|match highlights?|game highlights?|wta|atp|nba|nfl|ufc|formula 1|grand prix|china open|press conference|breaking news|news update|match review|match result|transfer news|sports news)\b/i;
 
 export function isMusicTrack(item: YtItem): boolean {
   if (item.duration > 0 && (item.duration < 30 || item.duration > 900)) return false;
@@ -358,14 +361,14 @@ function matchesSearchQuery(item: YtItem, query: string): boolean {
 }
 
 /**
- * Strict gate for the regular-web fallback. A matching title alone is not
- * enough: gaming walkthroughs and commentary often match the same words as a
- * song. Only rows with an explicit music marker can enter primary Songs.
+ * Gate for the regular-web fallback. A close query match plus a song-length
+ * duration is useful even when an otherwise valid upload has no "official
+ * audio" wording in its title/channel. Contextual non-music filters above keep
+ * this permissive without reintroducing the broad gaming/sports false positives.
  */
 export function isPrimaryMusicResult(item: YtItem, query: string): boolean {
   if (!isMusicTrack(item) || item.duration < 30 || item.duration > 900) return false;
-  if (!matchesSearchQuery(item, query)) return false;
-  return MUSIC_RESULT_MARKER_RE.test(`${item.title} ${item.artist}`);
+  return matchesSearchQuery(item, query);
 }
 
 function extractMusicResults(data: Record<string, unknown>): YtItem[] {
@@ -517,13 +520,17 @@ function parseMusicCardShelf(card: Record<string, unknown>): YtItem | null {
   const subtitle = (get(card, ["subtitle", "runs"]) as Array<{ text?: string }> | undefined) ?? [];
   const parts = subtitle.map((r) => r.text ?? "").join("").split("•").map((s) => s.trim());
   const artist = firstCreatorName(parts[0], parts[1]);
+  const durationText =
+    (get(card, ["lengthText", "simpleText"]) as string | undefined) ??
+    parts.find((part) => /^\d{1,2}:\d{2}(?::\d{2})?$/.test(part)) ??
+    "";
 
   const thumbs = get(card, ["thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails"]);
   const thumbnail = Array.isArray(thumbs)
     ? ((thumbs[thumbs.length - 1] as { url?: string })?.url ?? "")
     : "";
 
-  return { id: videoId, title, artist, duration: 0, thumbnail };
+  return { id: videoId, title, artist, duration: parseLength(durationText), thumbnail };
 }
 
 /**

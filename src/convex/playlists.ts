@@ -3,6 +3,26 @@ import { ConvexError, v } from "convex/values";
 import { mutation, query, MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 
+const trackSnapshotValidator = v.object({
+  id: v.string(),
+  title: v.string(),
+  artist: v.string(),
+  album: v.optional(v.string()),
+  coverUrl: v.string(),
+  duration: v.number(),
+  youtubeId: v.optional(v.string()),
+});
+
+type TrackSnapshot = {
+  id: string;
+  title: string;
+  artist: string;
+  album?: string;
+  coverUrl: string;
+  duration: number;
+  youtubeId?: string;
+};
+
 const requireUser = async (ctx: MutationCtx) => {
   const userId = await getAuthUserId(ctx);
   if (userId === null) {
@@ -33,19 +53,28 @@ async function logEvent(
  * Create a playlist for the signed-in user. Returns the new playlist id.
  */
 export const create = mutation({
-  args: { name: v.string(), description: v.optional(v.string()) },
-  handler: async (ctx, { name, description }) => {
+  args: {
+    name: v.string(),
+    description: v.optional(v.string()),
+    tracks: v.optional(v.array(trackSnapshotValidator)),
+  },
+  handler: async (ctx, { name, description, tracks }) => {
     const userId = await requireUser(ctx);
     const now = Date.now();
+    const playlistName = name.trim() || "New playlist";
+    const snapshots = tracks?.filter((track) => track.id.trim()) ?? [];
+    const uniqueSnapshots = [...new Map(snapshots.map((track) => [track.id, track])).values()];
+    const uniqueIds = uniqueSnapshots.map((track) => track.id);
     const id = await ctx.db.insert("playlists", {
       userId,
-      name: name.trim() || "New playlist",
+      name: playlistName,
       description,
-      trackIds: [],
+      trackIds: uniqueIds,
+      ...(uniqueSnapshots.length > 0 ? { trackSnapshots: uniqueSnapshots } : {}),
       createdAt: now,
       updatedAt: now,
     });
-    await logEvent(ctx, userId, id, name.trim() || "New playlist", "created");
+    await logEvent(ctx, userId, id, playlistName, "created");
     return id;
   },
 });
@@ -94,16 +123,22 @@ export const addTrack = mutation({
     playlistId: v.id("playlists"),
     trackId: v.string(),
     detail: v.optional(v.string()),
+    track: v.optional(trackSnapshotValidator),
   },
-  handler: async (ctx, { playlistId, trackId, detail }) => {
+  handler: async (ctx, { playlistId, trackId, detail, track }) => {
     const userId = await requireUser(ctx);
     const playlist = await ctx.db.get(playlistId);
     if (playlist === null || playlist.userId !== userId) {
       throw new ConvexError("Playlist not found");
     }
     if (!playlist.trackIds.includes(trackId)) {
+      const snapshots = playlist.trackSnapshots ?? [];
+      const nextSnapshots = track
+        ? [...snapshots.filter((snapshot) => snapshot.id !== trackId), track]
+        : snapshots;
       await ctx.db.patch(playlistId, {
         trackIds: [...playlist.trackIds, trackId],
+        ...(nextSnapshots.length > 0 ? { trackSnapshots: nextSnapshots } : {}),
         updatedAt: Date.now(),
       });
       await logEvent(ctx, userId, playlistId, playlist.name, "added", detail);
@@ -127,8 +162,10 @@ export const removeTrack = mutation({
       throw new ConvexError("Playlist not found");
     }
     const removed = playlist.trackIds.includes(trackId);
+    const snapshots = playlist.trackSnapshots?.filter((track) => track.id !== trackId);
     await ctx.db.patch(playlistId, {
       trackIds: playlist.trackIds.filter((id) => id !== trackId),
+      ...(playlist.trackSnapshots !== undefined ? { trackSnapshots: snapshots ?? [] } : {}),
       updatedAt: Date.now(),
     });
     if (removed) await logEvent(ctx, userId, playlistId, playlist.name, "removed", detail);
