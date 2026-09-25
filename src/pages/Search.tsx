@@ -104,53 +104,6 @@ const POPULAR_MIXES = [
 const POPULAR_MIX_REFRESH_INTERVAL = 12 * 60 * 60 * 1000;
 const POPULAR_MIX_REFRESH_KEY = "synq:popular-mixes-refreshed-at";
 const POPULAR_MIX_COUNT = 10;
-const DISCOVERY_QUERY_RE = /\b(songs?|music|hits|mix|playlist|chill|happy|sad|energetic|focus|workout|party|sleep|romantic|nostalgic|pop|rock|jazz|classical|ambient|funk|metal|country|reggaeton|afrobeats|k-pop|indie|electronic|lo-fi|r\s*(?:&|and)\s*b|hip-hop)\b/i;
-
-function isDiscoveryQuery(query: string): boolean {
-  return DISCOVERY_QUERY_RE.test(query);
-}
-
-const DISCOVERY_SEEDS: Array<[RegExp, string]> = [
-  [/\bpop\b/i, "Taylor Swift songs"],
-  [/\bhip[\s-]?hop\b/i, "Kendrick Lamar songs"],
-  [/\brock\b/i, "Foo Fighters songs"],
-  [/\br&b\b/i, "SZA songs"],
-  [/\belectronic\b/i, "Daft Punk songs"],
-  [/\bindie\b/i, "Phoebe Bridgers songs"],
-  [/\bjazz\b/i, "Miles Davis songs"],
-  [/\bclassical\b/i, "Ludwig van Beethoven songs"],
-  [/\blo[\s-]?fi\b/i, "Lofi Girl songs"],
-  [/\bmetal\b/i, "Metallica songs"],
-  [/\bcountry\b/i, "Morgan Wallen songs"],
-  [/\breggaeton\b/i, "Bad Bunny songs"],
-  [/\bafrobeats\b/i, "Burna Boy songs"],
-  [/\bk[\s-]?pop\b/i, "BLACKPINK songs"],
-  [/\bambient\b/i, "Brian Eno songs"],
-  [/\bfunk\b/i, "Jamiroquai songs"],
-  [/\bchill\b/i, "Frank Ocean songs"],
-  [/\bhappy\b/i, "Pharrell Williams songs"],
-  [/\bsad\b/i, "Billie Eilish songs"],
-  [/\benergetic\b/i, "Imagine Dragons songs"],
-  [/\bfocus\b/i, "Ludovico Einaudi songs"],
-  [/\bworkout\b/i, "Kendrick Lamar songs"],
-  [/\bparty\b/i, "Dua Lipa songs"],
-  [/\bsleep\b/i, "Norah Jones songs"],
-  [/\bromantic\b/i, "Adele songs"],
-  [/\bnostalgic\b/i, "Fleetwood Mac songs"],
-];
-
-function discoveryFallbackQuery(query: string): string {
-  const seed = DISCOVERY_SEEDS.find(([pattern]) => pattern.test(query))?.[1];
-  if (seed) return seed;
-  // Keep the visible query human-readable, but make every browse chip start
-  // from a concrete artist-backed search instead of a playlist-heavy phrase.
-  const cleaned = query
-    .replace(/\b(music|songs?|hits|playlist|mix)\b/gi, "")
-    .replace(/\s+/g, " ")
-    .trim();
-  return cleaned ? `${cleaned} songs` : "top songs";
-}
-
 function popularMixCycle() {
   const now = Date.now();
   if (typeof window === "undefined") return Math.floor(now / POPULAR_MIX_REFRESH_INTERVAL);
@@ -196,13 +149,10 @@ function MixCard({ mix }: { mix: (typeof POPULAR_MIXES)[number] }) {
           return [];
         }
       };
-      // Category/mood queries are broad discovery requests. Start with the
-      // artist-backed seed instead of waiting for a playlist-heavy YouTube
-      // Music response to fail, then keep a final generic fallback for mixes
-      // that do not map to a curated seed.
-      const candidates = isDiscoveryQuery(mix.query)
-        ? [...new Set([discoveryFallbackQuery(mix.query), mix.query, "top songs"])]
-        : [mix.query];
+      // Let the backend choose several artist-backed seeds for broad mixes.
+      // Sending only the first seed made every Funk/Rock/etc. card look like
+      // the same single artist instead of a real category mix.
+      const candidates = [...new Set([mix.query, "top songs"])];
       let items: YtItem[] = [];
       for (const candidate of candidates) {
         items = await runSearch(candidate);
@@ -316,16 +266,10 @@ export default function Search() {
       rememberQuery(q);
       trackEvent("search_performed", { query: q.slice(0, 120) });
           const requestPrimary = (attempt: number) => {
-        // Browse chips are already mapped to reliable artist-backed queries.
-        // Keep retries for broad typed searches, but do not make the user
-        // watch a playlist-heavy request fail before showing the useful mix.
-        const requestQuery = !isDiscoveryQuery(q)
-          ? q
-          : attempt === 0
-            ? discoveryFallbackQuery(q)
-            : attempt === 1
-              ? "top songs"
-              : q;
+        // Keep the user's category visible in the input, but let the backend
+        // choose multiple relevant artist-backed seeds. Mapping every chip to
+        // one seed made Funk and several other categories look unrelated.
+        const requestQuery = attempt === 1 ? "top songs" : q;
         searchYt({ query: requestQuery })
           .then(({ items }) => {
             if (cancelled) return;

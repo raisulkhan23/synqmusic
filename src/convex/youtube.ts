@@ -366,40 +366,39 @@ function hasMusicEvidence(item: YtItem): boolean {
 const DISCOVERY_QUERY_RE =
   /\b(songs?|music|hits|mix|playlist|chill|happy|sad|energetic|focus|workout|party|sleep|romantic|nostalgic|pop|rock|jazz|classical|ambient|funk|metal|country|reggaeton|afrobeats|k[\s-]?pop|indie|electronic|lo-fi|r\s*(?:&|and)\s*b|hip-hop)\b/i;
 
-const DISCOVERY_SEEDS: Array<[RegExp, string | string[]]> = [
+const DISCOVERY_SEEDS: Array<[RegExp, string[]]> = [
   [/\bk[\s-]?pop\b/i, ["BLACKPINK songs", "TWICE songs", "Stray Kids songs"]],
-  [/\bpop\b/i, "Taylor Swift songs"],
-  [/\bhip[\s-]?hop\b/i, "Kendrick Lamar songs"],
-  [/\brock\b/i, "Foo Fighters songs"],
-  [/\br\s*(?:&|and)\s*b\b/i, "SZA songs"],
-  [/\belectronic\b/i, "Daft Punk songs"],
-  [/\bindie\b/i, "Phoebe Bridgers songs"],
-  [/\bjazz\b/i, "Miles Davis songs"],
-  [/\bclassical\b/i, "Ludwig van Beethoven songs"],
-  [/\blo[\s-]?fi\b/i, "Lofi Girl songs"],
-  [/\bmetal\b/i, "Metallica songs"],
-  [/\bcountry\b/i, "Morgan Wallen songs"],
-  [/\breggaeton\b/i, "Bad Bunny songs"],
-  [/\bafrobeats\b/i, "Burna Boy songs"],
-  [/\bambient\b/i, "Brian Eno songs"],
-  [/\bfunk\b/i, "Jamiroquai songs"],
-  [/\bchill\b/i, "Frank Ocean songs"],
-  [/\bhappy\b/i, "Pharrell Williams songs"],
-  [/\bsad\b/i, "Billie Eilish songs"],
-  [/\benergetic\b/i, "Imagine Dragons songs"],
-  [/\bfocus\b/i, "Ludovico Einaudi songs"],
-  [/\bworkout\b/i, "Kendrick Lamar songs"],
-  [/\bparty\b/i, "Dua Lipa songs"],
-  [/\bsleep\b/i, "Norah Jones songs"],
-  [/\bromantic\b/i, "Adele songs"],
-  [/\bnostalgic\b/i, "Fleetwood Mac songs"],
+  [/\bpop\b/i, ["Taylor Swift songs", "Dua Lipa songs", "Olivia Rodrigo songs"]],
+  [/\bhip[\s-]?hop\b/i, ["Kendrick Lamar songs", "Drake songs", "Nicki Minaj songs"]],
+  [/\brock\b/i, ["Foo Fighters songs", "Queen songs", "Nirvana songs"]],
+  [/\br\s*(?:&|and)\s*b\b/i, ["SZA songs", "The Weeknd songs", "Daniel Caesar songs"]],
+  [/\belectronic\b/i, ["Daft Punk songs", "Justice songs", "Disclosure songs"]],
+  [/\bindie\b/i, ["Phoebe Bridgers songs", "Tame Impala songs", "Arctic Monkeys songs"]],
+  [/\bjazz\b/i, ["Miles Davis songs", "Ella Fitzgerald songs", "Kamasi Washington songs"]],
+  [/\bclassical\b/i, ["Ludwig van Beethoven songs", "Mozart songs", "Chopin songs"]],
+  [/\blo[\s-]?fi\b/i, ["Lofi Girl songs", "KSW songs", "Lofi beats songs"]],
+  [/\bmetal\b/i, ["Metallica songs", "Slipknot songs", "Iron Maiden songs"]],
+  [/\bcountry\b/i, ["Morgan Wallen songs", "Luke Combs songs", "Maren Morris songs"]],
+  [/\breggaeton\b/i, ["Bad Bunny songs", "Karol G songs", "J Balvin songs"]],
+  [/\bafrobeats\b/i, ["Burna Boy songs", "Wizkid songs", "Tems songs"]],
+  [/\bambient\b/i, ["Brian Eno songs", "Max Richter songs", "Marconi Union songs"]],
+  [/\bfunk\b/i, ["Jamiroquai songs", "Vulfpeck songs", "The Meters songs"]],
+  [/\bchill\b/i, ["Frank Ocean songs", "Daniel Caesar songs", "Khruangbin songs"]],
+  [/\bhappy\b/i, ["Pharrell Williams songs", "Olivia Rodrigo songs", "Dua Lipa songs"]],
+  [/\bsad\b/i, ["Billie Eilish songs", "Lana Del Rey songs", "The National songs"]],
+  [/\benergetic\b/i, ["Imagine Dragons songs", "The Killers songs", "Arctic Monkeys songs"]],
+  [/\bfocus\b/i, ["Ludovico Einaudi songs", "Max Richter songs", "Ólafur Arnalds songs"]],
+  [/\bworkout\b/i, ["Kendrick Lamar songs", "Drake songs", "Doja Cat songs"]],
+  [/\bparty\b/i, ["Dua Lipa songs", "Doja Cat songs", "Kylie Minogue songs"]],
+  [/\bsleep\b/i, ["Norah Jones songs", "Billie Eilish songs", "Bon Iver songs"]],
+  [/\bromantic\b/i, ["Adele songs", "The Weeknd songs", "SZA songs"]],
+  [/\bnostalgic\b/i, ["Fleetwood Mac songs", "The Weeknd songs", "Tame Impala songs"]],
 ];
 
 function discoverySeedQueries(query: string): string[] {
-  const seeds = DISCOVERY_SEEDS
+  return [...new Set(DISCOVERY_SEEDS
     .filter(([pattern]) => pattern.test(query))
-    .flatMap(([, categorySeeds]) => Array.isArray(categorySeeds) ? categorySeeds : [categorySeeds]);
-  return [...new Set([...seeds, "top songs"])];
+    .flatMap(([, categorySeeds]) => categorySeeds))];
 }
 
 function matchesSearchQuery(item: YtItem, query: string): boolean {
@@ -608,14 +607,17 @@ export const searchYoutube = action({
     // response: YouTube Music often answers "K-pop songs" with soundtrack or
     // animation tracks even though it has plenty of actual K-pop songs.
     if (DISCOVERY_QUERY_RE.test(query)) {
+      const seeded: YtItem[] = [];
       for (const seedQuery of discoverySeedQueries(query)) {
         try {
           const items = await musicSearch(seedQuery);
-          if (items.length > 0) return { items };
+          if (items.length > 0) seeded.push(...items);
         } catch {
-          // Try the next seed / original query / regular-web fallback.
+          // Try the next artist-backed seed.
         }
       }
+      const combined = dedupeMusicItems(seeded).slice(0, 10);
+      if (combined.length > 0) return { items: combined };
     }
 
     // Preferred: YouTube Music — returns real studio tracks (Songs shelf),
