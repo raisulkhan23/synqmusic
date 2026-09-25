@@ -37,11 +37,12 @@ export function RemoteTrackRow({
   const startRadio = usePlayerStore((s) => s.startRadio);
   const isCurrent = currentId === item.id;
   const isLiked = liked[item.id] !== undefined;
+  const artistName = displayArtistName(item.artist);
 
   const likeThis = () =>
     toggleLike(item.id, {
       title: item.title,
-      artistName: item.artist,
+      artistName,
       coverUrl: item.thumbnail,
       duration: item.duration,
       youtubeId: item.id,
@@ -124,7 +125,7 @@ export function RemoteTrackRow({
           {item.title}
         </p>
         <p className="truncate text-xs text-muted-foreground">
-          {item.artist}
+          {artistName}
         </p>
       </div>
 
@@ -139,7 +140,7 @@ export function RemoteTrackRow({
             startRadio({
               id: item.id,
               title: item.title,
-              artistName: item.artist,
+              artistName,
               albumName: "",
               coverUrl: item.thumbnail,
               audioUrl: "",
@@ -176,7 +177,7 @@ export function RemoteTrackRow({
               className="gap-2"
               onSelect={() => {
                 void navigator.clipboard
-                  .writeText(`${window.location.origin}/search?q=${encodeURIComponent(`${item.title} ${item.artist}`)}`)
+                  .writeText(`${window.location.origin}/search?q=${encodeURIComponent(`${item.title} ${artistName}`)}`)
                   .then(() => toast.success("Song link copied"));
               }}
             >
@@ -207,4 +208,12 @@ export function RemoteTrackRow({
       </div>
     </div>
   );
+}
+
+function displayArtistName(value: string): string {
+  const name = value.replace(/\s+/g, " ").trim();
+  if (!name || /^(?:unknown artist|artist|song|video|single|album|ep|music|official|unknown)$/i.test(name) || !/[\p{L}\p{N}]/u.test(name)) {
+    return "Unknown artist";
+  }
+  return name;
 }

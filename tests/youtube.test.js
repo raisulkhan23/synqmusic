@@ -153,6 +153,12 @@ describe("parseMusicListItem", () => {
     });
   });
 
+  test("replaces placeholder creator metadata instead of rendering '*'", () => {
+    expect(parseMusicListItem(renderer(["Song", " • ", "*", " • ", "3:45"]))).toMatchObject({
+      artist: "Unknown artist",
+    });
+  });
+
   test("keeps playlists classified as non-song rows", () => {
     expect(parseMusicListItem(renderer(["Playlist", "Daft Punk", "3:45"]))).toMatchObject({
       artist: "Daft Punk",

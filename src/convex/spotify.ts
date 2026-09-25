@@ -15,6 +15,15 @@ const CHART_PLAYLIST = "37i9dQZF1DXcBWIGoYBM5M";
 /** How many chart entries to return (and fetch artwork for). */
 const MAX_ITEMS = 10;
 
+function cleanArtistName(value: unknown): string {
+  if (typeof value !== "string") return "Unknown artist";
+  const name = value.replace(/\s+/g, " ").trim();
+  if (!name || /^(?:unknown artist|artist|song|video|single|album|ep|music|official|unknown)$/i.test(name) || !/[\p{L}\p{N}]/u.test(name)) {
+    return "Unknown artist";
+  }
+  return name;
+}
+
 interface ChartItem {
   /** Spotify track id (the tail of "spotify:track:{id}"). */
   id: string;
@@ -134,7 +143,7 @@ export const spotifyChart = action({
       .map((t) => ({
         id: (t.uri as string).slice("spotify:track:".length),
         title: t.title ?? "Untitled",
-        artist: t.subtitle ?? "Unknown artist",
+        artist: cleanArtistName(t.subtitle),
         duration: Math.round((Number(t.duration) || 0) / 1000),
       }));
 

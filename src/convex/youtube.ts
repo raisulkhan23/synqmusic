@@ -133,6 +133,26 @@ function parseLength(raw?: string): number {
   return parts[0] ?? 0;
 }
 
+const CREATOR_NAME_PLACEHOLDER_RE =
+  /^(?:unknown artist|artist|song|video|single|album|ep|music|official|unknown)$/i;
+
+function cleanCreatorName(value: unknown): string {
+  if (typeof value !== "string") return "Unknown artist";
+  const name = value.replace(/\s+/g, " ").trim();
+  if (!name || CREATOR_NAME_PLACEHOLDER_RE.test(name) || !/[\p{L}\p{N}]/u.test(name)) {
+    return "Unknown artist";
+  }
+  return name;
+}
+
+function firstCreatorName(...values: unknown[]): string {
+  for (const value of values) {
+    const name = cleanCreatorName(value);
+    if (name !== "Unknown artist") return name;
+  }
+  return "Unknown artist";
+}
+
 // Loose structural helpers — InnerTube responses are deeply nested and typed
 // as unknown, so we traverse defensively.
 // NOTE: numeric segments index LISTS ("tabs" → [tab]) and string segments
@@ -173,10 +193,10 @@ function extractSearchResults(data: Record<string, unknown>): YtItem[] {
         (get(vr, ["title", "runs", 0, "text"]) as string) ??
         (get(vr, ["title", "simpleText"]) as string) ??
         "Untitled";
-      const artist =
-        (get(vr, ["ownerText", "runs", 0, "text"]) as string) ??
-        (get(vr, ["longBylineText", "runs", 0, "text"]) as string) ??
-        "Unknown artist";
+      const artist = firstCreatorName(
+        get(vr, ["ownerText", "runs", 0, "text"]),
+        get(vr, ["longBylineText", "runs", 0, "text"]),
+      );
       const lengthText = get(vr, ["lengthText", "simpleText"]) as string | undefined;
       const thumbs = get(vr, ["thumbnail", "thumbnails"]);
       const thumbnail = Array.isArray(thumbs)
@@ -445,7 +465,11 @@ export function parseMusicListItem(renderer: Record<string, unknown>): (YtItem &
     /^song$/i.test(typeRun) || /^video$/i.test(typeRun) || /music video/i.test(typeRun)
       ? "song"
       : "other";
-  const artist = metaRuns[artistIndex] || "Unknown artist";
+  const artist = firstCreatorName(
+    metaRuns[artistIndex],
+    get(renderer, ["subtitle", "runs", 0, "text"]),
+    get(renderer, ["longBylineText", "runs", 0, "text"]),
+  );
   const durationMatch = [...metaRuns]
     .reverse()
     .find((value) => /^\d{1,2}:\d{2}(:\d{2})?$/.test(value));
@@ -480,7 +504,7 @@ function parseMusicCardShelf(card: Record<string, unknown>): YtItem | null {
   // Subtitle runs pack artist • song • year.
   const subtitle = (get(card, ["subtitle", "runs"]) as Array<{ text?: string }> | undefined) ?? [];
   const parts = subtitle.map((r) => r.text ?? "").join("").split("•").map((s) => s.trim());
-  const artist = parts[0] || "Unknown artist";
+  const artist = firstCreatorName(parts[0], parts[1]);
 
   const thumbs = get(card, ["thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails"]);
   const thumbnail = Array.isArray(thumbs)
