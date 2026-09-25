@@ -12,7 +12,7 @@ import { api } from "@/convex/_generated/api";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { useAuth } from "@/hooks/use-auth";
-import { BookOpen, Briefcase, House, ListMusic, Minimize2, Moon, Search, Settings, UserRound, WifiOff } from "lucide-react";
+import { BookOpen, Briefcase, House, ListMusic, Moon, Search, Settings, UserRound, WifiOff } from "lucide-react";
 import { usePlayerStore, type RemoteLikeSnapshot } from "@/store/player";
 import { track } from "@/lib/analytics";
 import {
@@ -590,23 +590,7 @@ export function AppShell() {
           <div className="absolute inset-0 bg-gradient-to-b from-background/20 via-background/10 to-background/55" />
         </div>
       )}
-      {!focusMode && <Sidebar />}
-
-      {focusMode && (
-        <button
-          type="button"
-          onClick={() => {
-            setFocusLayout("off");
-            localStorage.setItem("ss.focusLayout", "off");
-            localStorage.setItem("ss.focusMode", "0");
-            window.dispatchEvent(new CustomEvent("synq:focus-layout-change", { detail: "off" }));
-          }}
-          className="liquid-glass fixed top-20 left-4 z-40 inline-flex items-center gap-2 rounded-full border border-white/15 px-3.5 py-2 text-xs font-semibold text-foreground shadow-lg transition hover:scale-[1.02] hover:border-[rgb(var(--tint)_/_0.5)] sm:top-4"
-        >
-          <Minimize2 className="size-3.5 text-[rgb(var(--tint))]" />
-          Exit focus mode
-        </button>
-      )}
+      <Sidebar />
 
       <div className="flex min-w-0 flex-1 flex-col">
         {offline && (
@@ -636,7 +620,7 @@ export function AppShell() {
                 return <Icon className="size-4 shrink-0 text-[rgb(var(--tint))]" />;
               })()}
               <div className="min-w-0">
-                <p className="text-xs font-semibold">{FOCUS_LAYOUTS[focusLayout].label} focus</p>
+                <p className="text-xs font-semibold">Listening session · {FOCUS_LAYOUTS[focusLayout].label}</p>
                 <p className="truncate text-[10px] text-muted-foreground">
                   {FOCUS_LAYOUTS[focusLayout].detail}
                 </p>
@@ -686,10 +670,7 @@ export function AppShell() {
 
         {/* mobile bottom nav */}
         <nav
-          className={cn(
-            "mobile-bottom-nav liquid-glass z-30 flex h-[calc(3.5rem+env(safe-area-inset-bottom))] shrink-0 items-center justify-around border-t border-white/[0.06] pb-[env(safe-area-inset-bottom)] lg:hidden",
-            focusMode && "hidden",
-          )}
+          className="mobile-bottom-nav liquid-glass z-30 flex h-[calc(3.5rem+env(safe-area-inset-bottom))] shrink-0 items-center justify-around border-t border-white/[0.06] pb-[env(safe-area-inset-bottom)] lg:hidden"
         >
           {MOBILE_NAV.map(({ to, label, icon: Icon }) => (
             <NavLink

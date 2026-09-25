@@ -92,7 +92,7 @@ const SHORTCUTS: [string, string][] = [
 ];
 
 const FOCUS_LAYOUTS = [
-  { id: "off", name: "Off", detail: "Full navigation" },
+  { id: "off", name: "No session", detail: "Standard navigation" },
   { id: "study", name: "Study", detail: "Wide and calm" },
   { id: "work", name: "Work", detail: "Compact and focused" },
   { id: "sleep", name: "Sleep", detail: "Dim with end-of-song stop" },

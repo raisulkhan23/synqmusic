@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router";
 import { useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { SeekBar } from "@/components/player/SeekBar";
@@ -11,12 +12,70 @@ import { getAudio } from "@/lib/audio";
 import { usePlayerStore } from "@/store/player";
 import {
   Heart,
+  House,
   ListMusic,
   Loader2,
   Maximize2,
+  Minimize2,
+  Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+
+type SessionLayout = "off" | "study" | "work" | "sleep";
+
+const SESSION_LABELS: Record<Exclude<SessionLayout, "off">, string> = {
+  study: "Study session",
+  work: "Work session",
+  sleep: "Sleep session",
+};
+
+function isSessionLayout(value: string | null): value is SessionLayout {
+  return value === "off" || value === "study" || value === "work" || value === "sleep";
+}
+
+function ReadingSessionNav() {
+  const navigate = useNavigate();
+  const [layout, setLayout] = useState<SessionLayout>(() => {
+    const saved = localStorage.getItem("ss.focusLayout");
+    return isSessionLayout(saved) ? saved : localStorage.getItem("ss.focusMode") === "1" ? "study" : "off";
+  });
+
+  useEffect(() => {
+    const onLayoutChange = (event: Event) => {
+      const next = (event as CustomEvent<string>).detail;
+      if (isSessionLayout(next)) setLayout(next);
+    };
+    window.addEventListener("synq:focus-layout-change", onLayoutChange);
+    return () => window.removeEventListener("synq:focus-layout-change", onLayoutChange);
+  }, []);
+
+  if (layout === "off") return null;
+
+  const exitSession = () => {
+    localStorage.setItem("ss.focusLayout", "off");
+    localStorage.setItem("ss.focusMode", "0");
+    window.dispatchEvent(new CustomEvent("synq:focus-layout-change", { detail: "off" }));
+  };
+
+  return (
+    <div className="fixed top-3 right-3 z-[60] flex max-w-[calc(100vw-1.5rem)] items-center gap-1 rounded-2xl border border-white/10 bg-[#101218]/90 p-1.5 shadow-2xl backdrop-blur-xl sm:right-4">
+      <span className="hidden px-2 text-[10px] font-semibold tracking-[0.14em] text-brand uppercase sm:inline">{SESSION_LABELS[layout]}</span>
+      <button type="button" onClick={() => void navigate("/home")} className="flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-white/8 hover:text-foreground" title="Go home">
+        <House className="size-3.5" /><span className="hidden md:inline">Home</span>
+      </button>
+      <button type="button" onClick={() => void navigate("/search")} className="flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-white/8 hover:text-foreground" title="Search music">
+        <Search className="size-3.5" /><span className="hidden md:inline">Search</span>
+      </button>
+      <button type="button" onClick={() => usePlayerStore.getState().setQueueOpen(true)} className="flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-white/8 hover:text-foreground" title="Open queue">
+        <ListMusic className="size-3.5" /><span className="hidden md:inline">Queue</span>
+      </button>
+      <button type="button" onClick={exitSession} className="flex items-center gap-1.5 rounded-xl bg-brand px-2.5 py-2 text-xs font-semibold text-brand-foreground transition-transform hover:scale-[1.02]" title="End listening session">
+        <Minimize2 className="size-3.5" /><span>End session</span>
+      </button>
+    </div>
+  );
+}
 
 export function PlayerBar({ compact = false }: { compact?: boolean }) {
   const current = usePlayerStore((s) => s.current);
@@ -293,7 +352,7 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
     }
   }, [current, currentTime, duration, isPlaying]);
 
-  if (!current) return null;
+  if (!current) return <ReadingSessionNav />;
 
   const isLiked = liked[current.id] !== undefined;
   const rawDuration = duration || current.duration;
@@ -304,8 +363,10 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
     : 0;
 
   return (
-    <footer
-      data-playing={isPlaying}
+    <>
+      <ReadingSessionNav />
+      <footer
+        data-playing={isPlaying}
       className={cn(
         "mobile-player liquid-glass dynamic-island isolate z-40 mx-auto my-2 flex h-[68px] w-full min-w-0 max-w-[28rem] shrink-0 items-center gap-2 self-center overflow-hidden rounded-[1.6rem] border border-white/[0.1] px-2.5 transition-all duration-300 sm:mx-auto sm:my-0 sm:h-auto sm:w-auto sm:max-w-none sm:rounded-none sm:border-x-0 sm:border-b-0 sm:px-4 sm:gap-3 lg:mb-3 lg:w-[min(92vw,760px)] lg:rounded-[2rem] lg:border lg:border-white/10 lg:px-3 lg:py-2 lg:shadow-[0_18px_60px_rgba(0,0,0,0.38)] lg:hover:scale-[1.01]",
         compact ? "sm:min-h-[60px] lg:min-h-0" : "sm:min-h-[76px] lg:min-h-0",
@@ -422,6 +483,7 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
       >
         <span style={{ transform: `scaleX(${playbackProgress / 100})` }} />
       </div>
-    </footer>
+      </footer>
+    </>
   );
 }
