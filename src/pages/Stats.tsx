@@ -87,7 +87,7 @@ export default function Stats() {
         <>
           {/* headline numbers */}
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard icon={Music2} label="Songs played" value={stats.uniqueSongs} />
+            <StatCard icon={Music2} label="Unique songs" value={stats.uniqueSongs} />
             <StatCard icon={Trophy} label="Total plays" value={stats.totalPlays} />
             <StatCard icon={Flame} label="Day streak" value={stats.streak} />
             <StatCard
