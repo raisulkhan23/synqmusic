@@ -363,13 +363,56 @@ function hasMusicEvidence(item: YtItem): boolean {
     MUSIC_VIDEO_MARKER_RE.test(`${item.title} ${item.artist}`);
 }
 
+const DISCOVERY_QUERY_RE =
+  /\b(songs?|music|hits|mix|playlist|chill|happy|sad|energetic|focus|workout|party|sleep|romantic|nostalgic|pop|rock|jazz|classical|ambient|funk|metal|country|reggaeton|afrobeats|k-pop|indie|electronic|lo-fi|r\s*(?:&|and)\s*b|hip-hop)\b/i;
+
+const DISCOVERY_SEEDS: Array<[RegExp, string]> = [
+  [/\bpop\b/i, "Taylor Swift songs"],
+  [/\bhip[\s-]?hop\b/i, "Kendrick Lamar songs"],
+  [/\brock\b/i, "Foo Fighters songs"],
+  [/\br\s*(?:&|and)\s*b\b/i, "SZA songs"],
+  [/\belectronic\b/i, "Daft Punk songs"],
+  [/\bindie\b/i, "Phoebe Bridgers songs"],
+  [/\bjazz\b/i, "Miles Davis songs"],
+  [/\bclassical\b/i, "Ludwig van Beethoven songs"],
+  [/\blo[\s-]?fi\b/i, "Lofi Girl songs"],
+  [/\bmetal\b/i, "Metallica songs"],
+  [/\bcountry\b/i, "Morgan Wallen songs"],
+  [/\breggaeton\b/i, "Bad Bunny songs"],
+  [/\bafrobeats\b/i, "Burna Boy songs"],
+  [/\bk[\s-]?pop\b/i, "BLACKPINK songs"],
+  [/\bambient\b/i, "Brian Eno songs"],
+  [/\bfunk\b/i, "Jamiroquai songs"],
+  [/\bchill\b/i, "Frank Ocean songs"],
+  [/\bhappy\b/i, "Pharrell Williams songs"],
+  [/\bsad\b/i, "Billie Eilish songs"],
+  [/\benergetic\b/i, "Imagine Dragons songs"],
+  [/\bfocus\b/i, "Ludovico Einaudi songs"],
+  [/\bworkout\b/i, "Kendrick Lamar songs"],
+  [/\bparty\b/i, "Dua Lipa songs"],
+  [/\bsleep\b/i, "Norah Jones songs"],
+  [/\bromantic\b/i, "Adele songs"],
+  [/\bnostalgic\b/i, "Fleetwood Mac songs"],
+];
+
+function discoverySeedQueries(query: string): string[] {
+  const seeds = DISCOVERY_SEEDS.filter(([pattern]) => pattern.test(query)).map(([, seed]) => seed);
+  return [...new Set([...seeds, "top songs"])];
+}
+
 function matchesSearchQuery(item: YtItem, query: string): boolean {
   const terms = normalizeMatchText(query)
     .split(" ")
     .filter((term) => term.length > 1 && !QUERY_NOISE_RE.test(term));
   if (terms.length === 0) return false;
   const result = normalizeMatchText(`${item.title} ${item.artist}`);
-  return terms.every((term) => result.includes(term));
+  const matches = terms.filter((term) => result.includes(term)).length;
+  // Broad discovery searches are category requests, not exact title queries.
+  // Requiring every term made useful fallbacks such as "pop music hits" fail
+  // because the returned metadata naturally does not contain the word
+  // "hits". Exact song/artist searches remain strict.
+  if (DISCOVERY_QUERY_RE.test(query)) return matches > 0;
+  return matches === terms.length;
 }
 
 /**
@@ -487,10 +530,13 @@ export function parseMusicListItem(renderer: Record<string, unknown>): (YtItem &
   const typeIndex = metaRuns.findIndex((value) => typePattern.test(value));
   const artistIndex = typeIndex >= 0 ? typeIndex + 1 : 0;
   const typeRun = typeIndex >= 0 ? metaRuns[typeIndex] : "";
+  // The Songs shelf often omits the explicit "Song" metadata run and returns
+  // only [artist, album, duration]. Those rows are still single playable
+  // tracks, so only reject rows when YouTube explicitly identifies them as a
+  // playlist/album/artist/episode. Treating an omitted type as "other" made
+  // valid category results disappear before they reached the player.
   const kind: "song" | "other" =
-    /^song$/i.test(typeRun) || /^video$/i.test(typeRun) || /music video/i.test(typeRun)
-      ? "song"
-      : "other";
+    /^(playlist|album|artist|episode)$/i.test(typeRun) ? "other" : "song";
   const artist = firstCreatorName(
     title,
     metaRuns[artistIndex],
@@ -562,6 +608,20 @@ export const searchYoutube = action({
       if (items.length > 0) return { items };
     } catch {
       // fall through to the video-filter retry below
+    }
+
+    // Category/mood searches often return long playlists or mixes in the
+    // music shelf. Resolve those requests against concrete artist-backed
+    // seeds so a browse chip always produces playable songs when possible.
+    if (DISCOVERY_QUERY_RE.test(query)) {
+      for (const seedQuery of discoverySeedQueries(query)) {
+        try {
+          const items = await musicSearch(seedQuery);
+          if (items.length > 0) return { items };
+        } catch {
+          // Try the next seed / regular-web fallback.
+        }
+      }
     }
 
     // Fallback: regular YouTube search restricted to the "video" result type,
