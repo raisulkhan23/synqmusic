@@ -4,7 +4,7 @@ import { RequireAuth } from "@/components/RequireAuth";
 import { VlyToolbar } from "../vly-toolbar-readonly.tsx";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import { ConvexReactClient } from "convex/react";
-import React, { StrictMode, useEffect, lazy, Suspense, useState } from "react";
+import React, { StrictMode, useEffect, lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import {
   BrowserRouter,
@@ -131,17 +131,7 @@ const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
 
 function RouteSyncer() {
   const location = useLocation();
-  // TEMPORARY DIAGNOSTIC — remove once the bottom-nav bounce is identified.
-  // Shows who is moving the history stack: a `postMessage` from the host, or a
-  // bare popstate with no message in front of it.
-  const [probe, setProbe] = useState<string | null>(null);
   useEffect(() => {
-    if (!probe) return;
-    const timer = window.setTimeout(() => setProbe(null), 5000);
-    return () => window.clearTimeout(timer);
-  }, [probe]);
-  useEffect(() => {
-    console.log("[synq] app -> host route-change", location.pathname);
     window.parent.postMessage(
       { type: "iframe-route-change", path: location.pathname },
       "*",
@@ -149,18 +139,7 @@ function RouteSyncer() {
   }, [location.pathname]);
 
   useEffect(() => {
-    const onPop = () => {
-      console.log("[synq] popstate (no host message logged before it?)", window.location.pathname);
-      setProbe(`popstate -> ${window.location.pathname}`);
-    };
-    window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
-  }, []);
-
-  useEffect(() => {
     function handleMessage(event: MessageEvent) {
-      console.log("[synq] host -> app message", event.data);
-      setProbe(`host msg: ${JSON.stringify(event.data)}`);
       if (event.data?.type === "navigate") {
         if (event.data.direction === "back") window.history.back();
         if (event.data.direction === "forward") window.history.forward();
@@ -170,27 +149,7 @@ function RouteSyncer() {
     return () => window.removeEventListener("message", handleMessage);
   }, []);
 
-  if (!probe) return null;
-  return (
-    <div
-      style={{
-        position: "fixed",
-        left: 8,
-        bottom: 8,
-        zIndex: 100000,
-        maxWidth: "90vw",
-        padding: "6px 8px",
-        borderRadius: 8,
-        background: "rgba(0,0,0,0.85)",
-        color: "#9dff5c",
-        font: "11px/1.4 ui-monospace, monospace",
-        whiteSpace: "pre-wrap",
-        pointerEvents: "none",
-      }}
-    >
-      {probe}
-    </div>
-  );
+  return null;
 }
 
 
