@@ -779,9 +779,29 @@ let lastResumeSave = 0;
 
 function restartCurrent(): void {
   const s = usePlayerStore.getState();
+  if (s.current?.youtubeId) {
+    // The engine is built with `autoplay: 1`, so by the time the repeat-one
+    // hook runs the player has ALREADY rolled on to a YouTube-chosen related
+    // video. `seek(0)` + `resume()` therefore restarted *that* video, not the
+    // track the UI was showing — the symptom was a different song playing
+    // under a "repeat one" label. Load the current track explicitly by id so
+    // the audio and the miniplayer/fullscreen player can never disagree.
+    usePlayerStore.setState({ currentTime: 0, isBuffering: true });
+    void ytEngine
+      .play(s.current.youtubeId, {
+        volume: s.volume,
+        muted: s.muted,
+      })
+      .catch(() => {
+        // Fall back to the plain resume path so repeat still works if the
+        // explicit reload is rejected.
+        ytEngine.seek(0);
+        ytEngine.resume();
+      });
+    return;
+  }
   s.seek(0);
-  if (s.current?.youtubeId) ytEngine.resume();
-  else void getAudio().play().catch(() => undefined);
+  void getAudio().play().catch(() => undefined);
 }
 
 /** In-flight related-mix fetch, deduped per seed so track-end doesn't double-fire. */
@@ -1425,6 +1445,26 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
 
     const resumeAt = startSeconds ?? getResumePosition(track.id, track.duration);
 
+    // Commit the new track to the store BEFORE routing it to an engine.
+    // This used to sit at the very end of loadTrack, but two branches return
+    // early (the YouTube + audio-processing path below, and the "stream"
+    // rescue path) — so with an EQ preset or sound effect active, `current`
+    // was never updated. The new song played through the engine while the
+    // miniplayer and fullscreen player kept showing the PREVIOUS track, and
+    // the ytResolve guard below (which wants current to already be the new
+    // track) always failed, so the effect never applied to the new song
+    // either. Every branch must observe the same committed state.
+    set({
+      current: track,
+      currentTime: resumeAt,
+      duration: track.duration,
+      bufferedEnd: 0,
+      isBuffering: true,
+      // A-B points don't carry across tracks
+      abA: null,
+      abB: null,
+    });
+
     // Route to the YouTube IFrame engine by video id; otherwise use the audio element.
     // EXCEPTION: when an audio effect is active, YouTube tracks play through
     // the <audio> element with a resolved direct stream instead — the IFrame
@@ -1511,16 +1551,6 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       // THIS song's video instead of the previous one's frozen thumbnail.
       if (track.youtubeId) setTimeout(() => syncVideoSlave(), 150);
     }
-    set({
-      current: track,
-      currentTime: resumeAt,
-      duration: track.duration,
-      bufferedEnd: 0,
-      isBuffering: true,
-      // A-B points don't carry across tracks
-      abA: null,
-      abB: null,
-    });
     syncMediaSession(track, true);
     const nextIndex = get().queueIndex + 1;
     prefetchTrack(get().queue[nextIndex]);
