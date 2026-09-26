@@ -113,7 +113,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
   // effect above redirects to the app as soon as we know the session state.
   if (authLoading || isAuthenticated) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background text-foreground">
+      <div className="flex min-h-dvh items-center justify-center bg-background px-[max(1rem,env(safe-area-inset-left))] pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] text-foreground">
         <Loader2 className="size-6 animate-spin text-muted-foreground" />
       </div>
     );
@@ -160,7 +160,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
   };
 
   return (
-    <div className="relative flex min-h-screen flex-col overflow-hidden bg-background text-foreground">
+    <div className="relative flex min-h-dvh flex-col overflow-hidden bg-background pt-[env(safe-area-inset-top)] text-foreground">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[520px]">
         <div className="absolute left-1/2 top-[-200px] h-[480px] w-[760px] -translate-x-1/2 rounded-full bg-brand/12 blur-3xl" />
         <div className="absolute right-[-120px] bottom-[-60px] h-[320px] w-[320px] rounded-full bg-violet-500/10 blur-3xl" />

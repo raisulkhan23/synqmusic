@@ -12,6 +12,7 @@ import { cleanArtistName, cleanTrackTitle, type YtItem } from "@/lib/youtube";
 import { formatTime } from "@/lib/format";
 import { toPlayableYoutube } from "@/lib/playable";
 import { cn } from "@/lib/utils";
+import { copyText } from "@/lib/clipboard";
 import { usePlayerStore } from "@/store/player";
 import { Heart, ListEnd, ListMusic, ListStart, Loader2, MoreVertical, Pause, Play, Radio } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
@@ -228,9 +229,12 @@ export function RemoteTrackRow({
               <DropdownMenuItem
                 className="gap-2"
                 onSelect={() => {
-                  void navigator.clipboard
-                    .writeText(`${window.location.origin}/search?q=${encodeURIComponent(`${displayTitle} ${artistName}`)}`)
-                    .then(() => toast.success("Song link copied"));
+                  void copyText(
+                    `${window.location.origin}/search?q=${encodeURIComponent(`${displayTitle} ${artistName}`)}`,
+                  ).then((ok) => {
+                    if (ok) toast.success("Song link copied");
+                    else toast.error("Couldn't copy the link");
+                  });
                 }}
               >
                 <ListMusic className="size-4" />

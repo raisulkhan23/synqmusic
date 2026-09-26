@@ -34,6 +34,7 @@ import {
   Waves,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { copyText } from "@/lib/clipboard";
 import { IMAGE_WALLPAPER_MARKER, LIVE_WALLPAPER_MARKER } from "@/lib/wallpaperStorage";
 
 const SLEEP_OPTIONS: { label: string; value: number | "end" }[] = [
@@ -234,7 +235,7 @@ function LyricsPanel({ onClose }: { onClose: () => void }) {
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: 24 }}
       transition={{ duration: 0.22 }}
-      className="fixed inset-y-0 right-0 z-20 flex w-full max-w-md flex-col border-l border-white/[0.07] bg-[#0b0c11]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl"
+      className="fixed inset-y-0 right-0 z-20 flex w-full max-w-md flex-col border-l border-white/[0.07] bg-[#0b0c11]/95 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] backdrop-blur-xl"
     >
       <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4">
         <p className="flex items-center gap-2 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
@@ -660,7 +661,7 @@ export function FullscreenPlayer() {
           className="absolute inset-x-0 bottom-0 z-[1] h-[44vh] w-full opacity-70"
         />
 
-        <div className="relative z-10 flex h-full flex-col px-4 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-10 sm:pt-4 sm:pb-5">
+        <div className="relative z-10 flex h-full flex-col px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-10 sm:pt-6 sm:pb-5">
           {/* top row */}
           <div className="flex items-center justify-between">
             <button
@@ -729,7 +730,10 @@ export function FullscreenPlayer() {
                   if (navigator.share) {
                     void navigator.share(data).catch(() => undefined);
                   } else {
-                    void navigator.clipboard.writeText(url).then(() => toast.success("Song link copied"));
+                    void copyText(url).then((ok) => {
+                      if (ok) toast.success("Song link copied");
+                      else toast.error("Couldn't copy the link");
+                    });
                   }
                 }}
                 className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground sm:p-2.5"

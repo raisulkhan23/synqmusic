@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Logo } from "@/components/brand/Logo";
 import { PlaylistDialog } from "@/components/playlists/PlaylistDialog";
@@ -44,11 +44,11 @@ export function Sidebar() {
     navigate("/");
   };
 
-  const visiblePlaylists = useMemo(() => {
-    if (!playlists) return playlists;
-    if (filter === "all" || filter === "playlists") return playlists;
-    return [];
-  }, [playlists, filter]);
+  // The Playlists / Liked / Recent chips are pure navigation, so the playlist
+  // list must NOT depend on them. It used to: `filter` of "liked" or "recent"
+  // made this `[]`, so clicking either chip made the user's entire playlist
+  // list vanish from the sidebar until they clicked again.
+  const visiblePlaylists = playlists;
 
   const initials =
     user?.name
@@ -355,7 +355,6 @@ export function Sidebar() {
                 )
               }
             >
-              <span className="size-10 shrink-0 overflow-hidden rounded-md ring-1 ring-white/10">
               <span
                 className="size-10 shrink-0 overflow-hidden rounded-md ring-1 ring-white/10"
                 style={{ background: "linear-gradient(135deg, rgb(var(--tint) / 0.35), rgb(var(--tint) / 0.1))" }}
@@ -363,7 +362,6 @@ export function Sidebar() {
                 <span className="flex size-full items-center justify-center">
                   <ListMusic className="size-4 text-[rgb(var(--tint))]" />
                 </span>
-              </span>
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-foreground group-hover:text-foreground">{p.name}</span>

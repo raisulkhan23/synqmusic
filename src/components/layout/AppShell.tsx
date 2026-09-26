@@ -127,12 +127,22 @@ export function AppShell() {
     return localStorage.getItem("ss.wallpaperBlur") === "0" ? 0 : DEFAULT_WALLPAPER_BLUR_AMOUNT;
   });
   const rippleLayerRef = useRef<HTMLDivElement>(null);
+  const mainScrollRef = useRef<HTMLElement>(null);
   const cursorTrailRefs = useRef<Array<HTMLSpanElement | null>>([]);
   const touchGlowTimeoutRef = useRef<number | null>(null);
   const wallpaperVideoRef = useRef<HTMLVideoElement>(null);
   const shellRef = useRef<HTMLDivElement>(null);
   const pointerFrameRef = useRef<number | null>(null);
   const pointerPositionRef = useRef({ x: 0, y: 0, target: null as HTMLDivElement | null });
+
+  // Reset the page scroll on every navigation. `<main>` is the scroll
+  // container, not the document, and the browser only resets the *document*
+  // scroll — so leaving the bottom of a long Search results page and opening
+  // Home dropped you in halfway down the new page. Worst on mobile, where the
+  // top bar is the only thing marking the top of the content.
+  useEffect(() => {
+    mainScrollRef.current?.scrollTo({ top: 0, left: 0 });
+  }, [location.pathname, location.search]);
 
   // Restore an uploaded wallpaper from IndexedDB after a page reload.
   useEffect(() => {
@@ -605,7 +615,10 @@ export function AppShell() {
           </div>
         )}
         {/* mobile top bar */}
-        <div className="mobile-topbar liquid-glass sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between border-b border-white/[0.06] px-4 lg:hidden">
+        {/* `env(safe-area-inset-top)` is added to the height AND used as padding:
+            the shell is h-dvh, so on a notched phone the logo and settings
+            button were rendering underneath the status bar / notch. */}
+        <div className="mobile-topbar liquid-glass sticky top-0 z-30 flex h-[calc(3.5rem+env(safe-area-inset-top))] shrink-0 items-center justify-between border-b border-white/[0.06] px-4 pt-[env(safe-area-inset-top)] lg:hidden">
           <Logo to="/home" />
           <button
             type="button"
@@ -651,7 +664,10 @@ export function AppShell() {
         {/* overflow-x is clipped: a single over-wide row must never give the
             page a horizontal scrollbar on a phone. Nested `overflow-x-auto`
             rails inside a page still scroll normally. */}
-        <main className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+        <main
+          ref={mainScrollRef}
+          className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto"
+        >
           {/* ambient accent glow follows the current album art */}
           {ambientGlow && !focusMode && (
             <div

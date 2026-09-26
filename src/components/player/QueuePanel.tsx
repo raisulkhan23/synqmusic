@@ -30,6 +30,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { copyText } from "@/lib/clipboard";
 
 type QueueReorderRowProps = {
   track: Playable;
@@ -261,7 +262,10 @@ export function QueuePanel() {
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetContent
         side="right"
-        className="w-full border-l border-white/[0.08] bg-[#0e0f15]/95 p-0 backdrop-blur-2xl sm:max-w-md"
+        /* The sheet is `fixed inset-y-0`, so on a notched phone the "Queue"
+           header sat under the status bar and the bottom controls under the
+           home indicator. */
+        className="w-full border-l border-white/[0.08] bg-[#0e0f15]/95 p-0 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] backdrop-blur-2xl sm:max-w-md"
       >
         <SheetHeader className="flex flex-row flex-wrap items-center justify-between gap-y-2 border-b border-white/[0.06] py-3 pr-12 pl-4 sm:py-4 sm:pl-5">
           <SheetTitle className="flex items-center gap-2 font-display text-base">
@@ -379,8 +383,13 @@ export function QueuePanel() {
                     aria-label="Copy current track link"
                     title="Copy current track link"
                     onClick={() => {
-                      void navigator.clipboard?.writeText(`https://youtu.be/${current.youtubeId}`);
-                      toast.success("Track link copied");
+                      // Awaited: the old code toasted success immediately, so a
+                      // failed copy (no clipboard API / denied permission) still
+                      // told the user the link was on their clipboard.
+                      void copyText(`https://youtu.be/${current.youtubeId}`).then((ok) => {
+                        if (ok) toast.success("Track link copied");
+                        else toast.error("Couldn't copy the link");
+                      });
                     }}
                     className="flex size-8 shrink-0 items-center justify-center rounded-full border border-white/10 text-muted-foreground transition-colors hover:border-white/25 hover:text-foreground"
                   >

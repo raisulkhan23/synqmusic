@@ -302,7 +302,7 @@ const featureCards = [
 
 export default function Landing() {
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-background text-foreground">
+    <div className="relative min-h-dvh overflow-x-hidden bg-background pt-[env(safe-area-inset-top)] text-foreground">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[720px]">
         <div className="absolute left-1/2 top-[-240px] h-[600px] w-[900px] -translate-x-1/2 rounded-full bg-brand/15 blur-3xl" />
         <div className="absolute top-[300px] right-[-140px] h-[360px] w-[360px] rounded-full bg-violet-500/10 blur-3xl" />

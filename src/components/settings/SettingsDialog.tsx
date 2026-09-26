@@ -615,11 +615,18 @@ export function SettingsDialog({
         className={
           pageMode
             ? cn(
-                "liquid-glass settings-liquid-glass relative !static !top-auto !left-auto !z-10 !mx-auto !grid !w-full !max-w-3xl !translate-x-0 !translate-y-0 !gap-0 !rounded-3xl !border !border-white/10 !p-3.5 !shadow-xl sm:!p-8",
+                /* `!max-h-none !overflow-y-visible` opt out of the base
+                   DialogContent's viewport cap + scroll. In page mode this
+                   panel is `!static` inside the shell's `<main>`, and
+                   `jumpToSetting` scrolls `<main>` by hand — a second scroll
+                   container here clipped the sections and broke that math. */
+                "liquid-glass settings-liquid-glass relative !static !top-auto !left-auto !z-10 !mx-auto !grid !w-full !max-w-3xl !max-h-none !translate-x-0 !translate-y-0 !gap-0 !overflow-y-visible !rounded-3xl !border !border-white/10 !p-3.5 !shadow-xl sm:!p-8",
                 settingsShimmer ? "settings-glass-shimmer" : "settings-glass-still",
                 settingsDepth && "settings-glass-depth",
               )
-            : "glass-card !fixed max-h-[85vh] max-w-md overflow-y-auto"
+            /* 85dvh, not 85vh: `vh` ignores the collapsing browser chrome, so
+               on a phone the dialog ran off under the URL bar. */
+            : "glass-card !fixed max-h-[85dvh] max-w-md overflow-y-auto"
         }
         onPointerEnter={(event) => {
           if (pointerEffects && event.pointerType !== "touch") {
