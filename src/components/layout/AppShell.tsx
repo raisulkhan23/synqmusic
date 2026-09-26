@@ -690,10 +690,10 @@ export function AppShell() {
               aria-label={label}
               className={({ isActive }) =>
                 cn(
-                  "mobile-nav-item flex w-full touch-manipulation flex-col items-center justify-center gap-0.5 rounded-2xl px-1 py-1.5 text-[10px] font-medium transition-all duration-300",
+                  "mobile-nav-item flex w-full touch-manipulation select-none flex-col items-center justify-center gap-0.5 rounded-2xl px-1 py-1.5 text-[10px] font-medium transition-colors duration-150",
                   isActive
                     ? "mobile-nav-item-active text-[rgb(var(--tint))]"
-                    : "text-muted-foreground active:scale-95",
+                    : "text-muted-foreground",
                 )
               }
             >

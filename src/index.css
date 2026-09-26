@@ -910,11 +910,12 @@ html,
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
   }
-  /* The nav items are anchors, so they don't inherit the global button tap
-     reset. Spell it out, and make sure the full-height cell stays pressable
-     rather than only the glyph inside it. */
+  /* Press feedback must NOT move or scale the tap target. On touch devices a
+     target that animates its transform between pointerdown and pointerup loses
+     the click, because the browser re-hit-tests against the moved element. Use
+     a colour change only. */
   .mobile-nav-item:active {
-    transform: scale(0.94);
+    background-color: rgb(255 255 255 / 0.06);
   }
   .mobile-nav-item::before {
     content: "";
