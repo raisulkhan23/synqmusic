@@ -692,21 +692,13 @@ export function AppShell() {
 
         <PlayerBar compact={compactMode || focusLayout === "work" || focusLayout === "sleep"} />
 
-        {/* Mobile bottom nav.
-            The layout-critical parts (display, column count, stacking) are set
-            with inline `style` rather than utility classes on purpose: a
-            utility that fails to resolve collapses the bar into a single
-            stacked column, every link lands on the same box, and the last one
-            (Profile) wins the hit test for the entire bar. Inline styles can't
-            be dropped by the CSS build. */}
+        {/* Mobile bottom nav. Display, column count, stacking AND the desktop
+            hide are all owned by `.mobile-bottom-nav` in index.css. They were
+            inline styles, which silently overrode `lg:hidden` — an inline
+            declaration wins over any stylesheet rule without `!important` — so
+            the phone nav rendered on desktop right next to the real sidebar. */}
         <nav
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-            position: "relative",
-            zIndex: 50,
-          }}
-          className="mobile-bottom-nav liquid-glass h-[calc(3.5rem+env(safe-area-inset-bottom))] shrink-0 border-t border-white/[0.06] pb-[env(safe-area-inset-bottom)] lg:hidden"
+          className="mobile-bottom-nav liquid-glass h-[calc(3.5rem+env(safe-area-inset-bottom))] shrink-0 border-t border-white/[0.06] pb-[env(safe-area-inset-bottom)]"
         >
           {MOBILE_NAV.map(({ to, label, icon: Icon }) => {
             const isActive = location.pathname === to;

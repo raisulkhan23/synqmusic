@@ -905,6 +905,29 @@ html,
       display: none;
     }
   }
+  /* Mobile bottom navigation — PHONE ONLY.
+     The layout-critical properties live here rather than as inline styles or
+     Tailwind utilities. Inline `display: grid` was previously used to stop the
+     bar collapsing, but an inline style beats every stylesheet rule that isn't
+     `!important`, so it silently overrode the `lg:hidden` utility and the
+     mobile nav stayed visible on desktop next to the real sidebar. Owning the
+     display in CSS (and hiding it in our own media query) keeps the two navs
+     mutually exclusive and keeps the bar independent of utility generation.
+
+     Kept deliberately away from the `.mobile-topbar, .mobile-bottom-nav`
+     box-shadow group: Lightning CSS merges ADJACENT rules that share a
+     selector, and merging dragged `display: grid` onto the top bar too. */
+  .mobile-bottom-nav {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    position: relative;
+    z-index: 50;
+  }
+  @media (min-width: 1024px) {
+    .mobile-bottom-nav {
+      display: none;
+    }
+  }
   .mobile-nav-item {
     /* REQUIRED. The active-pill highlight below is an absolutely positioned
        ::before. Without a positioned ancestor it resolves against the <nav>
