@@ -1,111 +1,56 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Link } from "react-router";
-import { ArrowRightFromLine, ArrowRightToLine } from "lucide-react";
+import { ArrowRightFromLine } from "lucide-react";
 
-/** iconOnly renders just the mark — used in the collapsed sidebar rail. */
+/** iconOnly renders just the mark — used in the collapsed sidebar rail.
+ *  Passing `onToggle` there turns the mark into the rail's expand control. */
 export function Logo({
   to = "/home",
   className,
   iconOnly = false,
   onToggle,
-  collapsed,
 }: {
   to?: string;
   className?: string;
   iconOnly?: boolean;
-  /** When given, the logo becomes the sidebar collapse/expand control. */
+  /** Expand-only: the mark in the collapsed rail reopens the sidebar. The
+   *  expanded wordmark stays a plain link, because collapsing is the job of
+   *  the dedicated control in the sidebar header. */
   onToggle?: () => void;
-  /** Sidebar state, so the icon shown on hover says what the click will do. */
-  collapsed?: boolean;
 }) {
   // Pointer only, never focus: a keyboard user tabbing onto the control should
-  // keep seeing the wordmark, and a touch tap must not leave the icon stuck
-  // in place after the finger lifts.
+  // keep seeing the mark, and a touch tap must not leave the icon stuck in
+  // place after the finger lifts.
   const [hovered, setHovered] = useState(false);
 
-  if (onToggle) {
-    const ActionIcon = collapsed ? ArrowRightFromLine : ArrowRightToLine;
-    const actionLabel = collapsed ? "Expand sidebar" : "Collapse sidebar";
-    const pointerProps = {
-      onPointerEnter: () => setHovered(true),
-      onPointerLeave: () => setHovered(false),
-    };
-
-    if (iconOnly) {
-      return (
-        <button
-          type="button"
-          onClick={onToggle}
-          {...pointerProps}
-          aria-label={actionLabel}
-          title={actionLabel}
-          className={cn("group inline-flex", className)}
-        >
-          <span className="relative inline-flex items-center justify-center">
-            <img
-              src="/logo.svg"
-              alt="SYNQ logo"
-              aria-hidden={hovered || undefined}
-              className={cn(
-                "h-7 w-auto shrink-0 transition-opacity duration-150",
-                hovered && "opacity-0",
-              )}
-              width={104}
-              height={104}
-            />
-            <ActionIcon
-              aria-hidden
-              className={cn(
-                "absolute left-1/2 top-1/2 size-[18px] -translate-x-1/2 -translate-y-1/2 text-foreground transition-opacity duration-150",
-                hovered ? "opacity-100" : "opacity-0",
-              )}
-            />
-          </span>
-        </button>
-      );
-    }
-
+  if (iconOnly && onToggle) {
     return (
       <button
         type="button"
         onClick={onToggle}
-        {...pointerProps}
-        aria-label={actionLabel}
-        title={actionLabel}
-        className={cn(
-          "group inline-flex items-center gap-2.5 rounded-lg text-left transition-colors hover:bg-white/[0.05]",
-          className,
-        )}
+        onPointerEnter={() => setHovered(true)}
+        onPointerLeave={() => setHovered(false)}
+        aria-label="Expand sidebar"
+        title="Expand sidebar"
+        className={cn("group inline-flex", className)}
       >
-        {/* The wordmark keeps its box while it fades, so the header does not
-            jump sideways when the icon takes its place. */}
-        <span className="relative inline-flex items-center">
-          <span
+        <span className="relative inline-flex items-center justify-center">
+          <img
+            src="/logo.svg"
+            alt="SYNQ logo"
+            aria-hidden={hovered || undefined}
             className={cn(
-              "inline-flex items-center gap-2.5 transition-opacity duration-150",
-              hovered ? "opacity-0" : "opacity-100",
+              "h-7 w-auto shrink-0 transition-opacity duration-150",
+              hovered && "opacity-0",
             )}
-          >
-            <img
-              src="/logo.svg"
-              alt="SYNQ logo"
-              aria-hidden={hovered || undefined}
-              className="h-[26px] w-auto shrink-0"
-              width={104}
-              height={104}
-            />
-            <span className="font-display text-[17px] font-bold tracking-tight">
-              SYNQ
-            </span>
-            <span className="rounded-full border border-[rgb(var(--tint)/0.35)] bg-[rgb(var(--tint)/0.12)] px-1.5 py-px text-[9px] font-bold tracking-[0.08em] text-[rgb(var(--tint))] uppercase">
-              Beta
-            </span>
-          </span>
-          <ActionIcon
+            width={104}
+            height={104}
+          />
+          <ArrowRightFromLine
             aria-hidden
             className={cn(
-              "absolute left-0 top-1/2 size-[18px] -translate-y-1/2 text-foreground transition-opacity duration-150",
+              "absolute left-1/2 top-1/2 size-[18px] -translate-x-1/2 -translate-y-1/2 text-foreground transition-opacity duration-150",
               hovered ? "opacity-100" : "opacity-0",
             )}
           />
@@ -117,21 +62,12 @@ export function Logo({
   if (iconOnly) {
     return (
       <Link to={to} className={cn("group inline-flex", className)}>
-        <img
-          src="/logo.svg"
-          alt="SYNQ logo"
-          className="h-7 w-auto shrink-0"
-          width={104}
-          height={104}
-        />
+        <img src="/logo.svg" alt="SYNQ logo" className="h-7 w-auto shrink-0" width={104} height={104} />
       </Link>
     );
   }
   return (
-    <Link
-      to={to}
-      className={cn("group inline-flex items-center gap-2.5", className)}
-    >
+    <Link to={to} className={cn("group inline-flex items-center gap-2.5", className)}>
       <img
         src="/logo.svg"
         alt="SYNQ logo"
@@ -143,9 +79,10 @@ export function Logo({
         SYNQ
       </span>
       {!iconOnly && (
-        <span className="rounded-full border border-[rgb(var(--tint)/0.35)] bg-[rgb(var(--tint)/0.12)] px-1.5 py-px text-[9px] font-bold tracking-[0.08em] text-[rgb(var(--tint))] uppercase">
-          Beta{" "}
-        </span>
+      <span
+        className="rounded-full border border-[rgb(var(--tint)/0.35)] bg-[rgb(var(--tint)/0.12)] px-1.5 py-px text-[9px] font-bold tracking-[0.08em] text-[rgb(var(--tint))] uppercase"
+      >
+        Beta        </span>
       )}
     </Link>
   );

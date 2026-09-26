@@ -82,7 +82,6 @@ export function Sidebar() {
             iconOnly
             className="mb-2 flex size-10 items-center justify-center rounded-lg hover:bg-white/[0.05]"
             onToggle={toggleCollapsed}
-            collapsed={collapsed}
           />
           {[
             { to: "/home", label: "Home", icon: House },
@@ -223,7 +222,7 @@ export function Sidebar() {
           className="liquid-glass hidden w-60 shrink-0 flex-col border-r border-white/[0.06] lg:flex"
         >
           <div className="flex h-16 items-center justify-between px-5">
-            <Logo to="/home" onToggle={toggleCollapsed} collapsed={collapsed} />
+            <Logo to="/home" />
             <button
               type="button"
               aria-label="Collapse sidebar"
