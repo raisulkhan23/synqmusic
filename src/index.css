@@ -530,6 +530,28 @@ html,
     position: absolute;
     z-index: 0;
   }
+  /* The settings surface is a dense single-column grid, and grid/flex items
+     default to `min-width: auto` — meaning one wide row (a long label, a
+     fixed-size control) silently widens the implicit column and hands the
+     whole page a horizontal scrollbar on a phone. Let every child shrink,
+     and clip anything that still manages to exceed the surface. `clip` rather
+     than `hidden` so the sticky jump bar keeps working. */
+  .settings-liquid-glass {
+    max-width: 100%;
+    overflow-x: clip;
+  }
+  .settings-liquid-glass *,
+  .settings-liquid-glass *::before,
+  .settings-liquid-glass *::after {
+    min-width: 0;
+  }
+  /* Phones get a denser settings list: less dead space between the stacked
+     sections so more controls fit per screen. */
+  @media (max-width: 639px) {
+    .settings-liquid-glass > section {
+      gap: 0.5rem;
+    }
+  }
   /* Keep the settings jump bar above the scrolling surface and give it the
      same quiet glass treatment as the rest of the app. The important
      position rule deliberately overrides the generic settings child rule. */

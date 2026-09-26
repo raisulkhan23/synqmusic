@@ -618,7 +618,7 @@ export function SettingsDialog({
         className={
           pageMode
             ? cn(
-                "liquid-glass settings-liquid-glass relative !static !top-auto !left-auto !z-10 !mx-auto !grid !w-full !max-w-3xl !translate-x-0 !translate-y-0 !gap-0 !rounded-3xl !border !border-white/10 !p-5 !shadow-xl sm:!p-8",
+                "liquid-glass settings-liquid-glass relative !static !top-auto !left-auto !z-10 !mx-auto !grid !w-full !max-w-3xl !translate-x-0 !translate-y-0 !gap-0 !rounded-3xl !border !border-white/10 !p-3.5 !shadow-xl sm:!p-8",
                 settingsShimmer ? "settings-glass-shimmer" : "settings-glass-still",
                 settingsDepth && "settings-glass-depth",
               )

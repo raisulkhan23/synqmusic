@@ -648,7 +648,10 @@ export function AppShell() {
           </div>
         )}
 
-        <main className="relative min-h-0 flex-1 overflow-y-auto">
+        {/* overflow-x is clipped: a single over-wide row must never give the
+            page a horizontal scrollbar on a phone. Nested `overflow-x-auto`
+            rails inside a page still scroll normally. */}
+        <main className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
           {/* ambient accent glow follows the current album art */}
           {ambientGlow && !focusMode && (
             <div
