@@ -908,6 +908,13 @@ html,
   .mobile-nav-item {
     isolation: isolate;
     touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* The nav items are anchors, so they don't inherit the global button tap
+     reset. Spell it out, and make sure the full-height cell stays pressable
+     rather than only the glyph inside it. */
+  .mobile-nav-item:active {
+    transform: scale(0.94);
   }
   .mobile-nav-item::before {
     content: "";

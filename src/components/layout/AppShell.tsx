@@ -676,9 +676,12 @@ export function AppShell() {
 
         <PlayerBar compact={compactMode || focusLayout === "work" || focusLayout === "sleep"} />
 
-        {/* mobile bottom nav */}
+        {/* mobile bottom nav — a 4-column grid so each destination owns a full
+            quarter of the bar. With `justify-around` and content-sized links
+            the gaps between items were dead zones: tapping the bar beside an
+            icon did nothing. Every cell is now a full-height tap target. */}
         <nav
-          className="mobile-bottom-nav liquid-glass z-30 flex h-[calc(3.5rem+env(safe-area-inset-bottom))] shrink-0 items-center justify-around border-t border-white/[0.06] pb-[env(safe-area-inset-bottom)] lg:hidden"
+          className="mobile-bottom-nav liquid-glass relative z-50 grid h-[calc(3.5rem+env(safe-area-inset-bottom))] shrink-0 grid-cols-4 border-t border-white/[0.06] pb-[env(safe-area-inset-bottom)] lg:hidden"
         >
           {MOBILE_NAV.map(({ to, label, icon: Icon }) => (
             <NavLink
@@ -687,7 +690,7 @@ export function AppShell() {
               aria-label={label}
               className={({ isActive }) =>
                 cn(
-                  "mobile-nav-item flex min-w-14 flex-col items-center gap-0.5 rounded-2xl px-3 py-1.5 text-[10px] font-medium transition-all duration-300",
+                  "mobile-nav-item flex w-full touch-manipulation flex-col items-center justify-center gap-0.5 rounded-2xl px-1 py-1.5 text-[10px] font-medium transition-all duration-300",
                   isActive
                     ? "mobile-nav-item-active text-[rgb(var(--tint))]"
                     : "text-muted-foreground active:scale-95",
