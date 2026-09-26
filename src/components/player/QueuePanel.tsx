@@ -17,6 +17,8 @@ import { usePlayerStore } from "@/store/player";
 import { toast } from "sonner";
 import {
   ArrowLeftRight,
+  ChevronDown,
+  ChevronUp,
   Clock3,
   GripVertical,
   Link2,
@@ -32,19 +34,23 @@ import { cn } from "@/lib/utils";
 type QueueReorderRowProps = {
   track: Playable;
   rowIndex: number;
+  rowCount: number;
   queueIndex: number;
   playIndex: (index: number) => void;
   removeFromQueue: (index: number) => void;
   undoRemoveFromQueue: () => void;
+  onMove: (from: number, to: number) => void;
 };
 
 function QueueReorderRow({
   track,
   rowIndex,
+  rowCount,
   queueIndex,
   playIndex,
   removeFromQueue,
   undoRemoveFromQueue,
+  onMove,
 }: QueueReorderRowProps) {
   const controls = useDragControls();
 
@@ -84,6 +90,35 @@ function QueueReorderRow({
       </div>
       <span className="shrink-0 text-xs tabular-nums text-muted-foreground/70">
         {formatTime(track.duration)}
+      </span>
+      {/* Drag-to-reorder is unreliable on a touch surface inside a scrollable
+          sheet, so every row also gets explicit move controls. They work with
+          one tap and are keyboard reachable. */}
+      <span className="flex shrink-0 flex-col">
+        <button
+          type="button"
+          aria-label={`Move ${track.title} up`}
+          disabled={rowIndex === 0}
+          onClick={(event) => {
+            event.stopPropagation();
+            onMove(rowIndex, rowIndex - 1);
+          }}
+          className="flex size-5 items-center justify-center rounded text-muted-foreground/60 transition-colors hover:bg-white/10 hover:text-foreground disabled:pointer-events-none disabled:opacity-25"
+        >
+          <ChevronUp className="size-3.5" />
+        </button>
+        <button
+          type="button"
+          aria-label={`Move ${track.title} down`}
+          disabled={rowIndex >= rowCount - 1}
+          onClick={(event) => {
+            event.stopPropagation();
+            onMove(rowIndex, rowIndex + 1);
+          }}
+          className="flex size-5 items-center justify-center rounded text-muted-foreground/60 transition-colors hover:bg-white/10 hover:text-foreground disabled:pointer-events-none disabled:opacity-25"
+        >
+          <ChevronDown className="size-3.5" />
+        </button>
       </span>
       <button
         type="button"
@@ -130,7 +165,7 @@ export function QueuePanel() {
   const playIndex = usePlayerStore((s) => s.playIndex);
   const removeFromQueue = usePlayerStore((s) => s.removeFromQueue);
   const undoRemoveFromQueue = usePlayerStore((s) => s.undoRemoveFromQueue);
-  const replaceUpcoming = usePlayerStore((s) => s.replaceUpcoming);
+  const reorderUpcoming = usePlayerStore((s) => s.reorderUpcoming);
   const clearQueue = usePlayerStore((s) => s.clearQueue);
   const shuffle = usePlayerStore((s) => s.shuffle);
   const smartShuffle = usePlayerStore((s) => s.smartShuffle);
@@ -209,7 +244,17 @@ export function QueuePanel() {
     const reordered = keys
       .map((k) => byKey.get(k))
       .filter((t): t is NonNullable<typeof t> => t !== undefined);
-    replaceUpcoming(reordered);
+    reorderUpcoming(reordered);
+  };
+
+  /** Move one row to an absolute position in the upcoming list. */
+  const moveRow = (from: number, to: number) => {
+    if (from === to || to < 0 || to >= upcomingKeys.length) return;
+    const keys = [...upcomingKeys];
+    const [moved] = keys.splice(from, 1);
+    if (moved === undefined) return;
+    keys.splice(to, 0, moved);
+    handleReorder(keys);
   };
 
   return (
@@ -375,10 +420,12 @@ export function QueuePanel() {
                     key={`${track.id}#${rowIndex}`}
                     track={track}
                     rowIndex={rowIndex}
+                    rowCount={upcoming.length}
                     queueIndex={queueIndex}
                     playIndex={playIndex}
                     removeFromQueue={removeFromQueue}
                     undoRemoveFromQueue={undoRemoveFromQueue}
+                    onMove={moveRow}
                   />
                 ))}
               </Reorder.Group>

@@ -365,6 +365,8 @@ interface PlayerStore {
   extendQueueWithSimilar: (seed?: Playable) => void;
   playFromHistory: (index: number) => void;
   replaceUpcoming: (upcoming: Playable[]) => void;
+  /** Reorder only the not-yet-played tail, keeping history and queueIndex. */
+  reorderUpcoming: (upcoming: Playable[]) => void;
   clearQueue: () => void;
   setHistoryRecorder: (fn: ((trackId: string) => void) | null) => void;
 
@@ -2442,6 +2444,17 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
         const queue = current ? [current, ...upcoming] : [...upcoming];
         saveQueue(queue, current ? 0 : -1, current?.id ?? null);
         return { queue, queueIndex: current ? 0 : -1, current };
+      }),
+    // Reordering must NOT go through replaceUpcoming: that rebuilds the queue as
+    // [current, ...upcoming], which drops every already-played track and resets
+    // queueIndex to 0. Splicing the new order into the existing queue keeps
+    // history, the current track and the play position intact.
+    reorderUpcoming: (upcoming) =>
+      set((state) => {
+        const start = state.queueIndex >= 0 ? state.queueIndex + 1 : 0;
+        const queue = [...state.queue.slice(0, start), ...upcoming];
+        saveQueue(queue, state.queueIndex, state.current?.id ?? null);
+        return { queue };
       }),
     clearQueue: () =>
       set((s2) => {
