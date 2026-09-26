@@ -190,7 +190,9 @@ function LyricsPanel({ onClose }: { onClose: () => void }) {
     if (!key) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- reset when a new track loads
     setLines(null);
-     
+    // The timings flag belongs to the previous track's result; leaving it
+    // behind would make the next track claim to be unsynced before it loads.
+    setSynced(true);
     setLoading(true);
   }, [key]);
 
@@ -221,8 +223,12 @@ function LyricsPanel({ onClose }: { onClose: () => void }) {
     return () => {
       cancelled = true;
     };
+    // `key` is the track identity (title|artist|album) and is what makes this
+    // run per song. It was missing from the dependency list, which meant the
+    // panel cleared itself on a track change and then never fetched again:
+    // every song after the first sat on "loading" forever.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetchLyrics]);
+  }, [fetchLyrics, key]);
 
   // current line index (last line whose t <= currentTime)
   const activeIndex = useMemo(() => {

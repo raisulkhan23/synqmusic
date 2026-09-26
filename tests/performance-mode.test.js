@@ -86,6 +86,18 @@ describe("the compiled mode actually switches the work off", () => {
     expect(rule).toMatch(/transition:none!important/);
   });
 
+  test("the busy indicator keeps spinning", () => {
+    // The blanket rule also stops `animate-spin`, and a loader frozen on one
+    // frame reads as a permanent hang rather than as a fast device. All 25
+    // spinners in the product depend on it.
+    const rule = perfRule("animate-spin");
+    expect(rule).toMatch(/html\.perf-lite \.animate-spin\{/);
+    // Lightning CSS normalises the shorthand and puts the name last.
+    expect(rule).toMatch(/animation:1s linear infinite spin!important/);
+    // Scoped to the spinner only, and it has to outrank the `*` rule.
+    expect(rule).not.toContain("html.perf-lite *");
+  });
+
   test("large blur filters are dropped, including the Tailwind blur utilities", () => {
     // `blur-3xl` on the aurora blobs and the auth/landing decor is a
     // full-element filter on a layer big enough to matter.

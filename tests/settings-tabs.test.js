@@ -41,7 +41,20 @@ describe("settings page category tabs", () => {
     // At the top of the page the topmost section wins, not the rail's first
     // item: the rail is ordered by category size, the document is not.
     expect(settingsSource).toMatch(/current\?\.id \?\? earliest!\.id/);
-    expect(settingsSource).toMatch(/if \(!earliest \|\| top < earliest\.top\)/);
+    expect(settingsSource).toMatch(/if \(!earliest \|\| entry\.top < earliest\.top\)/);
+  });
+
+  test("the last category can be marked without reaching the probe line", () => {
+    // "Data" is the last section, so the page runs out of scroll before its
+    // header gets under the sticky rail: `scrollTo` clamps, the header stays
+    // low on the screen, and the probe rule keeps reporting the category
+    // above it. At the end of the scroll the last section is the one being
+    // read, whatever its top says.
+    expect(settingsSource).toMatch(/container\.scrollHeight > container\.clientHeight \+ 4/);
+    expect(settingsSource).toMatch(
+      /container\.scrollTop \+ container\.clientHeight >= container\.scrollHeight - 4/,
+    );
+    expect(settingsSource).toMatch(/const last = tops\.reduce\(\(a, b\) => \(b\.top > a\.top \? b : a\)\)/);
   });
 
   test("every tab has a real section to jump to", () => {
@@ -74,6 +87,21 @@ describe("settings page category tabs", () => {
     expect(jump).toContain("document.getElementById(id)");
     expect(jump).not.toContain("querySelectorAll");
     expect(jump).not.toContain("textContent");
+  });
+
+  test("a tab whose section is not laid out scrolls nowhere", () => {
+    // A hidden section has a zero rect, so `0 - containerTop - 96` threw the
+    // reader to the top of the shell instead of doing nothing. The keyboard
+    // panel below `lg` is the case that actually happens.
+    const jump = settingsSource.slice(
+      settingsSource.indexOf("function jumpToSetting"),
+      settingsSource.indexOf("export function SettingsDialog"),
+    );
+    expect(jump).toMatch(/if \(target\.offsetParent === null\) return;/);
+    const guard = jump.indexOf("offsetParent === null");
+    const scroll = jump.indexOf("scrollTo(");
+    expect(guard).toBeGreaterThan(-1);
+    expect(guard).toBeLessThan(scroll);
   });
 
   test("the rail stops being a second card inside the panel", async () => {

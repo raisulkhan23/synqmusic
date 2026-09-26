@@ -170,12 +170,13 @@ export function VisualizerCanvas({
       const bw = Math.max(2, (w - (BAR_COUNT - 1) * gap) / BAR_COUNT - gap);
       const maxBarH = h * 0.5;
       const baseline = h * 0.985;
+      // Loop-invariant: it was recomputed for all 24 bars on every frame.
+      const totalW = BAR_COUNT * bw + (BAR_COUNT - 1) * gap;
 
       for (let i = 0; i < BAR_COUNT; i++) {
         const norm = values[i] / 255;
         const eased = Math.pow(norm, 1.35);
         const bh = Math.max(3, eased * maxBarH);
-        const totalW = BAR_COUNT * bw + (BAR_COUNT - 1) * gap;
         const x = (w - totalW) / 2 + i * (bw + gap);
         const alpha = 0.12 + eased * 0.55;
         ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`;

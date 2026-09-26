@@ -124,6 +124,12 @@ function jumpToSetting(id: string) {
   // like it had been ignored while the marked tab stayed on the old section.
   const target = document.getElementById(id);
   if (!target) return;
+  // A section that is not laid out (the keyboard panel below `lg`, or anything
+  // inside a collapsed container) has a zero rect, and `0 - containerTop - 96`
+  // is a huge negative offset: clicking such a chip threw the reader to the
+  // top of the shell instead of doing nothing. The same test the highlight
+  // uses to skip unrendered sections.
+  if (target.offsetParent === null) return;
 
   // The authenticated shell owns the scroll container. Scrolling that element
   // directly avoids moving the whole document behind the fixed player/nav.
@@ -685,21 +691,46 @@ export function SettingsDialog({
     // "Data" and landing on "Personalize" — and it had no answer at all in the
     // gap between two tall sections, which left the highlight stuck.
     const PROBE_PX = 96; // matches the offset `jumpToSetting` scrolls to
+    const first = document.getElementById(ids[0]!);
+    const container = first?.closest("main") ?? null;
+    const scrollTarget: HTMLElement | Window =
+      container instanceof HTMLElement ? container : window;
+
     const sync = () => {
       const visible = sections();
       if (visible.length === 0) return;
+      const tops = visible.map((section) => ({
+        id: section.id,
+        top: section.getBoundingClientRect().top,
+      }));
+
+      // The last category is the one that can never reach the probe line: the
+      // page runs out of content before it gets there, so `scrollTo` is
+      // clamped and its header stays below the sticky rail. Without this, a
+      // click on "Data" scrolled as far as it could and still reported
+      // "Personalize". At the end of the scroll the last section is the one
+      // being read, whatever its top says.
+      const atBottom =
+        container instanceof HTMLElement &&
+        container.scrollHeight > container.clientHeight + 4 &&
+        container.scrollTop + container.clientHeight >= container.scrollHeight - 4;
+      if (atBottom) {
+        const last = tops.reduce((a, b) => (b.top > a.top ? b : a));
+        setActiveSection((previous) => (previous === last.id ? previous : last.id));
+        return;
+      }
+
       let current: { id: string; top: number } | null = null;
       let earliest: { id: string; top: number } | null = null;
-      for (const section of visible) {
-        const top = section.getBoundingClientRect().top;
+      for (const entry of tops) {
         // The topmost section on the page, which is not the rail's first item:
         // the rail is ordered by category size, the document is not.
-        if (!earliest || top < earliest.top) earliest = { id: section.id, top };
-        if (top - PROBE_PX > 0) continue; // still below the sticky rail
+        if (!earliest || entry.top < earliest.top) earliest = entry;
+        if (entry.top - PROBE_PX > 0) continue; // still below the sticky rail
         // Several sections can be above the probe line at once; the one the
         // reader is actually in is the last of them, whatever order the rail
         // lists them in.
-        if (!current || top > current.top) current = { id: section.id, top };
+        if (!current || entry.top > current.top) current = entry;
       }
       // Nothing above the line: the reader is above the first category.
       const next = current?.id ?? earliest!.id;
@@ -716,10 +747,6 @@ export function SettingsDialog({
     };
 
     sync();
-    const first = document.getElementById(ids[0]!);
-    const container = first?.closest("main") ?? null;
-    const scrollTarget: HTMLElement | Window =
-      container instanceof HTMLElement ? container : window;
     scrollTarget.addEventListener("scroll", schedule, { passive: true });
     window.addEventListener("resize", schedule);
     return () => {

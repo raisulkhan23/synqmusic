@@ -1332,6 +1332,15 @@ html,
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
   }
+  /* A frozen busy indicator is not a performance win, it is a broken app: the
+     blanket rule above also stops `animate-spin`, so all 25 loaders in the
+     product (queue, search, save, lyrics, playlist import) would hang on one
+     static frame and read as a permanent stall. A 2D transform on a ~24px
+     icon is compositor-only work, so the one animation that has to keep
+     running is the one that tells the user something is still happening. */
+  html.perf-lite .animate-spin {
+    animation: spin 1s linear infinite !important;
+  }
   /* The sheen layer is a moving 420% gradient band. Freezing the animation
      would just leave it parked as a flat tint, so the layer is removed. */
   html.perf-lite .liquid-glass::before,

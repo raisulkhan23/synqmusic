@@ -60,6 +60,13 @@ const VERSION_WORDS =
   /\b(radio edit|single version|album version|extended mix|extended edit|remaster(?:ed)?(?: \d{4})?|deluxe|bonus track|explicit|clean version|edit|remix|version|live|acoustic|instrumental|demo|mono|stereo|album edit|full album video|official (?:music )?video|official audio|lyric video|lyrics|visualizer|audio|hd|hq|4k|mv|visualiser)\b/gi;
 
 const FEATURED = /\s*[([]?\s*\b(?:feat|ft|featuring|with)\b\.?\s[^)\]]*[)\]]?/gi;
+
+/** `test` against a /g regex is stateful, so the flag is cleared first. */
+function isVersionWord(value: string): boolean {
+  VERSION_WORDS.lastIndex = 0;
+  return VERSION_WORDS.test(value);
+}
+
 const ARTIST_NOISE = /\s*[-–—]\s*(?:topic|official|video|audio|lyrics?|hd|hq|mv|visualizer)\s*$/i;
 
 /** Strip quotes, collapse whitespace, tidy punctuation. */
@@ -76,7 +83,12 @@ export function cleanTitle(title: string): string {
   let out = title;
   // Leading "Artist - Title" is a very common catalogue shape.
   const dash = out.match(/^(.{2,60}?)\s+[-–]\s+(.+)$/);
-  if (dash && !VERSION_WORDS.test(dash[1])) out = dash[2];
+  // `VERSION_WORDS` is /g, and `RegExp.test` on a global regex advances
+  // `lastIndex` instead of starting from 0. The flag is only reset by the
+  // `replace` further down, so the test was reading leftover state from
+  // whichever call ran before and could decide to keep "Artist - " glued onto
+  // the title (or strip a real title) on a whim.
+  if (dash && !isVersionWord(dash[1])) out = dash[2];
   out = out.replace(/\((?:[^()]*)\)/g, " ");
   out = out.replace(/\[(?:[^\][]*)\]/g, " ");
   out = out.replace(FEATURED, " ");
@@ -176,10 +188,17 @@ async function lrclibGet(
 function rank(results: LrcRecord[], candidate: Candidate, duration?: number): LrcRecord | null {
   let best: LrcRecord | null = null;
   let bestScore = -Infinity;
+  let bestTitleMatch = 0;
   for (const result of results) {
     if (!result.syncedLyrics && !result.plainLyrics) continue;
     let score = 0;
-    score += similarity(candidate.title, result.trackName ?? "") * 40;
+    // The title has to match at all. Without this floor the flat +18 for
+    // carrying synced lyrics was enough on its own, so a search that returned
+    // a blank or unrelated `trackName` won and the user was shown the wrong
+    // song's lyrics — strictly worse than being told there are none.
+    const titleMatch = similarity(candidate.title, result.trackName ?? "");
+    if (titleMatch === 0) continue;
+    score += titleMatch * 40;
     if (candidate.artist) score += similarity(candidate.artist, result.artistName ?? "") * 30;
     if (result.syncedLyrics) score += 18;
     if (duration && result.duration) {
@@ -193,10 +212,13 @@ function rank(results: LrcRecord[], candidate: Candidate, duration?: number): Lr
     if (/\b(live|acoustic|remaster|cover|karaoke|instrumental)\b/.test(name)) score -= 12;
     if (score > bestScore) {
       bestScore = score;
+      bestTitleMatch = titleMatch;
       best = result;
     }
   }
-  return bestScore > 0 ? best : null;
+  // A single shared word is a weak match for a multi-word title: prefer any
+  // candidate that matches the title properly over a one-word collision.
+  return best !== null && bestTitleMatch >= 0.3 && bestScore > 0 ? best : null;
 }
 
 async function lrclibSearch(

@@ -43,6 +43,34 @@ describe("lyrics lookup matches more songs", () => {
     expect(lyricsSource).toMatch(/score -= 10/);
   });
 
+  test("a result that does not match the title is never returned", () => {
+    // The +18 for carrying synced lyrics was enough to win on its own, so a
+    // search result with a blank `trackName` was accepted and the user was
+    // shown a different song's lyrics — worse than being told there are none.
+    const body = lyricsSource.slice(
+      lyricsSource.indexOf("function rank("),
+      lyricsSource.indexOf("async function lrclibSearch"),
+    );
+    expect(body).toMatch(/const titleMatch = similarity\(candidate\.title/);
+    expect(body).toMatch(/if \(titleMatch === 0\) continue;/);
+    expect(body).toMatch(/bestTitleMatch >= 0\.3/);
+  });
+
+  test("cleaning a title is not affected by leftover regex state", () => {
+    // `VERSION_WORDS` is /g, and `RegExp.test` on a global regex resumes from
+    // `lastIndex` instead of 0. The "Artist - Title" branch read whatever the
+    // previous call left behind, so the same input could be cleaned differently
+    // on two consecutive lookups.
+    const body = lyricsSource.slice(
+      lyricsSource.indexOf("export function cleanTitle"),
+      lyricsSource.indexOf("export function cleanArtist"),
+    );
+    expect(lyricsSource).toMatch(/function isVersionWord\(value: string\): boolean/);
+    expect(lyricsSource).toMatch(/VERSION_WORDS\.lastIndex = 0;/);
+    expect(body).toMatch(/!isVersionWord\(dash\[1\]\)/);
+    expect(body).not.toMatch(/VERSION_WORDS\.test\(/);
+  });
+
   test("synced and plain lyrics are read from one request, with fallbacks", () => {
     // One `/api/get` call returns both LRC and plain text; a second provider
     // covers the songs the first has never heard of.
@@ -56,6 +84,19 @@ describe("lyrics lookup matches more songs", () => {
     expect(lyricsSource).toMatch(/LOOKUP_BUDGET_MS/);
     expect(schemaSource).toMatch(/lyricsCache/);
     expect(schemaSource).toMatch(/byKey/);
+  });
+
+  test("the client re-fetches when the track changes", () => {
+    // The fetch effect listed only the action in its dependencies, so the
+    // panel cleared itself on a track change and then never asked again:
+    // every song after the first sat on "loading" for the rest of the session.
+    const effect = playerSource.slice(
+      playerSource.indexOf("const fetchLyrics = useAction"),
+      playerSource.indexOf("// current line index"),
+    );
+    expect(effect).toMatch(/\}, \[fetchLyrics, key\]\);/);
+    // The timings flag is per-result and must not survive into the next song.
+    expect(playerSource).toMatch(/setSynced\(true\);/);
   });
 
   test("the client tells the user when lyrics have no timings", () => {
