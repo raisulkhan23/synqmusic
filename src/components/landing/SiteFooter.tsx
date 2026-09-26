@@ -89,14 +89,20 @@ const featuredOn = [
 
 export function SiteFooter() {
   return (
-    <footer className="footer-scallop relative z-10 mt-8 border-t border-white/[0.07] bg-white/[0.015] pt-16 pb-10 sm:mt-12 sm:pt-20">
+    /* The footer sits on top of whatever wallpaper the listener picked, so a
+       1.5%-white wash left the copy, the badges and the tick marks to be read
+       against a photo. It now carries a real surface — mostly-opaque
+       `background` plus a backdrop blur — so contrast is the same on the
+       default dark theme and on a bright photo, and the hairline above it is
+       bright enough to read as an edge instead of a guess. */
+    <footer className="footer-scallop relative z-10 mt-8 border-t border-white/15 bg-background/80 pt-16 pb-10 backdrop-blur-2xl sm:mt-12 sm:pt-20">
       {/* Clipping lives on its own layer, NOT on the footer: the scalloped
           edge is drawn above the footer's top border, so an `overflow-hidden`
           here would cut the bumps off entirely. */}
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
         {/* Oversized wordmark bleeding off the bottom, the way a masthead sets
             its own name behind the content. */}
-        <span className="absolute inset-x-0 -bottom-4 block select-none text-center font-display text-[26vw] leading-none font-bold tracking-tighter text-white/[0.035] sm:-bottom-6">
+        <span className="absolute inset-x-0 -bottom-4 block select-none text-center font-display text-[26vw] leading-none font-bold tracking-tighter text-white/[0.05] sm:-bottom-6">
           SYNQ
         </span>
       </div>
@@ -106,13 +112,13 @@ export function SiteFooter() {
           {/* brand block */}
           <div className="max-w-sm">
             <Logo to="/" />
-            <p className="mt-4 text-sm leading-6 text-muted-foreground">
+            <p className="mt-4 text-sm leading-6 text-foreground/70">
               A home for the songs you actually want to hear — no ads, no
               clutter, and a queue that moves like you do.
             </p>
 
-            <span aria-hidden="true" className="mt-8 block h-px w-5 bg-[rgb(var(--tint))]/60" />
-            <p className="mt-3 font-mono text-[10px] tracking-[0.2em] text-muted-foreground/75 uppercase">
+            <span aria-hidden="true" className="mt-8 block h-px w-5 bg-[rgb(var(--tint))]/90" />
+            <p className="mt-3 font-mono text-[10px] tracking-[0.2em] text-foreground/60 uppercase">
               Featured on
             </p>
             <ul className="mt-3 flex flex-wrap items-center gap-2.5">
@@ -122,7 +128,7 @@ export function SiteFooter() {
                     href={badge.href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className={`block border border-white/70 opacity-80 transition-all duration-200 hover:-translate-y-0.5 hover:border-white hover:opacity-100 focus-visible:-translate-y-0.5 focus-visible:border-white focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[rgb(var(--tint))] ${badge.radius}`}
+                    className={`block border border-white/75 transition-all duration-200 hover:-translate-y-0.5 hover:border-white focus-visible:-translate-y-0.5 focus-visible:border-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[rgb(var(--tint))] ${badge.radius}`}
                   >
                     <img
                       src={badge.badge}
@@ -149,9 +155,9 @@ export function SiteFooter() {
                     quiet rule and a mono label reads as set typography. */}
                 <span
                   aria-hidden="true"
-                  className="block h-px w-5 bg-[rgb(var(--tint))]/60"
+                  className="block h-px w-5 bg-[rgb(var(--tint))]/90"
                 />
-                <p className="mt-3 font-mono text-[10px] tracking-[0.2em] text-muted-foreground/75 uppercase">
+                <p className="mt-3 font-mono text-[10px] tracking-[0.2em] text-foreground/60 uppercase">
                   {column.heading}
                 </p>
                 <ul className="mt-3.5">
@@ -164,10 +170,10 @@ export function SiteFooter() {
                         to={link.to}
                         className="group -mx-2 flex items-baseline gap-2.5 rounded-md px-2 py-[5px] transition-colors hover:bg-white/[0.05] focus-visible:bg-white/[0.05]"
                       >
-                        <span className="w-4 shrink-0 font-mono text-[10px] text-muted-foreground/30 tabular-nums transition-colors group-hover:text-[rgb(var(--tint))]/70">
+                        <span className="w-4 shrink-0 font-mono text-[10px] text-foreground/45 tabular-nums transition-colors group-hover:text-[rgb(var(--tint))]/80">
                           {String(i + 1).padStart(2, "0")}
                         </span>
-                        <span className="truncate text-sm text-muted-foreground transition-colors group-hover:text-foreground">
+                        <span className="truncate text-sm text-foreground/85 transition-colors group-hover:text-foreground">
                           {link.label}
                         </span>
                       </Link>
@@ -188,7 +194,7 @@ export function SiteFooter() {
             pill is hidden and a lone left-aligned child would look stranded. */}
         <div className="mt-14 flex flex-wrap items-end justify-end gap-4 sm:mt-16 sm:justify-between">
           <div className="hidden sm:block">
-            <div className="inline-flex items-center gap-2.5 rounded-full border border-white/10 bg-white/[0.04] py-2 pr-3 pl-2.5">
+            <div className="inline-flex items-center gap-2.5 rounded-full border border-white/20 bg-white/[0.07] py-2 pr-3 pl-2.5">
               <span className="flex size-7 items-center justify-center rounded-full bg-[rgb(var(--tint))]/15 text-[rgb(var(--tint))]">
                 <ShieldCheck className="size-3.5" />
               </span>
@@ -199,7 +205,7 @@ export function SiteFooter() {
             </div>
           </div>
 
-          <div className="inline-flex max-w-full flex-col items-center gap-1.5 rounded-2xl border border-white/10 bg-white/[0.04] px-6 py-3.5 text-center">
+          <div className="inline-flex max-w-full flex-col items-center gap-1.5 rounded-2xl border border-white/20 bg-white/[0.07] px-6 py-3.5 text-center">
             <p className="font-mono text-xs font-medium tracking-tight text-foreground">
               © 2026 SYNQ — currently in beta
             </p>

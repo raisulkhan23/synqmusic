@@ -70,8 +70,18 @@ describe("navigation scroll reset", () => {
 
 describe("footer featured-on badges", () => {
   test("every badge is outlined in white", () => {
-    expect(footerSource).toContain("border border-white/70");
+    expect(footerSource).toContain("border border-white/75");
     expect(footerSource).toContain("hover:border-white");
+  });
+
+  test("the footer carries a real surface so it reads over a wallpaper", () => {
+    // A 1.5%-white wash left the copy and badges to be read against whatever
+    // photo the listener picked. Opaque-ish background + blur keeps contrast
+    // the same on the dark theme and on a bright wallpaper.
+    expect(footerSource).toMatch(/<footer[^>]*bg-background\/80/);
+    expect(footerSource).toMatch(/<footer[^>]*backdrop-blur-2xl/);
+    expect(footerSource).toMatch(/<footer[^>]*border-white\/15/);
+    expect(footerSource).not.toMatch(/<footer[^>]*bg-white\/\[\?0\.015/);
   });
 
   test("each badge declares a radius matching its own artwork", () => {
@@ -90,7 +100,9 @@ describe("footer featured-on badges", () => {
   test("the outline utilities actually compile to a visible keyline", async () => {
     const css = await compileClasses([
       "border",
-      "border-white/70",
+      "border-white/75",
+      "bg-background/80",
+      "backdrop-blur-2xl",
       "hover:border-white",
       "rounded-full",
       "rounded-lg",
@@ -99,8 +111,11 @@ describe("footer featured-on badges", () => {
     // The emitted selector escapes the slash, so these are string matches:
     // `/\.border-white\/70/` would look for a bare `/` where the CSS has `\/`.
     expect(css).toMatch(/\.border\{[^}]*border-width:1px/);
-    expect(css).toContain(".border-white\\/70{border-color:#ffffffb3");
+    expect(css).toContain(".border-white\\/75{border-color:#ffffffbf");
     expect(css).toContain(".hover\\:border-white");
+    expect(css).toContain(".bg-background\\/80{");
+    expect(css).toMatch(/\.bg-background\\?\/80\{[^}]*background-color:/);
+    expect(css).toMatch(/\.backdrop-blur-2xl\{[^}]*backdrop-filter:/);
     expect(css).toMatch(/\.rounded-full\{[^}]*border-radius/);
     expect(css).toMatch(/\.rounded-lg\{[^}]*border-radius/);
     expect(css).toMatch(/\.rounded-xl\{[^}]*border-radius/);
