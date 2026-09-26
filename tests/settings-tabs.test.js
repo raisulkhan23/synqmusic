@@ -35,15 +35,19 @@ describe("settings page category tabs", () => {
     expect(css).toMatch(/\.settings-page-grid>\.settings-jump-bar\{[^}]*grid-area:2\/1\/span 60/);
     expect(css).toMatch(/\.settings-page-grid>\.settings-jump-bar\{[^}]*align-self:start/);
     // The pointer glow is absolutely positioned; a grid column would turn its
-    // grid area into the containing block and squash it. Lightning CSS drops
-    // the universal selector, so the emitted selector is `>:not(...):not(...)`.
+    // grid area into the containing block and squash it. The header has to be
+    // excluded too: this selector outranks the header rule, so without the
+    // `:not` the title is dragged into column 2 and the rail rides up under
+    // it. Lightning CSS drops the universal selector.
     expect(css).toMatch(
-      /\.settings-page-grid>:not\(\.settings-jump-bar\):not\(\.settings-pointer-glow\)\{grid-column:2/,
+      /\.settings-page-grid>:not\(\.settings-jump-bar\):not\(\.settings-pointer-glow\):not\(\.settings-header\)\{grid-column:2/,
     );
+    expect(css).toMatch(/\.settings-page-grid>\.settings-header\{grid-column:1\/-1\}/);
     // `gap: 0 !important` on the panel is a shorthand, so the clearance between
-    // rail and content is padding, not column-gap.
+    // rail and content is padding, not column-gap. Without it the rail sits
+    // flush against the section headings.
     expect(css).toMatch(
-      /\.settings-page-grid>\.settings-jump-bar\{[^}]*padding-right:2rem/,
+      /\.settings-page-grid>:not\(\.settings-jump-bar\)[^}]*padding-left:2\.5rem/,
     );
   });
 });

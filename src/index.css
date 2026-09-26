@@ -615,16 +615,21 @@ html,
       grid-column: 1;
       grid-row: 2 / span 60;
       align-self: start;
-      /* The panel sets `gap: 0 !important` as a shorthand, which would also
-         swallow a plain `column-gap`, so the clearance between the rail and
-         the content is padding inside the rail instead. */
-      padding-right: 2rem;
     }
-    /* The pointer glow is absolutely positioned; giving it a grid column would
-       turn its grid area into the containing block and shrink it to one
-       column. */
-    .settings-page-grid > *:not(.settings-jump-bar):not(.settings-pointer-glow) {
+    /* The header spans both columns, and the pointer glow is absolutely
+       positioned (giving it a grid column would turn its grid area into the
+       containing block and squash it). `:not(.settings-header)` is load-bearing:
+       this selector is more specific than the header rule above, so without the
+       guard the header would be dragged into column 2 and the rail would sit
+       under the page title. */
+    .settings-page-grid
+      > *:not(.settings-jump-bar):not(.settings-pointer-glow):not(.settings-header) {
       grid-column: 2;
+      /* The panel sets `gap: 0 !important` — a shorthand, which would swallow
+         a plain `column-gap` — so the clearance between the rail and the
+         content column is padding on the content instead. Without it the rail
+         sits flush against the section headings. */
+      padding-left: 2.5rem;
     }
     .settings-jump-rail {
       flex-direction: column !important;
