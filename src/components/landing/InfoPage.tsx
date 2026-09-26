@@ -1,4 +1,5 @@
 import { Logo } from "@/components/brand/Logo";
+import { SiteFooter } from "@/components/landing/SiteFooter";
 import { ArrowLeft } from "lucide-react";
 import { Link } from "react-router";
 import type { ReactNode } from "react";
@@ -98,6 +99,8 @@ export function InfoPage({
           </Link>
         </div>
       </main>
+
+      <SiteFooter />
     </div>
   );
 }

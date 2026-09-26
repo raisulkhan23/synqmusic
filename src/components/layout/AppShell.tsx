@@ -8,6 +8,7 @@ import { QueuePanel } from "@/components/player/QueuePanel";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { SettingsDialog } from "@/components/settings/SettingsDialog";
 import { Logo } from "@/components/brand/Logo";
+import { SiteFooter } from "@/components/landing/SiteFooter";
 import { api } from "@/convex/_generated/api";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
@@ -688,6 +689,14 @@ export function AppShell() {
           >
             <Outlet />
           </div>
+
+          {/* Site footer, shared with the landing page so every route ends the
+              same way. It lives INSIDE <main> (the scroll container) rather
+              than beside the player: as a sibling it would become a fixed
+              flex item that eats vertical space and squeezes the app on a
+              phone. Hidden in a focus session, where a footer is exactly the
+              kind of thing the mode exists to remove. */}
+          {!focusMode && <SiteFooter />}
         </main>
 
         <PlayerBar compact={compactMode || focusLayout === "work" || focusLayout === "sleep"} />

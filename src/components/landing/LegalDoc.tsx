@@ -1,4 +1,5 @@
 import { Logo } from "@/components/brand/Logo";
+import { SiteFooter } from "@/components/landing/SiteFooter";
 import { ArrowLeft } from "lucide-react";
 import { Link } from "react-router";
 import type { ReactNode } from "react";
@@ -142,6 +143,8 @@ export function LegalDoc({
           <span>Effective {effective}</span>
         </footer>
       </div>
+
+      <SiteFooter />
     </div>
   );
 }
