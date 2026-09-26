@@ -1,8 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router";
 import { Logo } from "@/components/brand/Logo";
-import { usePlayerStore } from "@/store/player";
 import { SiteFooter } from "@/components/landing/SiteFooter";
 import {
   Activity,
@@ -33,8 +32,6 @@ const fadeUp = {
   viewport: { once: true, margin: "-80px" },
   transition: { duration: 0.55, ease: "easeOut" as const },
 };
-
-const VIS_BARS = 52;
 
 const modeContent = {
   focus: {
@@ -67,119 +64,6 @@ const modeContent = {
 } as const;
 
 type ListeningMode = keyof typeof modeContent;
-
-function VisualizerDemo() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  // This demo repaints itself every frame from a rAF loop. Performance mode has
-  // to stop the loop — no stylesheet rule can reach a canvas.
-  const performanceMode = usePlayerStore((s) => s.performanceMode);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || performanceMode) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    const values = new Float32Array(VIS_BARS);
-    let raf = 0;
-    let last = performance.now();
-
-    const resize = () => {
-      const rect = canvas.getBoundingClientRect();
-      canvas.width = Math.max(1, Math.floor(rect.width * dpr));
-      canvas.height = Math.max(1, Math.floor(rect.height * dpr));
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    };
-
-    resize();
-    const observer = new ResizeObserver(resize);
-    observer.observe(canvas);
-
-    const draw = (now: number) => {
-      const dt = Math.min(0.1, (now - last) / 1000);
-      last = now;
-      const rect = canvas.getBoundingClientRect();
-      const w = rect.width;
-      const h = rect.height;
-      ctx.clearRect(0, 0, w, h);
-
-      const gap = Math.min(5, w / (VIS_BARS * 2));
-      const barWidth = Math.max(2, (w - (VIS_BARS - 1) * gap) / VIS_BARS - gap);
-      const baseline = h * 0.9;
-      const maxHeight = h * 0.76;
-
-      for (let i = 0; i < VIS_BARS; i += 1) {
-        const target =
-          0.12 +
-          0.66 *
-            Math.abs(Math.sin(now / 820 + i * 0.53)) *
-            (0.48 + 0.52 * Math.sin(now / 330 + i * 1.12));
-        values[i] += (target - values[i]) * Math.min(1, dt * 8);
-        const barHeight = Math.max(3, values[i] * maxHeight);
-        const x =
-          (w - (VIS_BARS * barWidth + (VIS_BARS - 1) * gap)) / 2 +
-          i * (barWidth + gap);
-        const gradient = ctx.createLinearGradient(
-          0,
-          baseline - barHeight,
-          0,
-          baseline,
-        );
-        gradient.addColorStop(0, "rgba(215,242,122,0.95)");
-        gradient.addColorStop(0.55, "rgba(139,232,255,0.58)");
-        gradient.addColorStop(1, "rgba(213,167,255,0.12)");
-        ctx.fillStyle = gradient;
-        ctx.beginPath();
-        ctx.roundRect(
-          x,
-          baseline - barHeight,
-          barWidth,
-          barHeight,
-          barWidth / 2,
-        );
-        ctx.fill();
-      }
-      raf = requestAnimationFrame(draw);
-    };
-
-    raf = requestAnimationFrame(draw);
-    return () => {
-      cancelAnimationFrame(raf);
-      observer.disconnect();
-    };
-  }, [performanceMode]);
-
-  return (
-    <div className="glass-card overflow-hidden rounded-[2rem] p-6 sm:p-9">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="flex items-center gap-2 text-[10px] font-bold tracking-[0.24em] text-brand uppercase">
-            <Activity className="size-3.5" /> Live frequency field
-          </p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            A reactive visual layer for the moments when the music takes over.
-          </p>
-        </div>
-        <span className="inline-flex items-center gap-2 rounded-full border border-brand/20 bg-brand/8 px-3 py-1.5 text-[10px] font-semibold text-brand">
-          <span className="size-1.5 animate-pulse rounded-full bg-brand" />{" "}
-          Playing
-        </span>
-      </div>
-      <canvas
-        ref={canvasRef}
-        className="mt-8 h-48 w-full sm:h-64"
-        aria-label="Animated music frequency visualization"
-      />
-      <div className="mt-5 flex items-center justify-between border-t border-white/[0.07] pt-4 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-        <span>sub bass</span>
-        <span>low mids</span>
-        <span>presence</span>
-        <span>air</span>
-      </div>
-    </div>
-  );
-}
 
 function CoverArt({ className = "size-16" }: { className?: string }) {
   return (
@@ -527,12 +411,6 @@ export default function Landing() {
             Features
           </a>
           <a
-            href="#visualizer"
-            className="transition-colors hover:text-foreground"
-          >
-            Visualizer
-          </a>
-          <a
             href="#experience"
             className="transition-colors hover:text-foreground"
           >
@@ -675,13 +553,6 @@ export default function Landing() {
             </motion.div>
           ))}
         </div>
-      </section>
-
-      <section
-        id="visualizer"
-        className="relative z-10 mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 sm:py-20"
-      >
-        <VisualizerDemo />
       </section>
 
       <section className="relative z-10 mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 sm:py-28">

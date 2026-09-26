@@ -165,19 +165,19 @@ describe("performance mode stops the frame loops CSS cannot reach", () => {
     );
   });
 
-  test("both canvas visualizers stop repainting", () => {
+  test("the canvas visualizer stops repainting", () => {
     // A canvas redraws from a rAF loop; no stylesheet rule reaches it, so this
-    // is the loop that kept a phone hot even with every effect hidden.
+    // is the loop that kept a phone hot even with every effect hidden. The
+    // landing page's decorative demo canvas was removed, so the player's
+    // visualizer is the only one left to park.
     expect(visualizerSource).toMatch(
       /if \(!canvas \|\| !visualizerEnabled \|\| !active \|\| performanceMode\) return;/,
     );
     expect(visualizerSource).toMatch(
       /if \(!visualizerEnabled \|\| performanceMode\) return null;/,
     );
-    expect(landingSource).toMatch(
-      /if \(!canvas \|\| performanceMode\) return;/,
-    );
-    expect(landingSource).toMatch(/\}, \[performanceMode\]\);/);
+    expect(landingSource).not.toContain("requestAnimationFrame");
+    expect(landingSource).not.toContain("getContext");
   });
 
   test("a video wallpaper stops decoding", () => {

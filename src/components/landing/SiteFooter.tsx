@@ -18,7 +18,6 @@ const linkColumns = [
     heading: "Explore",
     links: [
       { label: "Features", to: "/#features" },
-      { label: "Visualizer", to: "/#visualizer" },
       { label: "Experience", to: "/#experience" },
     ],
   },
