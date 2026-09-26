@@ -607,6 +607,11 @@ html,
   @media (min-width: 1024px) {
     .settings-page-grid {
       grid-template-columns: 12.5rem minmax(0, 1fr);
+      /* The rail spans 60 rows, so ~50 of them are empty. With the default
+         `align-content: normal` any spare height would be shared out across
+         all of them and push the last section down; the panel is content
+         sized, so start packing and let the spare height stay spare. */
+      align-content: start;
     }
     .settings-page-grid > .settings-header {
       grid-column: 1 / -1;

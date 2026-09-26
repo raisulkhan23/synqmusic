@@ -34,6 +34,10 @@ describe("settings page category tabs", () => {
     // `grid-row: 2 / span 60` into the `grid-area` shorthand.
     expect(css).toMatch(/\.settings-page-grid>\.settings-jump-bar\{[^}]*grid-area:2\/1\/span 60/);
     expect(css).toMatch(/\.settings-page-grid>\.settings-jump-bar\{[^}]*align-self:start/);
+    // The rail spans 60 rows, so most of them are empty. With the default
+    // `align-content: normal` any spare height would be shared across all of
+    // them and shove the last section down.
+    expect(css).toMatch(/\.settings-page-grid\{[^}]*align-content:start/);
     // The pointer glow is absolutely positioned; a grid column would turn its
     // grid area into the containing block and squash it. The header has to be
     // excluded too: this selector outranks the header rule, so without the
@@ -107,6 +111,17 @@ describe("fullscreen player cursor follow", () => {
     expect(fullscreenSource).toMatch(/trailFrameRef\.current = requestAnimationFrame/);
     expect(fullscreenSource).toMatch(
       /cancelAnimationFrame\(trailFrameRef\.current\)/,
+    );
+  });
+
+  test("the cached bounds are invalidated on resize, not only on pointer enter", () => {
+    // Resizing while the cursor sits inside the player fires no pointerenter,
+    // so without this the glow and trail stay offset by the size delta.
+    expect(fullscreenSource).toMatch(
+      /window\.addEventListener\("resize", invalidate\)/,
+    );
+    expect(fullscreenSource).toMatch(
+      /window\.removeEventListener\("resize", invalidate\)/,
     );
   });
 

@@ -128,7 +128,6 @@ export function AppShell() {
     return localStorage.getItem("ss.wallpaperBlur") === "0" ? 0 : DEFAULT_WALLPAPER_BLUR_AMOUNT;
   });
   const rippleLayerRef = useRef<HTMLDivElement>(null);
-  const mainScrollRef = useRef<HTMLElement>(null);
   const cursorTrailRefs = useRef<Array<HTMLSpanElement | null>>([]);
   const touchGlowTimeoutRef = useRef<number | null>(null);
   const wallpaperVideoRef = useRef<HTMLVideoElement>(null);
@@ -663,7 +662,6 @@ export function AppShell() {
             page a horizontal scrollbar on a phone. Nested `overflow-x-auto`
             rails inside a page still scroll normally. */}
         <main
-          ref={mainScrollRef}
           data-app-scroll
           className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto"
         >

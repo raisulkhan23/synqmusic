@@ -28,14 +28,21 @@ export function ScrollToTop() {
     let cancelled = false;
 
     const resetToTop = () => {
+      // `behavior: "instant"` is load-bearing, not a preference. The app sets
+      // `html { scroll-behavior: smooth }` (and `.focus-study main` does the
+      // same for the shell container), and `scrollTo` inherits the target's
+      // computed behaviour when you don't pass one. Leaving it off meant
+      // leaving the bottom of a long page animated the NEW page back up to
+      // the top, and in Study mode a jump could still be animating when the
+      // next navigation reset the same container.
       if (window.scrollX !== 0 || window.scrollY !== 0) {
-        window.scrollTo({ top: 0, left: 0 });
+        window.scrollTo({ top: 0, left: 0, behavior: "instant" });
       }
       document
         .querySelectorAll<HTMLElement>(SCROLL_CONTAINERS)
         .forEach((element) => {
           if (element.scrollTop !== 0 || element.scrollLeft !== 0) {
-            element.scrollTo({ top: 0, left: 0 });
+            element.scrollTo({ top: 0, left: 0, behavior: "instant" });
           }
         });
     };

@@ -442,6 +442,18 @@ export function FullscreenPlayer() {
     },
     [],
   );
+  // The cached bounds go stale the moment the window changes size, and pointer
+  // enter does not fire again if the cursor happens to be inside the player
+  // while it is resized — which would leave the glow and trail offset from the
+  // pointer by the size delta.
+  useEffect(() => {
+    if (!fullscreen) return;
+    const invalidate = () => {
+      surfaceBoundsRef.current = null;
+    };
+    window.addEventListener("resize", invalidate);
+    return () => window.removeEventListener("resize", invalidate);
+  }, [fullscreen]);
   /** Mirror of videoReady for the retry loop (state updates are async). */
   const videoReadyRef = useRef(false);
   /** Latest playback position, read inside the async retry loop. */
