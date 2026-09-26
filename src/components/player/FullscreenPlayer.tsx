@@ -173,6 +173,9 @@ function LyricsPanel({ onClose }: { onClose: () => void }) {
   const seek = usePlayerStore((s) => s.seek);
   const fetchLyrics = useAction(api.lyrics.fetchLyrics);
   const [lines, setLines] = useState<{ t: number; text: string }[] | null>(null);
+  /** False when the lines are guesses spread over the track rather than real
+   *  timings, so the panel can say so instead of pretending to follow along. */
+  const [synced, setSynced] = useState(true);
   const [loading, setLoading] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -203,7 +206,11 @@ function LyricsPanel({ onClose }: { onClose: () => void }) {
       duration: current.duration,
     })
       .then((res) => {
-        if (!cancelled) setLines(res?.lines ?? null);
+        if (!cancelled) {
+          // A cached miss comes back as an empty result rather than null.
+          setLines(res && res.lines.length > 0 ? res.lines : null);
+          setSynced(res?.synced ?? true);
+        }
       })
       .catch(() => {
         if (!cancelled) setLines(null);
@@ -228,11 +235,14 @@ function LyricsPanel({ onClose }: { onClose: () => void }) {
     return idx;
   }, [lines, currentTime]);
 
-  // auto-scroll active line into view
+  // auto-scroll active line into view. Skipped for unsynced lyrics: their
+  // timings are guesses spread across the track, so following them would drift
+  // a line at a time through the song and read as broken.
   useEffect(() => {
+    if (!synced) return;
     const el = containerRef.current?.querySelector<HTMLElement>("[data-active='true']");
     el?.scrollIntoView({ block: "center", behavior: "smooth" });
-  }, [activeIndex]);
+  }, [activeIndex, synced]);
 
   return (
     <motion.div
@@ -247,6 +257,11 @@ function LyricsPanel({ onClose }: { onClose: () => void }) {
           <MicVocal className="size-4" />
           Lyrics
         </p>
+        {!synced && (
+          <span className="rounded-full border border-white/10 bg-white/[0.05] px-2 py-0.5 text-[10px] text-muted-foreground">
+            No timings — plain lyrics
+          </span>
+        )}
         <button
           type="button"
           aria-label="Close lyrics"
@@ -279,7 +294,7 @@ function LyricsPanel({ onClose }: { onClose: () => void }) {
                 onClick={() => seek(line.t)}
                 className={cn(
                   "text-left text-lg leading-snug font-semibold transition-all duration-300",
-                  i === activeIndex
+                  i === activeIndex && synced
                     ? "scale-[1.02] text-[rgb(var(--tint))]"
                     : "text-muted-foreground/50 hover:text-foreground",
                 )}
@@ -392,6 +407,10 @@ export function FullscreenPlayer() {
   const [isMetaHovered, setIsMetaHovered] = useState(false);
   const metaExpanded = expandedMetaTrackId !== null && expandedMetaTrackId === current?.id;
   const pointerEffects = usePlayerStore((s) => s.pointerEffects);
+  const performanceMode = usePlayerStore((s) => s.performanceMode);
+  // Performance mode removes the pointer layer entirely in fullscreen, where
+  // the effects cover the whole screen and are the most expensive there.
+  const pointerFx = pointerEffects && !performanceMode;
   const [wallpaperBlur, setWallpaperBlur] = useState(
     () => localStorage.getItem("ss.wallpaperBlur") !== "0",
   );
@@ -580,7 +599,7 @@ export function FullscreenPlayer() {
   }, [lyricsOpen]);
 
   const handlePointerMove = (event: PointerEvent<HTMLDivElement>) => {
-    if (!pointerEffects || event.pointerType === "touch") return;
+    if (!pointerFx || event.pointerType === "touch") return;
     if (surfaceBoundsRef.current === null) {
       surfaceBoundsRef.current = event.currentTarget.getBoundingClientRect();
     }
@@ -590,7 +609,7 @@ export function FullscreenPlayer() {
   };
 
   const handlePointerEnter = (event: PointerEvent<HTMLDivElement>) => {
-    if (pointerEffects && event.pointerType !== "touch") {
+    if (pointerFx && event.pointerType !== "touch") {
       // Re-measure on enter: the window can have been resized while the
       // player was open, and a stale rect would offset every effect.
       surfaceBoundsRef.current = event.currentTarget.getBoundingClientRect();
@@ -603,7 +622,7 @@ export function FullscreenPlayer() {
   };
 
   const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
-    if (!pointerEffects || event.pointerType === "touch" || !rippleLayerRef.current) return;
+    if (!pointerFx || event.pointerType === "touch" || !rippleLayerRef.current) return;
     const layer = rippleLayerRef.current;
     const rect = event.currentTarget.getBoundingClientRect();
     const ripple = document.createElement("span");
@@ -648,13 +667,13 @@ export function FullscreenPlayer() {
                 muted
                 loop
                 playsInline
-                className={`size-full scale-110 object-cover ${wallpaperBlur ? "blur-3xl" : ""}`}
+                className={`perf-wallpaper-blur size-full scale-110 object-cover ${wallpaperBlur ? "blur-3xl" : ""}`}
               />
             ) : (
               <img
                 src={wallpaper}
                 alt=""
-                className={`size-full scale-110 object-cover ${wallpaperBlur ? "blur-3xl" : ""}`}
+                className={`perf-wallpaper-blur size-full scale-110 object-cover ${wallpaperBlur ? "blur-3xl" : ""}`}
               />
             )}
             <div className="absolute inset-0 bg-[#090a0f]/45" />
@@ -663,7 +682,7 @@ export function FullscreenPlayer() {
         )}
         <div className="ambient-grid pointer-events-none absolute inset-0 z-[1] opacity-35" aria-hidden="true" />
         <div className="pointer-events-none absolute inset-0 z-[1] bg-[#090a0f]/20" aria-hidden="true" />
-        {pointerEffects && (
+        {pointerFx && (
           <>
             <div className="pointer-glow pointer-events-none absolute inset-0 z-[2]" aria-hidden="true" />
             <div className="cursor-trail-layer pointer-events-none absolute inset-0 z-[2] overflow-hidden" aria-hidden="true">

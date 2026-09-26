@@ -156,6 +156,19 @@ const schema = defineSchema(
       ),
       createdAt: v.number(),
     }).index("by_user", ["userId"]),
+
+    // Lyrics lookups, keyed by the normalised "title|artist" that actually hit.
+    // Stores misses too (`missing: true`) so a song with no lyrics anywhere is
+    // only looked up once instead of on every open of the panel. Free lyrics
+    // APIs are rate limited, so this is what keeps the panel responsive.
+    lyricsCache: defineTable({
+      key: v.string(),
+      lines: v.any(), // LyricLine[]; empty when `missing`
+      synced: v.boolean(),
+      source: v.string(),
+      missing: v.boolean(),
+      fetchedAt: v.number(),
+    }).index("byKey", ["key"]),
   },
   {
     schemaValidation: false,

@@ -1305,6 +1305,51 @@ html,
     }
   }
 
+  /* Performance mode.
+     One class on <html> removes every decoration that costs frames on a
+     weaker machine, without touching layout, playback or the player:
+       - the glass sheen (a gradient repaint per panel, per frame)
+       - every backdrop-filter (a backdrop read-back and blur)
+       - the aurora orbs and the ambient grid (huge blurred/masked layers)
+       - the pointer glow and cursor trail
+       - click ripples
+     It is deliberately a rendering budget, not a feature switch: nothing
+     becomes unreachable or unreadable when it is on. */
+  html.perf-lite *,
+  html.perf-lite *::before,
+  html.perf-lite *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  html.perf-lite .liquid-glass,
+  html.perf-lite .glass,
+  html.perf-lite .glass-card,
+  html.perf-lite .mobile-player,
+  html.perf-lite .settings-jump-bar,
+  html.perf-lite .settings-jump-glass,
+  html.perf-lite .mobile-nav-item::before {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+  html.perf-lite .liquid-glass::before,
+  html.perf-lite .settings-liquid-glass::before,
+  html.perf-lite .settings-jump-glass::before {
+    content: none !important;
+  }
+  html.perf-lite .aurora-orb,
+  html.perf-lite .ambient-grid,
+  html.perf-lite .pointer-glow,
+  html.perf-lite .cursor-trail-layer,
+  html.perf-lite .click-ripple,
+  html.perf-lite .footer-scallop::before {
+    display: none !important;
+  }
+  /* A blurred full-bleed wallpaper is a full-screen filter on every frame of
+     any animation behind it; drop the blur but keep the picture. */
+  html.perf-lite .perf-wallpaper-blur {
+    filter: none !important;
+  }
+
   .hide-scrollbar {
     scrollbar-width: none;
   }

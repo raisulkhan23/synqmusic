@@ -181,6 +181,8 @@ export function SettingsDialog({
   const toggleVisualizer = usePlayerStore((s) => s.toggleVisualizer);
   const pointerEffects = usePlayerStore((s) => s.pointerEffects);
   const togglePointerEffects = usePlayerStore((s) => s.togglePointerEffects);
+  const performanceMode = usePlayerStore((s) => s.performanceMode);
+  const togglePerformanceMode = usePlayerStore((s) => s.togglePerformanceMode);
   const themeMode = usePlayerStore((s) => s.themeMode);
   const setThemeMode = usePlayerStore((s) => s.setThemeMode);
   const hideExplicit = usePlayerStore((s) => s.hideExplicit);
@@ -596,6 +598,7 @@ export function SettingsDialog({
     if (!ambientGlow) toggleAmbientGlow();
     if (!pointerEffects) togglePointerEffects();
     if (!visualizerEnabled) toggleVisualizer();
+    if (performanceMode) togglePerformanceMode();
     localStorage.setItem("ss.accentTheme", "auto");
     localStorage.setItem("ss.themeMode", "dark");
     localStorage.setItem("ss.trackPalettes", "1");
@@ -606,6 +609,7 @@ export function SettingsDialog({
     localStorage.setItem("ss.ambientGlow", "1");
     localStorage.setItem("ss.pointerEffects", "1");
     localStorage.setItem("ss.visualizer", "1");
+    localStorage.setItem("ss.performanceMode", "0");
     document.documentElement.classList.remove("no-glass", "reduce-motion");
     window.dispatchEvent(new CustomEvent("synq:track-palettes-change", { detail: true }));
     toast.success("Visual preferences reset");
@@ -1790,6 +1794,21 @@ export function SettingsDialog({
               toast(pointerEffects ? "Pointer glow off" : "Pointer glow on");
             }}
           />
+          <ToggleRow
+            label="Performance mode"
+            description="Turn off glass blur, the light sheen, aurora orbs, pointer glow and cursor trail for a smoother page"
+            on={performanceMode}
+            onToggle={() => {
+              togglePerformanceMode();
+              toast(performanceMode ? "Performance mode off" : "Performance mode on");
+            }}
+          />
+          <p className="px-1 text-xs leading-5 text-muted-foreground">
+            Performance mode only changes how the page is drawn — playback,
+            the queue and every setting stay exactly as they are. It is the one
+            switch to reach for if scrolling, the visualizer or fullscreen ever
+            feel stuttery on your device.
+          </p>
         </section>
 
         <Separator className="bg-white/[0.07]" />

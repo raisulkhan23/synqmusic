@@ -204,6 +204,14 @@ export function AppShell() {
     document.documentElement.dataset.scene = sceneTheme;
   }, [sceneTheme]);
 
+  // Performance mode is a single class on <html>; the whole set of expensive
+  // decorations is switched off from `src/index.css` under `html.perf-lite`.
+  const performanceMode = usePlayerStore((s) => s.performanceMode);
+  useEffect(() => {
+    document.documentElement.classList.toggle("perf-lite", performanceMode);
+    if (performanceMode) cursorTrailRef.current?.stop();
+  }, [performanceMode]);
+
   useEffect(() => {
     const onWallpaperEnabledChange = (event: Event) => {
       const enabled = (event as CustomEvent<boolean>).detail;
@@ -281,6 +289,9 @@ export function AppShell() {
   const fullscreen = usePlayerStore((s) => s.fullscreen);
   const isBuffering = usePlayerStore((s) => s.isBuffering);
   const pointerEffects = usePlayerStore((s) => s.pointerEffects);
+  // Performance mode drops the whole pointer layer (glow, trail, ripples)
+  // rather than only restyling it, so no pointer event is handled at all.
+  const pointerFx = pointerEffects && !performanceMode;
   const setLiked = usePlayerStore((s) => s.setLiked);
   const setLikeMutation = usePlayerStore((s) => s.setLikeMutation);
   const setHistoryRecorder = usePlayerStore((s) => s.setHistoryRecorder);
@@ -498,7 +509,7 @@ export function AppShell() {
       : {};
 
   const handlePointerMove = (event: PointerEvent<HTMLDivElement>) => {
-    if (!pointerEffects || event.pointerType === "touch") return;
+    if (!pointerFx || event.pointerType === "touch") return;
     // The shell is a fixed, viewport-sized surface, so its bounds are measured
     // once instead of on every pointer event: `getBoundingClientRect()` in this
     // handler was a forced layout read per event, on top of everything else
@@ -515,7 +526,7 @@ export function AppShell() {
   };
 
   const handlePointerEnter = (event: PointerEvent<HTMLDivElement>) => {
-    if (pointerEffects && event.pointerType !== "touch") {
+    if (pointerFx && event.pointerType !== "touch") {
       // Re-measure on enter: the window can have been resized while the tab
       // sat in the background, and a stale rect would offset every effect.
       shellBoundsRef.current = event.currentTarget.getBoundingClientRect();
@@ -528,7 +539,7 @@ export function AppShell() {
   };
 
   const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
-    if (!pointerEffects || !rippleLayerRef.current) return;
+    if (!pointerFx || !rippleLayerRef.current) return;
 
     const rect = event.currentTarget.getBoundingClientRect();
     event.currentTarget.style.setProperty("--pointer-x", `${event.clientX - rect.left}px`);
@@ -588,7 +599,7 @@ export function AppShell() {
           <div className="aurora-orb aurora-orb-two pointer-events-none absolute -right-48 bottom-[-16rem] -z-10 size-[42rem] rounded-full" aria-hidden="true" />
         </>
       )}
-      {pointerEffects && !focusMode && (
+      {pointerFx && !focusMode && (
         <>
           <div className="pointer-glow pointer-events-none absolute inset-0 -z-[5]" aria-hidden="true" />
           <div
@@ -618,14 +629,14 @@ export function AppShell() {
               muted
               loop
               playsInline
-              className="size-full scale-110 object-cover"
+              className="perf-wallpaper-blur size-full scale-110 object-cover"
               style={{ filter: wallpaperBlurAmount > 0 ? `blur(${wallpaperBlurAmount}px)` : undefined }}
             />
           ) : (
             <img
               src={wallpaper}
               alt=""
-              className="size-full scale-110 object-cover"
+              className="perf-wallpaper-blur size-full scale-110 object-cover"
               style={{ filter: wallpaperBlurAmount > 0 ? `blur(${wallpaperBlurAmount}px)` : undefined }}
             />
           )}

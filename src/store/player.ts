@@ -296,6 +296,14 @@ interface PlayerStore {
   /** Liquid glass UI effect (frosted refraction panels) */
   liquidGlass: boolean;
   toggleLiquidGlass: () => void;
+  /**
+   * Performance mode: drops every decoration that costs frames on a weaker
+   * machine (animated glass sheen, backdrop blurs, the aurora orbs, the
+   * ambient grid, click ripples and the pointer glow/trail). Playback, the
+   * queue and the player are untouched — it is purely a rendering budget.
+   */
+  performanceMode: boolean;
+  togglePerformanceMode: () => void;
   /** 0 = solid panels, 80 = maximum see-through. */
   cardTransparency: number;
   setCardTransparency: (value: number) => void;
@@ -473,6 +481,9 @@ const initialAccentTheme = localStorage.getItem("ss.accentTheme") ?? "auto";
 const initialCompact = readBool("ss.compact", false);
 const initialGlow = readBool("ss.ambientGlow", true);
 const initialVisualizer = readBool("ss.visualizer", true);
+// Performance mode is opt-in: a default-off machine is the reason it exists,
+// but nothing should change for anyone who has not asked for it.
+const initialPerformanceMode = readBool("ss.performanceMode", false);
 const initialPointerEffects = readBool("ss.pointerEffects", true);
 const initialWallpaper = localStorage.getItem("ss.wallpaper");
 const initialWallpaperType = localStorage.getItem("ss.wallpaperType") === "video" ? "video" : "image";
@@ -2271,6 +2282,12 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       set((state) => {
         localStorage.setItem("ss.visualizer", state.visualizerEnabled ? "0" : "1");
         return { visualizerEnabled: !state.visualizerEnabled };
+      }),
+    performanceMode: initialPerformanceMode,
+    togglePerformanceMode: () =>
+      set((state) => {
+        localStorage.setItem("ss.performanceMode", state.performanceMode ? "0" : "1");
+        return { performanceMode: !state.performanceMode };
       }),
     pointerEffects: initialPointerEffects,
     togglePointerEffects: () =>
