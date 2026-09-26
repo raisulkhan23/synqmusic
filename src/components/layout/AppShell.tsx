@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type PointerEvent, type RefObject } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent,
+  type RefObject,
+} from "react";
 import { Outlet, useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
 import * as ytEngine from "@/lib/youtubePlayer";
@@ -18,7 +24,17 @@ import { api } from "@/convex/_generated/api";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { useAuth } from "@/hooks/use-auth";
-import { BookOpen, Briefcase, House, ListMusic, Moon, Search, Settings, UserRound, WifiOff } from "lucide-react";
+import {
+  BookOpen,
+  Briefcase,
+  House,
+  ListMusic,
+  Moon,
+  Search,
+  Settings,
+  UserRound,
+  WifiOff,
+} from "lucide-react";
 import { usePlayerStore, type RemoteLikeSnapshot } from "@/store/player";
 import { track } from "@/lib/analytics";
 import {
@@ -47,9 +63,21 @@ type FocusLayoutMeta = {
 };
 
 const FOCUS_LAYOUTS: Record<Exclude<FocusLayout, "off">, FocusLayoutMeta> = {
-  study: { label: "Study", detail: "A calm, wide reading canvas", icon: BookOpen },
-  work: { label: "Work", detail: "Compact controls for deep focus", icon: Briefcase },
-  sleep: { label: "Sleep", detail: "Low-light listening with an end-of-song timer", icon: Moon },
+  study: {
+    label: "Study",
+    detail: "A calm, wide reading canvas",
+    icon: BookOpen,
+  },
+  work: {
+    label: "Work",
+    detail: "Compact controls for deep focus",
+    icon: Briefcase,
+  },
+  sleep: {
+    label: "Sleep",
+    detail: "Low-light listening with an end-of-song timer",
+    icon: Moon,
+  },
 };
 
 function isFocusLayout(value: string | null): value is FocusLayout {
@@ -66,7 +94,10 @@ function parseTint(value: string): [number, number, number] {
 }
 
 /** Smoothly interpolates between track colors without re-rendering the app shell. */
-function useAnimatedCssTint(target: string, elementRef: RefObject<HTMLElement | null>) {
+function useAnimatedCssTint(
+  target: string,
+  elementRef: RefObject<HTMLElement | null>,
+) {
   const currentRef = useRef(target);
   const frameRef = useRef<number | null>(null);
 
@@ -74,10 +105,15 @@ function useAnimatedCssTint(target: string, elementRef: RefObject<HTMLElement | 
     if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
     const from = parseTint(currentRef.current);
     const to = parseTint(target);
-    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const reducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
     const element = elementRef.current;
     if (!element) return;
-    if (reducedMotion || from.every((channel, index) => channel === to[index])) {
+    if (
+      reducedMotion ||
+      from.every((channel, index) => channel === to[index])
+    ) {
       currentRef.current = target;
       element.style.setProperty("--tint", target);
       return;
@@ -88,9 +124,11 @@ function useAnimatedCssTint(target: string, elementRef: RefObject<HTMLElement | 
     const tick = (now: number) => {
       const progress = Math.min(1, (now - startedAt) / duration);
       const eased = 1 - Math.pow(1 - progress, 3);
-      const next = from.map((channel, index) =>
-        Math.round(channel + (to[index] - channel) * eased),
-      ).join(" ");
+      const next = from
+        .map((channel, index) =>
+          Math.round(channel + (to[index] - channel) * eased),
+        )
+        .join(" ");
       currentRef.current = next;
       element.style.setProperty("--tint", next);
       if (progress < 1) frameRef.current = requestAnimationFrame(tick);
@@ -130,7 +168,9 @@ export function AppShell() {
     if (Number.isFinite(storedAmount) && storedAmount > 0) {
       return Math.min(MAX_WALLPAPER_BLUR_AMOUNT, Math.round(storedAmount));
     }
-    return localStorage.getItem("ss.wallpaperBlur") === "0" ? 0 : DEFAULT_WALLPAPER_BLUR_AMOUNT;
+    return localStorage.getItem("ss.wallpaperBlur") === "0"
+      ? 0
+      : DEFAULT_WALLPAPER_BLUR_AMOUNT;
   });
   const rippleLayerRef = useRef<HTMLDivElement>(null);
   const cursorTrailRefs = useRef<Array<HTMLSpanElement | null>>([]);
@@ -140,7 +180,11 @@ export function AppShell() {
   /** Cached bounds of the shell surface for the pointer handlers. Null means
    *  "not measured yet"; a window resize invalidates it. */
   const shellBoundsRef = useRef<DOMRect | null>(null);
-  const pointerPositionRef = useRef({ x: 0, y: 0, target: null as HTMLDivElement | null });
+  const pointerPositionRef = useRef({
+    x: 0,
+    y: 0,
+    target: null as HTMLDivElement | null,
+  });
   const cursorTrailRef = useRef<CursorTrail | null>(null);
 
   // The navigation scroll reset lives in one place — `ScrollToTop` in
@@ -153,8 +197,10 @@ export function AppShell() {
   useEffect(() => {
     const initial = usePlayerStore.getState();
     const storedWallpaperKey = getWallpaperKey(initial.wallpaper);
-    const isLiveFile = initial.wallpaperType === "video" && storedWallpaperKey !== null;
-    const isImageFile = initial.wallpaperType === "image" && storedWallpaperKey !== null;
+    const isLiveFile =
+      initial.wallpaperType === "video" && storedWallpaperKey !== null;
+    const isImageFile =
+      initial.wallpaperType === "image" && storedWallpaperKey !== null;
     if (!isLiveFile && !isImageFile) return;
 
     let restoredUrl: string | null = null;
@@ -168,7 +214,10 @@ export function AppShell() {
         restoredUrl = url;
         initial.setWallpaper(url, initial.wallpaperType);
         // setWallpaper receives a session-only blob URL; keep only the marker.
-        localStorage.setItem("ss.wallpaper", isLiveFile ? LIVE_WALLPAPER_MARKER : IMAGE_WALLPAPER_MARKER);
+        localStorage.setItem(
+          "ss.wallpaper",
+          isLiveFile ? LIVE_WALLPAPER_MARKER : IMAGE_WALLPAPER_MARKER,
+        );
       })
       .catch(() => initial.setWallpaper(null, initial.wallpaperType));
 
@@ -195,8 +244,14 @@ export function AppShell() {
     window.addEventListener("synq:focus-layout-change", onFocusLayoutChange);
     return () => {
       window.removeEventListener("synq:scene-change", onSceneChange);
-      window.removeEventListener("synq:track-palettes-change", onTrackPaletteChange);
-      window.removeEventListener("synq:focus-layout-change", onFocusLayoutChange);
+      window.removeEventListener(
+        "synq:track-palettes-change",
+        onTrackPaletteChange,
+      );
+      window.removeEventListener(
+        "synq:focus-layout-change",
+        onFocusLayoutChange,
+      );
     };
   }, []);
 
@@ -204,11 +259,11 @@ export function AppShell() {
     document.documentElement.dataset.scene = sceneTheme;
   }, [sceneTheme]);
 
-  // Performance mode is a single class on <html>; the whole set of expensive
-  // decorations is switched off from `src/index.css` under `html.perf-lite`.
+  // The `perf-lite` class itself is owned by `PerformanceModeSync` in
+  // `main.tsx`, so public pages get it too. What the shell owns is the work
+  // behind the class: the trail's frame loop has to stop, not just hide.
   const performanceMode = usePlayerStore((s) => s.performanceMode);
   useEffect(() => {
-    document.documentElement.classList.toggle("perf-lite", performanceMode);
     if (performanceMode) cursorTrailRef.current?.stop();
   }, [performanceMode]);
 
@@ -220,14 +275,25 @@ export function AppShell() {
     const onWallpaperBlurChange = (event: Event) => {
       const nextAmount = (event as CustomEvent<number>).detail;
       if (typeof nextAmount === "number" && Number.isFinite(nextAmount)) {
-        setWallpaperBlurAmount(Math.max(0, Math.min(MAX_WALLPAPER_BLUR_AMOUNT, nextAmount)));
+        setWallpaperBlurAmount(
+          Math.max(0, Math.min(MAX_WALLPAPER_BLUR_AMOUNT, nextAmount)),
+        );
       }
     };
-    window.addEventListener("ss:wallpaper-enabled-change", onWallpaperEnabledChange);
+    window.addEventListener(
+      "ss:wallpaper-enabled-change",
+      onWallpaperEnabledChange,
+    );
     window.addEventListener("ss:wallpaper-blur-change", onWallpaperBlurChange);
     return () => {
-      window.removeEventListener("ss:wallpaper-enabled-change", onWallpaperEnabledChange);
-      window.removeEventListener("ss:wallpaper-blur-change", onWallpaperBlurChange);
+      window.removeEventListener(
+        "ss:wallpaper-enabled-change",
+        onWallpaperEnabledChange,
+      );
+      window.removeEventListener(
+        "ss:wallpaper-blur-change",
+        onWallpaperBlurChange,
+      );
     };
   }, []);
 
@@ -299,16 +365,18 @@ export function AppShell() {
   const setSleepTimer = usePlayerStore((s) => s.setSleepTimer);
 
   // Do not keep decoding the background video while the maximized player has
-  // its own full-screen media layer active.
+  // its own full-screen media layer active. Performance mode parks it outright:
+  // a full-screen looping video is a per-frame decode no stylesheet rule can
+  // reach, and its first frame stays on screen while it is paused.
   useEffect(() => {
     const video = wallpaperVideoRef.current;
     if (!video) return;
-    if (fullscreen || isBuffering) {
+    if (fullscreen || isBuffering || performanceMode) {
       video.pause();
     } else {
       void video.play().catch(() => undefined);
     }
-  }, [fullscreen, isBuffering, wallpaper, wallpaperType]);
+  }, [fullscreen, isBuffering, performanceMode, wallpaper, wallpaperType]);
 
   const likedQuery = useQuery(api.likes.myLikedTrackIds);
   const toggleLikeMutation = useMutation(api.likes.toggleLike);
@@ -328,12 +396,13 @@ export function AppShell() {
     const s = usePlayerStore.getState();
     if (!s.fullscreen) ytEngine.dismissVideo();
     s.setQueueOpen(false);
-     
   }, [location.pathname]);
   // Keep the player store's liked map in sync with Convex.
   useEffect(() => {
     if (likedQuery) {
-      setLiked(Object.fromEntries(likedQuery.map((d) => [d.trackId, d.createdAt])));
+      setLiked(
+        Object.fromEntries(likedQuery.map((d) => [d.trackId, d.createdAt])),
+      );
     }
   }, [likedQuery, setLiked]);
 
@@ -366,15 +435,16 @@ export function AppShell() {
   useEffect(() => {
     setHistoryRecorder((trackId: string) => {
       const current = usePlayerStore.getState().current;
-      const snapshot = current && current.id === trackId
-        ? {
-            source: current.source,
-            title: current.title,
-            artistName: current.artistName,
-            coverUrl: current.coverUrl,
-            duration: current.duration,
-          }
-        : undefined;
+      const snapshot =
+        current && current.id === trackId
+          ? {
+              source: current.source,
+              title: current.title,
+              artistName: current.artistName,
+              coverUrl: current.coverUrl,
+              duration: current.duration,
+            }
+          : undefined;
       void recordPlay({ trackId, ...snapshot }).catch(() => undefined);
     });
   }, [recordPlay, setHistoryRecorder]);
@@ -385,13 +455,15 @@ export function AppShell() {
   useEffect(() => {
     const clearStaleBodyLock = () => {
       if (document.body.style.pointerEvents !== "none") return;
-      const hasOpenLayer = document.querySelector(
-        '[data-radix-popper-content-wrapper], [data-radix-menu-content], [data-radix-dialog-content], [data-radix-popover-content], [data-radix-hover-card-content], [data-radix-tooltip-content], [data-radix-select-content], [role="dialog"]:not([hidden]), [role="menu"], [data-slot="sheet-content"], [data-slot="dropdown-menu-content"]',
-      ) !== null;
+      const hasOpenLayer =
+        document.querySelector(
+          '[data-radix-popper-content-wrapper], [data-radix-menu-content], [data-radix-dialog-content], [data-radix-popover-content], [data-radix-hover-card-content], [data-radix-tooltip-content], [data-radix-select-content], [role="dialog"]:not([hidden]), [role="menu"], [data-slot="sheet-content"], [data-slot="dropdown-menu-content"]',
+        ) !== null;
       if (!hasOpenLayer) document.body.style.pointerEvents = "";
     };
     window.addEventListener("pointerdown", clearStaleBodyLock, true);
-    return () => window.removeEventListener("pointerdown", clearStaleBodyLock, true);
+    return () =>
+      window.removeEventListener("pointerdown", clearStaleBodyLock, true);
   }, []);
 
   // Session start (one per app load) + a page view on every route change.
@@ -432,7 +504,10 @@ export function AppShell() {
         s.togglePlay();
       } else if (e.key === "ArrowRight") {
         e.preventDefault();
-        const t = s.duration > 0 ? Math.min(s.duration, s.currentTime + 5) : s.currentTime + 5;
+        const t =
+          s.duration > 0
+            ? Math.min(s.duration, s.currentTime + 5)
+            : s.currentTime + 5;
         s.seek(t);
       } else if (e.key === "ArrowLeft") {
         e.preventDefault();
@@ -466,7 +541,9 @@ export function AppShell() {
         if (s.current) s.toggleLike(s.current.id);
       } else if (e.key === "/") {
         e.preventDefault();
-        window.dispatchEvent(new CustomEvent("ss:navigate", { detail: "/search" }));
+        window.dispatchEvent(
+          new CustomEvent("ss:navigate", { detail: "/search" }),
+        );
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -542,8 +619,14 @@ export function AppShell() {
     if (!pointerFx || !rippleLayerRef.current) return;
 
     const rect = event.currentTarget.getBoundingClientRect();
-    event.currentTarget.style.setProperty("--pointer-x", `${event.clientX - rect.left}px`);
-    event.currentTarget.style.setProperty("--pointer-y", `${event.clientY - rect.top}px`);
+    event.currentTarget.style.setProperty(
+      "--pointer-x",
+      `${event.clientX - rect.left}px`,
+    );
+    event.currentTarget.style.setProperty(
+      "--pointer-y",
+      `${event.clientY - rect.top}px`,
+    );
 
     // Touch devices have no cursor to trail. A short accent bloom at the
     // contact point gives them the same liquid-light response without
@@ -594,14 +677,26 @@ export function AppShell() {
     >
       {!focusMode && (
         <>
-          <div className="ambient-grid pointer-events-none absolute inset-0 -z-20 opacity-70" aria-hidden="true" />
-          <div className="aurora-orb aurora-orb-one pointer-events-none absolute -top-48 -left-32 -z-10 size-[34rem] rounded-full" aria-hidden="true" />
-          <div className="aurora-orb aurora-orb-two pointer-events-none absolute -right-48 bottom-[-16rem] -z-10 size-[42rem] rounded-full" aria-hidden="true" />
+          <div
+            className="ambient-grid pointer-events-none absolute inset-0 -z-20 opacity-70"
+            aria-hidden="true"
+          />
+          <div
+            className="aurora-orb aurora-orb-one pointer-events-none absolute -top-48 -left-32 -z-10 size-[34rem] rounded-full"
+            aria-hidden="true"
+          />
+          <div
+            className="aurora-orb aurora-orb-two pointer-events-none absolute -right-48 bottom-[-16rem] -z-10 size-[42rem] rounded-full"
+            aria-hidden="true"
+          />
         </>
       )}
       {pointerFx && !focusMode && (
         <>
-          <div className="pointer-glow pointer-events-none absolute inset-0 -z-[5]" aria-hidden="true" />
+          <div
+            className="pointer-glow pointer-events-none absolute inset-0 -z-[5]"
+            aria-hidden="true"
+          />
           <div
             className="cursor-trail-layer pointer-events-none absolute inset-0 z-[90] overflow-hidden"
             aria-hidden="true"
@@ -616,34 +711,54 @@ export function AppShell() {
               />
             ))}
           </div>
-          <div ref={rippleLayerRef} className="touch-ripple-layer pointer-events-none absolute inset-0 -z-[4] overflow-hidden" aria-hidden="true" />
+          <div
+            ref={rippleLayerRef}
+            className="touch-ripple-layer pointer-events-none absolute inset-0 -z-[4] overflow-hidden"
+            aria-hidden="true"
+          />
         </>
       )}
-      {wallpaperEnabled && wallpaper && wallpaper !== LIVE_WALLPAPER_MARKER && wallpaper !== IMAGE_WALLPAPER_MARKER && (
-        <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden bg-background/35" aria-hidden="true">
-          {wallpaperType === "video" ? (
-            <video
-              ref={wallpaperVideoRef}
-              src={wallpaper}
-              autoPlay
-              muted
-              loop
-              playsInline
-              className="perf-wallpaper-blur size-full scale-110 object-cover"
-              style={{ filter: wallpaperBlurAmount > 0 ? `blur(${wallpaperBlurAmount}px)` : undefined }}
-            />
-          ) : (
-            <img
-              src={wallpaper}
-              alt=""
-              className="perf-wallpaper-blur size-full scale-110 object-cover"
-              style={{ filter: wallpaperBlurAmount > 0 ? `blur(${wallpaperBlurAmount}px)` : undefined }}
-            />
-          )}
-          <div className="absolute inset-0 bg-background/45" />
-          <div className="absolute inset-0 bg-gradient-to-b from-background/20 via-background/10 to-background/55" />
-        </div>
-      )}
+      {wallpaperEnabled &&
+        wallpaper &&
+        wallpaper !== LIVE_WALLPAPER_MARKER &&
+        wallpaper !== IMAGE_WALLPAPER_MARKER && (
+          <div
+            className="pointer-events-none absolute inset-0 -z-10 overflow-hidden bg-background/35"
+            aria-hidden="true"
+          >
+            {wallpaperType === "video" ? (
+              <video
+                ref={wallpaperVideoRef}
+                src={wallpaper}
+                autoPlay
+                muted
+                loop
+                playsInline
+                className="perf-wallpaper-blur size-full scale-110 object-cover"
+                style={{
+                  filter:
+                    wallpaperBlurAmount > 0
+                      ? `blur(${wallpaperBlurAmount}px)`
+                      : undefined,
+                }}
+              />
+            ) : (
+              <img
+                src={wallpaper}
+                alt=""
+                className="perf-wallpaper-blur size-full scale-110 object-cover"
+                style={{
+                  filter:
+                    wallpaperBlurAmount > 0
+                      ? `blur(${wallpaperBlurAmount}px)`
+                      : undefined,
+                }}
+              />
+            )}
+            <div className="absolute inset-0 bg-background/45" />
+            <div className="absolute inset-0 bg-gradient-to-b from-background/20 via-background/10 to-background/55" />
+          </div>
+        )}
       <Sidebar />
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -674,10 +789,14 @@ export function AppShell() {
             <div className="flex min-w-0 items-center gap-2.5">
               {(() => {
                 const Icon = FOCUS_LAYOUTS[focusLayout].icon;
-                return <Icon className="size-4 shrink-0 text-[rgb(var(--tint))]" />;
+                return (
+                  <Icon className="size-4 shrink-0 text-[rgb(var(--tint))]" />
+                );
               })()}
               <div className="min-w-0">
-                <p className="text-xs font-semibold">Listening session · {FOCUS_LAYOUTS[focusLayout].label}</p>
+                <p className="text-xs font-semibold">
+                  Listening session · {FOCUS_LAYOUTS[focusLayout].label}
+                </p>
                 <p className="truncate text-[10px] text-muted-foreground">
                   {FOCUS_LAYOUTS[focusLayout].detail}
                 </p>
@@ -737,16 +856,18 @@ export function AppShell() {
           {!focusMode && <SiteFooter />}
         </main>
 
-        <PlayerBar compact={compactMode || focusLayout === "work" || focusLayout === "sleep"} />
+        <PlayerBar
+          compact={
+            compactMode || focusLayout === "work" || focusLayout === "sleep"
+          }
+        />
 
         {/* Mobile bottom nav. Display, column count, stacking AND the desktop
             hide are all owned by `.mobile-bottom-nav` in index.css. They were
             inline styles, which silently overrode `lg:hidden` — an inline
             declaration wins over any stylesheet rule without `!important` — so
             the phone nav rendered on desktop right next to the real sidebar. */}
-        <nav
-          className="mobile-bottom-nav liquid-glass h-[calc(3.5rem+env(safe-area-inset-bottom))] shrink-0 border-t border-white/[0.06] pb-[env(safe-area-inset-bottom)]"
-        >
+        <nav className="mobile-bottom-nav liquid-glass h-[calc(3.5rem+env(safe-area-inset-bottom))] shrink-0 border-t border-white/[0.06] pb-[env(safe-area-inset-bottom)]">
           {MOBILE_NAV.map(({ to, label, icon: Icon }) => {
             const isActive = location.pathname === to;
             return (

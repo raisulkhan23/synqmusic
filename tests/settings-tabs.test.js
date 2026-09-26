@@ -130,7 +130,8 @@ describe("keyboard shortcuts are desktop only", () => {
   });
 
   test("the landing shortcuts showcase is desktop only, with no dead anchor", () => {
-    const section = landingSource.match(/<section id="shortcuts"[^>]*>/)?.[0] ?? "";
+    // Whitespace-tolerant: JSX attribute wrapping is formatting, not meaning.
+    const section = landingSource.match(/<section\s+id="shortcuts"[\s\S]*?>/)?.[0] ?? "";
     expect(section).toContain("lg:block");
     expect(section).toContain("hidden");
     // The footer entry was removed earlier, so nothing can jump to a section

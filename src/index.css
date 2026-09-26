@@ -1308,32 +1308,37 @@ html,
   /* Performance mode.
      One class on <html> removes every decoration that costs frames on a
      weaker machine, without touching layout, playback or the player:
+       - every animation and transition
+       - every backdrop-filter (a backdrop read-back plus a blur, per frame)
+       - every large `filter: blur()` (the aurora orbs, the blurred gradient
+         blobs, the full-bleed wallpaper)
        - the glass sheen (a gradient repaint per panel, per frame)
-       - every backdrop-filter (a backdrop read-back and blur)
-       - the aurora orbs and the ambient grid (huge blurred/masked layers)
-       - the pointer glow and cursor trail
-       - click ripples
+       - the pointer glow, the cursor trail and the click ripples
      It is deliberately a rendering budget, not a feature switch: nothing
-     becomes unreachable or unreadable when it is on. */
+     becomes unreachable or unreadable when it is on.
+
+     These rules are deliberately written against `*` rather than against a
+     list of panel classes. A named list silently misses every surface that
+     gets its blur from a plain Tailwind utility — `backdrop-blur-xl` on the
+     player bar and the landing hero, `blur-3xl` on the decorative blobs — and
+     a mode that only switches off *some* of the expensive layers is worse
+     than no mode at all, because it looks like it worked. */
+  html.perf-lite,
   html.perf-lite *,
   html.perf-lite *::before,
   html.perf-lite *::after {
     animation: none !important;
     transition: none !important;
-  }
-  html.perf-lite .liquid-glass,
-  html.perf-lite .glass,
-  html.perf-lite .glass-card,
-  html.perf-lite .mobile-player,
-  html.perf-lite .settings-jump-bar,
-  html.perf-lite .settings-jump-glass,
-  html.perf-lite .mobile-nav-item::before {
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
   }
+  /* The sheen layer is a moving 420% gradient band. Freezing the animation
+     would just leave it parked as a flat tint, so the layer is removed. */
   html.perf-lite .liquid-glass::before,
   html.perf-lite .settings-liquid-glass::before,
-  html.perf-lite .settings-jump-glass::before {
+  html.perf-lite .settings-jump-glass::before,
+  html.perf-lite .mobile-player::before,
+  html.perf-lite .mobile-island-aura::before {
     content: none !important;
   }
   html.perf-lite .aurora-orb,
@@ -1344,8 +1349,10 @@ html,
   html.perf-lite .footer-scallop::before {
     display: none !important;
   }
-  /* A blurred full-bleed wallpaper is a full-screen filter on every frame of
-     any animation behind it; drop the blur but keep the picture. */
+  /* Big blur filters: the Tailwind `blur-*` utilities used for decoration
+     (every one of them is an aurora blob or a glowing backdrop) plus the
+     wallpaper, which carries a full-screen filter. */
+  html.perf-lite :is([class*="blur-sm"], [class*="blur-md"], [class*="blur-lg"], [class*="blur-xl"], [class*="blur-2xl"], [class*="blur-3xl"]),
   html.perf-lite .perf-wallpaper-blur {
     filter: none !important;
   }

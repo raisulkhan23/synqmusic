@@ -55,6 +55,9 @@ export function VisualizerCanvas({
   const accent = usePlayerStore((s) => s.accent);
   const trackId = usePlayerStore((s) => s.current?.id);
   const visualizerEnabled = usePlayerStore((s) => s.visualizerEnabled);
+  // The canvas redraws itself every frame, which no CSS rule can switch off,
+  // so performance mode has to stop the loop as well as hide the element.
+  const performanceMode = usePlayerStore((s) => s.performanceMode);
   const analyserRef = useRef<AnalyserNode | null>(null);
 
   // Attach to the shared audio element when visualization is enabled. The
@@ -62,7 +65,7 @@ export function VisualizerCanvas({
   // retry on the toggle and on the next user interaction rather than relying
   // on a DOM <audio> element that this app never appends.
   useEffect(() => {
-    if (!visualizerEnabled) return;
+    if (!visualizerEnabled || performanceMode) return;
     const attachAnalyser = () => {
       analyserRef.current = ensureAnalyser();
     };
@@ -73,11 +76,11 @@ export function VisualizerCanvas({
       window.removeEventListener("pointerdown", attachAnalyser);
       window.removeEventListener("focus", attachAnalyser);
     };
-  }, [visualizerEnabled]);
+  }, [visualizerEnabled, performanceMode]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !visualizerEnabled || !active) return;
+    if (!canvas || !visualizerEnabled || !active || performanceMode) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
@@ -130,7 +133,10 @@ export function VisualizerCanvas({
       // we simulate — but with the track's own energy/tempo signature.
       const audioEl = getAudio();
       const usingRealAudio =
-        analyserNode && audioEl && !audioEl.paused && !audioEl.src.includes("youtu");
+        analyserNode &&
+        audioEl &&
+        !audioEl.paused &&
+        !audioEl.src.includes("youtu");
 
       if (usingRealAudio) {
         readFrequencyData(analyserNode, freq);
@@ -143,7 +149,8 @@ export function VisualizerCanvas({
         const beat = 0.5 + 0.5 * Math.sin(beatPhase); // 0..1 pulse
         for (let i = 0; i < BAR_COUNT; i++) {
           // Per-bar pseudo-random character derived from track seed.
-          const char = Math.sin(i * 12.9898 + (seed % 1000) * 0.618) * 0.5 + 0.5;
+          const char =
+            Math.sin(i * 12.9898 + (seed % 1000) * 0.618) * 0.5 + 0.5;
           // Bass-weighted profile: low bars move more, highs flutter.
           const weight = 1 - (i / BAR_COUNT) * 0.55;
           const target =
@@ -151,7 +158,8 @@ export function VisualizerCanvas({
             level *
               weight *
               (0.35 + 0.65 * beat) *
-              (0.4 + 0.6 * Math.abs(Math.sin(now / (700 + char * 500) + i * 0.62)));
+              (0.4 +
+                0.6 * Math.abs(Math.sin(now / (700 + char * 500) + i * 0.62)));
           sim[i] += (target - sim[i]) * Math.min(1, dt * (6 + beat * 6));
         }
         for (let i = 0; i < BAR_COUNT; i++) values[i] = sim[i] * 255;
@@ -185,8 +193,8 @@ export function VisualizerCanvas({
       ro.disconnect();
       unsubTrack();
     };
-  }, [accent, trackId, visualizerEnabled, active]);
+  }, [accent, trackId, visualizerEnabled, active, performanceMode]);
 
-  if (!visualizerEnabled) return null;
+  if (!visualizerEnabled || performanceMode) return null;
   return <canvas ref={canvasRef} className={cn("block", className)} />;
 }

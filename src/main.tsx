@@ -1,4 +1,4 @@
-import '@vly-ai/integrations';
+import "@vly-ai/integrations";
 import { Toaster } from "@/components/ui/sonner";
 import { RequireAuth } from "@/components/RequireAuth";
 import { ScrollToTop } from "@/components/ScrollToTop";
@@ -6,6 +6,7 @@ import { VlyToolbar } from "../vly-toolbar-readonly.tsx";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import { ConvexReactClient } from "convex/react";
 import React, { StrictMode, useEffect, lazy, Suspense } from "react";
+import { MotionConfig } from "framer-motion";
 import { createRoot } from "react-dom/client";
 import {
   BrowserRouter,
@@ -14,7 +15,11 @@ import {
   Routes,
   useLocation,
 } from "react-router";
-import { applyCardTransparency, readCardTransparency } from "@/lib/cardTransparency";
+import {
+  applyCardTransparency,
+  readCardTransparency,
+} from "@/lib/cardTransparency";
+import { usePlayerStore } from "@/store/player";
 import "./index.css";
 
 // SYNQ defaults to dark; restore the user's theme mode before first paint.
@@ -24,11 +29,17 @@ document.documentElement.classList.add("dark");
 if (localStorage.getItem("ss.liquidGlass") === "0") {
   document.documentElement.classList.add("no-glass");
 }
+// Performance mode is the same idea: restore it before the first paint so a
+// returning user never sees one frame of the expensive decorations.
+if (localStorage.getItem("ss.performanceMode") === "1") {
+  document.documentElement.classList.add("perf-lite");
+}
 // Restore the saved card transparency before paint so glass panels never flash
 // at the default opacity first.
 applyCardTransparency(readCardTransparency());
 const savedTheme = localStorage.getItem("ss.themeMode");
-document.documentElement.dataset.scene = localStorage.getItem("ss.sceneTheme") ?? "studio";
+document.documentElement.dataset.scene =
+  localStorage.getItem("ss.sceneTheme") ?? "studio";
 if (savedTheme === "light") {
   document.documentElement.classList.remove("dark");
   document.documentElement.classList.add("light");
@@ -134,7 +145,34 @@ class RootErrorBoundary extends React.Component<
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
 
+/** Keeps \`html.perf-lite\` in sync with the store.
+ *
+ *  This lives at the app root rather than in AppShell because most of the
+ *  expensive surfaces are on the public pages: the landing hero, the auth card
+ *  and the support pages all render outside the signed-in shell, and a class
+ *  only AppShell ever sets leaves every one of them running at full cost. */
+function PerformanceModeSync() {
+  const performanceMode = usePlayerStore((s) => s.performanceMode);
+  useEffect(() => {
+    document.documentElement.classList.toggle("perf-lite", performanceMode);
+  }, [performanceMode]);
+  return null;
+}
 
+/** Performance mode also has to reach the animations CSS cannot see.
+ *
+ *  framer-motion drives its animations from JavaScript, so `animation: none`
+ *  does nothing to them — the hero, the queue panel and the sidebar would keep
+ *  animating with every effect switched off. `reducedMotion: "always"` is the
+ *  supported way to tell the library to stop moving things. */
+function MotionPrefs({ children }: { children: React.ReactNode }) {
+  const performanceMode = usePlayerStore((s) => s.performanceMode);
+  return (
+    <MotionConfig reducedMotion={performanceMode ? "always" : "never"}>
+      {children}
+    </MotionConfig>
+  );
+}
 
 function RouteSyncer() {
   const location = useLocation();
@@ -159,7 +197,6 @@ function RouteSyncer() {
   return null;
 }
 
-
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <RootErrorBoundary>
@@ -169,124 +206,127 @@ createRoot(document.getElementById("root")!).render(
       <ConvexAuthProvider client={convex}>
         <BrowserRouter>
           <RouteSyncer />
+          <PerformanceModeSync />
           <ScrollToTop />
-          <Suspense fallback={<RouteLoading />}>
-            <Routes>
-              <Route path="/" element={<Landing />} />
-              <Route
-                path="/auth"
-                element={<AuthPage redirectAfterAuth="/home" />}
-              />
-              <Route
-                path="/dashboard"
-                element={
-                  <RequireAuth>
-                    <Navigate to="/home" replace />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                element={
-                  <RequireAuth>
-                    <AppShell />
-                  </RequireAuth>
-                }
-              >
+          <MotionPrefs>
+            <Suspense fallback={<RouteLoading />}>
+              <Routes>
+                <Route path="/" element={<Landing />} />
                 <Route
-                  path="/home"
+                  path="/auth"
+                  element={<AuthPage redirectAfterAuth="/home" />}
+                />
+                <Route
+                  path="/dashboard"
                   element={
-                    <PageSuspense>
-                      <Home />
-                    </PageSuspense>
+                    <RequireAuth>
+                      <Navigate to="/home" replace />
+                    </RequireAuth>
                   }
                 />
                 <Route
-                  path="/search"
                   element={
-                    <PageSuspense>
-                      <Search />
-                    </PageSuspense>
+                    <RequireAuth>
+                      <AppShell />
+                    </RequireAuth>
                   }
-                />
-                <Route
-                  path="/liked"
-                  element={
-                    <PageSuspense>
-                      <Liked />
-                    </PageSuspense>
-                  }
-                />
-                <Route
-                  path="/playlists"
-                  element={
-                    <PageSuspense>
-                      <Playlists />
-                    </PageSuspense>
-                  }
-                />
-                <Route
-                  path="/playlist/:id"
-                  element={
-                    <PageSuspense>
-                      <PlaylistDetail />
-                    </PageSuspense>
-                  }
-                />
-                <Route
-                  path="/stats"
-                  element={
-                    <PageSuspense>
-                      <Stats />
-                    </PageSuspense>
-                  }
-                />
-                <Route
-                  path="/recent"
-                  element={
-                    <PageSuspense>
-                      <Recent />
-                    </PageSuspense>
-                  }
-                />
-                <Route
-                  path="/social"
-                  element={
-                    <PageSuspense>
-                      <Social />
-                    </PageSuspense>
-                  }
-                />
-                <Route
-                  path="/profile"
-                  element={
-                    <PageSuspense>
-                      <Profile />
-                    </PageSuspense>
-                  }
-                />
-                <Route
-                  path="/settings"
-                  element={
-                    <PageSuspense>
-                      <Settings />
-                    </PageSuspense>
-                  }
-                />
-                <Route
-                  path="/admin"
-                  element={
-                    <PageSuspense>
-                      <Admin />
-                    </PageSuspense>
-                  }
-                />
-              </Route>
-              <Route path="/support" element={<Support />} />
-              <Route path="/privacy" element={<Privacy />} />
-              <Route path="/terms" element={<Terms />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </Suspense>
+                >
+                  <Route
+                    path="/home"
+                    element={
+                      <PageSuspense>
+                        <Home />
+                      </PageSuspense>
+                    }
+                  />
+                  <Route
+                    path="/search"
+                    element={
+                      <PageSuspense>
+                        <Search />
+                      </PageSuspense>
+                    }
+                  />
+                  <Route
+                    path="/liked"
+                    element={
+                      <PageSuspense>
+                        <Liked />
+                      </PageSuspense>
+                    }
+                  />
+                  <Route
+                    path="/playlists"
+                    element={
+                      <PageSuspense>
+                        <Playlists />
+                      </PageSuspense>
+                    }
+                  />
+                  <Route
+                    path="/playlist/:id"
+                    element={
+                      <PageSuspense>
+                        <PlaylistDetail />
+                      </PageSuspense>
+                    }
+                  />
+                  <Route
+                    path="/stats"
+                    element={
+                      <PageSuspense>
+                        <Stats />
+                      </PageSuspense>
+                    }
+                  />
+                  <Route
+                    path="/recent"
+                    element={
+                      <PageSuspense>
+                        <Recent />
+                      </PageSuspense>
+                    }
+                  />
+                  <Route
+                    path="/social"
+                    element={
+                      <PageSuspense>
+                        <Social />
+                      </PageSuspense>
+                    }
+                  />
+                  <Route
+                    path="/profile"
+                    element={
+                      <PageSuspense>
+                        <Profile />
+                      </PageSuspense>
+                    }
+                  />
+                  <Route
+                    path="/settings"
+                    element={
+                      <PageSuspense>
+                        <Settings />
+                      </PageSuspense>
+                    }
+                  />
+                  <Route
+                    path="/admin"
+                    element={
+                      <PageSuspense>
+                        <Admin />
+                      </PageSuspense>
+                    }
+                  />
+                </Route>
+                <Route path="/support" element={<Support />} />
+                <Route path="/privacy" element={<Privacy />} />
+                <Route path="/terms" element={<Terms />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </Suspense>
+          </MotionPrefs>
         </BrowserRouter>
         <Toaster />
       </ConvexAuthProvider>
