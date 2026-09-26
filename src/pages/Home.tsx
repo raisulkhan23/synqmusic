@@ -503,31 +503,34 @@ export default function Home() {
             </Link>
           </div>
 
-          <div className="relative mt-4 grid grid-cols-3 gap-2">
-            <div className="min-w-0 rounded-xl border border-white/[0.07] bg-black/10 p-2.5 sm:p-3">
-              <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                <Play className="size-3 text-[rgb(var(--tint))]" />
+          <div className="relative mt-4 grid grid-cols-3 gap-1.5 sm:gap-2">
+            <div className="min-w-0 rounded-xl border border-white/[0.07] bg-black/10 p-2 sm:p-3">
+              <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                <Play className="size-3 shrink-0 text-[rgb(var(--tint))]" />
                 <span className="truncate">Sessions</span>
               </div>
-              <p className="mt-1 text-lg font-bold tabular-nums sm:text-xl">{listeningPulse.totalPlays}</p>
+              <p className="mt-0.5 text-base font-bold tabular-nums sm:mt-1 sm:text-xl">{listeningPulse.totalPlays}</p>
             </div>
-            <div className="min-w-0 rounded-xl border border-white/[0.07] bg-black/10 p-2.5 sm:p-3">
-              <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                <UsersRound className="size-3 text-[rgb(var(--tint))]" />
+            <div className="min-w-0 rounded-xl border border-white/[0.07] bg-black/10 p-2 sm:p-3">
+              <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                <UsersRound className="size-3 shrink-0 text-[rgb(var(--tint))]" />
                 <span className="truncate">Artists</span>
               </div>
-              <p className="mt-1 text-lg font-bold tabular-nums sm:text-xl">{listeningPulse.uniqueArtists}</p>
+              <p className="mt-0.5 text-base font-bold tabular-nums sm:mt-1 sm:text-xl">{listeningPulse.uniqueArtists}</p>
             </div>
-            <div className="min-w-0 rounded-xl border border-white/[0.07] bg-black/10 p-2.5 sm:p-3">
-              <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                <Repeat2 className="size-3 text-[rgb(var(--tint))]" />
+            <div className="min-w-0 rounded-xl border border-white/[0.07] bg-black/10 p-2 sm:p-3">
+              <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                <Repeat2 className="size-3 shrink-0 text-[rgb(var(--tint))]" />
                 <span className="truncate">Top repeat</span>
               </div>
-              <p className="mt-1 text-lg font-bold tabular-nums sm:text-xl">{listeningPulse.topRepeat}×</p>
+              <p className="mt-0.5 text-base font-bold tabular-nums sm:mt-1 sm:text-xl">{listeningPulse.topRepeat}×</p>
             </div>
           </div>
 
-          <div className="relative mt-4 flex h-14 items-end gap-1.5 border-b border-white/[0.08] px-1 sm:h-16">
+          {/* Bars live in the card's own content box: no extra inset, so they
+              can never run into the rounded corners, and the row clips so a
+              narrow phone can never push a bar past the card edge. */}
+          <div className="relative mt-4 flex h-14 items-end gap-1 overflow-hidden border-b border-white/[0.08] sm:h-16 sm:gap-1.5">
             {listeningPulse.bars.map((count, index) => (
               <div key={`${index}-${count}`} className="group flex h-full min-w-0 flex-1 items-end">
                 <div
