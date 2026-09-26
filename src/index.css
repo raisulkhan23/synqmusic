@@ -533,12 +533,12 @@ html,
   /* The settings surface is a dense single-column grid, and grid/flex items
      default to `min-width: auto` — meaning one wide row (a long label, a
      fixed-size control) silently widens the implicit column and hands the
-     whole page a horizontal scrollbar on a phone. Let every child shrink,
-     and clip anything that still manages to exceed the surface. `clip` rather
-     than `hidden` so the sticky jump bar keeps working. */
+     whole page a horizontal scrollbar on a phone. Let every child shrink so
+     the surface stays inside its container. (No `overflow` here: a clipping
+     ancestor would also clip the sticky jump bar's floating UI. The app
+     shell's <main> is the backstop that stops page-level sideways scroll.) */
   .settings-liquid-glass {
     max-width: 100%;
-    overflow-x: clip;
   }
   .settings-liquid-glass *,
   .settings-liquid-glass *::before,

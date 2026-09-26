@@ -30,7 +30,6 @@ import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import {
   Check,
-  ChevronDown,
   Clock3,
   Database,
   Film,
@@ -40,7 +39,6 @@ import {
   Keyboard,
   Loader2,
   LogOut,
-  Menu,
   Moon,
   Palette,
   Pause,
@@ -217,7 +215,6 @@ export function SettingsDialog({
     if (isFocusLayout(saved)) return saved;
     return localStorage.getItem("ss.focusMode") === "1" ? "study" : "off";
   });
-  const [jumpMenuOpen, setJumpMenuOpen] = useState(false);
   const [name, setName] = useState("");
   const wallpaperInputRef = useRef<HTMLInputElement>(null);
   const liveWallpaperInputRef = useRef<HTMLInputElement>(null);
@@ -675,24 +672,14 @@ export function SettingsDialog({
           )}
           aria-label="Settings sections"
         >
-          <div className="flex items-center gap-2">
+          <div className="slider-rail flex items-center gap-2 overflow-x-auto pb-0.5">
             <span className="hidden shrink-0 px-1 text-[10px] font-semibold tracking-widest text-foreground/70 uppercase sm:block">
               Jump to
             </span>
-            <button
-              type="button"
-              onClick={() => setJumpMenuOpen((open) => !open)}
-              className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded-xl border border-white/[0.06] bg-white/[0.04] px-2.5 py-2 text-xs font-semibold text-foreground/85 shadow-sm transition-colors hover:border-[rgb(var(--tint))]/30 hover:bg-white/[0.08] hover:text-foreground sm:hidden"
-              aria-expanded={jumpMenuOpen}
-              aria-controls="settings-jump-menu"
-            >
-              <span className="inline-flex items-center gap-2">
-                <Menu className="size-3.5" />
-                Jump to a section
-              </span>
-              <ChevronDown className={cn("size-3.5 transition-transform", jumpMenuOpen && "rotate-180")} />
-            </button>
-            <div className="hidden min-w-0 flex-1 gap-1 overflow-x-auto pb-0.5 sm:flex">
+            {/* The section chips are the jump control on every screen size. On a
+                phone the rail scrolls sideways inside the bar (`slider-rail`)
+                so the page itself never gains a horizontal scrollbar. */}
+            <div className="flex shrink-0 gap-1">
               {SETTINGS_SECTIONS.map(([label, id, Icon]) => (
                 <button
                   key={id}
@@ -709,27 +696,6 @@ export function SettingsDialog({
               ))}
             </div>
           </div>
-          {jumpMenuOpen && (
-            <div
-              id="settings-jump-menu"
-              className="absolute top-[calc(100%+0.5rem)] right-0 left-0 z-[60] grid gap-1 rounded-2xl border border-white/[0.1] bg-[#12151d]/95 p-1.5 shadow-[0_18px_50px_rgba(0,0,0,0.4)] backdrop-blur-xl sm:hidden"
-            >
-              {SETTINGS_SECTIONS.map(([label, id, Icon]) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => {
-                    jumpToSetting(id);
-                    setJumpMenuOpen(false);
-                  }}
-                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground transition-colors hover:bg-white/[0.07] hover:text-foreground"
-                >
-                  <Icon className="size-3.5 shrink-0 text-[rgb(var(--tint))]" />
-                  {label}
-                </button>
-              ))}
-            </div>
-          )}
         </nav>
 
         {/* profile */}
