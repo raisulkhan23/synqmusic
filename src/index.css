@@ -383,6 +383,13 @@ html,
     @apply bg-background text-foreground;
     font-feature-settings: "cv11", "ss01";
   }
+  /* The launch badges are static markup that sits in the document after
+     #root. While the app is still mounting, #root is empty, so the badges
+     would be the only thing painted and appear at the very top of a blank
+     page. Keep them out of the loading state entirely. */
+  #root:empty + .launch-badges {
+    display: none;
+  }
   button:not([disabled]),
   [role="button"]:not([disabled]) {
     cursor: pointer;
