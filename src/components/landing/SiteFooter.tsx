@@ -154,8 +154,26 @@ export function SiteFooter() {
           </nav>
         </div>
 
-        {/* copyright pill */}
-        <div className="mt-14 flex justify-center sm:mt-16">
+        {/* Bottom row: the copyright plaque sits in the bottom-RIGHT corner and
+            the promise pill balances it on the left. Both used to be stacked —
+            the promise pill was absolutely positioned in the corner while the
+            plaque was centred in flow, so they sat on unrelated baselines. One
+            flex row keeps their bottom edges aligned at every width.
+            `justify-end` (not `justify-between`) on mobile, where the promise
+            pill is hidden and a lone left-aligned child would look stranded. */}
+        <div className="mt-14 flex flex-wrap items-end justify-end gap-4 sm:mt-16 sm:justify-between">
+          <div className="hidden sm:block">
+            <div className="inline-flex items-center gap-2.5 rounded-full border border-white/10 bg-white/[0.04] py-2 pr-3 pl-2.5">
+              <span className="flex size-7 items-center justify-center rounded-full bg-[rgb(var(--tint))]/15 text-[rgb(var(--tint))]">
+                <ShieldCheck className="size-3.5" />
+              </span>
+              <span className="text-xs font-semibold text-foreground">Zero ads</span>
+              <span className="rounded-full bg-[rgb(var(--tint))] px-2 py-0.5 text-[10px] font-bold text-black">
+                forever
+              </span>
+            </div>
+          </div>
+
           <div className="inline-flex max-w-full flex-col items-center gap-1.5 rounded-2xl border border-white/10 bg-white/[0.04] px-6 py-3.5 text-center">
             <p className="font-mono text-xs font-medium tracking-tight text-foreground">
               © 2026 SYNQ — currently in beta
@@ -164,19 +182,6 @@ export function SiteFooter() {
               Made for long listens
             </p>
           </div>
-        </div>
-      </div>
-
-      {/* floating promise pill, anchored to the bottom-left of the footer */}
-      <div className="pointer-events-none absolute bottom-8 left-4 hidden sm:block lg:left-6">
-        <div className="inline-flex items-center gap-2.5 rounded-full border border-white/10 bg-[#0b0c11]/80 py-2 pr-3 pl-2.5 shadow-xl backdrop-blur-xl">
-          <span className="flex size-7 items-center justify-center rounded-full bg-[rgb(var(--tint))]/15 text-[rgb(var(--tint))]">
-            <ShieldCheck className="size-3.5" />
-          </span>
-          <span className="text-xs font-semibold text-foreground">Zero ads</span>
-          <span className="rounded-full bg-[rgb(var(--tint))] px-2 py-0.5 text-[10px] font-bold text-black">
-            forever
-          </span>
         </div>
       </div>
     </footer>
