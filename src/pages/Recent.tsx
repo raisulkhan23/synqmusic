@@ -1,4 +1,5 @@
 import { useMemo, useState, useSyncExternalStore } from "react";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { RemoteTrackRow } from "@/components/tracks/RemoteTrackRow";
 import { toPlayableYoutube, type Playable } from "@/lib/playable";
 import { cleanArtistName, type YtItem } from "@/lib/youtube";
@@ -203,24 +204,22 @@ export default function Recent() {
                   resolving={resolvingId === item.id}
                   source="youtube"
                   trailing={
-                    <div className="flex shrink-0 items-center gap-2">
-                      <span className="hidden text-[11px] text-muted-foreground/70 lg:block">
-                        {entry.playCount > 1 ? `${entry.playCount} plays · ` : ""}
-                        {timeAgo(entry.at)}
-                      </span>
-                      <button
-                        type="button"
-                        aria-label={`Remove ${item.title} from recently played`}
-                        title="Remove from recently played"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeFromHistory(entry.id);
-                        }}
-                        className="rounded-full p-1.5 text-muted-foreground/70 opacity-0 transition-all group-hover:opacity-100 hover:bg-white/10 hover:text-foreground focus:opacity-100"
-                      >
-                        <X className="size-4" />
-                      </button>
-                    </div>
+                    <span className="hidden text-[11px] text-muted-foreground/70 lg:block">
+                      {entry.playCount > 1 ? `${entry.playCount} plays · ` : ""}
+                      {timeAgo(entry.at)}
+                    </span>
+                  }
+                  menuItems={
+                    <DropdownMenuItem
+                      className="gap-2"
+                      onSelect={(event) => {
+                        event.stopPropagation();
+                        removeFromHistory(entry.id);
+                      }}
+                    >
+                      <X className="size-4" />
+                      Remove from recently played
+                    </DropdownMenuItem>
                   }
                 />
               </div>

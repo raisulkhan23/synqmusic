@@ -4,6 +4,7 @@ import { useAction, useMutation, useQuery } from "convex/react";
 import { ListMusic, Play, Search as SearchIcon, Shuffle, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { RemoteTrackRow } from "@/components/tracks/RemoteTrackRow";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -324,19 +325,17 @@ export default function PlaylistDetail() {
                 resolving={resolvingId === track.id}
                 onPlay={() => void playRow(track)}
                 source="youtube"
-                trailing={
-                  <button
-                    type="button"
-                    aria-label={`Remove ${track.title} from playlist`}
-                    title="Remove from playlist"
-                    onClick={(event) => {
+                menuItems={
+                  <DropdownMenuItem
+                    className="gap-2"
+                    onSelect={(event) => {
                       event.stopPropagation();
                       void handleRemove(track);
                     }}
-                    className="rounded-full p-1.5 text-muted-foreground/70 transition-colors hover:bg-white/10 hover:text-foreground"
                   >
                     <X className="size-4" />
-                  </button>
+                    Remove from playlist
+                  </DropdownMenuItem>
                 }
               />
             ))
