@@ -4,65 +4,48 @@
 <head>
   <meta charset="UTF-8" />
   <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+  <link rel="apple-touch-icon" href="/product-icon.png" />
+  <!-- Social share card. Regenerate with: python3 scripts/generate-brand-assets.py -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="SYNQ" />
+  <meta property="og:title" content="SYNQ — Your music, uninterrupted." />
+  <meta property="og:description" content="Music-only discovery, a queue that moves like you do, and a live visualizer. No ads, no noise." />
+  <meta property="og:image" content="/hero.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="SYNQ — Your music, uninterrupted." />
+  <meta name="twitter:description" content="Music-only discovery, a queue that moves like you do, and a live visualizer. No ads, no noise." />
+  <meta name="twitter:image" content="/hero.png" />
   <link rel="manifest" href="/manifest.webmanifest" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- `viewport-fit=cover` is REQUIRED for `env(safe-area-inset-*)` to return
+       anything but 0px on iPhone. Without it the notch/home-indicator insets
+       used by the bottom nav, queue sheet and fullscreen player were all
+       silently zero on every notched device. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="SynqMusic is a music streaming app with YouTube-quality playback, smart queues, playlists, lyrics and a listening visualizer — on desktop and mobile." />
+  <meta name="theme-color" content="#12141c" />
   <link rel="preconnect" href="https://www.youtube.com" />
   <link rel="preconnect" href="https://www.youtube-nocookie.com" />
   <link rel="preconnect" href="https://i.ytimg.com" />
   <link rel="preconnect" href="https://yt3.ggpht.com" />
   <title>SynqMusic</title>
-  <script type="module" crossorigin src="/assets/index-TnpSDKJO.js"></script>
+  <script type="module" crossorigin src="/assets/index-BNJ64cEj.js"></script>
   <link rel="modulepreload" crossorigin href="/assets/react-vendor-Byl_OyRH.js">
   <link rel="modulepreload" crossorigin href="/assets/framer-motion-Ba6h7vyg.js">
   <link rel="modulepreload" crossorigin href="/assets/radix-ui-Ctp7xy6D.js">
   <link rel="modulepreload" crossorigin href="/assets/charts-g1v5H_EM.js">
-  <link rel="stylesheet" crossorigin href="/assets/index-h6mO0bYn.css">
+  <link rel="stylesheet" crossorigin href="/assets/index-D1nUjJFG.css">
 </head>
 
 
 <body>
   <div id="root"></div>
-  <!-- Launch badges: plain HTML so search crawlers and no-JS visitors still
-       see them. Hidden inline until the app has painted (see the script below)
-       so they never flash at the top of a loading page. Sits in the dead space
-       at the very bottom of the document, not a floating overlay. -->
-  <div id="launch-badges" style="display: none"
-    class="launch-badges flex flex-wrap items-center justify-center gap-x-4 py-2 opacity-60 transition-opacity hover:opacity-100">
-    <div class="scale-[0.6] origin-bottom">
-      <a href="https://easylaunch.dev/media/synqmusic" target="_blank" rel="noopener"><img src="https://easylaunch.dev/badge/easylaunch-badge-dark.svg" alt="Featured on EasyLaunch" width="188" height="56" /></a>
-    </div>
-    <div class="scale-[0.6] origin-bottom">
-      <a href="https://skylaun.ch/media/synqmusic" target="_blank" rel="noopener"><img src="https://skylaun.ch/badge/skylaunch-badge-dark.svg" alt="Featured on Sky Launch" width="188" height="56" /></a>
-    </div>
-    <div class="scale-[0.6] origin-bottom">
-      <a href="https://launchstreak.dev/media/synqmusic" target="_blank" rel="noopener"><img src="https://launchstreak.dev/badge/launch-streak-badge-dark.svg" alt="Launched on Launch Streak" width="248" height="68" /></a>
-    </div>
-    <div class="scale-[0.6] origin-bottom">
-      <a href="https://easydofollow.dev/media/synqmusic" target="_blank" rel="noopener"><img src="https://easydofollow.dev/badge/easydofollow-badge-dark.svg" alt="Featured on EasyDoFollow" width="188" height="56" /></a>
-    </div>
-  </div>
-  <script>
-    // The badges are static markup that sits in the document after #root, so
-    // they would be the only thing painted while the app boots (and, before
-    // the app stylesheet arrives, they render unstyled at the top of the page).
-    // Start them hidden with an inline style and reveal them the moment React
-    // puts real content in the root — no CSS or framework needed.
-    (function () {
-      var root = document.getElementById("root");
-      var badges = document.getElementById("launch-badges");
-      if (!root || !badges) return;
-      if (root.childElementCount > 0) {
-        badges.style.display = "";
-        return;
-      }
-      var observer = new MutationObserver(function () {
-        if (root.childElementCount === 0) return;
-        observer.disconnect();
-        badges.style.display = "";
-      });
-      observer.observe(root, { childList: true });
-    })();
-  </script>
+  <!-- Launch badges used to live here as static markup, which meant they were
+       appended to EVERY route — they showed up under /home, /search, the
+       queue, all of it. They now live only in the landing page footer
+       (src/components/landing/SiteFooter.tsx), so they appear on the marketing
+       page and nowhere else. -->
 </body>
 
 </html>
