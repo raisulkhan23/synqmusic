@@ -33,7 +33,6 @@ const linkColumns = [
   {
     heading: "Product",
     links: [
-      { label: "Keyboard shortcuts", to: "/#shortcuts" },
       { label: "Listening stats", to: "/auth?returnTo=/stats" },
       { label: "Discover weekly", to: "/auth?returnTo=/home" },
     ],
