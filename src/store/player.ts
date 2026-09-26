@@ -1213,6 +1213,22 @@ function wireYoutubeEngine() {
       if (!usePlayerStore.getState().current?.youtubeId) return;
       if (state === 1) {
         clearYtLoadWatchdog();
+        // The IFrame player is created with autoplay:1, so YouTube rolls on to
+        // a RELATED video by itself when one finishes. Nothing in the app asks
+        // for that, so the store's current track (and therefore the miniplayer
+        // and fullscreen player) kept showing the old song while a different
+        // one played. Snap the engine back to the track the UI is showing.
+        const current = usePlayerStore.getState().current;
+        const actualId = ytEngine.getActualVideoId();
+        if (current?.youtubeId && actualId && actualId !== current.youtubeId) {
+          const s2 = usePlayerStore.getState();
+          void ytEngine
+            .play(current.youtubeId, { volume: s2.volume, muted: s2.muted })
+            .catch(() => {
+              /* the store's own error path will surface a failed reload */
+            });
+          return;
+        }
         usePlayerStore.setState({ isPlaying: true, isBuffering: false });
       } else if (state === 2) {
         usePlayerStore.setState({ isPlaying: false, isBuffering: false });

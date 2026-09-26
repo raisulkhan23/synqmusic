@@ -27,6 +27,8 @@ interface YtPlayerLike {
   getCurrentTime: () => number;
   getDuration: () => number;
   getPlayerState: () => number;
+  /** Present on the real IFrame API player; used to detect autoplay drift. */
+  getVideoData?: () => { video_id?: string };
 }
 
 interface YtNamespace {
@@ -112,6 +114,14 @@ let lastState = -1;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 /** The video id currently loaded into the engine (null = nothing loaded). */
 let loadedVideoId: string | null = null;
+/**
+ * The video the IFrame player is ACTUALLY on, read back from the player itself.
+ * `loadedVideoId` only records what we asked for — with `autoplay: 1` YouTube
+ * will roll on to a related video by itself, and nothing in our bookkeeping
+ * notices. Callers compare this against the store's current track to catch that
+ * drift instead of silently playing the wrong song.
+ */
+let actualVideoId: string | null = null;
 
 /**
  * Slave mode: the engine plays a video MUTED purely as visuals while the
@@ -210,6 +220,16 @@ async function ensurePlayer(): Promise<YtPlayerLike> {
           },
           onStateChange: (e) => {
             lastState = e.data;
+            if (e.data === 1 || e.data === 0) {
+              // Read back the real video id whenever the player reports a
+              // state, so autoplay drift is detectable.
+              try {
+                const data = e.target.getVideoData?.();
+                if (data?.video_id) actualVideoId = data.video_id;
+              } catch {
+                /* player not ready */
+              }
+            }
             if (slaveMode) return; // muted visual slave — store never hears this
             handlers.onStateChange?.(e.data);
             // YouTube resets the playback rate on state changes — re-apply
@@ -273,6 +293,7 @@ export async function play(
   }
   lastState = -1;
   loadedVideoId = videoId;
+  actualVideoId = videoId;
   p.loadVideoById(videoId, Math.max(0, opts.startSeconds ?? 0));
   // A fresh load resets the rate — the verified re-apply loop handles it.
   applyRate();
@@ -474,6 +495,25 @@ export function isFatalError(code: number): boolean {
 /** The video id the engine currently has loaded — null when nothing loaded. */
 export function getLoadedVideoId(): string | null {
   return loadedVideoId;
+}
+
+/**
+ * The video the IFrame player is really playing, which can differ from
+ * getLoadedVideoId() when YouTube autoplays into a related video.
+ */
+export function getActualVideoId(): string | null {
+  if (actualVideoId) return actualVideoId;
+  // Fall back to a live read for the case where no state change has fired yet.
+  try {
+    const data = player?.getVideoData?.();
+    if (data?.video_id) {
+      actualVideoId = data.video_id;
+      return actualVideoId;
+    }
+  } catch {
+    /* not ready */
+  }
+  return actualVideoId;
 }
 
 // --- slave (visual-only) mode -------------------------------------------------
