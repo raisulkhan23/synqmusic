@@ -29,7 +29,51 @@ describe("settings page category tabs", () => {
     // The marked tab is driven by state, not hardcoded, and stays in step with
     // the section being read.
     expect(settingsSource).toMatch(/setActiveSection\(id\)/);
-    expect(settingsSource).toContain("IntersectionObserver");
+    // From positions, not from the observer's partial batch of changed
+    // entries: that version reported the wrong tab whenever two categories
+    // overlapped, and had no answer at all in the gap between two tall ones.
+    expect(settingsSource).not.toMatch(/new IntersectionObserver/);
+    expect(settingsSource).toMatch(/getBoundingClientRect\(\)\.top/);
+    expect(settingsSource).toMatch(/const PROBE_PX = 96;/);
+    // Sections hidden at this width (the keyboard panel below `lg`) have a
+    // zero rect, which would pin the highlight to them.
+    expect(settingsSource).toMatch(/element\.offsetParent !== null/);
+    // At the top of the page the topmost section wins, not the rail's first
+    // item: the rail is ordered by category size, the document is not.
+    expect(settingsSource).toMatch(/current\?\.id \?\? earliest!\.id/);
+    expect(settingsSource).toMatch(/if \(!earliest \|\| top < earliest\.top\)/);
+  });
+
+  test("every tab has a real section to jump to", () => {
+    // Two of the seven tabs pointed at ids that no element carried, so
+    // clicking them scrolled nowhere and the highlight stayed on whatever was
+    // actually on screen — which is why "Data" appeared to select
+    // "Personalize". `jumpToSetting` used to sniff the section text as a
+    // fallback; it found nothing and failed silently.
+    const tabs = settingsSource
+      .slice(settingsSource.indexOf("const SETTINGS_SECTIONS"))
+      .slice(0, settingsSource.indexOf("];", settingsSource.indexOf("const SETTINGS_SECTIONS")));
+    const ids = [...tabs.matchAll(/"(settings-[a-z]+)"/g)].map((match) => match[1]);
+    expect(ids).toEqual([
+      "settings-playback",
+      "settings-audio",
+      "settings-appearance",
+      "settings-profile",
+      "settings-personalization",
+      "settings-shortcuts",
+      "settings-data",
+    ]);
+    for (const id of ids) {
+      expect(settingsSource).toContain(`<section id="${id}"`);
+    }
+    // No content-sniffing fallback left to fail silently.
+    const jump = settingsSource.slice(
+      settingsSource.indexOf("function jumpToSetting"),
+      settingsSource.indexOf("export function SettingsDialog"),
+    );
+    expect(jump).toContain("document.getElementById(id)");
+    expect(jump).not.toContain("querySelectorAll");
+    expect(jump).not.toContain("textContent");
   });
 
   test("the rail stops being a second card inside the panel", async () => {
@@ -120,8 +164,10 @@ describe("keyboard shortcuts are desktop only", () => {
     // (or a divider left with nothing to separate) is what a partial gate
     // produces.
     expect(settingsSource).toContain('label === "Shortcuts" && "hidden lg:inline-flex"');
-    expect(settingsSource).toMatch(/<section className="hidden flex-col gap-2 lg:flex">/);
-    expect(settingsSource).not.toMatch(/<section className="hidden flex-col gap-2 sm:flex">/);
+    expect(settingsSource).toMatch(
+      /<section id="settings-shortcuts" className="hidden flex-col gap-2 lg:flex">/,
+    );
+    expect(settingsSource).not.toMatch(/className="hidden flex-col gap-2 sm:flex"/);
     // The divider belongs to the shortcuts block.
     expect(settingsSource).toContain('<Separator className="hidden bg-white/[0.07] lg:block" />');
     expect(settingsSource).not.toContain(

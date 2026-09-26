@@ -118,13 +118,11 @@ function isFocusLayout(value: string | null): value is FocusLayout {
 }
 
 function jumpToSetting(id: string) {
-  const directTarget = document.getElementById(id);
-  const fallbackTarget = Array.from(document.querySelectorAll("section")).find((section) => {
-    if (id === "settings-shortcuts") return section.querySelector("kbd") !== null;
-    if (id === "settings-data") return section.textContent?.includes("Your data") === true;
-    return false;
-  });
-  const target = directTarget ?? fallbackTarget;
+  // Every tab in SETTINGS_SECTIONS must have a real element to aim at. When
+  // one did not, this used to fall back to sniffing the section text, which
+  // found nothing and left the page exactly where it was — so the click looked
+  // like it had been ignored while the marked tab stayed on the old section.
+  const target = document.getElementById(id);
   if (!target) return;
 
   // The authenticated shell owns the scroll container. Scrolling that element
@@ -671,22 +669,64 @@ export function SettingsDialog({
   // enough that the rail never needs to follow.
   useEffect(() => {
     if (!pageMode || !open) return;
-    const targets = SETTINGS_SECTIONS.map(([, id]) => document.getElementById(id)).filter(
-      (element): element is HTMLElement => element !== null,
-    );
-    if (targets.length === 0) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const first = entries
-          .filter((entry) => entry.isIntersecting)
-          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
-        if (first) setActiveSection(first.target.id);
-      },
-      // A category counts as current once its header clears the sticky rail.
-      { rootMargin: "-72px 0px -70% 0px", threshold: 0 },
-    );
-    for (const target of targets) observer.observe(target);
-    return () => observer.disconnect();
+    const ids = SETTINGS_SECTIONS.map(([, id]) => id);
+    const sections = () =>
+      ids
+        .map((id) => document.getElementById(id))
+        // A section hidden at this width (the keyboard panel below `lg`) has a
+        // zero rect, which would read as "at the top" and pin the highlight to
+        // it, so unrendered sections are left out entirely.
+        .filter((element): element is HTMLElement => element !== null && element.offsetParent !== null);
+
+    // The marked tab has to agree with what is on screen, so it is computed
+    // from the sections' own positions. The IntersectionObserver version only
+    // ever saw the entries that had just crossed the line, so it reported the
+    // wrong section whenever two categories overlapped in the band — clicking
+    // "Data" and landing on "Personalize" — and it had no answer at all in the
+    // gap between two tall sections, which left the highlight stuck.
+    const PROBE_PX = 96; // matches the offset `jumpToSetting` scrolls to
+    const sync = () => {
+      const visible = sections();
+      if (visible.length === 0) return;
+      let current: { id: string; top: number } | null = null;
+      let earliest: { id: string; top: number } | null = null;
+      for (const section of visible) {
+        const top = section.getBoundingClientRect().top;
+        // The topmost section on the page, which is not the rail's first item:
+        // the rail is ordered by category size, the document is not.
+        if (!earliest || top < earliest.top) earliest = { id: section.id, top };
+        if (top - PROBE_PX > 0) continue; // still below the sticky rail
+        // Several sections can be above the probe line at once; the one the
+        // reader is actually in is the last of them, whatever order the rail
+        // lists them in.
+        if (!current || top > current.top) current = { id: section.id, top };
+      }
+      // Nothing above the line: the reader is above the first category.
+      const next = current?.id ?? earliest!.id;
+      setActiveSection((previous) => (previous === next ? previous : next));
+    };
+
+    let frame = 0;
+    const schedule = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        sync();
+      });
+    };
+
+    sync();
+    const first = document.getElementById(ids[0]!);
+    const container = first?.closest("main") ?? null;
+    const scrollTarget: HTMLElement | Window =
+      container instanceof HTMLElement ? container : window;
+    scrollTarget.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      scrollTarget.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
+    };
   }, [pageMode, open]);
 
   return (
@@ -1845,7 +1885,7 @@ export function SettingsDialog({
             one in landscape, which is wider than the `md` breakpoint — never
             sees any of it. The global key handler still works wherever there is
             a physical keyboard. */}
-        <section className="hidden flex-col gap-2 lg:flex">
+        <section id="settings-shortcuts" className="hidden flex-col gap-2 lg:flex">
           <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
             <Keyboard className="size-3.5" />
             Keyboard shortcuts
@@ -1870,7 +1910,7 @@ export function SettingsDialog({
         <Separator className="bg-white/[0.07]" />
 
         {/* data */}
-        <section className="flex flex-col gap-2">
+        <section id="settings-data" className="flex flex-col gap-2">
           <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
             <Moon className="size-3.5" />
             Your data
