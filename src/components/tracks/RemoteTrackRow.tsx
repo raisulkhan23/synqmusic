@@ -141,7 +141,9 @@ export function RemoteTrackRow({
           <Loader2 className="size-4 shrink-0 animate-spin text-[rgb(var(--tint))] sm:hidden" />
         )}
 
-        <div className="relative hidden size-10 shrink-0 overflow-hidden rounded-md ring-1 ring-white/10 sm:block">
+        {/* Artwork stays on every screen size — it's the one non-interactive
+            element that earns its space in a touch row. */}
+        <div className="relative size-11 shrink-0 overflow-hidden rounded-lg ring-1 ring-white/10 sm:size-10 sm:rounded-md">
           <img
             src={item.thumbnail}
             alt=""
