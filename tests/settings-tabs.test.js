@@ -44,6 +44,17 @@ describe("settings page category tabs", () => {
     expect(css).toMatch(
       /\.settings-page-grid>\.settings-jump-bar\{[^}]*box-shadow:none!important/,
     );
+    // The sheen/tint pseudo-layers are the card chrome too. Leaving them on
+    // meant a ghost box was still being clipped to the element's rounded rect
+    // on top of the panel — the "corners" that made it look like a
+    // mis-shaped card.
+    expect(css).toMatch(
+      /\.settings-page-grid>\.settings-jump-bar:before,\.settings-page-grid>\.settings-jump-bar:after\{content:none\}/,
+    );
+    // The radius stays explicit even with no chrome left.
+    expect(css).toMatch(
+      /\.settings-page-grid>\.settings-jump-bar\{[^}]*border-radius:1rem/,
+    );
     expect(css).toMatch(
       /\.settings-page-grid>\.settings-jump-bar:hover\{[^}]*box-shadow:none/,
     );

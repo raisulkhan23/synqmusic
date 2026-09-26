@@ -635,6 +635,18 @@ html,
       box-shadow: none !important;
       border-color: transparent;
       padding-inline: 0;
+      /* Keep the radius explicit even with no chrome left, so the one thing
+         that can still paint here (the item list) inherits a rounded box. */
+      border-radius: 1rem;
+    }
+    /* The sheen and the accent blob belong to the card chrome. With the
+       element's own background, blur and shadow gone they were the only thing
+       still painting, and being clipped to the element's rounded box they read
+       as a mis-shaped card sitting on top of the panel. Nothing of the card
+       chrome survives in the sidebar layout. */
+    .settings-page-grid > .settings-jump-bar::before,
+    .settings-page-grid > .settings-jump-bar::after {
+      content: none;
     }
     .settings-page-grid > .settings-jump-bar:hover {
       border-color: transparent;
