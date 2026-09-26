@@ -136,14 +136,11 @@ export function AppShell() {
   const pointerFrameRef = useRef<number | null>(null);
   const pointerPositionRef = useRef({ x: 0, y: 0, target: null as HTMLDivElement | null });
 
-  // Reset the page scroll on every navigation. `<main>` is the scroll
-  // container, not the document, and the browser only resets the *document*
-  // scroll — so leaving the bottom of a long Search results page and opening
-  // Home dropped you in halfway down the new page. Worst on mobile, where the
-  // top bar is the only thing marking the top of the content.
-  useEffect(() => {
-    mainScrollRef.current?.scrollTo({ top: 0, left: 0 });
-  }, [location.pathname, location.search]);
+  // The navigation scroll reset lives in one place — `ScrollToTop` in
+  // `src/components/ScrollToTop.tsx` — because the shell's `<main>` is the
+  // scroll container (not the document) and an effect here ran before the new
+  // route painted, so it lost the race. It resets `[data-app-scroll]`, which
+  // is this element.
 
   // Restore an uploaded wallpaper from IndexedDB after a page reload.
   useEffect(() => {
@@ -667,6 +664,7 @@ export function AppShell() {
             rails inside a page still scroll normally. */}
         <main
           ref={mainScrollRef}
+          data-app-scroll
           className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto"
         >
           {/* ambient accent glow follows the current album art */}
