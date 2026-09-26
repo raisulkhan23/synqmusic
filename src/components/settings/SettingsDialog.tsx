@@ -607,6 +607,37 @@ export function SettingsDialog({
     toast("Wallpaper library removed");
   };
 
+  /**
+   * Go back to the stock SYNQ background without touching saved files.
+   *
+   * Deliberately non-destructive, unlike clearWallpaper: every pointer to the
+   * active wallpaper is dropped and the blur returns to its default, but the
+   * library stays in IndexedDB so the user can re-apply a wallpaper in one
+   * click. It also has to clear the two "remembered for when you switch back"
+   * keys — leaving them behind meant that switching to Photo after reverting
+   * silently resurrected the wallpaper the user just reverted away from.
+   */
+  const revertWallpaper = () => {
+    if (wallpaper?.startsWith("blob:") && !wallpaperLibraryUrlsRef.current.includes(wallpaper)) {
+      URL.revokeObjectURL(wallpaper);
+    }
+    setActiveWallpaperKey(null);
+    setLiveWallpaperFileName("");
+    setLiveWallpaperUrl("");
+    localStorage.removeItem("ss.savedImageWallpaper");
+    localStorage.removeItem("ss.savedVideoUrl");
+    // Clearing the value removes `ss.wallpaper` and writes `ss.wallpaperType`.
+    setWallpaper(null, "image");
+    setWallpaperType("image");
+    setWallpaperBlurAmount(DEFAULT_WALLPAPER_BLUR_AMOUNT);
+    localStorage.setItem("ss.wallpaperBlur", "1");
+    localStorage.setItem("ss.wallpaperBlurAmount", String(DEFAULT_WALLPAPER_BLUR_AMOUNT));
+    window.dispatchEvent(
+      new CustomEvent("ss:wallpaper-blur-change", { detail: DEFAULT_WALLPAPER_BLUR_AMOUNT }),
+    );
+    toast("Back to the default background");
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange} modal={pageMode ? false : undefined}>
       <DialogContent
@@ -1510,14 +1541,27 @@ export function SettingsDialog({
             )}
 
             {(wallpaper || wallpaperLibrary.length > 0) && (
-              <button
-                type="button"
-                onClick={clearWallpaper}
-                className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-red-400/30 hover:bg-red-400/[0.08] hover:text-red-300"
-              >
-                <ImageOff className="size-3.5" />
-                Remove wallpaper library
-              </button>
+              /* Two distinct actions, deliberately side by side: "Revert" is
+                 safe and keeps every saved file, while "Remove library" is
+                 destructive and deletes them from IndexedDB. */
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={revertWallpaper}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-[rgb(var(--tint))]/40 hover:bg-[rgb(var(--tint))]/10 hover:text-[rgb(var(--tint))]"
+                >
+                  <RotateCcw className="size-3.5" />
+                  Revert to default
+                </button>
+                <button
+                  type="button"
+                  onClick={clearWallpaper}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-red-400/30 hover:bg-red-400/[0.08] hover:text-red-300"
+                >
+                  <ImageOff className="size-3.5" />
+                  Remove wallpaper library
+                </button>
+              </div>
             )}
           </div>
 
