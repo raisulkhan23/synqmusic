@@ -47,6 +47,11 @@ const linkColumns = [
   },
 ] as const;
 
+// `radius` mirrors the corner shape each badge already draws, so the white
+// keyline we add hugs its own outline instead of boxing a pill inside a
+// rectangle. Launch Streak and EasyDoFollow ship a near-white stroke inside
+// their own artwork; ours lands on the same pixels there, so they read as one
+// line rather than two.
 const featuredOn = [
   {
     name: "EasyLaunch",
@@ -54,6 +59,7 @@ const featuredOn = [
     badge: "https://easylaunch.dev/badge/easylaunch-badge-dark.svg",
     width: 188,
     height: 56,
+    radius: "rounded-full",
   },
   {
     name: "Sky Launch",
@@ -61,6 +67,7 @@ const featuredOn = [
     badge: "https://skylaun.ch/badge/skylaunch-badge-dark.svg",
     width: 188,
     height: 56,
+    radius: "rounded-lg",
   },
   {
     name: "Launch Streak",
@@ -68,6 +75,7 @@ const featuredOn = [
     badge: "https://launchstreak.dev/badge/launch-streak-badge-dark.svg",
     width: 248,
     height: 68,
+    radius: "rounded-xl",
   },
   {
     name: "EasyDoFollow",
@@ -75,6 +83,7 @@ const featuredOn = [
     badge: "https://easydofollow.dev/badge/easydofollow-badge-dark.svg",
     width: 188,
     height: 56,
+    radius: "rounded-xl",
   },
 ] as const;
 
@@ -113,7 +122,7 @@ export function SiteFooter() {
                     href={badge.href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="block rounded-lg opacity-80 transition-all duration-200 hover:-translate-y-0.5 hover:opacity-100 focus-visible:-translate-y-0.5 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[rgb(var(--tint))]"
+                    className={`block border border-white/70 opacity-80 transition-all duration-200 hover:-translate-y-0.5 hover:border-white hover:opacity-100 focus-visible:-translate-y-0.5 focus-visible:border-white focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[rgb(var(--tint))] ${badge.radius}`}
                   >
                     <img
                       src={badge.badge}
