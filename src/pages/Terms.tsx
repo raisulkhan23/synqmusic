@@ -1,13 +1,17 @@
-import { InfoPage } from "@/components/landing/InfoPage";
+import { LegalDoc } from "@/components/landing/LegalDoc";
 
-/** Terms of use. Reflects the app's real beta status and content sourcing. */
+/**
+ * Terms of use. Reflects the app's real beta status and content sourcing.
+ * The copy is unchanged from the first pass — only the presentation moved to
+ * the document layout.
+ */
 export default function Terms() {
   return (
-    <InfoPage
-      eyebrow="The fine print"
-      title="Terms of use"
-      intro="The rules for using SYNQ. Plain English, and short — if any of it is unclear, treat the conservative reading as the one that applies."
-      updated="September 26, 2026"
+    <LegalDoc
+      title="Terms of Use"
+      version="1.0"
+      effective="26 September 2026"
+      preamble="The rules for using SYNQ. Plain English and short — if any of it is unclear, the conservative reading is the one that applies."
       sections={[
         {
           id: "acceptance",
@@ -25,17 +29,20 @@ export default function Terms() {
           body: (
             <>
               <p>
-                SYNQ is currently in <strong>beta</strong>. Features may
-                change, break, or disappear without notice, and parts of the
-                app may be unavailable at times while we work on it.
+                SYNQ is a listening client. It does not host, own, or sell
+                music, and it has no affiliation with any record label, artist,
+                or rights holder.
               </p>
               <p>
-                SYNQ is a listening client. It does not host, own, or sell
-                music, and it has no affiliation with any record label,
-                artist, or rights holder.
+                Playback is served by YouTube's embedded player. You are
+                responsible for complying with YouTube's own terms and with
+                applicable copyright law, and SYNQ may remove or block access
+                to any specific item that is unavailable, restricted, or the
+                subject of a valid complaint.
               </p>
             </>
           ),
+          note: "SYNQ is currently in beta. Features may change, break, or disappear without notice, and parts of the app may be unavailable while we work on it.",
         },
         {
           id: "account",
@@ -54,10 +61,15 @@ export default function Terms() {
           body: (
             <>
               <p>Don't use SYNQ to:</p>
-              <ul className="list-disc space-y-1 pl-5">
+              <ul>
                 <li>Download, rip, or redistribute any audio or video.</li>
-                <li>Strip, replace, or obscure any copyright or attribution notice.</li>
-                <li>Circumvent region limits, embed restrictions, or rate limits.</li>
+                <li>
+                  Strip, replace, or obscure any copyright or attribution
+                  notice.
+                </li>
+                <li>
+                  Circumvent region limits, embed restrictions, or rate limits.
+                </li>
                 <li>
                   Probe, overload, scrape, or interfere with the service or its
                   infrastructure.
@@ -65,19 +77,6 @@ export default function Terms() {
                 <li>Upload content that is unlawful, infringing, or hateful.</li>
               </ul>
             </>
-          ),
-        },
-        {
-          id: "content",
-          heading: "Music and third-party content",
-          body: (
-            <p>
-              Playback is served by YouTube's embedded player. You are
-              responsible for complying with YouTube's own terms and with
-              applicable copyright law, and SYNQ may remove or block access to
-              any specific item that is unavailable, restricted, or the subject
-              of a valid complaint.
-            </p>
           ),
         },
         {
@@ -97,8 +96,8 @@ export default function Terms() {
           heading: "No warranty",
           body: (
             <p>
-              SYNQ is provided <strong>as is</strong>, without warranties of
-              any kind, express or implied, including fitness for a particular
+              SYNQ is provided <strong>as is</strong>, without warranties of any
+              kind, express or implied, including fitness for a particular
               purpose. Because playback depends on third-party services, we
               cannot guarantee uninterrupted availability of any track.
             </p>
