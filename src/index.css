@@ -623,6 +623,28 @@ html,
       /* Air under the title block. Same value as the content column below, so
          the rail and the first category stay on one line. */
       margin-top: 1.75rem;
+      /* Inside the panel the rail was a SECOND card: 82%-opaque card with its
+         own blur and a heavy shadow, sitting on the panel's 58% surface, so it
+         read as a black hole in the middle of the settings rather than part of
+         them. On wide screens it stops being a card — the panel's own glass is
+         the surface and the rail is a quiet list inside it. The compact dialog
+         keeps the floating bar, where it has to sit over scrolling content. */
+      background: transparent !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      box-shadow: none !important;
+      border-color: transparent;
+      padding-inline: 0;
+    }
+    .settings-page-grid > .settings-jump-bar:hover {
+      border-color: transparent;
+      box-shadow: none;
+    }
+    /* "JUMP TO" labels the horizontal chip strip, where it explains what the
+       control is. As a sidebar the items are self-evident, and the shouty
+       uppercase label was the other thing that made this read as a card. */
+    .settings-page-grid .settings-jump-label {
+      display: none;
     }
     /* The header spans both columns, and the pointer glow is absolutely
        positioned (giving it a grid column would turn its grid area into the
@@ -658,10 +680,12 @@ html,
       padding-block: 0.5rem !important;
       padding-inline: 0.75rem !important;
     }
-    /* A left accent bar, the way a real sidebar marks the current item. */
+    /* The active row matches the app's own sidebar nav (white/[0.07] on
+       `foreground` text) with a lime left bar marking the current category,
+       rather than a second, louder accent treatment. */
     .settings-jump-list > .settings-tab-active {
-      border-color: rgb(var(--tint) / 0.35);
-      background: rgb(var(--tint) / 0.1);
+      border-color: transparent;
+      background: rgb(255 255 255 / 0.07);
       color: var(--foreground);
       box-shadow: inset 2px 0 0 rgb(var(--tint));
     }

@@ -19,11 +19,40 @@ describe("settings page category tabs", () => {
   test("the rail and its chip list carry the layout hooks", () => {
     expect(settingsSource).toContain("settings-jump-rail");
     expect(settingsSource).toContain("settings-jump-list");
+    expect(settingsSource).toContain("settings-jump-label");
     expect(settingsSource).toContain("settings-tab-active");
     // The marked tab is driven by state, not hardcoded, and stays in step with
     // the section being read.
     expect(settingsSource).toMatch(/setActiveSection\(id\)/);
     expect(settingsSource).toContain("IntersectionObserver");
+  });
+
+  test("the rail stops being a second card inside the panel", async () => {
+    // It was 82%-opaque card + its own blur + a heavy shadow sitting on the
+    // panel's 58% surface, so it read as a black hole in the settings. On wide
+    // screens the panel's own glass is the surface and the rail is a list
+    // inside it; the compact dialog keeps the floating bar it needs.
+    const css = await compileClasses(["overflow-x-auto"]);
+    // Minified: `transparent` collapses to `0 0`, and Lightning CSS keeps only
+    // the `-webkit-` form of backdrop-filter (both engines honour it).
+    expect(css).toMatch(
+      /\.settings-page-grid>\.settings-jump-bar\{[^}]*background:0 0!important/,
+    );
+    expect(css).toMatch(
+      /\.settings-page-grid>\.settings-jump-bar\{[^}]*backdrop-filter:none!important/,
+    );
+    expect(css).toMatch(
+      /\.settings-page-grid>\.settings-jump-bar\{[^}]*box-shadow:none!important/,
+    );
+    expect(css).toMatch(
+      /\.settings-page-grid>\.settings-jump-bar:hover\{[^}]*box-shadow:none/,
+    );
+    // The shouty uppercase label describes the chip strip, not a sidebar.
+    expect(css).toMatch(/\.settings-page-grid \.settings-jump-label\{display:none\}/);
+    // The active row matches the app's own sidebar nav, not a louder accent.
+    expect(css).toMatch(
+      /\.settings-jump-list>\.settings-tab-active\{[^}]*background:#ffffff12/,
+    );
   });
 
   test("the rail becomes a sticky left column on wide screens", async () => {
