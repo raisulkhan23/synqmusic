@@ -906,6 +906,14 @@ html,
     }
   }
   .mobile-nav-item {
+    /* REQUIRED. The active-pill highlight below is an absolutely positioned
+       ::before. Without a positioned ancestor it resolves against the <nav>
+       (which is `relative` via .liquid-glass), so `inset: 1px 5px 0` made
+       every item's highlight span the ENTIRE bar. All four stacked up, the
+       last one (Profile) won every hit test, and `opacity: 0` never made them
+       non-interactive — so a tap anywhere in the nav navigated to /profile.
+       `position: relative` keeps each highlight inside its own button. */
+    position: relative;
     isolation: isolate;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
@@ -921,6 +929,9 @@ html,
     content: "";
     position: absolute;
     z-index: -1;
+    /* Also non-interactive on its own, so the highlight can never become a
+       tap target even if the containing block changes. */
+    pointer-events: none;
     inset: 1px 5px 0;
     border: 1px solid rgb(var(--tint) / 0.18);
     border-radius: 0.9rem;
