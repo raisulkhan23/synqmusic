@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { CardTransparencySection } from "@/components/settings/CardTransparencySection";
 import { ImportSection } from "@/components/settings/ImportSection";
 import {
   Dialog,
@@ -10,6 +11,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
+import { DEFAULT_CARD_TRANSPARENCY } from "@/lib/cardTransparency";
 import {
   applyEqPreset,
   setAudioFilter,
@@ -571,6 +573,9 @@ export function SettingsDialog({
     setSettingsDepth(true);
     setReduceMotion(false);
     if (!liquidGlass) toggleLiquidGlass();
+    if (usePlayerStore.getState().cardTransparency !== DEFAULT_CARD_TRANSPARENCY) {
+      usePlayerStore.getState().setCardTransparency(DEFAULT_CARD_TRANSPARENCY);
+    }
     if (!ambientGlow) toggleAmbientGlow();
     if (!pointerEffects) togglePointerEffects();
     if (!visualizerEnabled) toggleVisualizer();
@@ -1109,6 +1114,7 @@ export function SettingsDialog({
 
         {/* appearance */}
         <section id="settings-appearance" className="scroll-mt-20 flex flex-col gap-2.5">
+          <CardTransparencySection />
           <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-3">
             <div className="mb-2 flex items-center justify-between gap-3">
               <div>

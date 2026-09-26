@@ -15,6 +15,11 @@ import {
   type AudioFilterId,
 } from "@/lib/audio";
 import type { RGB } from "@/lib/covers";
+import {
+  applyCardTransparency,
+  CARD_TRANSPARENCY_KEY,
+  readCardTransparency,
+} from "@/lib/cardTransparency";
 import { toPlayableYoutube, type Playable } from "@/lib/playable";
 import * as ytEngine from "@/lib/youtubePlayer";
 import { cacheStream, cleanArtistName, cleanTrackTitle, getCachedStream, type YtItem } from "@/lib/youtube";
@@ -291,6 +296,9 @@ interface PlayerStore {
   /** Liquid glass UI effect (frosted refraction panels) */
   liquidGlass: boolean;
   toggleLiquidGlass: () => void;
+  /** 0 = solid panels, 80 = maximum see-through. */
+  cardTransparency: number;
+  setCardTransparency: (value: number) => void;
   /** Optional locally-persisted blurred background wallpaper. */
   wallpaper: string | null;
   wallpaperType: "image" | "video";
@@ -2237,6 +2245,12 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       }),
 
     liquidGlass: localStorage.getItem("ss.liquidGlass") !== "0",
+    cardTransparency: readCardTransparency(),
+    setCardTransparency: (value) => {
+      const next = applyCardTransparency(value);
+      localStorage.setItem(CARD_TRANSPARENCY_KEY, String(next));
+      set({ cardTransparency: next });
+    },
     toggleLiquidGlass: () =>
       set((state) => {
         const next = !state.liquidGlass;

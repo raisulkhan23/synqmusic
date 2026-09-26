@@ -114,6 +114,13 @@
 
   /* dynamic album-art tint (overridden by the player); default = brand lime */
   --tint: 203 244 143;
+
+  /* Glass opacities, driven by the card transparency slider in
+     Settings → Appearance (see src/lib/cardTransparency.ts). Higher = more
+     see-through. */
+  --ui-card-alpha: 68%;
+  --ui-panel-alpha: 52%;
+  --ui-settings-alpha: 58%;
 }
 
 /* AMOLED mode: true-black variant of dark (set alongside .dark) */
@@ -155,7 +162,7 @@ html.light {
 
 /* In light mode, panels built with white-on-dark assumptions flip. */
 html.light .liquid-glass {
-  background: rgba(255, 255, 255, 0.72);
+  background: color-mix(in oklab, #fff var(--ui-panel-alpha), transparent);
 }
 html.light img {
   filter: none;
@@ -412,7 +419,7 @@ html,
    */
   .liquid-glass {
     position: relative;
-    background: color-mix(in oklab, var(--card) 52%, transparent);
+    background: color-mix(in oklab, var(--card) var(--ui-panel-alpha), transparent);
     backdrop-filter: blur(28px) saturate(1.8) brightness(1.06);
     -webkit-backdrop-filter: blur(28px) saturate(1.8) brightness(1.06);
     box-shadow:
@@ -466,7 +473,7 @@ html,
   .settings-liquid-glass {
     position: relative;
     isolation: isolate;
-    background: color-mix(in oklab, var(--card) 58%, transparent) !important;
+    background: color-mix(in oklab, var(--card) var(--ui-settings-alpha), transparent) !important;
     backdrop-filter: blur(30px) saturate(1.85) brightness(1.06) !important;
     -webkit-backdrop-filter: blur(30px) saturate(1.85) brightness(1.06) !important;
     box-shadow:
@@ -654,7 +661,7 @@ html,
     border: 1px solid rgb(255 255 255 / 0.08);
     background:
       linear-gradient(135deg, rgb(255 255 255 / 0.055), transparent 46%),
-      color-mix(in oklab, var(--card) 68%, transparent);
+      color-mix(in oklab, var(--card) var(--ui-card-alpha), transparent);
     backdrop-filter: blur(22px) saturate(1.45);
     -webkit-backdrop-filter: blur(22px) saturate(1.45);
     box-shadow:

@@ -13,6 +13,7 @@ import {
   Routes,
   useLocation,
 } from "react-router";
+import { applyCardTransparency, readCardTransparency } from "@/lib/cardTransparency";
 import "./index.css";
 
 // SYNQ defaults to dark; restore the user's theme mode before first paint.
@@ -22,6 +23,9 @@ document.documentElement.classList.add("dark");
 if (localStorage.getItem("ss.liquidGlass") === "0") {
   document.documentElement.classList.add("no-glass");
 }
+// Restore the saved card transparency before paint so glass panels never flash
+// at the default opacity first.
+applyCardTransparency(readCardTransparency());
 const savedTheme = localStorage.getItem("ss.themeMode");
 document.documentElement.dataset.scene = localStorage.getItem("ss.sceneTheme") ?? "studio";
 if (savedTheme === "light") {
