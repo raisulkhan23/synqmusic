@@ -142,6 +142,11 @@ describe("settings section spacing", () => {
     expect(cssSource).toMatch(
       /\.settings-liquid-glass > \[data-slot="separator"\] \{\s*margin-block: 1\.75rem;/,
     );
+    // Same reason, at the top: the panel is `gap: 0`, so the first category
+    // header sat flush against the sticky jump bar in the compact dialog.
+    expect(cssSource).toMatch(
+      /\.settings-liquid-glass > #settings-playback \{\s*margin-top: 1\.25rem;/,
+    );
   });
 });
 
@@ -155,6 +160,23 @@ describe("glass sheen", () => {
     expect(css).toMatch(/\.liquid-glass:before\{[^}]*\/420% 100% no-repeat/);
     expect(css).not.toMatch(/\.liquid-glass:before\{[^}]*\/250% 100%/);
     expect(css).toMatch(/\.settings-jump-glass:before\{[^}]*\/420% 100% no-repeat/);
+  });
+
+  test("the sweep stays on the surface for the whole cycle", () => {
+    // `background-position` percentages resolve against (box - image), so the
+    // stops that worked for the old 250% band (120% -> -40%) sat entirely
+    // off-panel once the band went to 420%: the shine was invisible for most
+    // of the cycle and the panels read as flat. A 420% band is on screen
+    // roughly between -3% and 102%.
+    const keyframes = cssSource.match(/@keyframes glass-sheen \{[\s\S]*?\n  \}/)?.[0] ?? "";
+    const stops = [...keyframes.matchAll(/background-position: (-?[\d.]+%) 0/g)].map((match) =>
+      Number.parseFloat(match[1]),
+    );
+    expect(stops.length).toBe(2);
+    for (const stop of stops) {
+      expect(stop).toBeGreaterThan(-10);
+      expect(stop).toBeLessThan(110);
+    }
   });
 });
 

@@ -460,13 +460,20 @@ html,
     background-repeat: no-repeat;
     animation: glass-sheen 11s ease-in-out infinite;
   }
+  /* Travel range is coupled to the band width above, and the old 120% -> -40%
+     was tuned for a 250% band. `background-position` percentages resolve
+     against (box - image), so with a 420% band those two stops sat entirely
+     off-panel: the shine was off screen for roughly four fifths of the cycle
+     and the panels just looked flat. These stops keep at least the edge of the
+     band on the surface for the whole cycle, so it sweeps across slowly and
+     never appears cut. */
   @keyframes glass-sheen {
     0%,
     100% {
-      background-position: 120% 0;
+      background-position: 100% 0;
     }
     50% {
-      background-position: -40% 0;
+      background-position: 30% 0;
     }
   }
   /* tinted refraction blob that reacts to the current accent color */
@@ -560,6 +567,12 @@ html,
      breathe, which is what makes the sections read as separate blocks. */
   .settings-liquid-glass > [data-slot="separator"] {
     margin-block: 1.75rem;
+  }
+  /* The panel is `gap: 0`, so without this the sticky jump bar sat flush
+     against the very first category header in the compact dialog. The wide
+     layout overrides it with the larger value it uses for every category. */
+  .settings-liquid-glass > #settings-playback {
+    margin-top: 1.25rem;
   }
   /* Phones get a denser settings list: less dead space between the stacked
      sections so more controls fit per screen. */
