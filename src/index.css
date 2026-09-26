@@ -434,7 +434,14 @@ html,
       inset 1px 0 0 0 rgb(255 255 255 / 0.03),
       0 8px 32px rgb(0 0 0 / 0.25);
   }
-  /* specular sheen that drifts across the surface */
+  /* Specular sheen that drifts across the surface.
+
+     The band has to be WIDER than the panel it sits on. At 250% the bright
+     core fitted inside the panel width, so the gradient got sliced by the
+     panel's own edges (and repeated, since the default `repeat` tiled it) —
+     which is the "shine cuts off" tell. At 420%, no-repeat, only one soft
+     band exists and it is wider than the surface, so what you see is always
+     the middle of the ramp entering and leaving rather than a hard cut. */
   .liquid-glass::before {
     content: "";
     position: absolute;
@@ -443,14 +450,15 @@ html,
     pointer-events: none;
     background: linear-gradient(
       115deg,
-      transparent 30%,
-      rgb(255 255 255 / 0.06) 45%,
+      transparent 22%,
+      rgb(255 255 255 / 0.045) 38%,
       rgb(255 255 255 / 0.1) 50%,
-      rgb(255 255 255 / 0.06) 55%,
-      transparent 70%
+      rgb(255 255 255 / 0.045) 62%,
+      transparent 78%
     );
-    background-size: 250% 100%;
-    animation: glass-sheen 9s ease-in-out infinite;
+    background-size: 420% 100%;
+    background-repeat: no-repeat;
+    animation: glass-sheen 11s ease-in-out infinite;
   }
   @keyframes glass-sheen {
     0%,
@@ -497,14 +505,15 @@ html,
     pointer-events: none;
     background: linear-gradient(
       115deg,
-      transparent 28%,
-      rgb(255 255 255 / 0.07) 45%,
+      transparent 22%,
+      rgb(255 255 255 / 0.055) 38%,
       rgb(255 255 255 / 0.12) 50%,
-      rgb(255 255 255 / 0.07) 55%,
-      transparent 72%
+      rgb(255 255 255 / 0.055) 62%,
+      transparent 78%
     );
-    background-size: 250% 100%;
-    animation: glass-sheen 9s ease-in-out infinite;
+    background-size: 420% 100%;
+    background-repeat: no-repeat;
+    animation: glass-sheen 11s ease-in-out infinite;
   }
   .settings-liquid-glass::after {
     content: "";
@@ -545,6 +554,13 @@ html,
   .settings-liquid-glass *::after {
     min-width: 0;
   }
+  /* Hairlines between settings categories were 1px with no space either side,
+     so the last row of a category sat straight on the line and the next
+     category header sat straight under it. The divider now has room to
+     breathe, which is what makes the sections read as separate blocks. */
+  .settings-liquid-glass > [data-slot="separator"] {
+    margin-block: 1.75rem;
+  }
   /* Phones get a denser settings list: less dead space between the stacked
      sections so more controls fit per screen. */
   @media (max-width: 639px) {
@@ -576,6 +592,64 @@ html,
       inset 0 1px 0 rgb(255 255 255 / 0.1),
       0 16px 38px rgb(0 0 0 / 0.22),
       0 0 28px rgb(var(--tint) / 0.06);
+  }
+  /* Settings page: category tabs down the left, like the Freebuff desktop
+     settings. Implemented as grid placement rather than by wrapping the
+     sections in a second element, because the exact same markup is also used
+     by the small settings dialog — where the rail stays a horizontal chip
+     strip. The header spans both columns, the rail owns column 1 from row 2
+     down, and every other child is pushed into column 2.
+
+     The rail spans many rows on purpose: a sticky element can only travel
+     inside its own grid area, so a single-row item would stop sticking the
+     moment the first section was taller than the list. The trailing
+     implicit rows are empty and therefore 0px tall. */
+  @media (min-width: 1024px) {
+    .settings-page-grid {
+      grid-template-columns: 12.5rem minmax(0, 1fr);
+    }
+    .settings-page-grid > .settings-header {
+      grid-column: 1 / -1;
+    }
+    .settings-page-grid > .settings-jump-bar {
+      grid-column: 1;
+      grid-row: 2 / span 60;
+      align-self: start;
+      /* The panel sets `gap: 0 !important` as a shorthand, which would also
+         swallow a plain `column-gap`, so the clearance between the rail and
+         the content is padding inside the rail instead. */
+      padding-right: 2rem;
+    }
+    /* The pointer glow is absolutely positioned; giving it a grid column would
+       turn its grid area into the containing block and shrink it to one
+       column. */
+    .settings-page-grid > *:not(.settings-jump-bar):not(.settings-pointer-glow) {
+      grid-column: 2;
+    }
+    .settings-jump-rail {
+      flex-direction: column !important;
+      align-items: stretch !important;
+      gap: 0.25rem !important;
+      overflow: visible !important;
+    }
+    .settings-jump-list {
+      flex-direction: column;
+      gap: 0.125rem;
+    }
+    .settings-jump-list > button {
+      width: 100%;
+      justify-content: flex-start;
+      border-radius: 0.75rem !important;
+      padding-block: 0.5rem !important;
+      padding-inline: 0.75rem !important;
+    }
+    /* A left accent bar, the way a real sidebar marks the current item. */
+    .settings-jump-list > .settings-tab-active {
+      border-color: rgb(var(--tint) / 0.35);
+      background: rgb(var(--tint) / 0.1);
+      color: var(--foreground);
+      box-shadow: inset 2px 0 0 rgb(var(--tint));
+    }
   }
 
   /* Put the controls people reach for most first: playback, sound, and
@@ -631,9 +705,17 @@ html,
     z-index: 0;
     inset: 0;
     pointer-events: none;
-    background: linear-gradient(110deg, transparent 25%, rgb(255 255 255 / 0.1) 48%, transparent 72%);
-    background-size: 240% 100%;
-    animation: glass-sheen 9s ease-in-out infinite;
+    background: linear-gradient(
+      110deg,
+      transparent 20%,
+      rgb(255 255 255 / 0.055) 38%,
+      rgb(255 255 255 / 0.1) 50%,
+      rgb(255 255 255 / 0.055) 62%,
+      transparent 80%
+    );
+    background-size: 420% 100%;
+    background-repeat: no-repeat;
+    animation: glass-sheen 11s ease-in-out infinite;
   }
   .settings-jump-glass::after {
     content: "";
@@ -1020,6 +1102,17 @@ html,
       left 120ms cubic-bezier(0.22, 1, 0.36, 1),
       top 120ms cubic-bezier(0.22, 1, 0.36, 1),
       opacity 180ms ease;
+  }
+  /* Fullscreen player: the same 120–300ms easing that reads as a soft trail
+     on a small panel reads as the cursor lagging behind the pointer on a
+     viewport-sized surface, so the motes here track it almost immediately.
+     `:nth-child(n)` keeps the specificity level needed to beat the per-mote
+     durations below. */
+  /* `.cursor-trail-layer` is in the selector on purpose: the per-mote
+     `:nth-child(2..5)` durations below are the same specificity as a bare
+     `.cursor-trail-snap:nth-child(n)` and would otherwise win on order. */
+  .cursor-trail-layer .cursor-trail-snap:nth-child(n) {
+    transition-duration: 40ms, 40ms, 160ms;
   }
   .cursor-trail:nth-child(2) {
     width: 12px;

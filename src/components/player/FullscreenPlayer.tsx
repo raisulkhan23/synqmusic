@@ -426,6 +426,22 @@ export function FullscreenPlayer() {
   const videoFrameRef = useRef<HTMLDivElement | null>(null);
   const rippleLayerRef = useRef<HTMLDivElement>(null);
   const cursorTrailRefs = useRef<Array<HTMLSpanElement | null>>([]);
+  /** Cached bounds of the fullscreen surface. It is a fixed, viewport-sized
+   *  element, so measuring it on every pointermove (as the shell does for its
+   *  smaller panels) forced a layout read per event on top of the video, the
+   *  blurred orbs and the backdrop filters — which is what made the cursor
+   *  effects feel like they were dragging behind the pointer. */
+  const surfaceBoundsRef = useRef<DOMRect | null>(null);
+  const pointerPositionRef = useRef({ x: 0, y: 0 });
+  const trailFrameRef = useRef<number | null>(null);
+  // Drop a queued frame when the player closes, or it fires into unmounted
+  // motes on the way out.
+  useEffect(
+    () => () => {
+      if (trailFrameRef.current !== null) cancelAnimationFrame(trailFrameRef.current);
+    },
+    [],
+  );
   /** Mirror of videoReady for the retry loop (state updates are async). */
   const videoReadyRef = useRef(false);
   /** Latest playback position, read inside the async retry loop. */
@@ -540,21 +556,33 @@ export function FullscreenPlayer() {
 
   const handlePointerMove = (event: PointerEvent<HTMLDivElement>) => {
     if (!pointerEffects || event.pointerType === "touch") return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
+    const bounds = surfaceBoundsRef.current ?? event.currentTarget.getBoundingClientRect();
+    const x = event.clientX - bounds.left;
+    const y = event.clientY - bounds.top;
+    // The glow follows the pointer with no transition, so it updates straight
+    // away; only the trail motes are batched, once per frame.
     event.currentTarget.style.setProperty("--pointer-x", `${x}px`);
     event.currentTarget.style.setProperty("--pointer-y", `${y}px`);
-    for (let index = 0; index < cursorTrailRefs.current.length; index += 1) {
-      const mote = cursorTrailRefs.current[index];
-      if (!mote) continue;
-      mote.style.left = `${x}px`;
-      mote.style.top = `${y}px`;
+    pointerPositionRef.current = { x, y };
+    if (trailFrameRef.current === null) {
+      trailFrameRef.current = requestAnimationFrame(() => {
+        trailFrameRef.current = null;
+        const { x: moteX, y: moteY } = pointerPositionRef.current;
+        for (let index = 0; index < cursorTrailRefs.current.length; index += 1) {
+          const mote = cursorTrailRefs.current[index];
+          if (!mote) continue;
+          mote.style.left = `${moteX}px`;
+          mote.style.top = `${moteY}px`;
+        }
+      });
     }
   };
 
   const handlePointerEnter = (event: PointerEvent<HTMLDivElement>) => {
     if (pointerEffects && event.pointerType !== "touch") {
+      // Re-measure on enter: the window can have been resized while the
+      // player was open, and a stale rect would offset every effect.
+      surfaceBoundsRef.current = event.currentTarget.getBoundingClientRect();
       event.currentTarget.style.setProperty("--pointer-opacity", "1");
     }
   };
@@ -634,7 +662,7 @@ export function FullscreenPlayer() {
                   ref={(node) => {
                     cursorTrailRefs.current[index] = node;
                   }}
-                  className="cursor-trail"
+                  className="cursor-trail cursor-trail-snap"
                 />
               ))}
             </div>

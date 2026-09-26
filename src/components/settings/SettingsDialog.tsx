@@ -638,6 +638,33 @@ export function SettingsDialog({
     toast("Back to the default background");
   };
 
+  // Which settings category is currently on screen. The rail marks it, so the
+  // section list reads as tabs instead of seven more buttons.
+  const [activeSection, setActiveSection] = useState<string>(SETTINGS_SECTIONS[0][1]);
+
+  // Keep the marked tab in step with the category actually being read. Only
+  // the full settings page scrolls the whole list; the compact dialog is short
+  // enough that the rail never needs to follow.
+  useEffect(() => {
+    if (!pageMode || !open) return;
+    const targets = SETTINGS_SECTIONS.map(([, id]) => document.getElementById(id)).filter(
+      (element): element is HTMLElement => element !== null,
+    );
+    if (targets.length === 0) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const first = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+        if (first) setActiveSection(first.target.id);
+      },
+      // A category counts as current once its header clears the sticky rail.
+      { rootMargin: "-72px 0px -70% 0px", threshold: 0 },
+    );
+    for (const target of targets) observer.observe(target);
+    return () => observer.disconnect();
+  }, [pageMode, open]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange} modal={pageMode ? false : undefined}>
       <DialogContent
@@ -651,7 +678,7 @@ export function SettingsDialog({
                    panel is `!static` inside the shell's `<main>`, and
                    `jumpToSetting` scrolls `<main>` by hand — a second scroll
                    container here clipped the sections and broke that math. */
-                "liquid-glass settings-liquid-glass relative !static !top-auto !left-auto !z-10 !mx-auto !grid !w-full !max-w-3xl !max-h-none !translate-x-0 !translate-y-0 !gap-0 !overflow-y-visible !rounded-3xl !border !border-white/10 !p-3.5 !shadow-xl sm:!p-8",
+                "settings-page-grid liquid-glass settings-liquid-glass relative !static !top-auto !left-auto !z-10 !mx-auto !grid !w-full !max-w-5xl !max-h-none !translate-x-0 !translate-y-0 !gap-0 !overflow-y-visible !rounded-3xl !border !border-white/10 !p-3.5 !shadow-xl sm:!p-8",
                 settingsShimmer ? "settings-glass-shimmer" : "settings-glass-still",
                 settingsDepth && "settings-glass-depth",
               )
@@ -710,21 +737,26 @@ export function SettingsDialog({
           )}
           aria-label="Settings sections"
         >
-          <div className="slider-rail flex items-center gap-2 overflow-x-auto pb-0.5">
+          <div className="settings-jump-rail slider-rail flex items-center gap-2 overflow-x-auto pb-0.5">
             <span className="hidden shrink-0 px-1 text-[10px] font-semibold tracking-widest text-foreground/70 uppercase sm:block">
               Jump to
             </span>
             {/* The section chips are the jump control on every screen size. On a
                 phone the rail scrolls sideways inside the bar (`slider-rail`)
                 so the page itself never gains a horizontal scrollbar. */}
-            <div className="flex shrink-0 gap-1">
+            <div className="settings-jump-list flex shrink-0 gap-1">
               {SETTINGS_SECTIONS.map(([label, id, Icon]) => (
                 <button
                   key={id}
                   type="button"
-                  onClick={() => jumpToSetting(id)}
+                  onClick={() => {
+                    setActiveSection(id);
+                    jumpToSetting(id);
+                  }}
+                  aria-current={activeSection === id ? "true" : undefined}
                   className={cn(
                     "inline-flex shrink-0 items-center gap-1.5 rounded-full border border-transparent px-2.5 py-1.5 text-[11px] font-semibold text-foreground/70 transition-colors hover:border-white/15 hover:bg-white/[0.07] hover:text-foreground",
+                    activeSection === id && "settings-tab-active border-white/15 bg-white/[0.09] text-foreground",
                     label === "Shortcuts" && "hidden md:inline-flex",
                   )}
                 >
