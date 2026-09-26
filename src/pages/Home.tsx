@@ -39,6 +39,9 @@ type RemoteMap = Record<string, YtItem[] | undefined>;
 const DISCOVERY_REFRESH_INTERVAL = 24 * 60 * 60 * 1000;
 const DISCOVERY_REFRESH_KEY = "synq:discovery-refreshed-at";
 const HOME_REQUEST_TIMEOUT_MS = 12_000;
+/** Discovery ("random genre") searches fan out to several artist-backed
+ *  lookups server-side, so they legitimately take longer than a shelf fetch. */
+const DISCOVERY_REQUEST_TIMEOUT_MS = 30_000;
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs = HOME_REQUEST_TIMEOUT_MS): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -285,7 +288,12 @@ export default function Home() {
     if (surprising) return;
     setSurprising(true);
     const seed = surpriseSeeds[Math.floor(Math.random() * surpriseSeeds.length)];
-    withTimeout(searchYt({ query: seed }))
+    // Genre seeds go through the slower discovery search (several artist-backed
+    // lookups), so they get a longer budget than the plain 12s shelf timeout.
+    // A second, concrete seed is the fallback so one unlucky genre never leaves
+    // the button dead.
+    withTimeout(searchYt({ query: seed }), DISCOVERY_REQUEST_TIMEOUT_MS)
+      .catch(() => searchYt({ query: "Taylor Swift songs" }))
       .then(({ items }) => {
         const pool = items.filter((i) => i.duration > 0);
         if (pool.length > 0) {
@@ -316,7 +324,7 @@ export default function Home() {
       "legendary song", "timeless classic",
     ];
     const pick = seeds[Math.floor(Math.random() * seeds.length)];
-    withTimeout(searchYt({ query: pick }))
+    withTimeout(searchYt({ query: pick }), DISCOVERY_REQUEST_TIMEOUT_MS)
       .then(({ items }) => {
         const pool = items.filter((i) => i.duration > 0);
         const song = pool[Math.floor(Math.random() * pool.length)];

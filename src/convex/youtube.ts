@@ -606,15 +606,18 @@ export const searchYoutube = action({
     // response: YouTube Music often answers "K-pop songs" with soundtrack or
     // animation tracks even though it has plenty of actual K-pop songs.
     if (DISCOVERY_QUERY_RE.test(query)) {
-      const seeded: YtItem[] = [];
-      for (const seedQuery of discoverySeedQueries(query)) {
-        try {
-          const items = await musicSearch(seedQuery);
-          if (items.length > 0) seeded.push(...items);
-        } catch {
-          // Try the next artist-backed seed.
-        }
-      }
+      // Run the artist-backed seeds CONCURRENTLY, not one after another. A
+      // broad genre query can match several seed groups at once ("indie pop"
+      // matches both `indie` and `pop`), so the sequential version chained up
+      // to six YouTube Music requests — long enough to blow the caller's
+      // request timeout, which is why "Play something random" kept failing.
+      const seeds = discoverySeedQueries(query).slice(0, 4);
+      const settled = await Promise.allSettled(
+        seeds.map((seedQuery) => musicSearch(seedQuery)),
+      );
+      const seeded = settled.flatMap((result) =>
+        result.status === "fulfilled" ? result.value : [],
+      );
       const combined = dedupeMusicItems(seeded).slice(0, 10);
       if (combined.length > 0) return { items: combined };
     }
