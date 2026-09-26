@@ -132,6 +132,9 @@ export function AppShell() {
   const touchGlowTimeoutRef = useRef<number | null>(null);
   const wallpaperVideoRef = useRef<HTMLVideoElement>(null);
   const shellRef = useRef<HTMLDivElement>(null);
+  /** Cached bounds of the shell surface for the pointer handlers. Null means
+   *  "not measured yet"; a window resize invalidates it. */
+  const shellBoundsRef = useRef<DOMRect | null>(null);
   const pointerFrameRef = useRef<number | null>(null);
   const pointerPositionRef = useRef({ x: 0, y: 0, target: null as HTMLDivElement | null });
 
@@ -216,7 +219,15 @@ export function AppShell() {
   }, []);
 
   useEffect(() => {
+    // A resize under a stationary cursor fires no pointerenter, so without
+    // this the cached bounds (and therefore the glow and trail) stay offset by
+    // the size delta.
+    const invalidateBounds = () => {
+      shellBoundsRef.current = null;
+    };
+    window.addEventListener("resize", invalidateBounds);
     return () => {
+      window.removeEventListener("resize", invalidateBounds);
       if (touchGlowTimeoutRef.current !== null) {
         window.clearTimeout(touchGlowTimeoutRef.current);
       }
@@ -465,7 +476,14 @@ export function AppShell() {
 
   const handlePointerMove = (event: PointerEvent<HTMLDivElement>) => {
     if (!pointerEffects || event.pointerType === "touch") return;
-    const rect = event.currentTarget.getBoundingClientRect();
+    // The shell is a fixed, viewport-sized surface, so its bounds are measured
+    // once instead of on every pointer event: `getBoundingClientRect()` in this
+    // handler was a forced layout read per event, on top of everything else
+    // that runs while the pointer moves.
+    if (shellBoundsRef.current === null) {
+      shellBoundsRef.current = event.currentTarget.getBoundingClientRect();
+    }
+    const rect = shellBoundsRef.current;
     pointerPositionRef.current = {
       x: event.clientX - rect.left,
       y: event.clientY - rect.top,
@@ -480,14 +498,19 @@ export function AppShell() {
       target.style.setProperty("--pointer-y", `${y}px`);
       for (const mote of cursorTrailRefs.current) {
         if (!mote) continue;
-        mote.style.left = `${x}px`;
-        mote.style.top = `${y}px`;
+        // `transform`, not left/top: those are layout properties, so moving
+        // five motes with them re-ran layout on every frame. The trail easing
+        // lives on the transform transition in CSS and is unchanged.
+        mote.style.transform = `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%)`;
       }
     });
   };
 
   const handlePointerEnter = (event: PointerEvent<HTMLDivElement>) => {
     if (pointerEffects && event.pointerType !== "touch") {
+      // Re-measure on enter: the window can have been resized while the tab
+      // sat in the background, and a stale rect would offset every effect.
+      shellBoundsRef.current = event.currentTarget.getBoundingClientRect();
       event.currentTarget.style.setProperty("--pointer-opacity", "1");
     }
   };

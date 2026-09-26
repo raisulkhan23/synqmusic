@@ -426,8 +426,13 @@ html,
   .liquid-glass {
     position: relative;
     background: color-mix(in oklab, var(--card) var(--ui-panel-alpha), transparent);
-    backdrop-filter: blur(28px) saturate(1.8) brightness(1.06);
-    -webkit-backdrop-filter: blur(28px) saturate(1.8) brightness(1.06);
+    /* Blur radius and the extra `brightness()` pass were both trimmed: a
+       backdrop-filter has to read back and blur everything behind the panel on
+       every frame it changes, and this class is on the sidebar, both bars, the
+       player and every settings surface at once. 20px still reads as frosted
+       glass over a wallpaper. */
+    backdrop-filter: blur(20px) saturate(1.5);
+    -webkit-backdrop-filter: blur(20px) saturate(1.5);
     box-shadow:
       inset 0 1px 0 0 rgb(255 255 255 / 0.08),
       inset 0 -1px 0 0 rgb(255 255 255 / 0.04),
@@ -495,8 +500,8 @@ html,
     position: relative;
     isolation: isolate;
     background: color-mix(in oklab, var(--card) var(--ui-settings-alpha), transparent) !important;
-    backdrop-filter: blur(30px) saturate(1.85) brightness(1.06) !important;
-    -webkit-backdrop-filter: blur(30px) saturate(1.85) brightness(1.06) !important;
+    backdrop-filter: blur(22px) saturate(1.6) !important;
+    -webkit-backdrop-filter: blur(22px) saturate(1.6) !important;
     box-shadow:
       inset 0 1px 0 0 rgb(255 255 255 / 0.1),
       inset 0 -1px 0 0 rgb(255 255 255 / 0.045),
@@ -755,8 +760,8 @@ html,
     background:
       linear-gradient(110deg, rgb(255 255 255 / 0.08), transparent 42%),
       color-mix(in oklab, var(--card) 62%, transparent) !important;
-    backdrop-filter: blur(26px) saturate(1.8) brightness(1.08) !important;
-    -webkit-backdrop-filter: blur(26px) saturate(1.8) brightness(1.08) !important;
+    backdrop-filter: blur(18px) saturate(1.5) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(1.5) !important;
     box-shadow:
       inset 0 1px 0 rgb(255 255 255 / 0.1),
       inset 0 -1px 0 rgb(255 255 255 / 0.045),
@@ -951,8 +956,8 @@ html,
         0 14px 34px rgb(0 0 0 / 0.42),
         0 5px 18px rgb(var(--tint) / 0.1);
       animation: mobile-island-arrive 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
-      -webkit-backdrop-filter: blur(30px) saturate(1.9) brightness(1.08);
-      backdrop-filter: blur(30px) saturate(1.9) brightness(1.08);
+      -webkit-backdrop-filter: blur(22px) saturate(1.6);
+      backdrop-filter: blur(22px) saturate(1.6);
     }
     .mobile-player:active {
       transform: scale(0.988);
@@ -1124,27 +1129,54 @@ html,
   }
 
   /* Cursor light is painted behind the UI and follows CSS custom properties,
-     so pointer movement never triggers a React re-render. */
+     so pointer movement never triggers a React re-render.
+
+     It is a fixed-size disc that MOVES by transform, not a viewport-sized
+     gradient re-centred on the cursor. The old version repainted and
+     re-blended the entire screen on every pointer event, which is the single
+     most expensive thing on the page while the pointer is moving; this one
+     composites a 640px layer instead. `mix-blend-mode` is kept because it now
+     only has a 640px area to blend rather than the whole viewport. */
   .pointer-glow {
     opacity: var(--pointer-opacity, 0);
+    inset: auto !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 640px !important;
+    height: 640px !important;
     background: radial-gradient(
-      280px circle at var(--pointer-x, 50%) var(--pointer-y, 50%),
+      closest-side,
       rgb(var(--tint) / 0.13),
-      rgb(var(--tint) / 0.045) 32%,
+      rgb(var(--tint) / 0.045) 45%,
       transparent 72%
     );
+    transform: translate3d(
+      calc(var(--pointer-x, 50%) - 320px),
+      calc(var(--pointer-y, 50%) - 320px),
+      0
+    );
+    will-change: transform;
     transition: opacity 300ms ease;
     mix-blend-mode: screen;
   }
 
-  /* Bright liquid-glass motes trail the pointer with slightly delayed motion. */
+  /* Bright liquid-glass motes trail the pointer with slightly delayed motion.
+
+     Position is a `transform`, never `left`/`top`: those are layout properties,
+     so transitioning them re-ran layout for five elements on every frame. The
+     motes also dropped their `filter: blur()` and their widest box-shadow —
+     both were re-rasterised for each of the five motes on every frame. The
+     gradient already fades to transparent, so the look survives. */
   .cursor-trail-layer {
     opacity: var(--pointer-opacity, 0);
     transition: opacity 180ms ease;
+    contain: layout paint;
   }
   .cursor-trail {
     position: absolute;
     display: block;
+    top: 0;
+    left: 0;
     width: 10px;
     height: 10px;
     border: 1px solid rgb(255 255 255 / 0.92);
@@ -1158,13 +1190,12 @@ html,
     );
     box-shadow:
       0 0 0 1px rgb(var(--tint) / 0.24),
-      0 0 12px 3px rgb(var(--tint) / 0.72),
-      0 0 28px 6px rgb(var(--tint) / 0.24);
+      0 0 10px 2px rgb(var(--tint) / 0.6);
     opacity: 0.98;
-    transform: translate(-50%, -50%);
+    will-change: transform;
+    transform: translate3d(-50%, -50%, 0);
     transition:
-      left 120ms cubic-bezier(0.22, 1, 0.36, 1),
-      top 120ms cubic-bezier(0.22, 1, 0.36, 1),
+      transform 120ms cubic-bezier(0.22, 1, 0.36, 1),
       opacity 180ms ease;
   }
   /* Fullscreen player: the same 120–300ms easing that reads as a soft trail
@@ -1176,35 +1207,31 @@ html,
      `:nth-child(2..5)` durations below are the same specificity as a bare
      `.cursor-trail-snap:nth-child(n)` and would otherwise win on order. */
   .cursor-trail-layer .cursor-trail-snap:nth-child(n) {
-    transition-duration: 40ms, 40ms, 160ms;
+    transition-duration: 40ms, 160ms;
   }
   .cursor-trail:nth-child(2) {
     width: 12px;
     height: 12px;
     opacity: 0.7;
-    filter: blur(0.5px);
-    transition-duration: 180ms, 180ms, 220ms;
+    transition-duration: 180ms, 220ms;
   }
   .cursor-trail:nth-child(3) {
     width: 17px;
     height: 17px;
     opacity: 0.5;
-    filter: blur(1.5px);
-    transition-duration: 240ms, 240ms, 220ms;
+    transition-duration: 240ms, 220ms;
   }
   .cursor-trail:nth-child(4) {
     width: 24px;
     height: 24px;
     opacity: 0.32;
-    filter: blur(3px);
-    transition-duration: 300ms, 300ms, 220ms;
+    transition-duration: 300ms, 220ms;
   }
   .cursor-trail:nth-child(5) {
     width: 34px;
     height: 34px;
     opacity: 0.18;
-    filter: blur(6px);
-    transition-duration: 370ms, 370ms, 220ms;
+    transition-duration: 370ms, 220ms;
   }
 
   /* A restrained pointer-down ripple confirms clicks without adding a noisy overlay. */

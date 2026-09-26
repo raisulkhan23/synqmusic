@@ -91,11 +91,14 @@ export function SiteFooter() {
   return (
     /* The footer sits on top of whatever wallpaper the listener picked, so a
        1.5%-white wash left the copy, the badges and the tick marks to be read
-       against a photo. It now carries a real surface — mostly-opaque
-       `background` plus a backdrop blur — so contrast is the same on the
-       default dark theme and on a bright photo, and the hairline above it is
-       bright enough to read as an edge instead of a guess. */
-    <footer className="footer-scallop relative z-10 mt-8 border-t border-white/15 bg-background/80 pt-16 pb-10 backdrop-blur-2xl sm:mt-12 sm:pt-20">
+       against a photo. It now carries a real surface — a mostly-opaque
+       `background` — so contrast is the same on the default dark theme and on
+       a bright photo, and the hairline above it is bright enough to read as an
+       edge instead of a guess. Deliberately NO `backdrop-filter`: this is a
+       full-width element inside the shell's scroll container, so a blur here
+       re-ran over the whole footer on every scroll frame, and the 80% surface
+       already does the job the blur was doing. */
+    <footer className="footer-scallop relative z-10 mt-8 border-t border-white/15 bg-background/80 pt-16 pb-10 sm:mt-12 sm:pt-20">
       {/* Clipping lives on its own layer, NOT on the footer: the scalloped
           edge is drawn above the footer's top border, so an `overflow-hidden`
           here would cut the bumps off entirely. */}

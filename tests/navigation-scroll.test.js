@@ -78,12 +78,15 @@ describe("footer featured-on badges", () => {
 
   test("the footer carries a real surface so it reads over a wallpaper", () => {
     // A 1.5%-white wash left the copy and badges to be read against whatever
-    // photo the listener picked. Opaque-ish background + blur keeps contrast
-    // the same on the dark theme and on a bright wallpaper.
+    // photo the listener picked. The opaque-ish background keeps contrast the
+    // same on the dark theme and on a bright wallpaper.
     expect(footerSource).toMatch(/<footer[^>]*bg-background\/80/);
-    expect(footerSource).toMatch(/<footer[^>]*backdrop-blur-2xl/);
     expect(footerSource).toMatch(/<footer[^>]*border-white\/15/);
     expect(footerSource).not.toMatch(/<footer[^>]*bg-white\/\[\?0\.015/);
+    // No backdrop-filter: the footer is full-width and lives inside the
+    // shell's scroll container, so a blur re-ran over the whole element on
+    // every scroll frame. The surface alone carries the contrast.
+    expect(footerSource).not.toMatch(/<footer[^>]*backdrop-blur/);
   });
 
   test("each badge declares a radius matching its own artwork", () => {
@@ -104,7 +107,6 @@ describe("footer featured-on badges", () => {
       "border",
       "border-white/75",
       "bg-background/80",
-      "backdrop-blur-2xl",
       "hover:border-white",
       "rounded-full",
       "rounded-lg",
@@ -117,7 +119,6 @@ describe("footer featured-on badges", () => {
     expect(css).toContain(".hover\\:border-white");
     expect(css).toContain(".bg-background\\/80{");
     expect(css).toMatch(/\.bg-background\\?\/80\{[^}]*background-color:/);
-    expect(css).toMatch(/\.backdrop-blur-2xl\{[^}]*backdrop-filter:/);
     expect(css).toMatch(/\.rounded-full\{[^}]*border-radius/);
     expect(css).toMatch(/\.rounded-lg\{[^}]*border-radius/);
     expect(css).toMatch(/\.rounded-xl\{[^}]*border-radius/);

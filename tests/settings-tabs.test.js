@@ -220,9 +220,10 @@ describe("fullscreen player cursor follow", () => {
   test("fullscreen motes ease faster so the cursor does not read as lagging", async () => {
     const css = await compileClasses(["cursor-trail-layer"]);
     // The layer class is in the selector so this outranks the per-mote
-    // `:nth-child(2..5)` durations further down the file.
+    // `:nth-child(2..5)` durations further down the file. Two values, because
+    // position is a single `transform` rather than separate left/top.
     expect(css).toMatch(
-      /\.cursor-trail-layer \.cursor-trail-snap:nth-child\(n\)\{[^}]*transition-duration:40ms,40ms,\.16s/,
+      /\.cursor-trail-layer \.cursor-trail-snap:nth-child\(n\)\{[^}]*transition-duration:40ms,\.16s/,
     );
     expect(fullscreenSource).toContain("cursor-trail cursor-trail-snap");
   });

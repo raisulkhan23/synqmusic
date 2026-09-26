@@ -583,8 +583,10 @@ export function FullscreenPlayer() {
         for (let index = 0; index < cursorTrailRefs.current.length; index += 1) {
           const mote = cursorTrailRefs.current[index];
           if (!mote) continue;
-          mote.style.left = `${moteX}px`;
-          mote.style.top = `${moteY}px`;
+          // `transform`, not left/top: those are layout properties, so moving
+          // five motes with them re-ran layout on every frame. The trail easing
+          // lives on the transform transition in CSS and is unchanged.
+          mote.style.transform = `translate3d(${moteX}px, ${moteY}px, 0) translate(-50%, -50%)`;
         }
       });
     }
