@@ -4,6 +4,7 @@ import { compileClasses, readSource } from "./helpers/tailwind-css.js";
 const cssSource = readSource("src/index.css");
 const shellSource = readSource("src/components/layout/AppShell.tsx");
 const fullscreenSource = readSource("src/components/player/FullscreenPlayer.tsx");
+const settingsSource = readSource("src/components/settings/SettingsDialog.tsx");
 
 /** Every `.cursor-trail` rule, joined, so a rule added anywhere in the file is
  *  covered by the same assertions. */
@@ -61,6 +62,21 @@ describe("cursor trail stays on the compositor", () => {
     // stale under a stationary cursor.
     expect(shellSource).toMatch(/const handlePointerEnter[\s\S]{0,400}getBoundingClientRect\(\)/);
     expect(shellSource).toContain('window.addEventListener("resize", invalidateBounds)');
+  });
+
+  test("no pointer surface measures its bounds on every move", () => {
+    // The settings panel carries five blurred sheets, so a forced layout read
+    // per pointer move there was the same cost the shell had.
+    const move = settingsSource.match(/onPointerMove=\{\(event\) => \{[\s\S]*?\n        \}\}/)?.[0];
+    expect(move).toBeDefined();
+    expect(move).toMatch(/if \(surfaceBoundsRef\.current === null\)/);
+    expect(move).not.toMatch(
+      /const rect = event\.currentTarget\.getBoundingClientRect\(\)/,
+    );
+    expect(settingsSource).toContain('window.addEventListener("resize", invalidateBounds)');
+    expect(settingsSource).toMatch(
+      /onPointerEnter=\{\(event\) => \{[\s\S]{0,400}getBoundingClientRect\(\)/,
+    );
   });
 });
 

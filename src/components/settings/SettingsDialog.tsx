@@ -217,6 +217,9 @@ export function SettingsDialog({
   });
   const [name, setName] = useState("");
   const wallpaperInputRef = useRef<HTMLInputElement>(null);
+  /** Cached bounds of the settings surface for the pointer handlers. Null means
+   *  "not measured yet"; a window resize invalidates it. */
+  const surfaceBoundsRef = useRef<DOMRect | null>(null);
   const liveWallpaperInputRef = useRef<HTMLInputElement>(null);
   const [liveWallpaperFileName, setLiveWallpaperFileName] = useState("");
   const [wallpaperLibrary, setWallpaperLibrary] = useState<WallpaperLibraryEntry[]>([]);
@@ -298,6 +301,17 @@ export function SettingsDialog({
   useEffect(() => {
     document.documentElement.classList.toggle("reduce-motion", reduceMotion);
   }, [reduceMotion]);
+
+  // A resize under a stationary cursor fires no pointerenter, so the cached
+  // bounds (and the glow that follows them) would stay offset by the size
+  // delta until the pointer left and came back.
+  useEffect(() => {
+    const invalidateBounds = () => {
+      surfaceBoundsRef.current = null;
+    };
+    window.addEventListener("resize", invalidateBounds);
+    return () => window.removeEventListener("resize", invalidateBounds);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -688,12 +702,21 @@ export function SettingsDialog({
         }
         onPointerEnter={(event) => {
           if (pointerEffects && event.pointerType !== "touch") {
+            // Re-measure on enter: the window can have been resized while this
+            // surface was open, and a stale rect would offset the glow.
+            surfaceBoundsRef.current = event.currentTarget.getBoundingClientRect();
             event.currentTarget.style.setProperty("--pointer-opacity", "1");
           }
         }}
         onPointerMove={(event) => {
           if (!pointerEffects || event.pointerType === "touch") return;
-          const rect = event.currentTarget.getBoundingClientRect();
+          // Cached, not measured per event: this surface has five blurred
+          // sheets on it, so a forced layout read on every pointer move is
+          // exactly the kind of cost the pointer effects are meant to avoid.
+          if (surfaceBoundsRef.current === null) {
+            surfaceBoundsRef.current = event.currentTarget.getBoundingClientRect();
+          }
+          const rect = surfaceBoundsRef.current;
           event.currentTarget.style.setProperty(
             "--pointer-x",
             `${event.clientX - rect.left}px`,
