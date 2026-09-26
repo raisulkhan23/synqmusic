@@ -49,6 +49,15 @@ describe("settings page category tabs", () => {
     expect(css).toMatch(
       /\.settings-page-grid>:not\(\.settings-jump-bar\)[^}]*padding-left:2\.5rem/,
     );
+    // `gap: 0 !important` is a shorthand, so the vertical air under the title
+    // has to be margin on both the rail and the content column — and it has to
+    // be the SAME value, or the rail and the first category stop lining up.
+    expect(css).toMatch(
+      /\.settings-page-grid>\.settings-jump-bar\{[^}]*margin-top:1\.75rem/,
+    );
+    expect(css).toMatch(
+      /\.settings-page-grid>:not\(\.settings-jump-bar\)[^}]*margin-top:1\.75rem/,
+    );
   });
 });
 
