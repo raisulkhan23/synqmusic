@@ -16,10 +16,12 @@
 
 <body>
   <div id="root"></div>
-  <!-- Static launch badge: served in the HTML so it is visible without JS.
-       It sits in the dead space at the very bottom of the document (no
-       floating/fixed overlay) and is scaled down to stay out of the way. -->
-  <div class="launch-badges flex flex-wrap items-center justify-center gap-x-4 py-2 opacity-60 transition-opacity hover:opacity-100">
+  <!-- Launch badges: plain HTML so search crawlers and no-JS visitors still
+       see them. Hidden inline until the app has painted (see the script below)
+       so they never flash at the top of a loading page. Sits in the dead space
+       at the very bottom of the document, not a floating overlay. -->
+  <div id="launch-badges" style="display: none"
+    class="launch-badges flex flex-wrap items-center justify-center gap-x-4 py-2 opacity-60 transition-opacity hover:opacity-100">
     <div class="scale-[0.6] origin-bottom">
       <a href="https://easylaunch.dev/media/synqmusic" target="_blank" rel="noopener"><img src="https://easylaunch.dev/badge/easylaunch-badge-dark.svg" alt="Featured on EasyLaunch" width="188" height="56" /></a>
     </div>
@@ -33,6 +35,28 @@
       <a href="https://easydofollow.dev/media/synqmusic" target="_blank" rel="noopener"><img src="https://easydofollow.dev/badge/easydofollow-badge-dark.svg" alt="Featured on EasyDoFollow" width="188" height="56" /></a>
     </div>
   </div>
+  <script>
+    // The badges are static markup that sits in the document after #root, so
+    // they would be the only thing painted while the app boots (and, before
+    // the app stylesheet arrives, they render unstyled at the top of the page).
+    // Start them hidden with an inline style and reveal them the moment React
+    // puts real content in the root — no CSS or framework needed.
+    (function () {
+      var root = document.getElementById("root");
+      var badges = document.getElementById("launch-badges");
+      if (!root || !badges) return;
+      if (root.childElementCount > 0) {
+        badges.style.display = "";
+        return;
+      }
+      var observer = new MutationObserver(function () {
+        if (root.childElementCount === 0) return;
+        observer.disconnect();
+        badges.style.display = "";
+      });
+      observer.observe(root, { childList: true });
+    })();
+  </script>
   <script type="module" src="/src/main.tsx"></script>
 </body>
 
