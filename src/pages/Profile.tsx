@@ -5,7 +5,7 @@ import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/hooks/use-auth";
 import { usePlayerStore } from "@/store/player";
 import { readPlayHistory, subscribePlayHistory } from "@/store/player";
-import { BarChart3, Check, Heart, ListMusic, Pencil } from "lucide-react";
+import { BarChart3, Check, ChevronRight, Heart, ListMusic, Pencil, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Profile() {
@@ -21,6 +21,8 @@ export default function Profile() {
     readPlayHistory,
   );
   const playlists = useQuery(api.playlists.myPlaylists);
+  // null = not an admin, so the admin link stays hidden for everyone else.
+  const adminStatus = useQuery(api.admin.status);
 
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState("");
@@ -105,6 +107,26 @@ export default function Profile() {
         <StatCard to="/recent" icon={<BarChart3 className="size-4" />} label="Songs played" value={history.length} />
         <StatCard to="/stats" icon={<BarChart3 className="size-4" />} label="Listening stats" value="View" />
       </section>
+
+      {/* The sidebar (and its admin link) is `lg:`-only, so without this an
+          admin on a phone had no way to reach the admin area at all. */}
+      {adminStatus !== null && (
+        <Link
+          to="/admin"
+          className="flex items-center gap-3 rounded-2xl border border-[rgb(var(--tint)_/_0.25)] bg-[rgb(var(--tint)_/_0.08)] px-4 py-3.5 transition-colors hover:bg-[rgb(var(--tint)_/_0.14)]"
+        >
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[rgb(var(--tint)_/_0.16)]">
+            <ShieldCheck className="size-4 text-[rgb(var(--tint))]" />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold">Admin panel</span>
+            <span className="block text-xs text-muted-foreground">
+              Manage accounts, playlists and listening activity
+            </span>
+          </span>
+          <ChevronRight className="ml-auto size-4 shrink-0 text-muted-foreground" />
+        </Link>
+      )}
     </div>
   );
 }

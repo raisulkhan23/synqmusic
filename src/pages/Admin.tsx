@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useAction, useMutation, useQuery } from "convex/react";
@@ -31,6 +32,35 @@ function formatDate(ts: number): string {
     day: "numeric",
     year: "numeric",
   });
+}
+
+function ResultGroup({
+  title,
+  count,
+  children,
+}: {
+  title: string;
+  count: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-4">
+      <p className="flex items-center justify-between text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+        {title}
+        <span className="tabular-nums">{count}</span>
+      </p>
+      <div className="mt-2 flex flex-col gap-1.5">{children}</div>
+    </div>
+  );
+}
+
+function ResultRow({ title, detail }: { title: string; detail: string }) {
+  return (
+    <div className="flex min-w-0 items-baseline justify-between gap-3 rounded-lg px-2 py-1.5 text-sm hover:bg-white/[0.05]">
+      <span className="min-w-0 truncate font-medium">{title}</span>
+      <span className="shrink-0 truncate text-xs text-muted-foreground">{detail}</span>
+    </div>
+  );
 }
 
 /** Two-step destructive action: first click arms, second click confirms. */
@@ -138,6 +168,72 @@ export default function Admin() {
   };
 
   const [tab, setTab] = useState("overview");
+  // Table controls: instant client-side narrowing so admins don't have to page
+  // through long lists, and so they work without extra round trips on mobile.
+  const [userQuery, setUserQuery] = useState("");
+  const [userRole, setUserRole] = useState<"all" | "admin" | "user">("all");
+  const [userSort, setUserSort] = useState<"newest" | "oldest" | "name">("newest");
+  const [playlistQuery, setPlaylistQuery] = useState("");
+  const [playlistSort, setPlaylistSort] = useState<"newest" | "largest" | "name">("newest");
+  const [globalQuery, setGlobalQuery] = useState("");
+
+  const filteredUsers = useMemo(() => {
+    const q = userQuery.trim().toLowerCase();
+    const rows = (users ?? []).filter((u) => {
+      if (userRole === "admin" && u.role !== "admin") return false;
+      if (userRole === "user" && u.role === "admin") return false;
+      if (!q) return true;
+      const name = (u.name ?? "").toLowerCase();
+      const email = (u.email ?? "").toLowerCase();
+      return name.includes(q) || email.includes(q) || u._id.includes(q);
+    });
+    return rows.sort((a, b) => {
+      if (userSort === "name") return (a.name ?? "").localeCompare(b.name ?? "");
+      if (userSort === "oldest") return a._creationTime - b._creationTime;
+      return b._creationTime - a._creationTime;
+    });
+  }, [users, userQuery, userRole, userSort]);
+
+  const filteredPlaylists = useMemo(() => {
+    const q = playlistQuery.trim().toLowerCase();
+    const rows = (playlists ?? []).filter(
+      (p) =>
+        !q ||
+        p.name.toLowerCase().includes(q) ||
+        p._id.includes(q) ||
+        (p.ownerName ?? "").toLowerCase().includes(q),
+    );
+    return rows.sort((a, b) => {
+      if (playlistSort === "largest") return b.trackCount - a.trackCount;
+      if (playlistSort === "name") return a.name.localeCompare(b.name);
+      return b._creationTime - a._creationTime;
+    });
+  }, [playlists, playlistQuery, playlistSort]);
+
+  /** Cross-entity search over the data already loaded for the admin. */
+  const globalResults = useMemo(() => {
+    const q = globalQuery.trim().toLowerCase();
+    if (!q) return null;
+    return {
+      users: (users ?? []).filter(
+        (u) =>
+          (u.name ?? "").toLowerCase().includes(q) ||
+          (u.email ?? "").toLowerCase().includes(q),
+      ).slice(0, 25),
+      playlists: (playlists ?? []).filter(
+        (p) => p.name.toLowerCase().includes(q) || p._id.includes(q),
+      ).slice(0, 25),
+      likes: (allLikes ?? []).filter(
+        (l) => l.title.toLowerCase().includes(q) || l.artistName.toLowerCase().includes(q),
+      ).slice(0, 25),
+      rooms: (rooms ?? []).filter((r) =>
+        (r.name ?? "").toLowerCase().includes(q),
+      ).slice(0, 25),
+      imports: (imports ?? []).filter((i) =>
+        (i.name ?? "").toLowerCase().includes(q),
+      ).slice(0, 25),
+    };
+  }, [globalQuery, users, playlists, allLikes, rooms, imports]);
   const [gh, setGh] = useState<{ userId: string; name: string; loading: boolean; data: Awaited<ReturnType<typeof fetchGithub>> } | null>(null);
 
   const openGithub = async (userId: string, githubId: string | null, name: string) => {
@@ -240,14 +336,17 @@ export default function Admin() {
       </header>
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="flex-wrap bg-white/[0.05]">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="users">Users</TabsTrigger>
-          <TabsTrigger value="insights">Insights</TabsTrigger>
-          <TabsTrigger value="likes">Liked songs</TabsTrigger>
-          <TabsTrigger value="playlists">Playlists</TabsTrigger>
-          <TabsTrigger value="rooms">Listening rooms</TabsTrigger>
-          <TabsTrigger value="imports">Imports</TabsTrigger>
+        {/* 7 tabs wrapped into a tall stack on a phone. Scroll the rail
+            sideways instead so the admin area stays one-handed. */}
+        <TabsList className="slider-rail h-auto w-full justify-start gap-1 overflow-x-auto bg-white/[0.05] p-1">
+          <TabsTrigger value="overview" className="shrink-0">Overview</TabsTrigger>
+          <TabsTrigger value="users" className="shrink-0">Users</TabsTrigger>
+          <TabsTrigger value="insights" className="shrink-0">Insights</TabsTrigger>
+          <TabsTrigger value="likes" className="shrink-0">Liked songs</TabsTrigger>
+          <TabsTrigger value="playlists" className="shrink-0">Playlists</TabsTrigger>
+          <TabsTrigger value="rooms" className="shrink-0">Listening rooms</TabsTrigger>
+          <TabsTrigger value="imports" className="shrink-0">Imports</TabsTrigger>
+          <TabsTrigger value="search" className="shrink-0">Search</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-6 flex flex-col gap-6">
@@ -291,9 +390,114 @@ export default function Admin() {
           </div>
         </TabsContent>
 
-        <TabsContent value="users" className="mt-6">
-          <div className="overflow-hidden rounded-2xl border border-white/[0.07]">
-            <table className="w-full text-left text-sm">
+        <TabsContent value="search" className="mt-6 flex flex-col gap-3">
+          <input
+            value={globalQuery}
+            onChange={(e) => setGlobalQuery(e.target.value)}
+            placeholder="Search accounts, playlists, liked songs, rooms and imports…"
+            aria-label="Search everything"
+            className="h-11 w-full rounded-full border border-white/10 bg-white/[0.04] px-4 text-sm outline-none placeholder:text-muted-foreground/70 focus:border-[rgb(var(--tint)_/_0.5)]"
+          />
+          {!globalResults ? (
+            <p className="py-10 text-center text-sm text-muted-foreground">
+              Type to search across every list in this admin area.
+            </p>
+          ) : (
+            <div className="flex flex-col gap-4">
+              {globalResults.users.length > 0 && (
+                <ResultGroup title="Accounts" count={globalResults.users.length}>
+                  {globalResults.users.map((u) => (
+                    <ResultRow
+                      key={u._id}
+                      title={u.name ?? (u.isAnonymous ? "Guest listener" : "Unnamed listener")}
+                      detail={u.email ?? "Anonymous sign-in"}
+                    />
+                  ))}
+                </ResultGroup>
+              )}
+              {globalResults.playlists.length > 0 && (
+                <ResultGroup title="Playlists" count={globalResults.playlists.length}>
+                  {globalResults.playlists.map((p) => (
+                    <ResultRow key={p._id} title={p.name} detail={`${p.trackCount} tracks · ${p.ownerName ?? "unknown owner"}`} />
+                  ))}
+                </ResultGroup>
+              )}
+              {globalResults.likes.length > 0 && (
+                <ResultGroup title="Liked songs" count={globalResults.likes.length}>
+                  {globalResults.likes.map((l) => (
+                    <ResultRow key={`${l._id}`} title={l.title} detail={l.artistName} />
+                  ))}
+                </ResultGroup>
+              )}
+              {globalResults.rooms.length > 0 && (
+                <ResultGroup title="Listening rooms" count={globalResults.rooms.length}>
+                  {globalResults.rooms.map((r) => (
+                    <ResultRow key={r._id} title={r.name} detail={`${r.memberCount} listeners · ${r.hostName}`} />
+                  ))}
+                </ResultGroup>
+              )}
+              {globalResults.imports.length > 0 && (
+                <ResultGroup title="Imports" count={globalResults.imports.length}>
+                  {globalResults.imports.map((i) => (
+                    <ResultRow key={i._id} title={i.name ?? "Untitled import"} detail={`${i.trackCount ?? 0} tracks`} />
+                  ))}
+                </ResultGroup>
+              )}
+              {globalResults.users.length === 0 &&
+                globalResults.playlists.length === 0 &&
+                globalResults.likes.length === 0 &&
+                globalResults.rooms.length === 0 &&
+                globalResults.imports.length === 0 && (
+                  <p className="py-10 text-center text-sm text-muted-foreground">
+                    Nothing matched “{globalQuery}”.
+                  </p>
+                )}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="users" className="mt-6 flex flex-col gap-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <input
+              value={userQuery}
+              onChange={(e) => setUserQuery(e.target.value)}
+              placeholder="Search name, email or id…"
+              aria-label="Search accounts"
+              className="h-10 w-full rounded-full border border-white/10 bg-white/[0.04] px-4 text-sm outline-none placeholder:text-muted-foreground/70 focus:border-[rgb(var(--tint)_/_0.5)] sm:max-w-xs"
+            />
+            <div className="flex flex-wrap items-center gap-1.5">
+              {(["all", "admin", "user"] as const).map((role) => (
+                <button
+                  key={role}
+                  type="button"
+                  onClick={() => setUserRole(role)}
+                  className={cn(
+                    "rounded-full border px-3 py-1.5 text-xs font-semibold capitalize transition-colors",
+                    userRole === role
+                      ? "border-[rgb(var(--tint))] bg-[rgb(var(--tint)_/_0.14)] text-[rgb(var(--tint))]"
+                      : "border-white/10 text-muted-foreground hover:border-white/25 hover:text-foreground",
+                  )}
+                >
+                  {role}
+                </button>
+              ))}
+              <select
+                value={userSort}
+                onChange={(e) => setUserSort(e.target.value as typeof userSort)}
+                aria-label="Sort accounts"
+                className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-muted-foreground outline-none"
+              >
+                <option value="newest">Newest</option>
+                <option value="oldest">Oldest</option>
+                <option value="name">Name</option>
+              </select>
+              <span className="text-[11px] text-muted-foreground">
+                {filteredUsers.length} of {users?.length ?? 0}
+              </span>
+            </div>
+          </div>
+          <div className="overflow-x-auto rounded-2xl border border-white/[0.07]">
+            <table className="w-full min-w-[560px] text-left text-sm">
               <thead>
                 <tr className="border-b border-white/[0.07] bg-white/[0.03] text-[11px] tracking-widest text-muted-foreground uppercase">
                   <th className="px-4 py-3 font-semibold">Account</th>
@@ -311,7 +515,7 @@ export default function Admin() {
                       </td>
                     </tr>
                   ))}
-                {users?.map((user) => {
+                {filteredUsers.map((user) => {
                   const isSelf = user._id === me?._id;
                   const name = user.name ?? (user.isAnonymous ? "Guest listener" : "Unnamed listener");
                   const email = user.email ?? "Anonymous sign-in";
@@ -422,8 +626,8 @@ export default function Admin() {
 
         <TabsContent value="likes" className="mt-6 flex flex-col gap-6">
           {/* per-user activity rollup */}
-          <div className="overflow-hidden rounded-2xl border border-white/[0.07]">
-            <table className="w-full text-left text-sm">
+          <div className="overflow-x-auto rounded-2xl border border-white/[0.07]">
+            <table className="w-full min-w-[560px] text-left text-sm">
               <thead>
                 <tr className="border-b border-white/[0.07] bg-white/[0.03] text-[11px] tracking-widest text-muted-foreground uppercase">
                   <th className="px-4 py-3 font-semibold">Listener</th>
@@ -458,7 +662,7 @@ export default function Admin() {
           </div>
 
           {/* every liked song across the deployment */}
-          <div className="overflow-hidden rounded-2xl border border-white/[0.07]">
+          <div className="overflow-x-auto rounded-2xl border border-white/[0.07]">
             <div className="flex items-center gap-2 border-b border-white/[0.07] bg-white/[0.03] px-4 py-3">
               <Heart className="size-4 text-[rgb(var(--tint))]" />
               <p className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
@@ -466,7 +670,7 @@ export default function Admin() {
               </p>
             </div>
             <div className="max-h-[420px] overflow-y-auto">
-              <table className="w-full text-left text-sm">
+              <table className="w-full min-w-[560px] text-left text-sm">
                 <tbody>
                   {allLikes === undefined &&
                     [0, 1, 2, 3].map((i) => (
@@ -535,9 +739,33 @@ export default function Admin() {
           </div>
         </TabsContent>
 
-        <TabsContent value="playlists" className="mt-6">
-          <div className="overflow-hidden rounded-2xl border border-white/[0.07]">
-            <table className="w-full text-left text-sm">
+        <TabsContent value="playlists" className="mt-6 flex flex-col gap-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <input
+              value={playlistQuery}
+              onChange={(e) => setPlaylistQuery(e.target.value)}
+              placeholder="Search playlist, owner or id…"
+              aria-label="Search playlists"
+              className="h-10 w-full rounded-full border border-white/10 bg-white/[0.04] px-4 text-sm outline-none placeholder:text-muted-foreground/70 focus:border-[rgb(var(--tint)_/_0.5)] sm:max-w-xs"
+            />
+            <div className="flex flex-wrap items-center gap-1.5">
+              <select
+                value={playlistSort}
+                onChange={(e) => setPlaylistSort(e.target.value as typeof playlistSort)}
+                aria-label="Sort playlists"
+                className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-muted-foreground outline-none"
+              >
+                <option value="newest">Newest</option>
+                <option value="largest">Most tracks</option>
+                <option value="name">Name</option>
+              </select>
+              <span className="text-[11px] text-muted-foreground">
+                {filteredPlaylists.length} of {playlists?.length ?? 0}
+              </span>
+            </div>
+          </div>
+          <div className="overflow-x-auto rounded-2xl border border-white/[0.07]">
+            <table className="w-full min-w-[560px] text-left text-sm">
               <thead>
                 <tr className="border-b border-white/[0.07] bg-white/[0.03] text-[11px] tracking-widest text-muted-foreground uppercase">
                   <th className="px-4 py-3 font-semibold">Playlist</th>
@@ -556,7 +784,7 @@ export default function Admin() {
                       </td>
                     </tr>
                   ))}
-                {playlists?.map((playlist) => (
+                {filteredPlaylists.map((playlist) => (
                   <tr key={playlist._id} className="border-b border-white/[0.04] last:border-0">
                     <td className="px-4 py-3 font-medium">{playlist.name}</td>
                     <td className="hidden px-4 py-3 text-muted-foreground sm:table-cell">
@@ -688,8 +916,8 @@ export default function Admin() {
         </TabsContent>
 
         <TabsContent value="rooms" className="mt-6">
-          <div className="overflow-hidden rounded-2xl border border-white/[0.07]">
-            <table className="w-full text-left text-sm">
+          <div className="overflow-x-auto rounded-2xl border border-white/[0.07]">
+            <table className="w-full min-w-[560px] text-left text-sm">
               <thead>
                 <tr className="border-b border-white/[0.07] bg-white/[0.03] text-[11px] tracking-widest text-muted-foreground uppercase">
                   <th className="px-4 py-3 font-semibold">Room</th>
@@ -743,8 +971,8 @@ export default function Admin() {
         </TabsContent>
 
         <TabsContent value="imports" className="mt-6">
-          <div className="overflow-hidden rounded-2xl border border-white/[0.07]">
-            <table className="w-full text-left text-sm">
+          <div className="overflow-x-auto rounded-2xl border border-white/[0.07]">
+            <table className="w-full min-w-[560px] text-left text-sm">
               <thead>
                 <tr className="border-b border-white/[0.07] bg-white/[0.03] text-[11px] tracking-widest text-muted-foreground uppercase">
                   <th className="px-4 py-3 font-semibold">Playlist</th>
