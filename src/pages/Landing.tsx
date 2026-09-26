@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router";
 import { Logo } from "@/components/brand/Logo";
+import { SiteFooter } from "@/components/landing/SiteFooter";
 import {
   Activity,
   ArrowRight,
@@ -351,7 +352,7 @@ export default function Landing() {
 
       <section className="relative z-10 mx-auto w-full max-w-6xl px-4 py-20 sm:px-6"><motion.div {...fadeUp} className="relative overflow-hidden rounded-3xl border border-white/10 px-6 py-16 text-center sm:px-12"><div className="absolute inset-0 bg-gradient-to-br from-brand/18 via-transparent to-violet-500/12" /><div className="absolute inset-0 bg-[radial-gradient(60%_120%_at_50%_0%,rgb(203_244_143/0.12),transparent_70%)]" /><div className="relative"><span className="inline-flex items-center gap-2 text-[10px] font-bold tracking-[0.22em] text-brand uppercase"><TimerReset className="size-3.5" /> Your next favorite is waiting</span><h2 className="mt-4 font-display text-3xl font-bold tracking-tight sm:text-5xl">Ready when you are.</h2><p className="mx-auto mt-4 max-w-md text-base leading-7 text-muted-foreground">Sign in, bring your taste, and let the next song find you.</p><div className="mt-8 flex flex-wrap items-center justify-center gap-3"><Link to="/auth?returnTo=/home" className="group flex items-center gap-2 rounded-full bg-brand px-7 py-3 text-sm font-semibold text-brand-foreground shadow-[0_10px_36px_rgb(203_244_143/0.4)] transition-transform hover:scale-105">Start listening <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" /></Link><a href="#features" className="rounded-full border border-white/10 px-5 py-3 text-sm font-semibold text-muted-foreground transition-colors hover:border-white/20 hover:text-foreground">Explore features</a></div></div></motion.div></section>
 
-      <footer className="relative z-10 border-t border-white/[0.06]"><div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-6 px-4 py-10 sm:flex-row sm:px-6"><Logo to="/" /><p className="text-xs text-muted-foreground">© 2026 SYNQ · Currently in beta</p><nav className="flex items-center gap-5 text-xs font-medium text-muted-foreground"><a href="#features" className="transition-colors hover:text-foreground">Features</a><a href="#visualizer" className="transition-colors hover:text-foreground">Visualizer</a><a href="#experience" className="transition-colors hover:text-foreground">Experience</a></nav></div></footer>
+      <SiteFooter />
     </div>
   );
 }

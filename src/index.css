@@ -1110,6 +1110,37 @@ html,
     display: none;
   }
 
+  /* Scalloped top edge for the landing footer: a row of repeating half-round
+     bumps sitting on the footer's top border. Drawn as a repeated radial
+     gradient rather than an inline SVG so it stays crisp at any width and
+     needs no viewBox maths. */
+  .footer-scallop {
+    position: relative;
+  }
+  .footer-scallop::before {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    top: -13px;
+    height: 14px;
+    pointer-events: none;
+    background-image: radial-gradient(
+      circle 15px at 50% 100%,
+      rgb(255 255 255 / 0.055) 15px,
+      transparent 15.5px
+    );
+    background-repeat: repeat-x;
+    background-size: 30px 14px;
+  }
+  /* Tint the bumps with the theme accent when glass is enabled. */
+  html:not(.no-glass) .footer-scallop::before {
+    background-image: radial-gradient(
+      circle 15px at 50% 100%,
+      rgb(var(--tint) / 0.1) 15px,
+      transparent 15.5px
+    );
+  }
+
   /* One-shot like pulse (heart pop when a song is liked). */
   @keyframes ping-once {
     0% { transform: scale(0.7); }
