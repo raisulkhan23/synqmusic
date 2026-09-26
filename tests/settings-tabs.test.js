@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { compileClasses, readSource } from "./helpers/tailwind-css.js";
 
 const settingsSource = readSource("src/components/settings/SettingsDialog.tsx");
+const landingSource = readSource("src/pages/Landing.tsx");
+const footerSource = readSource("src/components/landing/SiteFooter.tsx");
 const fullscreenSource = readSource("src/components/player/FullscreenPlayer.tsx");
 const cssSource = readSource("src/index.css");
 
@@ -62,6 +64,34 @@ describe("settings page category tabs", () => {
     expect(css).toMatch(
       /\.settings-page-grid>:not\(\.settings-jump-bar\)[^}]*margin-top:1\.75rem/,
     );
+  });
+});
+
+describe("keyboard shortcuts are desktop only", () => {
+  test("no shortcuts tab, panel or divider below lg", () => {
+    // A phone in landscape is wider than the `md` breakpoint, so `md` is not
+    // a "mobile" cutoff. All three pieces of the feature are gated at `lg` so
+    // they can never drift apart again — a hidden panel behind a visible tab
+    // (or a divider left with nothing to separate) is what a partial gate
+    // produces.
+    expect(settingsSource).toContain('label === "Shortcuts" && "hidden lg:inline-flex"');
+    expect(settingsSource).toMatch(/<section className="hidden flex-col gap-2 lg:flex">/);
+    expect(settingsSource).not.toMatch(/<section className="hidden flex-col gap-2 sm:flex">/);
+    // The divider belongs to the shortcuts block.
+    expect(settingsSource).toContain('<Separator className="hidden bg-white/[0.07] lg:block" />');
+    expect(settingsSource).not.toContain(
+      '<Separator className="hidden bg-white/[0.07] sm:block" />',
+    );
+  });
+
+  test("the landing shortcuts showcase is desktop only, with no dead anchor", () => {
+    const section = landingSource.match(/<section id="shortcuts"[^>]*>/)?.[0] ?? "";
+    expect(section).toContain("lg:block");
+    expect(section).toContain("hidden");
+    // The footer entry was removed earlier, so nothing can jump to a section
+    // that is not rendered on a phone.
+    expect(landingSource).not.toContain('href="#shortcuts"');
+    expect(footerSource).not.toContain("#shortcuts");
   });
 });
 

@@ -757,7 +757,11 @@ export function SettingsDialog({
                   className={cn(
                     "inline-flex shrink-0 items-center gap-1.5 rounded-full border border-transparent px-2.5 py-1.5 text-[11px] font-semibold text-foreground/70 transition-colors hover:border-white/15 hover:bg-white/[0.07] hover:text-foreground",
                     activeSection === id && "settings-tab-active border-white/15 bg-white/[0.09] text-foreground",
-                    label === "Shortcuts" && "hidden md:inline-flex",
+                    // Keyboard shortcuts are a pointer-and-keyboard feature:
+                    // no tab, no panel, nothing to tap on a phone. The cutoff is
+                    // `lg`, not `md`, because a phone in landscape is wider than
+                    // 768px and would otherwise get the whole keyboard UI back.
+                    label === "Shortcuts" && "hidden lg:inline-flex",
                   )}
                 >
                   <Icon className="size-3" />
@@ -1774,11 +1778,17 @@ export function SettingsDialog({
           </p>
         </section>
 
-        <Separator className="hidden bg-white/[0.07] sm:block" />
+        {/* This divider belongs to the shortcuts block below. Hiding the block
+            without hiding the divider with it left two hairlines stacked on
+            top of each other on a phone. */}
+        <Separator className="hidden bg-white/[0.07] lg:block" />
 
-        {/* Keyboard shortcuts remain available on larger screens only; the
-            phone settings UI stays focused on touch-native controls. */}
-        <section className="hidden flex-col gap-2 sm:flex">
+        {/* Keyboard shortcuts are a desktop-only affordance: the tab, the
+            panel and this divider are all gated at `lg`, so a phone — including
+            one in landscape, which is wider than the `md` breakpoint — never
+            sees any of it. The global key handler still works wherever there is
+            a physical keyboard. */}
+        <section className="hidden flex-col gap-2 lg:flex">
           <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
             <Keyboard className="size-3.5" />
             Keyboard shortcuts
