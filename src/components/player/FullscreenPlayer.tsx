@@ -819,11 +819,18 @@ export function FullscreenPlayer() {
               lyricsOpen && "opacity-0 lg:opacity-100", // lyrics overlay covers on small screens
             )}
           >
-            <div className="w-full text-center">
-              <h2 className="truncate font-display text-lg font-bold tracking-tight sm:text-2xl lg:text-3xl">
+            {/* Hovering the metadata expands the clamped title/artist so a long
+                name is fully readable instead of ending in an ellipsis. Both
+                lines use `line-clamp` (not `truncate`) so collapsed and expanded
+                states share the same box display and swap cleanly. */}
+            <div className="group/meta w-full text-center">
+              <h2
+                title={current.title}
+                className="line-clamp-1 font-display text-lg font-bold tracking-tight transition-colors duration-200 group-hover/meta:line-clamp-3 sm:text-2xl lg:text-3xl"
+              >
                 {current.title}
               </h2>
-              <p className="mt-0.5 truncate text-xs text-muted-foreground sm:mt-1 sm:text-sm">
+              <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground transition-colors duration-200 group-hover/meta:line-clamp-2 sm:mt-1 sm:text-sm">
                 {current.albumName ? `${current.artistName} · ${current.albumName}` : current.artistName}
               </p>
             </div>
