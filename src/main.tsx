@@ -53,6 +53,12 @@ const Social = lazy(() => import("./pages/Social.tsx"));
 const Profile = lazy(() => import("./pages/Profile.tsx"));
 const Settings = lazy(() => import("./pages/Settings.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
+// Public information pages linked from the landing footer. They sit OUTSIDE
+// the RequireAuth group on purpose: a privacy notice or a support answer
+// shouldn't require an account to read.
+const Support = lazy(() => import("./pages/Support.tsx"));
+const Privacy = lazy(() => import("./pages/Privacy.tsx"));
+const Terms = lazy(() => import("./pages/Terms.tsx"));
 
 // Simple loading fallback for route transitions
 function RouteLoading() {
@@ -273,6 +279,9 @@ createRoot(document.getElementById("root")!).render(
                   }
                 />
               </Route>
+              <Route path="/support" element={<Support />} />
+              <Route path="/privacy" element={<Privacy />} />
+              <Route path="/terms" element={<Terms />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>

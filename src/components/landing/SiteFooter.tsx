@@ -33,17 +33,17 @@ const linkColumns = [
   {
     heading: "Product",
     links: [
-      { label: "Keyboard shortcuts", to: "/#experience" },
-      { label: "Listening stats", to: "/home" },
-      { label: "Discover weekly", to: "/home" },
+      { label: "Keyboard shortcuts", to: "/#shortcuts" },
+      { label: "Listening stats", to: "/auth?returnTo=/stats" },
+      { label: "Discover weekly", to: "/auth?returnTo=/home" },
     ],
   },
   {
     heading: "Connect",
     links: [
-      { label: "Support", to: "/#features" },
-      { label: "Privacy", to: "/#features" },
-      { label: "Terms", to: "/#features" },
+      { label: "Support", to: "/support" },
+      { label: "Privacy", to: "/privacy" },
+      { label: "Terms", to: "/terms" },
     ],
   },
 ] as const;
