@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent, type RefObject } from "react";
-import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
+import { Outlet, useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
 import * as ytEngine from "@/lib/youtubePlayer";
 import { FullscreenPlayer } from "@/components/player/FullscreenPlayer";
@@ -676,33 +676,54 @@ export function AppShell() {
 
         <PlayerBar compact={compactMode || focusLayout === "work" || focusLayout === "sleep"} />
 
-        {/* mobile bottom nav — `flex` + `flex-1` items, never a grid. With
-            `justify-around` and content-sized links the gaps between items were
-            dead zones; a grid was tried next, but if the column class ever
-            fails to resolve every item piles into one implicit column, the
-            fixed height clips them and they overlap with the last one on top
-            (tapping any item then hit Profile). flex-1 cannot do that. */}
+        {/* Mobile bottom nav.
+            The layout-critical parts (display, column count, stacking) are set
+            with inline `style` rather than utility classes on purpose: a
+            utility that fails to resolve collapses the bar into a single
+            stacked column, every link lands on the same box, and the last one
+            (Profile) wins the hit test for the entire bar. Inline styles can't
+            be dropped by the CSS build. */}
         <nav
-          className="mobile-bottom-nav liquid-glass relative z-50 flex h-[calc(3.5rem+env(safe-area-inset-bottom))] shrink-0 items-stretch border-t border-white/[0.06] pb-[env(safe-area-inset-bottom)] lg:hidden"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+            position: "relative",
+            zIndex: 50,
+          }}
+          className="mobile-bottom-nav liquid-glass h-[calc(3.5rem+env(safe-area-inset-bottom))] shrink-0 border-t border-white/[0.06] pb-[env(safe-area-inset-bottom)] lg:hidden"
         >
-          {MOBILE_NAV.map(({ to, label, icon: Icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              aria-label={label}
-              className={({ isActive }) =>
-                cn(
-                  "mobile-nav-item flex min-w-0 flex-1 touch-manipulation select-none flex-col items-center justify-center gap-0.5 rounded-2xl px-1 py-1.5 text-[10px] font-medium transition-colors duration-150",
+          {MOBILE_NAV.map(({ to, label, icon: Icon }) => {
+            const isActive = location.pathname === to;
+            return (
+              <button
+                key={to}
+                type="button"
+                onClick={() => void navigate(to)}
+                aria-label={label}
+                aria-current={isActive ? "page" : undefined}
+                style={{
+                  display: "flex",
+                  width: "100%",
+                  minWidth: 0,
+                  height: "100%",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 2,
+                  touchAction: "manipulation",
+                }}
+                className={cn(
+                  "mobile-nav-item touch-manipulation select-none rounded-2xl px-1 py-1.5 text-[10px] font-medium transition-colors duration-150",
                   isActive
                     ? "mobile-nav-item-active text-[rgb(var(--tint))]"
                     : "text-muted-foreground",
-                )
-              }
-            >
-              <Icon className="size-[20px]" />
-              {label}
-            </NavLink>
-          ))}
+                )}
+              >
+                <Icon className="size-[20px] shrink-0" />
+                {label}
+              </button>
+            );
+          })}
         </nav>
       </div>
 
