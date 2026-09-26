@@ -103,7 +103,8 @@ export function SiteFooter() {
               clutter, and a queue that moves like you do.
             </p>
 
-            <p className="mt-8 text-[10px] font-bold tracking-[0.24em] text-muted-foreground uppercase">
+            <span aria-hidden="true" className="mt-8 block h-px w-5 bg-[rgb(var(--tint))]/60" />
+            <p className="mt-3 font-mono text-[10px] tracking-[0.2em] text-muted-foreground/75 uppercase">
               Featured on
             </p>
             <ul className="mt-3 flex flex-wrap items-center gap-2.5">
@@ -134,17 +135,33 @@ export function SiteFooter() {
           <nav className="grid grid-cols-2 gap-8 sm:grid-cols-4 sm:gap-6">
             {linkColumns.map((column) => (
               <div key={column.heading} className="min-w-0">
-                <p className="text-[10px] font-bold tracking-[0.22em] text-[rgb(var(--tint))] uppercase">
+                {/* A short accent tick + mono heading instead of a loud
+                    uppercase title in the accent colour on all four columns.
+                    Four identical shouty headings is the template tell; a
+                    quiet rule and a mono label reads as set typography. */}
+                <span
+                  aria-hidden="true"
+                  className="block h-px w-5 bg-[rgb(var(--tint))]/60"
+                />
+                <p className="mt-3 font-mono text-[10px] tracking-[0.2em] text-muted-foreground/75 uppercase">
                   {column.heading}
                 </p>
-                <ul className="mt-4 space-y-2.5">
-                  {column.links.map((link) => (
+                <ul className="mt-3.5">
+                  {column.links.map((link, i) => (
                     <li key={link.label} className="min-w-0">
+                      {/* Numbered rows echo the Contents index on the legal
+                          pages, and the row-wide hover target gives each link
+                          a real affordance instead of a bare colour swap. */}
                       <Link
                         to={link.to}
-                        className="block truncate text-sm text-muted-foreground transition-colors hover:text-foreground"
+                        className="group -mx-2 flex items-baseline gap-2.5 rounded-md px-2 py-[5px] transition-colors hover:bg-white/[0.05] focus-visible:bg-white/[0.05]"
                       >
-                        {link.label}
+                        <span className="w-4 shrink-0 font-mono text-[10px] text-muted-foreground/30 tabular-nums transition-colors group-hover:text-[rgb(var(--tint))]/70">
+                          {String(i + 1).padStart(2, "0")}
+                        </span>
+                        <span className="truncate text-sm text-muted-foreground transition-colors group-hover:text-foreground">
+                          {link.label}
+                        </span>
                       </Link>
                     </li>
                   ))}
