@@ -29,12 +29,21 @@ export function AddToPlaylistItems({
       <DropdownMenuLabel className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
         Add to playlist
       </DropdownMenuLabel>
-      {playlists && playlists.length > 0 ? (
-        playlists.slice(0, 8).map((p) => (
+      {playlists === undefined ? (
+        /* `useQuery` returns undefined until the first response arrives. Saying
+           "No playlists yet" during that window is a lie, and it made the menu
+           flash before the real list appeared. */
+        <p className="px-2 py-1.5 text-xs text-muted-foreground">
+          Loading playlists…
+        </p>
+      ) : playlists.length > 0 ? (
+        /* Every playlist is listed. The previous `slice(0, 8)` silently hid the
+           rest with no "more" affordance, so a 9th playlist was unreachable. */
+        playlists.map((p) => (
           <DropdownMenuItem
             key={p._id}
             onSelect={() => void addTo(p._id, p.name)}
-            className="pr-8"
+            className="max-w-[16rem] pr-8"
           >
             <ListMusic className="size-4" />
             <span className="truncate">{p.name}</span>

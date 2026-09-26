@@ -395,10 +395,38 @@ const DISCOVERY_SEEDS: Array<[RegExp, string[]]> = [
   [/\bnostalgic\b/i, ["Fleetwood Mac songs", "The Weeknd songs", "Tame Impala songs"]],
 ];
 
-function discoverySeedQueries(query: string): string[] {
-  return [...new Set(DISCOVERY_SEEDS
+/**
+ * Artist-backed seed queries for a category/mood request. A broad query can
+ * match several groups at once ("indie pop" matches `indie` and `pop`), so the
+ * seeds are round-robined across the matching groups instead of concatenated.
+ * Concatenation let the caller's `slice` cap cut off the second genre almost
+ * entirely, which is exactly the variety a broad genre request is asking for.
+ */
+export const DISCOVERY_SEED_LIMIT = 4;
+
+export function discoverySeedQueries(
+  query: string,
+  limit = DISCOVERY_SEED_LIMIT,
+): string[] {
+  const groups = DISCOVERY_SEEDS
     .filter(([pattern]) => pattern.test(query))
-    .flatMap(([, categorySeeds]) => categorySeeds))];
+    .map(([, categorySeeds]) => categorySeeds)
+    .filter((seeds) => seeds.length > 0);
+  if (groups.length === 0) return [];
+
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (let round = 0; round < Math.max(...groups.map((seeds) => seeds.length)); round++) {
+    for (const seeds of groups) {
+      const seed = seeds[round];
+      if (seed && !seen.has(seed)) {
+        seen.add(seed);
+        out.push(seed);
+        if (out.length >= limit) return out;
+      }
+    }
+  }
+  return out;
 }
 
 function matchesSearchQuery(item: YtItem, query: string): boolean {
@@ -611,7 +639,7 @@ export const searchYoutube = action({
       // matches both `indie` and `pop`), so the sequential version chained up
       // to six YouTube Music requests — long enough to blow the caller's
       // request timeout, which is why "Play something random" kept failing.
-      const seeds = discoverySeedQueries(query).slice(0, 4);
+      const seeds = discoverySeedQueries(query);
       const settled = await Promise.allSettled(
         seeds.map((seedQuery) => musicSearch(seedQuery)),
       );

@@ -1227,6 +1227,10 @@ function wireYoutubeEngine() {
             .catch(() => {
               /* the store's own error path will surface a failed reload */
             });
+          // Returned early, so the playing flag has to be set here too. Leaving
+          // it untouched made the miniplayer keep showing a paused transport
+          // for the whole reload.
+          usePlayerStore.setState({ isPlaying: true, isBuffering: false });
           return;
         }
         usePlayerStore.setState({ isPlaying: true, isBuffering: false });
@@ -2468,6 +2472,17 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     reorderUpcoming: (upcoming) =>
       set((state) => {
         const start = state.queueIndex >= 0 ? state.queueIndex + 1 : 0;
+        const liveUpcoming = state.queue.slice(start);
+        // The queue panel hands us an order derived from the last render. If a
+        // track ended (or the queue changed) between that render and the drop,
+        // splicing the stale list in would duplicate and drop tracks, so the
+        // reorder is ignored instead of corrupting the queue.
+        if (
+          liveUpcoming.length !== upcoming.length ||
+          liveUpcoming.some((track, i) => track.id !== upcoming[i]?.id)
+        ) {
+          return {};
+        }
         const queue = [...state.queue.slice(0, start), ...upcoming];
         saveQueue(queue, state.queueIndex, state.current?.id ?? null);
         return { queue };
@@ -2476,7 +2491,16 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       set((s2) => {
         const queue = s2.current ? [s2.current] : [];
         saveQueue(queue, s2.current ? 0 : -1, s2.current?.id ?? null);
-        return { queue, queueIndex: s2.current ? 0 : -1, current: s2.current };
+        // The shuffle snapshot has to be dropped too. Keeping it meant that
+        // turning shuffle off after a "clear queue" brought the whole removed
+        // queue back from the dead.
+        return {
+          queue,
+          queueIndex: s2.current ? 0 : -1,
+          current: s2.current,
+          unshuffledQueue: null,
+          unshuffledIndex: -1,
+        };
       }),
     setHistoryRecorder: (fn) => {
       historyRecorder = fn;

@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
   dedupeMusicItems,
+  discoverySeedQueries,
+  DISCOVERY_SEED_LIMIT,
   isLyricVideoTrack,
   isMusicTrack,
   isPrimaryMusicResult,
@@ -190,6 +192,39 @@ describe("primary music result filtering", () => {
       expect(isMusicTrack(item)).toBe(true);
       expect(isPrimaryMusicResult(item, item.title)).toBe(true);
     }
+  });
+});
+
+describe("discoverySeedQueries", () => {
+  test("draws from every genre group a broad query matches", () => {
+    // "indie pop" matches both the `pop` and `indie` groups.
+    const seeds = discoverySeedQueries("indie pop", 10);
+    expect(seeds.some((seed) => /Phoebe Bridgers|Tame Impala|Arctic Monkeys/.test(seed))).toBe(true);
+    expect(seeds.some((seed) => /Taylor Swift|Dua Lipa|Olivia Rodrigo/.test(seed))).toBe(true);
+  });
+
+  test("round-robins genres so the limit does not starve the second group", () => {
+    const capped = discoverySeedQueries("indie pop");
+    expect(capped).toHaveLength(DISCOVERY_SEED_LIMIT);
+    expect(capped.filter((seed) => /Taylor Swift|Dua Lipa|Olivia Rodrigo/.test(seed))).toHaveLength(2);
+    expect(capped.filter((seed) => /Phoebe Bridgers|Tame Impala|Arctic Monkeys/.test(seed))).toHaveLength(2);
+  });
+
+  test("returns nothing for a query that matches no genre", () => {
+    expect(discoverySeedQueries("inferno clash flamefrags")).toEqual([]);
+    expect(discoverySeedQueries("")).toEqual([]);
+  });
+
+  test("never returns duplicate seeds for overlapping groups", () => {
+    // "k-pop" matches the `k-pop` group and also the bare `pop` group.
+    const seeds = discoverySeedQueries("k-pop", 20);
+    expect(new Set(seeds).size).toBe(seeds.length);
+    expect(seeds.some((seed) => /BLACKPINK|TWICE|Stray Kids/.test(seed))).toBe(true);
+    expect(seeds.some((seed) => /Taylor Swift|Dua Lipa|Olivia Rodrigo/.test(seed))).toBe(true);
+  });
+
+  test("a mood-only query still resolves to seeds", () => {
+    expect(discoverySeedQueries("something chill", 3)).toHaveLength(3);
   });
 });
 
