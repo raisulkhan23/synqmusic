@@ -4,6 +4,11 @@ import { compileClasses, readSource } from "./helpers/tailwind-css.js";
 const settingsSource = readSource("src/components/settings/SettingsDialog.tsx");
 const landingSource = readSource("src/pages/Landing.tsx");
 const footerSource = readSource("src/components/landing/SiteFooter.tsx");
+
+/** The pointer-move handler body of a component source. */
+function moveHandlerOf(source) {
+  return source.match(/const handlePointerMove = [\s\S]*?\n  };/)?.[0] ?? "";
+}
 const fullscreenSource = readSource("src/components/player/FullscreenPlayer.tsx");
 const cssSource = readSource("src/index.css");
 
@@ -189,21 +194,25 @@ describe("fullscreen player cursor follow", () => {
       /const handlePointerMove = [\s\S]*?\n  };/,
     )?.[0];
     expect(moveHandler).toBeDefined();
-    // The measure survives only as a fallback for a move that arrives before
-    // any pointer-enter; the steady state reads the cached rect.
-    expect(moveHandler).toContain(
-      "surfaceBoundsRef.current ?? event.currentTarget.getBoundingClientRect()",
+    // The steady state reads the cached rect; the measure only happens when
+    // the cache is empty.
+    expect(moveHandler).toMatch(/if \(surfaceBoundsRef\.current === null\)/);
+    expect(moveHandler).not.toMatch(
+      /const bounds = event\.currentTarget\.getBoundingClientRect\(\)/,
     );
     expect(fullscreenSource).toMatch(
       /const handlePointerEnter[\s\S]{0,400}getBoundingClientRect\(\)/,
     );
   });
 
-  test("trail motes are written once per frame, not once per event", () => {
-    expect(fullscreenSource).toMatch(/trailFrameRef\.current = requestAnimationFrame/);
-    expect(fullscreenSource).toMatch(
-      /cancelAnimationFrame\(trailFrameRef\.current\)/,
-    );
+  test("per-frame trail work is delegated to the shared loop", () => {
+    // The player used to run its own rAF + mote writes; both surfaces now use
+    // `src/lib/cursorTrail.ts`, whose easing is unit tested in
+    // tests/cursor-trail.test.js.
+    expect(fullscreenSource).toContain("createCursorTrail");
+    expect(moveHandlerOf(fullscreenSource)).toContain("cursorTrailRef.current?.push(");
+    expect(fullscreenSource).not.toContain("trailFrameRef");
+    expect(fullscreenSource).not.toContain("mote.style.");
   });
 
   test("the cached bounds are invalidated on resize, not only on pointer enter", () => {
@@ -217,14 +226,11 @@ describe("fullscreen player cursor follow", () => {
     );
   });
 
-  test("fullscreen motes ease faster so the cursor does not read as lagging", async () => {
-    const css = await compileClasses(["cursor-trail-layer"]);
-    // The layer class is in the selector so this outranks the per-mote
-    // `:nth-child(2..5)` durations further down the file. Two values, because
-    // position is a single `transform` rather than separate left/top.
-    expect(css).toMatch(
-      /\.cursor-trail-layer \.cursor-trail-snap:nth-child\(n\)\{[^}]*transition-duration:40ms,\.16s/,
-    );
-    expect(fullscreenSource).toContain("cursor-trail cursor-trail-snap");
+  test("fullscreen motes ease faster so the cursor does not read as lagging", () => {
+    // The lag constants moved into `src/lib/cursorTrail.ts` when the trail
+    // stopped being a CSS transition; the fullscreen set is tighter than the
+    // shell's, and that ordering is asserted in tests/cursor-trail.test.js.
+    expect(fullscreenSource).toContain("FULLSCREEN_TRAIL_TAUS");
+    expect(fullscreenSource).not.toContain("cursor-trail-snap");
   });
 });

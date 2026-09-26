@@ -1194,44 +1194,39 @@ html,
     opacity: 0.98;
     will-change: transform;
     transform: translate3d(-50%, -50%, 0);
-    transition:
-      transform 120ms cubic-bezier(0.22, 1, 0.36, 1),
-      opacity 180ms ease;
+    /* Position is NOT transitioned. The trail eases the motes in JS
+       (`src/lib/cursorTrail.ts`): a CSS transition fed a new target every
+       frame restarts itself each frame, so the motes crept after the pointer
+       and then snapped when it stopped. Only opacity is transitioned here. */
+    transition: opacity 180ms ease;
   }
   /* Fullscreen player: the same 120–300ms easing that reads as a soft trail
      on a small panel reads as the cursor lagging behind the pointer on a
      viewport-sized surface, so the motes here track it almost immediately.
      `:nth-child(n)` keeps the specificity level needed to beat the per-mote
      durations below. */
-  /* `.cursor-trail-layer` is in the selector on purpose: the per-mote
-     `:nth-child(2..5)` durations below are the same specificity as a bare
-     `.cursor-trail-snap:nth-child(n)` and would otherwise win on order. */
-  .cursor-trail-layer .cursor-trail-snap:nth-child(n) {
-    transition-duration: 40ms, 160ms;
-  }
+  /* Per-mote sizing and opacity only. The lag between motes comes from the
+     easing constants in `src/lib/cursorTrail.ts`, not from per-mote CSS
+     durations — those used to be the transition being restarted every frame. */
   .cursor-trail:nth-child(2) {
     width: 12px;
     height: 12px;
     opacity: 0.7;
-    transition-duration: 180ms, 220ms;
   }
   .cursor-trail:nth-child(3) {
     width: 17px;
     height: 17px;
     opacity: 0.5;
-    transition-duration: 240ms, 220ms;
   }
   .cursor-trail:nth-child(4) {
     width: 24px;
     height: 24px;
     opacity: 0.32;
-    transition-duration: 300ms, 220ms;
   }
   .cursor-trail:nth-child(5) {
     width: 34px;
     height: 34px;
     opacity: 0.18;
-    transition-duration: 370ms, 220ms;
   }
 
   /* A restrained pointer-down ripple confirms clicks without adding a noisy overlay. */

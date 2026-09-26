@@ -220,6 +220,9 @@ export function SettingsDialog({
   /** Cached bounds of the settings surface for the pointer handlers. Null means
    *  "not measured yet"; a window resize invalidates it. */
   const surfaceBoundsRef = useRef<DOMRect | null>(null);
+  const pointerPositionRef = useRef({ x: 0, y: 0 });
+  const glowTargetRef = useRef<HTMLDivElement | null>(null);
+  const glowFrameRef = useRef<number | null>(null);
   const liveWallpaperInputRef = useRef<HTMLInputElement>(null);
   const [liveWallpaperFileName, setLiveWallpaperFileName] = useState("");
   const [wallpaperLibrary, setWallpaperLibrary] = useState<WallpaperLibraryEntry[]>([]);
@@ -310,7 +313,10 @@ export function SettingsDialog({
       surfaceBoundsRef.current = null;
     };
     window.addEventListener("resize", invalidateBounds);
-    return () => window.removeEventListener("resize", invalidateBounds);
+    return () => {
+      window.removeEventListener("resize", invalidateBounds);
+      if (glowFrameRef.current !== null) cancelAnimationFrame(glowFrameRef.current);
+    };
   }, []);
 
   useEffect(() => {
@@ -717,14 +723,23 @@ export function SettingsDialog({
             surfaceBoundsRef.current = event.currentTarget.getBoundingClientRect();
           }
           const rect = surfaceBoundsRef.current;
-          event.currentTarget.style.setProperty(
-            "--pointer-x",
-            `${event.clientX - rect.left}px`,
-          );
-          event.currentTarget.style.setProperty(
-            "--pointer-y",
-            `${event.clientY - rect.top}px`,
-          );
+          pointerPositionRef.current = {
+            x: event.clientX - rect.left,
+            y: event.clientY - rect.top,
+          };
+          glowTargetRef.current = event.currentTarget;
+          // Batched to one write per frame: pointermove can fire far more
+          // often than the display refreshes, and every custom-property write
+          // invalidates style for the glow.
+          if (glowFrameRef.current !== null) return;
+          glowFrameRef.current = requestAnimationFrame(() => {
+            glowFrameRef.current = null;
+            const target = glowTargetRef.current;
+            const { x, y } = pointerPositionRef.current;
+            if (!target) return;
+            target.style.setProperty("--pointer-x", `${x}px`);
+            target.style.setProperty("--pointer-y", `${y}px`);
+          });
         }}
         onPointerLeave={(event) => {
           event.currentTarget.style.setProperty("--pointer-opacity", "0");

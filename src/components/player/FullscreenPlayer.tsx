@@ -15,6 +15,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { api } from "@/convex/_generated/api";
 import { formatTime } from "@/lib/format";
+import {
+  createCursorTrail,
+  FULLSCREEN_TRAIL_TAUS,
+  type CursorTrail,
+} from "@/lib/cursorTrail";
 import { dismissVideo, ensureVideoPlaying, getLoadedVideoId, presentOverlay, trackFrame } from "@/lib/youtubePlayer";
 import { hasAudioProcessing } from "@/lib/audio";
 import { AUDIO_EFFECT_DELAY_MESSAGE, AUDIO_FILTERS as FILTER_DEFS } from "@/lib/audio";
@@ -432,16 +437,24 @@ export function FullscreenPlayer() {
    *  blurred orbs and the backdrop filters — which is what made the cursor
    *  effects feel like they were dragging behind the pointer. */
   const surfaceBoundsRef = useRef<DOMRect | null>(null);
-  const pointerPositionRef = useRef({ x: 0, y: 0 });
-  const trailFrameRef = useRef<number | null>(null);
-  // Drop a queued frame when the player closes, or it fires into unmounted
-  // motes on the way out.
-  useEffect(
-    () => () => {
-      if (trailFrameRef.current !== null) cancelAnimationFrame(trailFrameRef.current);
-    },
-    [],
-  );
+  const pointerTargetRef = useRef<HTMLDivElement | null>(null);
+  const cursorTrailRef = useRef<CursorTrail | null>(null);
+  // The trail loop owns every per-frame write here (mote easing and the
+  // glow). It is created once and parks itself when the motes settle.
+  useEffect(() => {
+    const trail = createCursorTrail({
+      motes: () => cursorTrailRefs.current,
+      taus: FULLSCREEN_TRAIL_TAUS,
+      onFrame: (x, y) => {
+        const target = pointerTargetRef.current;
+        if (!target) return;
+        target.style.setProperty("--pointer-x", `${x}px`);
+        target.style.setProperty("--pointer-y", `${y}px`);
+      },
+    });
+    cursorTrailRef.current = trail;
+    return () => trail.stop();
+  }, []);
   // The cached bounds go stale the moment the window changes size, and pointer
   // enter does not fire again if the cursor happens to be inside the player
   // while it is resized — which would leave the glow and trail offset from the
@@ -568,28 +581,12 @@ export function FullscreenPlayer() {
 
   const handlePointerMove = (event: PointerEvent<HTMLDivElement>) => {
     if (!pointerEffects || event.pointerType === "touch") return;
-    const bounds = surfaceBoundsRef.current ?? event.currentTarget.getBoundingClientRect();
-    const x = event.clientX - bounds.left;
-    const y = event.clientY - bounds.top;
-    // The glow follows the pointer with no transition, so it updates straight
-    // away; only the trail motes are batched, once per frame.
-    event.currentTarget.style.setProperty("--pointer-x", `${x}px`);
-    event.currentTarget.style.setProperty("--pointer-y", `${y}px`);
-    pointerPositionRef.current = { x, y };
-    if (trailFrameRef.current === null) {
-      trailFrameRef.current = requestAnimationFrame(() => {
-        trailFrameRef.current = null;
-        const { x: moteX, y: moteY } = pointerPositionRef.current;
-        for (let index = 0; index < cursorTrailRefs.current.length; index += 1) {
-          const mote = cursorTrailRefs.current[index];
-          if (!mote) continue;
-          // `transform`, not left/top: those are layout properties, so moving
-          // five motes with them re-ran layout on every frame. The trail easing
-          // lives on the transform transition in CSS and is unchanged.
-          mote.style.transform = `translate3d(${moteX}px, ${moteY}px, 0) translate(-50%, -50%)`;
-        }
-      });
+    if (surfaceBoundsRef.current === null) {
+      surfaceBoundsRef.current = event.currentTarget.getBoundingClientRect();
     }
+    const bounds = surfaceBoundsRef.current;
+    pointerTargetRef.current = event.currentTarget;
+    cursorTrailRef.current?.push(event.clientX - bounds.left, event.clientY - bounds.top);
   };
 
   const handlePointerEnter = (event: PointerEvent<HTMLDivElement>) => {
@@ -676,7 +673,7 @@ export function FullscreenPlayer() {
                   ref={(node) => {
                     cursorTrailRefs.current[index] = node;
                   }}
-                  className="cursor-trail cursor-trail-snap"
+                  className="cursor-trail"
                 />
               ))}
             </div>

@@ -2,6 +2,11 @@ import { useEffect, useRef, useState, type PointerEvent, type RefObject } from "
 import { Outlet, useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
 import * as ytEngine from "@/lib/youtubePlayer";
+import {
+  createCursorTrail,
+  SHELL_TRAIL_TAUS,
+  type CursorTrail,
+} from "@/lib/cursorTrail";
 import { FullscreenPlayer } from "@/components/player/FullscreenPlayer";
 import { PlayerBar } from "@/components/player/PlayerBar";
 import { QueuePanel } from "@/components/player/QueuePanel";
@@ -135,8 +140,8 @@ export function AppShell() {
   /** Cached bounds of the shell surface for the pointer handlers. Null means
    *  "not measured yet"; a window resize invalidates it. */
   const shellBoundsRef = useRef<DOMRect | null>(null);
-  const pointerFrameRef = useRef<number | null>(null);
   const pointerPositionRef = useRef({ x: 0, y: 0, target: null as HTMLDivElement | null });
+  const cursorTrailRef = useRef<CursorTrail | null>(null);
 
   // The navigation scroll reset lives in one place — `ScrollToTop` in
   // `src/components/ScrollToTop.tsx` — because the shell's `<main>` is the
@@ -231,8 +236,26 @@ export function AppShell() {
       if (touchGlowTimeoutRef.current !== null) {
         window.clearTimeout(touchGlowTimeoutRef.current);
       }
-      if (pointerFrameRef.current !== null) cancelAnimationFrame(pointerFrameRef.current);
+      cursorTrailRef.current?.stop();
     };
+  }, []);
+
+  // The trail loop is created once and lives for the shell's lifetime. It
+  // parks itself whenever the motes settle, so it costs nothing while the
+  // pointer is still.
+  useEffect(() => {
+    const trail = createCursorTrail({
+      motes: () => cursorTrailRefs.current,
+      taus: SHELL_TRAIL_TAUS,
+      onFrame: (x, y) => {
+        const target = pointerPositionRef.current.target;
+        if (!target) return;
+        target.style.setProperty("--pointer-x", `${x}px`);
+        target.style.setProperty("--pointer-y", `${y}px`);
+      },
+    });
+    cursorTrailRef.current = trail;
+    return () => trail.stop();
   }, []);
 
   // Offline mode banner — react to connectivity changes live.
@@ -484,26 +507,11 @@ export function AppShell() {
       shellBoundsRef.current = event.currentTarget.getBoundingClientRect();
     }
     const rect = shellBoundsRef.current;
-    pointerPositionRef.current = {
-      x: event.clientX - rect.left,
-      y: event.clientY - rect.top,
-      target: event.currentTarget,
-    };
-    if (pointerFrameRef.current !== null) return;
-    pointerFrameRef.current = requestAnimationFrame(() => {
-      pointerFrameRef.current = null;
-      const { x, y, target } = pointerPositionRef.current;
-      if (!target) return;
-      target.style.setProperty("--pointer-x", `${x}px`);
-      target.style.setProperty("--pointer-y", `${y}px`);
-      for (const mote of cursorTrailRefs.current) {
-        if (!mote) continue;
-        // `transform`, not left/top: those are layout properties, so moving
-        // five motes with them re-ran layout on every frame. The trail easing
-        // lives on the transform transition in CSS and is unchanged.
-        mote.style.transform = `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%)`;
-      }
-    });
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    pointerPositionRef.current = { x, y, target: event.currentTarget };
+    // The trail loop owns all per-frame work (mote easing and the glow).
+    cursorTrailRef.current?.push(x, y);
   };
 
   const handlePointerEnter = (event: PointerEvent<HTMLDivElement>) => {
