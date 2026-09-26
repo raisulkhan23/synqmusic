@@ -379,6 +379,12 @@ export function FullscreenPlayer() {
   const a = accent ?? { r: 196, g: 246, b: 152 };
 
   const [lyricsOpen, setLyricsOpen] = useState(false);
+  // Tap-to-expand the clamped song title (touch devices have no hover). Storing
+  // the track id instead of a boolean means a new track is collapsed for free —
+  // no effect needed to reset it.
+  const [expandedMetaTrackId, setExpandedMetaTrackId] = useState<string | null>(null);
+  const [isMetaHovered, setIsMetaHovered] = useState(false);
+  const metaExpanded = expandedMetaTrackId !== null && expandedMetaTrackId === current?.id;
   const pointerEffects = usePlayerStore((s) => s.pointerEffects);
   const [wallpaperBlur, setWallpaperBlur] = useState(
     () => localStorage.getItem("ss.wallpaperBlur") !== "0",
@@ -822,15 +828,39 @@ export function FullscreenPlayer() {
             {/* Hovering the metadata expands the clamped title/artist so a long
                 name is fully readable instead of ending in an ellipsis. Both
                 lines use `line-clamp` (not `truncate`) so collapsed and expanded
-                states share the same box display and swap cleanly. */}
-            <div className="group/meta w-full text-center">
+                states share the same box display and swap cleanly. On touch
+                there is no hover, so tapping the block pins it open until the
+                next tap (or a different track) collapses it again. */}
+            <div
+              className={cn(
+                "group/meta w-full text-center",
+                metaExpanded && "cursor-default",
+              )}
+              onPointerEnter={() => setIsMetaHovered(true)}
+              onPointerLeave={() => setIsMetaHovered(false)}
+              onClick={() =>
+                setExpandedMetaTrackId((id) => (id === current?.id ? null : (current?.id ?? null)))
+              }
+            >
               <h2
                 title={current.title}
-                className="line-clamp-1 font-display text-lg font-bold tracking-tight transition-colors duration-200 group-hover/meta:line-clamp-3 sm:text-2xl lg:text-3xl"
+                className={cn(
+                  "font-display text-lg font-bold tracking-tight transition-colors duration-200 sm:text-2xl lg:text-3xl",
+                  (metaExpanded || isMetaHovered)
+                    ? "line-clamp-3"
+                    : "line-clamp-1 group-hover/meta:line-clamp-3",
+                )}
               >
                 {current.title}
               </h2>
-              <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground transition-colors duration-200 group-hover/meta:line-clamp-2 sm:mt-1 sm:text-sm">
+              <p
+                className={cn(
+                  "mt-0.5 text-xs text-muted-foreground transition-colors duration-200 sm:mt-1 sm:text-sm",
+                  (metaExpanded || isMetaHovered)
+                    ? "line-clamp-2"
+                    : "line-clamp-1 group-hover/meta:line-clamp-2",
+                )}
+              >
                 {current.albumName ? `${current.artistName} · ${current.albumName}` : current.artistName}
               </p>
             </div>

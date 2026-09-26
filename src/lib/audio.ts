@@ -73,6 +73,16 @@ let activeFilter: AudioFilterId = "off";
 let rotateRaf = 0;
 
 /**
+ * True once `createMediaElementSource` has succeeded for the shared audio
+ * element. The spec allows exactly ONE MediaElementSource per element, so this
+ * can never be undone: any later "rebuild" throws InvalidStateError. Without
+ * this flag the old code closed and recreated the AudioContext on every failed
+ * attempt, which tore down the graph the YouTube player was routed through and
+ * made playback skip to another track.
+ */
+let mediaSourceAttached = false;
+
+/**
  * Lazily create the shared audio graph:
  *   <audio> → [user EQ: bass → treble] → balance → [effects: bass → vocal →
  *   night → pan → gain] → analyser → destination
@@ -97,6 +107,12 @@ export function ensureGraph(): boolean {
     // a non-gesture task). Tear it down so this call can build it cleanly —
     // otherwise every subsequent call throws and the EQ never works.
     if (audioCtx && !filterSource) {
+      if (mediaSourceAttached) {
+        // The element already owns a MediaElementSource, so the graph cannot
+        // be rebuilt. Leave the live context alone — closing it is what made
+        // playback jump to another track when an effect was switched on.
+        return false;
+      }
       try {
         void audioCtx.close();
       } catch {
@@ -111,6 +127,7 @@ export function ensureGraph(): boolean {
     audioCtx = audioCtx ?? new AudioCtx();
 
     filterSource = audioCtx.createMediaElementSource(getAudio());
+    mediaSourceAttached = true;
 
     // user EQ stage
     eqBassNode = audioCtx.createBiquadFilter();
@@ -166,11 +183,16 @@ export function ensureGraph(): boolean {
     if (audioCtx.state === "suspended") void audioCtx.resume();
     return true;
   } catch {
-    // Reset everything so the next user gesture can rebuild the graph.
-    try {
-      if (audioCtx && audioCtx.state !== "closed") void audioCtx.close();
-    } catch {
-      /* ignore */
+    // Reset the node references so the next user gesture can rebuild. Only
+    // close the context when the audio element never got a MediaElementSource
+    // — once it has one, closing the context is unrecoverable and cuts the
+    // player's audio out from under it.
+    if (!mediaSourceAttached) {
+      try {
+        if (audioCtx && audioCtx.state !== "closed") void audioCtx.close();
+      } catch {
+        /* ignore */
+      }
     }
     audioCtx = null;
     filterSource = null;
