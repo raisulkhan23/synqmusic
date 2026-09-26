@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { PlaylistCard } from "@/components/playlists/PlaylistCard";
 import { PlaylistDialog } from "@/components/playlists/PlaylistDialog";
+import { LikedSongsCard } from "@/components/playlists/LikedSongsCard";
 import { api } from "@/convex/_generated/api";
 import { useQuery } from "convex/react";
 import { ListMusic, Plus } from "lucide-react";
@@ -30,6 +31,22 @@ export default function Playlists() {
         </button>
       </header>
 
+      {/* Liked Songs is pinned above the user's own playlists. */}
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+        <LikedSongsCard />
+        {playlists?.map((p) => (
+          <PlaylistCard key={p._id} playlist={p} />
+        ))}
+        {playlists === undefined &&
+          Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="w-full">
+              <div className="aspect-square animate-pulse rounded-xl bg-white/[0.05]" />
+              <div className="mt-2.5 h-4 w-2/3 animate-pulse rounded bg-white/[0.05]" />
+              <div className="mt-1.5 h-3 w-1/2 animate-pulse rounded bg-white/[0.05]" />
+            </div>
+          ))}
+      </div>
+
       {playlists !== undefined && playlists.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-3xl border border-dashed border-white/10 py-20 text-center">
           <ListMusic className="size-10 text-muted-foreground/40" />
@@ -47,21 +64,7 @@ export default function Playlists() {
             Create your first playlist
           </button>
         </div>
-      ) : (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-          {playlists?.map((p) => (
-            <PlaylistCard key={p._id} playlist={p} />
-          ))}
-          {playlists === undefined &&
-            Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="w-full">
-                <div className="aspect-square animate-pulse rounded-xl bg-white/[0.05]" />
-                <div className="mt-2.5 h-4 w-2/3 animate-pulse rounded bg-white/[0.05]" />
-                <div className="mt-1.5 h-3 w-1/2 animate-pulse rounded bg-white/[0.05]" />
-              </div>
-            ))}
-        </div>
-      )}
+      ) : null}
 
       <PlaylistDialog open={dialogOpen} onOpenChange={setDialogOpen} />
     </div>
