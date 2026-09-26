@@ -1257,9 +1257,6 @@ html,
   .stagger > *:nth-child(7) { animation-delay: 0.21s; }  .stagger > *:nth-child(8) {
     animation-delay: 0.24s;
   }
-  #root:empty + .launch-badges {
-    display: none;
-  }
   /* shimmer for loading skeletons */
   .shimmer {
     background: linear-gradient(

@@ -48,7 +48,36 @@ const linkColumns = [
   },
 ] as const;
 
-const featuredOn = ["EasyLaunch", "Sky Launch", "Launch Streak", "EasyDoFollow"];
+const featuredOn = [
+  {
+    name: "EasyLaunch",
+    href: "https://easylaunch.dev/media/synqmusic",
+    badge: "https://easylaunch.dev/badge/easylaunch-badge-dark.svg",
+    width: 188,
+    height: 56,
+  },
+  {
+    name: "Sky Launch",
+    href: "https://skylaun.ch/media/synqmusic",
+    badge: "https://skylaun.ch/badge/skylaunch-badge-dark.svg",
+    width: 188,
+    height: 56,
+  },
+  {
+    name: "Launch Streak",
+    href: "https://launchstreak.dev/media/synqmusic",
+    badge: "https://launchstreak.dev/badge/launch-streak-badge-dark.svg",
+    width: 248,
+    height: 68,
+  },
+  {
+    name: "EasyDoFollow",
+    href: "https://easydofollow.dev/media/synqmusic",
+    badge: "https://easydofollow.dev/badge/easydofollow-badge-dark.svg",
+    width: 188,
+    height: 56,
+  },
+] as const;
 
 export function SiteFooter() {
   return (
@@ -77,16 +106,28 @@ export function SiteFooter() {
             <p className="mt-8 text-[10px] font-bold tracking-[0.24em] text-muted-foreground uppercase">
               Featured on
             </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {featuredOn.map((name) => (
-                <span
-                  key={name}
-                  className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[11px] font-semibold text-muted-foreground transition-colors hover:border-white/20 hover:text-foreground"
-                >
-                  {name}
-                </span>
+            <ul className="mt-3 flex flex-wrap items-center gap-2.5">
+              {featuredOn.map((badge) => (
+                <li key={badge.name}>
+                  <a
+                    href={badge.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block rounded-lg opacity-80 transition-all duration-200 hover:-translate-y-0.5 hover:opacity-100 focus-visible:-translate-y-0.5 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[rgb(var(--tint))]"
+                  >
+                    <img
+                      src={badge.badge}
+                      alt={`Featured on ${badge.name}`}
+                      width={badge.width}
+                      height={badge.height}
+                      loading="lazy"
+                      decoding="async"
+                      className="block h-8 w-auto"
+                    />
+                  </a>
+                </li>
               ))}
-            </div>
+            </ul>
           </div>
 
           {/* link columns */}
