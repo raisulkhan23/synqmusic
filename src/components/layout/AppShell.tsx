@@ -530,8 +530,14 @@ export function AppShell() {
       } else if (e.key.toLowerCase() === "s") {
         // Same action as the transport button, so the shortcut can never leave
         // the button showing a mode the queue is not actually in.
-        s.toggleShuffleSmart();
-        toast(s.shuffle ? "Shuffle off" : "Shuffle on — avoiding repeats");
+        s.cycleShuffle();
+        toast(
+          s.shuffle
+            ? "Shuffle off"
+            : s.smartShuffle
+              ? "Shuffle on"
+              : "Smart shuffle on — avoiding repeats",
+        );
       } else if (e.key.toLowerCase() === "r") {
         s.cycleRepeat();
         toast(`Repeat: ${s.repeat}`);

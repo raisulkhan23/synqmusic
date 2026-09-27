@@ -214,9 +214,9 @@ export default function PlaylistDetail() {
       if (!candidate) return;
       void playRow(candidate);
     }
-    // One action, so the button can't leave the queue in a different mode than
-    // the transport control is showing.
-    usePlayerStore.getState().toggleShuffleSmart();
+    // Turn shuffle on, don't cycle it: this is an action button, so a second
+    // press must start the music again rather than switching shuffle back off.
+    usePlayerStore.getState().startShuffle();
     toast.success("Shuffling the playlist");
   };
 

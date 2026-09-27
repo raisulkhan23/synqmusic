@@ -60,7 +60,7 @@ export function TransportControls({
   const togglePlay = usePlayerStore((s) => s.togglePlay);
   const next = usePlayerStore((s) => s.next);
   const prev = usePlayerStore((s) => s.prev);
-  const toggleShuffle = usePlayerStore((s) => s.toggleShuffleSmart);
+  const cycleShuffle = usePlayerStore((s) => s.cycleShuffle);
   const smartShuffle = usePlayerStore((s) => s.smartShuffle);
   const cycleRepeat = usePlayerStore((s) => s.cycleRepeat);
 
@@ -76,21 +76,34 @@ export function TransportControls({
       )}
     >
       {!compact && (
-        // Pressing shuffle engages smart shuffle with it, the way Spotify's
-        // shuffle button does, so repeats are avoided without a second trip to
-        // the queue panel. Pressing it again turns both back off.
+        // Three states, one control, exactly like Spotify's shuffle button:
+        // off -> shuffle -> smart shuffle -> off. The next state is what the
+        // label and the toast describe, so the button always says what the
+        // press will do rather than only what the current mode is.
         <IconButton
           active={shuffle}
           onClick={() => {
-            toggleShuffle();
-            toast(shuffle ? "Shuffle off" : "Shuffle on — avoiding repeats");
+            cycleShuffle();
+            toast(
+              shuffle
+                ? "Shuffle off"
+                : smartShuffle
+                  ? "Shuffle on"
+                  : "Smart shuffle on — avoiding repeats",
+            );
           }}
-          label={shuffle ? "Shuffle on" : "Shuffle off"}
+          label={
+            shuffle
+              ? smartShuffle
+                ? "Smart shuffle on — turn shuffle off"
+                : "Shuffle on — turn on smart shuffle"
+              : "Shuffle off — turn on shuffle"
+          }
         >
           <Shuffle className="size-[18px] stroke-[1.9]" />
-          {/* Smart shuffle has no icon of its own, so the pressed state of the
-              button is the only place it can be seen. Without this marker the
-              behaviour was invisible: the mode was on and nothing showed it. */}
+          {/* Smart shuffle has no icon of its own, so the badge is the only way
+              to tell the second state from the third. Without it both looked
+              identical and there was no way to know which mode was running. */}
           {shuffle && smartShuffle && (
             <span className="absolute -top-0.5 -right-0.5 flex size-3 items-center justify-center rounded-full bg-[rgb(var(--tint))] text-black ring-2 ring-[rgb(var(--background))]">
               <Sparkles className="size-2" strokeWidth={2.5} />

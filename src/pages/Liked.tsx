@@ -128,9 +128,9 @@ export default function Liked() {
     // handler, which reads to the user as the button doing nothing at all.
     if (!row) return;
     playRemoteLike(row);
-    // One action, so the button can't leave the queue in a different mode than
-    // the transport control is showing.
-    usePlayerStore.getState().toggleShuffleSmart();
+    // Turn shuffle on, don't cycle it: this is an action button, so a second
+    // press must start the music again rather than switching shuffle back off.
+    usePlayerStore.getState().startShuffle();
     toast.success("Shuffling your liked songs");
   };
 

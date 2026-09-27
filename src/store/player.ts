@@ -354,8 +354,10 @@ interface PlayerStore {
   setVolume: (volume: number) => void;
   toggleMute: () => void;
   toggleShuffle: () => void;
-  /** Transport-button shuffle: enables/disables shuffle AND smart shuffle. */
-  toggleShuffleSmart: () => void;
+  /** Transport-button shuffle: off -> shuffle -> smart shuffle -> off. */
+  cycleShuffle: () => void;
+  /** Turn shuffle on without cycling, for the page-level shuffle actions. */
+  startShuffle: () => void;
   toggleSmartShuffle: () => void;
   cycleRepeat: () => void;
   setRate: (rate: number) => void;
@@ -1790,17 +1792,54 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     set({ shuffle: next });
   };
 
-  const toggleShuffleSmart = () => {
-    // The transport shuffle button turns BOTH modes on, and both off again, so
-    // the button can never disagree with the mode the queue is actually in.
-    // `toggleShuffle` owns the physical queue reorder, so it is reused rather
-    // than duplicated: enabling smart shuffle has to go through the same
-    // save/restore of the unshuffled order, or turning shuffle back off would
-    // leave the queue stuck in shuffled order.
-    const turningOn = !get().shuffle;
+  /**
+   * The transport shuffle button cycles through three states, the way
+   * Spotify's does:
+   *
+   *   off  ->  shuffle  ->  smart shuffle  ->  off
+   *
+   * One control for both modes, so the repeat-avoiding mode is one press away
+   * instead of hidden behind a separate switch in the queue panel. The button
+   * cannot end up disagreeing with the queue, because every transition goes
+   * through here.
+   *
+   * `toggleShuffle` owns the physical queue reorder, so it is reused rather
+   * than duplicated: entering and leaving the shuffled state has to go through
+   * the same save/restore of the unshuffled order, or turning shuffle off would
+   * leave the queue stuck in shuffled order. Promoting plain shuffle to smart
+   * shuffle deliberately does NOT reorder again — the queue is already
+   * shuffled, and re-shuffling would throw away the order the listener is
+   * part-way through.
+   */
+  const cycleShuffle = () => {
+    const s = get();
+    // Off -> plain shuffle. `toggleShuffle` owns only the shuffle flag, and
+    // smart shuffle is already false here, so it needs no clearing.
+    if (!s.shuffle && !s.smartShuffle) {
+      toggleShuffle();
+      return;
+    }
+    // Plain shuffle -> smart shuffle: the queue order stays exactly as it is.
+    if (s.shuffle && !s.smartShuffle) {
+      localStorage.setItem("ss.smartShuffle", "1");
+      set({ smartShuffle: true });
+      return;
+    }
+    // Anything else (shuffle on, or both on) -> fully off, restoring the order.
     toggleShuffle();
-    localStorage.setItem("ss.smartShuffle", turningOn ? "1" : "0");
-    set({ smartShuffle: turningOn });
+    localStorage.setItem("ss.smartShuffle", "0");
+    set({ smartShuffle: false });
+  };
+
+  /**
+   * Turn shuffle on, for the "shuffle this list" buttons on the Liked Songs
+   * and playlist pages. Deliberately NOT the three-state cycle: those buttons
+   * are actions, not a mode selector, so pressing one twice must never turn
+   * shuffle back off. Smart shuffle is left exactly as the listener set it.
+   */
+  const startShuffle = () => {
+    if (get().shuffle) return;
+    toggleShuffle();
   };
 
   const toggleSmartShuffle = () => {
@@ -2419,7 +2458,8 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     setVolume,
     toggleMute,
     toggleShuffle,
-    toggleShuffleSmart,
+    cycleShuffle,
+    startShuffle,
     toggleSmartShuffle,
     cycleRepeat,
     setRate,

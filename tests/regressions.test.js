@@ -67,8 +67,9 @@ describe("the page-level shuffle buttons are safe on empty input", () => {
     );
     expect(shuffle).toContain("remoteLikes[Math.floor(");
     expect(shuffle).toMatch(/if \(!row\) return;/);
-    // Same action as the transport button, so the two can't disagree.
-    expect(likedSource).toMatch(/toggleShuffleSmart\(\)/);
+    // `startShuffle` turns shuffle on without cycling, so pressing the button
+    // twice can't switch shuffle back off.
+    expect(likedSource).toMatch(/startShuffle\(\)/);
     expect(likedSource).not.toMatch(/\.toggleShuffle\(\)/);
   });
 
@@ -82,7 +83,7 @@ describe("the page-level shuffle buttons are safe on empty input", () => {
     );
     expect(shuffle).toMatch(/if \(rows\.length === 0\) return;/);
     expect(shuffle).toMatch(/if \(!candidate\) return;/);
-    expect(shuffle).toMatch(/toggleShuffleSmart\(\)/);
+    expect(shuffle).toMatch(/startShuffle\(\)/);
     expect(shuffle).not.toMatch(/\.toggleShuffle\(\)/);
   });
 });
