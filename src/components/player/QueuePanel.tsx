@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { copyText } from "@/lib/clipboard";
+import { moveQueueRow, queueReorderKeys } from "@/lib/queueOrder";
 
 type QueueReorderRowProps = {
   track: Playable;
@@ -41,6 +42,7 @@ type QueueReorderRowProps = {
   removeFromQueue: (index: number) => void;
   undoRemoveFromQueue: () => void;
   onMove: (from: number, to: number) => void;
+  reorderKey: string;
 };
 
 function QueueReorderRow({
@@ -52,12 +54,13 @@ function QueueReorderRow({
   removeFromQueue,
   undoRemoveFromQueue,
   onMove,
+  reorderKey,
 }: QueueReorderRowProps) {
   const controls = useDragControls();
 
   return (
     <Reorder.Item
-      value={`${track.id}#${rowIndex}`}
+      value={reorderKey}
       dragListener={false}
       className="group flex items-center gap-2 rounded-lg px-1 py-1.5 transition-colors hover:bg-white/[0.05]"
     >
@@ -87,38 +90,44 @@ function QueueReorderRow({
         onClick={() => playIndex(queueIndex + 1 + rowIndex)}
       >
         <p className="truncate text-sm font-medium">{track.title}</p>
-        <p className="truncate text-xs text-muted-foreground">{track.artistName}</p>
+        <p className="truncate text-xs text-muted-foreground">
+          {track.artistName}
+        </p>
       </div>
       <span className="shrink-0 text-xs tabular-nums text-muted-foreground/70">
         {formatTime(track.duration)}
       </span>
       {/* Drag-to-reorder is unreliable on a touch surface inside a scrollable
           sheet, so every row also gets explicit move controls. They work with
-          one tap and are keyboard reachable. */}
-      <span className="flex shrink-0 flex-col">
+          one tap and are keyboard reachable. Grouped into one pill with a
+          divider so they read as a single control rather than two loose
+          chevrons squashed against the remove button. */}
+      <span className="flex shrink-0 flex-col divide-y divide-white/[0.08] overflow-hidden rounded-md border border-white/10 bg-white/[0.03]">
         <button
           type="button"
           aria-label={`Move ${track.title} up`}
+          title="Move up"
           disabled={rowIndex === 0}
           onClick={(event) => {
             event.stopPropagation();
             onMove(rowIndex, rowIndex - 1);
           }}
-          className="flex size-5 items-center justify-center rounded text-muted-foreground/60 transition-colors hover:bg-white/10 hover:text-foreground disabled:pointer-events-none disabled:opacity-25"
+          className="flex size-7 touch-manipulation items-center justify-center text-muted-foreground/70 transition-colors hover:bg-white/10 hover:text-foreground active:bg-white/15 disabled:pointer-events-none disabled:opacity-25"
         >
-          <ChevronUp className="size-3.5" />
+          <ChevronUp className="size-4" />
         </button>
         <button
           type="button"
           aria-label={`Move ${track.title} down`}
+          title="Move down"
           disabled={rowIndex >= rowCount - 1}
           onClick={(event) => {
             event.stopPropagation();
             onMove(rowIndex, rowIndex + 1);
           }}
-          className="flex size-5 items-center justify-center rounded text-muted-foreground/60 transition-colors hover:bg-white/10 hover:text-foreground disabled:pointer-events-none disabled:opacity-25"
+          className="flex size-7 touch-manipulation items-center justify-center text-muted-foreground/70 transition-colors hover:bg-white/10 hover:text-foreground active:bg-white/15 disabled:pointer-events-none disabled:opacity-25"
         >
-          <ChevronDown className="size-3.5" />
+          <ChevronDown className="size-4" />
         </button>
       </span>
       <button
@@ -144,13 +153,21 @@ function QueueReorderRow({
 /** Fetch a related-mix for the current track (any source) as suggestions. */
 async function fetchRelatedSuggestions(seed: Playable): Promise<Playable[]> {
   try {
-    const client = (window as unknown as { __ssSuggestSearch?: { action: (fn: unknown, args: unknown) => Promise<{ items?: YtItem[] }> } }).__ssSuggestSearch;
+    const client = (
+      window as unknown as {
+        __ssSuggestSearch?: {
+          action: (fn: unknown, args: unknown) => Promise<{ items?: YtItem[] }>;
+        };
+      }
+    ).__ssSuggestSearch;
     if (!client) return [];
     const primary = seed.artistName.split(",")[0]?.trim() ?? seed.artistName;
     const res = await client.action("youtube:searchYoutube", {
       query: `${seed.title} ${primary} similar songs`,
     });
-    return (res?.items ?? []).slice(0, 6).map((it) => toPlayableYoutube(it, ""));
+    return (res?.items ?? [])
+      .slice(0, 6)
+      .map((it) => toPlayableYoutube(it, ""));
   } catch {
     return [];
   }
@@ -175,14 +192,15 @@ export function QueuePanel() {
   const autoplay = usePlayerStore((s) => s.autoplay);
   const toggleAutoplay = usePlayerStore((s) => s.toggleAutoplay);
   const addToQueue = usePlayerStore((s) => s.addToQueue);
-  const extendQueueWithSimilar = usePlayerStore((s) => s.extendQueueWithSimilar);
+  const extendQueueWithSimilar = usePlayerStore(
+    (s) => s.extendQueueWithSimilar,
+  );
   const createPlaylist = useMutation(api.playlists.create);
 
   const upcoming = queueIndex >= 0 ? queue.slice(queueIndex + 1) : queue;
-  // Reorder needs UNIQUE values — the queue can legitimately contain the same
-  // track twice, and duplicate values make Framer Motion stack rows on top of
-  // each other. Composite "id#index" values keep every row distinct.
-  const upcomingKeys = upcoming.map((t, i) => `${t.id}#${i}`);
+  // Reorder needs UNIQUE values that stay stable across a move — see
+  // `queueReorderKeys`.
+  const upcomingKeys = queueReorderKeys(upcoming);
 
   // Queue suggestions: fetched related mix for what's playing (any source),
   // filtered against what's already queued. Loaded lazily via an effect.
@@ -197,7 +215,9 @@ export function QueuePanel() {
       if (cancelled) return;
       setSuggestions(
         items
-          .filter((t) => !queue.some((q) => q.id === t.id) && t.id !== current.id)
+          .filter(
+            (t) => !queue.some((q) => q.id === t.id) && t.id !== current.id,
+          )
           .slice(0, 3),
       );
     });
@@ -241,21 +261,26 @@ export function QueuePanel() {
   };
 
   const handleReorder = (keys: string[]) => {
+    // Reorder keys are `${id}#${rowIndex}` of the list this render produced, so
+    // `upcoming` IS the "base" the store compares against to tell a real
+    // reorder apart from a stale render. It has to be passed in: without it the
+    // store cannot validate anything and silently discards every change, which
+    // is why the arrows and drag both looked broken.
+    if (keys.length !== upcoming.length) return;
+    // Nothing actually moved (e.g. a cancelled drag) — don't touch the queue.
+    if (keys.every((k, i) => k === upcomingKeys[i])) return;
     const byKey = new Map(upcoming.map((t, i) => [upcomingKeys[i], t]));
     const reordered = keys
       .map((k) => byKey.get(k))
       .filter((t): t is NonNullable<typeof t> => t !== undefined);
-    reorderUpcoming(reordered);
+    if (reordered.length !== upcoming.length) return;
+    reorderUpcoming(reordered, upcoming);
   };
 
   /** Move one row to an absolute position in the upcoming list. */
   const moveRow = (from: number, to: number) => {
-    if (from === to || to < 0 || to >= upcomingKeys.length) return;
-    const keys = [...upcomingKeys];
-    const [moved] = keys.splice(from, 1);
-    if (moved === undefined) return;
-    keys.splice(to, 0, moved);
-    handleReorder(keys);
+    const keys = moveQueueRow(upcomingKeys, from, to);
+    if (keys) handleReorder(keys);
   };
 
   return (
@@ -280,7 +305,11 @@ export function QueuePanel() {
               title={smartShuffle ? "Smart shuffle on" : "Smart shuffle off"}
               onClick={() => {
                 toggleSmartShuffle();
-                toast(smartShuffle ? "Smart shuffle off" : "Smart shuffle on — avoids repeats");
+                toast(
+                  smartShuffle
+                    ? "Smart shuffle off"
+                    : "Smart shuffle on — avoids repeats",
+                );
               }}
               className={cn(
                 "flex items-center gap-1 rounded-full px-2 py-1 text-xs transition-colors",
@@ -314,10 +343,18 @@ export function QueuePanel() {
             <button
               type="button"
               aria-label="Autoplay similar music"
-              title={autoplay ? "Autoplay on — similar music plays when the queue ends" : "Autoplay off"}
+              title={
+                autoplay
+                  ? "Autoplay on — similar music plays when the queue ends"
+                  : "Autoplay off"
+              }
               onClick={() => {
                 toggleAutoplay();
-                toast(autoplay ? "Autoplay off" : "Autoplay on — similar music when queue ends");
+                toast(
+                  autoplay
+                    ? "Autoplay off"
+                    : "Autoplay on — similar music when queue ends",
+                );
               }}
               className={cn(
                 "flex items-center gap-1 rounded-full px-2 py-1 text-xs transition-colors",
@@ -371,7 +408,9 @@ export function QueuePanel() {
                   className="size-11 shrink-0 rounded-md object-cover"
                 />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">{current.title}</p>
+                  <p className="truncate text-sm font-semibold">
+                    {current.title}
+                  </p>
                   <p className="truncate text-xs text-muted-foreground">
                     {current.artistName}
                   </p>
@@ -386,7 +425,9 @@ export function QueuePanel() {
                       // Awaited: the old code toasted success immediately, so a
                       // failed copy (no clipboard API / denied permission) still
                       // told the user the link was on their clipboard.
-                      void copyText(`https://youtu.be/${current.youtubeId}`).then((ok) => {
+                      void copyText(
+                        `https://youtu.be/${current.youtubeId}`,
+                      ).then((ok) => {
                         if (ok) toast.success("Track link copied");
                         else toast.error("Couldn't copy the link");
                       });
@@ -426,7 +467,8 @@ export function QueuePanel() {
               >
                 {upcoming.map((track, rowIndex) => (
                   <QueueReorderRow
-                    key={`${track.id}#${rowIndex}`}
+                    key={upcomingKeys[rowIndex]}
+                    reorderKey={upcomingKeys[rowIndex]}
                     track={track}
                     rowIndex={rowIndex}
                     rowCount={upcoming.length}
@@ -460,7 +502,9 @@ export function QueuePanel() {
                       className="size-10 shrink-0 rounded-md object-cover opacity-80"
                     />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{track.title}</p>
+                      <p className="truncate text-sm font-medium">
+                        {track.title}
+                      </p>
                       <p className="truncate text-xs text-muted-foreground">
                         Matches what&apos;s playing
                       </p>
@@ -470,7 +514,9 @@ export function QueuePanel() {
                       aria-label={`Add ${track.title} to queue`}
                       onClick={() => {
                         addToQueue(track);
-                        setSuggestions((prev) => prev.filter((t) => t.id !== track.id));
+                        setSuggestions((prev) =>
+                          prev.filter((t) => t.id !== track.id),
+                        );
                         toast.success(`Added "${track.title}" to queue`);
                       }}
                       className="shrink-0 rounded-full p-1.5 text-muted-foreground/60 transition-colors hover:bg-white/10 hover:text-foreground"
@@ -490,7 +536,6 @@ export function QueuePanel() {
               </div>
             </section>
           )}
-
         </div>
       </SheetContent>
     </Sheet>

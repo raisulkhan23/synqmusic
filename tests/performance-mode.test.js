@@ -32,7 +32,11 @@ describe("performance mode is a real, persisted switch", () => {
     expect(storeSource).toMatch(/performanceMode: boolean;/);
     expect(storeSource).toMatch(/togglePerformanceMode: \(\) => void;/);
     expect(storeSource).toMatch(/readBool\("ss\.performanceMode", false\)/);
-    expect(storeSource).toMatch(/localStorage\.setItem\("ss\.performanceMode"/);
+    // Whitespace-tolerant: prettier wraps this call across lines, and a source
+    // assertion should track the code, not the formatter's line width.
+    expect(storeSource).toMatch(
+      /localStorage\.setItem\(\s*"ss\.performanceMode"/,
+    );
   });
 
   test("the class is applied at the app root, not only inside the shell", () => {

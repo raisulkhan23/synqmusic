@@ -22,7 +22,13 @@ import {
 } from "@/lib/cardTransparency";
 import { toPlayableYoutube, type Playable } from "@/lib/playable";
 import * as ytEngine from "@/lib/youtubePlayer";
-import { cacheStream, cleanArtistName, cleanTrackTitle, getCachedStream, type YtItem } from "@/lib/youtube";
+import {
+  cacheStream,
+  cleanArtistName,
+  cleanTrackTitle,
+  getCachedStream,
+  type YtItem,
+} from "@/lib/youtube";
 import { api } from "@/convex/_generated/api";
 import { ConvexClient } from "convex/browser";
 import { toast } from "sonner";
@@ -40,15 +46,22 @@ import { track as trackEvent } from "@/lib/analytics";
  */
 let ytResolveClient: ConvexClient | null = null;
 let ytSearchClient: ConvexClient | null = null;
-const convexSiteUrl = ((import.meta.env.VITE_CONVEX_URL as string) ?? "").replace(".cloud", ".site");
+const convexSiteUrl = (
+  (import.meta.env.VITE_CONVEX_URL as string) ?? ""
+).replace(".cloud", ".site");
 const audioProxyBase = `${convexSiteUrl}/audio-proxy`;
-const resolveYoutubeStream = async (videoId: string): Promise<string | null> => {
+const resolveYoutubeStream = async (
+  videoId: string,
+): Promise<string | null> => {
   // EQ-only playback uses the same resolver as preset effects. Start the
   // already-warm YouTube IFrame immediately so the user hears the dry track
   // while the direct stream is being resolved, then swap to Web Audio only
   // after that stream is ready. Initial track loads already start this path
   // in loadTrack, so the current-track guard avoids a duplicate load there.
-  if (hasAudioProcessing() && usePlayerStore.getState().current?.youtubeId === videoId) {
+  if (
+    hasAudioProcessing() &&
+    usePlayerStore.getState().current?.youtubeId === videoId
+  ) {
     const state = usePlayerStore.getState();
     void ytEngine
       .play(videoId, {
@@ -66,31 +79,54 @@ const resolveYoutubeStream = async (videoId: string): Promise<string | null> => 
   //    element (and therefore the EQ chain) can load it.
   try {
     const clients = [
-      { name: "ANDROID_VR", id: "28", version: "1.60.19", ua: "com.google.android.apps.youtube.vr.oculus/1.60.19 (Linux; U; Android 12; eureka-user Build/SQ3A.220605.009.A1) gzip", extra: { androidSdkVersion: 31, osName: "Android", osVersion: "12" } },
-      { name: "TVHTML5", id: "7", version: "7.20240801.18.00", ua: "Mozilla/5.0 (PlayStation; PlayStation 4/12.00) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Safari/605.1.15", extra: {} },
+      {
+        name: "ANDROID_VR",
+        id: "28",
+        version: "1.60.19",
+        ua: "com.google.android.apps.youtube.vr.oculus/1.60.19 (Linux; U; Android 12; eureka-user Build/SQ3A.220605.009.A1) gzip",
+        extra: { androidSdkVersion: 31, osName: "Android", osVersion: "12" },
+      },
+      {
+        name: "TVHTML5",
+        id: "7",
+        version: "7.20240801.18.00",
+        ua: "Mozilla/5.0 (PlayStation; PlayStation 4/12.00) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Safari/605.1.15",
+        extra: {},
+      },
     ];
     for (const c of clients) {
       try {
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), 8000);
-        const res = await fetch(`https://www.youtube.com/youtubei/v1/player?prettyPrint=false`, {
-          method: "POST",
-          signal: ctrl.signal,
-          headers: {
-            "Content-Type": "application/json",
-            "User-Agent": c.ua,
-            "X-Youtube-Client-Name": c.id,
-            "X-Youtube-Client-Version": c.version,
-            Origin: "https://www.youtube.com",
+        const res = await fetch(
+          `https://www.youtube.com/youtubei/v1/player?prettyPrint=false`,
+          {
+            method: "POST",
+            signal: ctrl.signal,
+            headers: {
+              "Content-Type": "application/json",
+              "User-Agent": c.ua,
+              "X-Youtube-Client-Name": c.id,
+              "X-Youtube-Client-Version": c.version,
+              Origin: "https://www.youtube.com",
+            },
+            body: JSON.stringify({
+              context: {
+                client: {
+                  hl: "en",
+                  gl: "US",
+                  clientName: c.name,
+                  clientVersion: c.version,
+                  ...c.extra,
+                },
+              },
+              videoId,
+              contentCheckOk: true,
+              racyCheckOk: true,
+              thirdParty: { embedUrl: "https://www.youtube.com" },
+            }),
           },
-          body: JSON.stringify({
-            context: { client: { hl: "en", gl: "US", clientName: c.name, clientVersion: c.version, ...c.extra } },
-            videoId,
-            contentCheckOk: true,
-            racyCheckOk: true,
-            thirdParty: { embedUrl: "https://www.youtube.com" },
-          }),
-        });
+        );
         clearTimeout(timer);
         if (!res.ok) continue;
         const data = (await res.json()) as {
@@ -100,7 +136,11 @@ const resolveYoutubeStream = async (videoId: string): Promise<string | null> => 
             formats?: Record<string, unknown>[];
           };
         };
-        if (data.playabilityStatus?.status && data.playabilityStatus.status !== "OK") continue;
+        if (
+          data.playabilityStatus?.status &&
+          data.playabilityStatus.status !== "OK"
+        )
+          continue;
         const formats = [
           ...(data.streamingData?.adaptiveFormats ?? []),
           ...(data.streamingData?.formats ?? []),
@@ -127,12 +167,20 @@ const resolveYoutubeStream = async (videoId: string): Promise<string | null> => 
   // 2) Server-side InnerTube resolution as a backup (may be bot-blocked, but
   //    occasionally the cloud IP isn't).
   try {
-    ytResolveClient = ytResolveClient ?? new ConvexClient(import.meta.env.VITE_CONVEX_URL as string);
+    ytResolveClient =
+      ytResolveClient ??
+      new ConvexClient(import.meta.env.VITE_CONVEX_URL as string);
     // Network-aware quality: prefer a lighter stream when the connection is poor.
     type NetInfo = { effectiveType?: string };
     const net = (navigator as Navigator & { connection?: NetInfo }).connection;
-    const slow = net?.effectiveType === "2g" || net?.effectiveType === "slow-2g" || net?.effectiveType === "3g";
-    const res = await ytResolveClient.action(api.youtube.resolveStream, { videoId, quality: slow ? "low" : "high" });
+    const slow =
+      net?.effectiveType === "2g" ||
+      net?.effectiveType === "slow-2g" ||
+      net?.effectiveType === "3g";
+    const res = await ytResolveClient.action(api.youtube.resolveStream, {
+      videoId,
+      quality: slow ? "low" : "high",
+    });
     if (res?.url) return `${audioProxyBase}?u=${encodeURIComponent(res.url)}`;
   } catch {
     /* fall through to browser-side resolution */
@@ -149,16 +197,25 @@ const resolveYoutubeStream = async (videoId: string): Promise<string | null> => 
       try {
         const ctrl = new AbortController();
         const timeout = setTimeout(() => ctrl.abort(), 6000);
-        const res = await fetch(`${base}/streams/${videoId}`, { signal: ctrl.signal });
+        const res = await fetch(`${base}/streams/${videoId}`, {
+          signal: ctrl.signal,
+        });
         clearTimeout(timeout);
         if (!res.ok) continue;
         const data = (await res.json()) as {
           audioStreams?: { url: string; bitrate?: number; mimeType?: string }[];
-          videoStreams?: { url: string; quality?: string; videoOnly?: boolean; mimeType?: string }[];
+          videoStreams?: {
+            url: string;
+            quality?: string;
+            videoOnly?: boolean;
+            mimeType?: string;
+          }[];
         };
         // Preferred: dedicated audio-only streams (best quality).
         const audioStreams = (data.audioStreams ?? [])
-          .filter((s) => !!s.url && (!s.mimeType || s.mimeType.includes("audio")))
+          .filter(
+            (s) => !!s.url && (!s.mimeType || s.mimeType.includes("audio")),
+          )
           .sort((a, b) => (b.bitrate ?? 0) - (a.bitrate ?? 0));
         if (audioStreams[0]?.url) return audioStreams[0].url;
         // Fallback: ANY muxed (video+audio) stream, not just exact "360p".
@@ -171,9 +228,15 @@ const resolveYoutubeStream = async (videoId: string): Promise<string | null> => 
             (s) =>
               !!s.url &&
               s.videoOnly === false &&
-              (!s.mimeType || s.mimeType.includes("mp4") || s.mimeType.includes("webm")),
+              (!s.mimeType ||
+                s.mimeType.includes("mp4") ||
+                s.mimeType.includes("webm")),
           )
-          .sort((a, b) => (parseInt(a.quality ?? "0", 10) || 9999) - (parseInt(b.quality ?? "0", 10) || 9999));
+          .sort(
+            (a, b) =>
+              (parseInt(a.quality ?? "0", 10) || 9999) -
+              (parseInt(b.quality ?? "0", 10) || 9999),
+          );
         if (muxed[0]?.url) return muxed[0].url;
       } catch {
         continue;
@@ -340,7 +403,7 @@ interface PlayerStore {
   toggleFollowArtist: (artistId: string) => void;
 
   // actions
-  playTrack: (track: Playable, list?: (Playable)[]) => void;
+  playTrack: (track: Playable, list?: Playable[]) => void;
   /** Start an endless related-mix radio from any track (any source). */
   startRadio: (track: Playable, contextQuery?: string) => void;
   /** Play a YouTube track through the proxy/audio path (rescues non-embeddable videos). */
@@ -378,7 +441,13 @@ interface PlayerStore {
   playFromHistory: (index: number) => void;
   replaceUpcoming: (upcoming: Playable[]) => void;
   /** Reorder only the not-yet-played tail, keeping history and queueIndex. */
-  reorderUpcoming: (upcoming: Playable[]) => void;
+  /**
+   * Move tracks within the "up next" part of the queue.
+   *
+   * `base` is the list the caller rendered; it is what proves the reorder is
+   * not acting on a queue that has since changed. See the implementation.
+   */
+  reorderUpcoming: (upcoming: Playable[], base: Playable[]) => void;
   clearQueue: () => void;
   setHistoryRecorder: (fn: ((trackId: string) => void) | null) => void;
 
@@ -410,7 +479,11 @@ const persistPlayable = (p: Playable): PersistedPlayable => ({
   duration: p.duration,
 });
 
-function saveQueue(queue: Playable[], queueIndex: number, currentId: string | null): void {
+function saveQueue(
+  queue: Playable[],
+  queueIndex: number,
+  currentId: string | null,
+): void {
   try {
     localStorage.setItem(
       QUEUE_KEY,
@@ -497,7 +570,8 @@ const initialVisualizer = readBool("ss.visualizer", true);
 const initialPerformanceMode = readBool("ss.performanceMode", false);
 const initialPointerEffects = readBool("ss.pointerEffects", true);
 const initialWallpaper = localStorage.getItem("ss.wallpaper");
-const initialWallpaperType = localStorage.getItem("ss.wallpaperType") === "video" ? "video" : "image";
+const initialWallpaperType =
+  localStorage.getItem("ss.wallpaperType") === "video" ? "video" : "image";
 const savedQueue = readSavedQueue();
 
 const readIdSet = (key: string): Record<string, true> => {
@@ -530,7 +604,10 @@ const RESUME_MIN_DURATION = 300; // only tracks ≥ 5 min
 /** Latest saved position for a track (for the Continue Listening UI). */
 export function peekResumePosition(id: string, duration: number): number {
   try {
-    const map = JSON.parse(localStorage.getItem(RESUME_KEY) ?? "{}") as Record<string, { t: number; at: number }>;
+    const map = JSON.parse(localStorage.getItem(RESUME_KEY) ?? "{}") as Record<
+      string,
+      { t: number; at: number }
+    >;
     const hit = map[id];
     if (!hit) return 0;
     if (hit.t < 10 || (duration > 0 && hit.t > duration - 20)) return 0;
@@ -554,7 +631,9 @@ function saveResumePosition(id: string, t: number): void {
   const map = readResumeMap();
   map[id] = { t, at: Date.now() };
   // cap entries
-  const entries = Object.entries(map).sort((a, b) => b[1].at - a[1].at).slice(0, 50);
+  const entries = Object.entries(map)
+    .sort((a, b) => b[1].at - a[1].at)
+    .slice(0, 50);
   localStorage.setItem(RESUME_KEY, JSON.stringify(Object.fromEntries(entries)));
 }
 
@@ -584,7 +663,11 @@ function rememberTrack(id: string): void {
  * ~10 heard tracks. Falls back to any other index when the exclusions cover
  * the whole queue, so shuffle never dead-ends on a short queue.
  */
-function pickShuffleIndex(queueLen: number, currentIndex: number, smart: boolean): number {
+function pickShuffleIndex(
+  queueLen: number,
+  currentIndex: number,
+  smart: boolean,
+): number {
   const candidates: number[] = [];
   const recent = smart ? new Set(recentTrackIds) : null;
   for (let i = 0; i < queueLen; i++) {
@@ -792,8 +875,6 @@ export function clearSingleHistoryEntry(id: string): void {
   notifyHistoryChange();
 }
 
-
-
 // --- shared end-of-track handling ----------------------------------------------
 
 let sleepCheckInterval: ReturnType<typeof setInterval> | null = null;
@@ -823,11 +904,16 @@ function restartCurrent(): void {
     return;
   }
   s.seek(0);
-  void getAudio().play().catch(() => undefined);
+  void getAudio()
+    .play()
+    .catch(() => undefined);
 }
 
 /** In-flight related-mix fetch, deduped per seed so track-end doesn't double-fire. */
-let relatedMixInFlight: { seedId: string; promise: Promise<Playable[]> } | null = null;
+let relatedMixInFlight: {
+  seedId: string;
+  promise: Promise<Playable[]>;
+} | null = null;
 
 /** Tracks already played in this session — related mixes must never repeat them. */
 const playedSessionIds = new Set<string>();
@@ -845,12 +931,46 @@ const playedSessionIds = new Set<string>();
 let activeMixContext: string | null = null;
 
 const GENRE_HINTS = [
-  "pop", "rock", "hip hop", "rap", "r&b", "soul", "funk", "jazz", "blues",
-  "electronic", "edm", "house", "techno", "trance", "dubstep", "drum and bass",
-  "ambient", "lofi", "lo-fi", "chill", "classical", "country", "folk",
-  "indie", "alternative", "metal", "punk", "reggae", "latin", "afrobeats",
-  "k-pop", "kpop", "j-pop", "disco", "synthwave", "vaporwave", "gospel",
-  "acoustic", "dance", "disco",
+  "pop",
+  "rock",
+  "hip hop",
+  "rap",
+  "r&b",
+  "soul",
+  "funk",
+  "jazz",
+  "blues",
+  "electronic",
+  "edm",
+  "house",
+  "techno",
+  "trance",
+  "dubstep",
+  "drum and bass",
+  "ambient",
+  "lofi",
+  "lo-fi",
+  "chill",
+  "classical",
+  "country",
+  "folk",
+  "indie",
+  "alternative",
+  "metal",
+  "punk",
+  "reggae",
+  "latin",
+  "afrobeats",
+  "k-pop",
+  "kpop",
+  "j-pop",
+  "disco",
+  "synthwave",
+  "vaporwave",
+  "gospel",
+  "acoustic",
+  "dance",
+  "disco",
 ];
 
 /**
@@ -867,7 +987,10 @@ function normalizeContext(q?: string | null): string | null {
   if (t.length < 3) return null;
   // Strip noise words, keep the meaningful genre-ish phrase.
   const cleaned = t
-    .replace(/\b(songs?|music|track|playlist|video|official|lyrics?|lyric video|remix|mix|edit|full album|top|best|popular|new|2024|2025|2026|hit|hits|vibe|mood|playlist)\b/g, " ")
+    .replace(
+      /\b(songs?|music|track|playlist|video|official|lyrics?|lyric video|remix|mix|edit|full album|top|best|popular|new|2024|2025|2026|hit|hits|vibe|mood|playlist)\b/g,
+      " ",
+    )
     .replace(/\s+/g, " ")
     .trim();
   if (cleaned.length < 3) return null;
@@ -887,11 +1010,18 @@ function inferGenre(seed: Playable): string | null {
 /**
  * Fetch a related-mix from YouTube Music based on the seed track's GENRE.
  * Returns Playables ready for the queue (empty on failure).
- */async function fetchRelatedMix(seed: Playable, existingQueue: Playable[], count: number, contextQuery?: string | null): Promise<Playable[]> {
+ */ async function fetchRelatedMix(
+  seed: Playable,
+  existingQueue: Playable[],
+  count: number,
+  contextQuery?: string | null,
+): Promise<Playable[]> {
   if (relatedMixInFlight?.seedId === seed.id) return relatedMixInFlight.promise;
   const promise = (async () => {
     try {
-      ytSearchClient = ytSearchClient ?? new ConvexClient(import.meta.env.VITE_CONVEX_URL as string);
+      ytSearchClient =
+        ytSearchClient ??
+        new ConvexClient(import.meta.env.VITE_CONVEX_URL as string);
       const artist = seed.artistName.split(",")[0]?.trim() ?? "";
       // IMPORTANT: prioritize GENRE over artist. Queries target SONGS in the
       // genre (not "mix"/"playlist" compilations, which return whole-video
@@ -918,7 +1048,8 @@ function inferGenre(seed: Playable): string | null {
             `${artist} and similar artists playlist`,
           ];
       // Pick two different queries so one fill blends two result pools.
-      const pick = () => songQueries[Math.floor(Math.random() * songQueries.length)];
+      const pick = () =>
+        songQueries[Math.floor(Math.random() * songQueries.length)];
       const q1 = pick();
       let q2 = pick();
       let guard = 0;
@@ -932,7 +1063,10 @@ function inferGenre(seed: Playable): string | null {
           return [];
         }
       };
-      const [items1, items2] = await Promise.all([searchOnce(q1), searchOnce(q2)]);
+      const [items1, items2] = await Promise.all([
+        searchOnce(q1),
+        searchOnce(q2),
+      ]);
       // Interleave the two result pools — spreads artists throughout.
       const items: YtItem[] = [];
       const maxLen = Math.max(items1.length, items2.length);
@@ -946,11 +1080,16 @@ function inferGenre(seed: Playable): string | null {
       const existing = new Set(existingQueue.map((t) => t.id));
       existing.add(seed.id);
       for (const id of playedSessionIds) existing.add(id);
-      const normTitle = (s: string) => s.toLowerCase().replace(/\([^)]*\)|\[[^\]]*\]/g, "").replace(/[^a-z0-9]/g, "");
+      const normTitle = (s: string) =>
+        s
+          .toLowerCase()
+          .replace(/\([^)]*\)|\[[^\]]*\]/g, "")
+          .replace(/[^a-z0-9]/g, "");
       const seenTitles = new Set(existingQueue.map((t) => normTitle(t.title)));
       const seedTitle = normTitle(seed.title);
       const out: Playable[] = [];
-      const normArtist = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const normArtist = (s: string) =>
+        s.toLowerCase().replace(/[^a-z0-9]/g, "");
       const seedArtist = normArtist(seed.artistName);
       // Artist diversity inside the fill itself: max 2 songs per artist.
       const artistSeen = new Map<string, number>();
@@ -962,7 +1101,8 @@ function inferGenre(seed: Playable): string | null {
         // Drop same-artist repeats after the first couple — the point of the
         // fill is DIFFERENT songs, ideally different artists.
         const thisArtist = normArtist(it.artist ?? "");
-        if (seedArtist && thisArtist === seedArtist && out.length >= 2) continue;
+        if (seedArtist && thisArtist === seedArtist && out.length >= 2)
+          continue;
         if (thisArtist && (artistSeen.get(thisArtist) ?? 0) >= 2) continue;
         artistSeen.set(thisArtist, (artistSeen.get(thisArtist) ?? 0) + 1);
         existing.add(it.id);
@@ -978,11 +1118,14 @@ function inferGenre(seed: Playable): string | null {
   relatedMixInFlight = { seedId: seed.id, promise };
   // Don't cache empty/failed fills — a transient search failure would lock
   // the seed out of retries.
-  void promise.then((r: Playable[]) => {
-    if (r.length === 0 && relatedMixInFlight?.promise === promise) relatedMixInFlight = null;
-  }).catch(() => {
-    if (relatedMixInFlight?.promise === promise) relatedMixInFlight = null;
-  });
+  void promise
+    .then((r: Playable[]) => {
+      if (r.length === 0 && relatedMixInFlight?.promise === promise)
+        relatedMixInFlight = null;
+    })
+    .catch(() => {
+      if (relatedMixInFlight?.promise === promise) relatedMixInFlight = null;
+    });
   return promise;
 }
 
@@ -1005,7 +1148,9 @@ function handleEnded(): void {
   if (s.queue.length > 0) {
     // Shuffle ON: jump to a RANDOM upcoming track, not the next in line.
     if (s.shuffle && s.queue.length > 1) {
-      s.playIndex(pickShuffleIndex(s.queue.length, s.queueIndex, s.smartShuffle));
+      s.playIndex(
+        pickShuffleIndex(s.queue.length, s.queueIndex, s.smartShuffle),
+      );
       return;
     }
     // Normal: advance in order.
@@ -1028,7 +1173,9 @@ function handleEnded(): void {
       // same related mix while this fetch was in flight — filtering against a
       // stale queue snapshot used to double-append the same tracks.
       usePlayerStore.setState((st) => {
-        const fresh = related.filter((t) => !st.queue.some((q) => q.id === t.id));
+        const fresh = related.filter(
+          (t) => !st.queue.some((q) => q.id === t.id),
+        );
         if (fresh.length === 0) return st;
         return { queue: [...st.queue, ...fresh] };
       });
@@ -1070,7 +1217,12 @@ function audioElementIsSource(t: Playable | null | undefined): boolean {
 const prefetchedTrackIds = new Set<string>();
 
 function prefetchTrack(track: Playable | undefined): void {
-  if (!track || typeof window === "undefined" || prefetchedTrackIds.has(track.id)) return;
+  if (
+    !track ||
+    typeof window === "undefined" ||
+    prefetchedTrackIds.has(track.id)
+  )
+    return;
   prefetchedTrackIds.add(track.id);
 
   // Keep next-track preparation off the critical click path. Artwork is cheap
@@ -1103,14 +1255,19 @@ function prefetchTrack(track: Playable | undefined): void {
 function onTimeUpdate(t: number, duration: number): void {
   const s = usePlayerStore.getState();
   if (s.abA !== null && s.abB !== null && t >= s.abB) {
-    if (s.current?.youtubeId && !audioElementIsSource(s.current)) ytEngine.seek(s.abA);
+    if (s.current?.youtubeId && !audioElementIsSource(s.current))
+      ytEngine.seek(s.abA);
     else getAudio().currentTime = s.abA;
     usePlayerStore.setState({ currentTime: s.abA });
     return;
   }
   // remember position on long tracks (throttled)
   const id = s.current?.id;
-  if (id && duration >= RESUME_MIN_DURATION && Date.now() - lastResumeSave > 5000) {
+  if (
+    id &&
+    duration >= RESUME_MIN_DURATION &&
+    Date.now() - lastResumeSave > 5000
+  ) {
     lastResumeSave = Date.now();
     saveResumePosition(id, t);
   }
@@ -1151,7 +1308,10 @@ function armAudioBufferWatchdog(audio: HTMLAudioElement): void {
         usePlayerStore.setState({ currentTime: resumeAt });
       };
       if (audio.readyState >= HTMLMediaElement.HAVE_METADATA) restorePosition();
-      else audio.addEventListener("loadedmetadata", restorePosition, { once: true });
+      else
+        audio.addEventListener("loadedmetadata", restorePosition, {
+          once: true,
+        });
     }
     void audio.play().catch(() => undefined);
   }, 8_000);
@@ -1185,7 +1345,8 @@ function wireAudio() {
   }
 
   audio.addEventListener("timeupdate", () => {
-    const duration = audio.duration && Number.isFinite(audio.duration) ? audio.duration : 0;
+    const duration =
+      audio.duration && Number.isFinite(audio.duration) ? audio.duration : 0;
     usePlayerStore.setState({ currentTime: audio.currentTime, duration });
     onTimeUpdate(audio.currentTime, duration);
   });
@@ -1223,13 +1384,14 @@ function wireAudio() {
     clearAudioBufferWatchdog();
     usePlayerStore.setState({ isPlaying: false, isBuffering: false });
   });
-  audio.addEventListener("play", () => usePlayerStore.setState({ isPlaying: true }));
+  audio.addEventListener("play", () =>
+    usePlayerStore.setState({ isPlaying: true }),
+  );
 
   audio.addEventListener("ended", () => {
     clearAudioBufferWatchdog();
     handleEnded();
   });
-
 }
 
 // --- youtube iframe engine wiring --------------------------------------------
@@ -1296,7 +1458,11 @@ function wireYoutubeEngine() {
       const current = usePlayerStore.getState().current;
       // Ignore late errors from a previous YouTube load. Otherwise the
       // fallback UI can replace the newly selected song with another upload.
-      if (!current?.youtubeId || ytEngine.getLoadedVideoId() !== current.youtubeId) return;
+      if (
+        !current?.youtubeId ||
+        ytEngine.getLoadedVideoId() !== current.youtubeId
+      )
+        return;
       if (ytEngine.isFatalError(code)) {
         clearYtLoadWatchdog();
         usePlayerStore.setState((s) => ({
@@ -1338,7 +1504,9 @@ function wireMediaKeys() {
   try {
     ms.setActionHandler("play", () => usePlayerStore.getState().togglePlay());
     ms.setActionHandler("pause", () => usePlayerStore.getState().togglePlay());
-    ms.setActionHandler("previoustrack", () => usePlayerStore.getState().prev());
+    ms.setActionHandler("previoustrack", () =>
+      usePlayerStore.getState().prev(),
+    );
     ms.setActionHandler("nexttrack", () => usePlayerStore.getState().next());
     ms.setActionHandler("seekbackward", () => {
       const s = usePlayerStore.getState();
@@ -1375,7 +1543,11 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
   /** Increments on every track load; stale async results are discarded. */
   let loadSeq = 0;
 
-  const watchAudioErrors = (audio: HTMLAudioElement, token: number, trackId: string) => {
+  const watchAudioErrors = (
+    audio: HTMLAudioElement,
+    token: number,
+    trackId: string,
+  ) => {
     const onError = () => {
       // Ignore errors from a previous source that arrive after the user has
       // already switched tracks. Without this guard they increment errorNonce
@@ -1402,7 +1574,8 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
   const maybeAutofillQueue = () => {
     const s = get();
     if (!s.autoplay || !s.current) return;
-    const upcoming = s.queueIndex >= 0 ? s.queue.length - 1 - s.queueIndex : s.queue.length;
+    const upcoming =
+      s.queueIndex >= 0 ? s.queue.length - 1 - s.queueIndex : s.queue.length;
     if (upcoming >= 3) return;
     if (autofillInFlight || autofillSeedId === s.current.id) return;
     autofillInFlight = true;
@@ -1415,11 +1588,15 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
         // queue auto-advance path in handleEnded can append the same mix
         // concurrently, and a stale snapshot would duplicate the tracks.
         usePlayerStore.setState((st) => {
-          const fresh = related.filter((t) => !st.queue.some((q) => q.id === t.id));
+          const fresh = related.filter(
+            (t) => !st.queue.some((q) => q.id === t.id),
+          );
           if (fresh.length === 0) return st;
           return {
             queue: [...st.queue, ...fresh],
-            unshuffledQueue: st.unshuffledQueue ? [...st.unshuffledQueue, ...fresh] : null,
+            unshuffledQueue: st.unshuffledQueue
+              ? [...st.unshuffledQueue, ...fresh]
+              : null,
           };
         });
         const after = usePlayerStore.getState();
@@ -1439,7 +1616,10 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     // queue history: remember what was playing before this
     if (prev && prev.id !== track.id) {
       set((state) => ({
-        history: [prev, ...state.history.filter((h) => h.id !== prev.id)].slice(0, 50),
+        history: [prev, ...state.history.filter((h) => h.id !== prev.id)].slice(
+          0,
+          50,
+        ),
       }));
     }
     rememberTrack(track.id);
@@ -1465,7 +1645,8 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       has_video: !!track.youtubeId,
     });
 
-    const resumeAt = startSeconds ?? getResumePosition(track.id, track.duration);
+    const resumeAt =
+      startSeconds ?? getResumePosition(track.id, track.duration);
 
     // Commit the new track to the store BEFORE routing it to an engine.
     // This used to sit at the very end of loadTrack, but two branches return
@@ -1513,7 +1694,8 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
         void ytResolve(track.youtubeId).then((url) => {
           if (!url) return;
           const state = usePlayerStore.getState();
-          if (state.current?.youtubeId !== track.youtubeId || !state.current) return;
+          if (state.current?.youtubeId !== track.youtubeId || !state.current)
+            return;
           swapToFilteredStream(state.current, state.currentTime);
         });
         return;
@@ -1522,7 +1704,8 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       clearYtLoadWatchdog();
       ytLoadWatchdog = setTimeout(() => {
         const state = usePlayerStore.getState();
-        if (seq !== loadSeq || !state.current?.youtubeId || state.isPlaying) return;
+        if (seq !== loadSeq || !state.current?.youtubeId || state.isPlaying)
+          return;
         clearYtLoadWatchdog();
         usePlayerStore.setState((currentState) => ({
           isBuffering: false,
@@ -1531,16 +1714,24 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
         }));
       }, 12_000);
       ytEngine
-        .play(track.youtubeId, { volume: get().volume, muted: get().muted, startSeconds: resumeAt || undefined })
+        .play(track.youtubeId, {
+          volume: get().volume,
+          muted: get().muted,
+          startSeconds: resumeAt || undefined,
+        })
         .then(() => {
           // The engine init is async — if the user picked another song while
           // this one was initializing, make sure this load never wins.
-        if (seq !== loadSeq) ytEngine.pause();
-      })
-      .catch(() => {
+          if (seq !== loadSeq) ytEngine.pause();
+        })
+        .catch(() => {
           clearYtLoadWatchdog();
           if (seq !== loadSeq) return;
-            set({ isPlaying: false, isBuffering: false, errorNonce: get().errorNonce + 1 });
+          set({
+            isPlaying: false,
+            isBuffering: false,
+            errorNonce: get().errorNonce + 1,
+          });
         });
     } else {
       ytEngine.pause();
@@ -1562,7 +1753,8 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
           usePlayerStore.setState({ currentTime: resumeAt });
         };
         if (audio.readyState >= 1) applyResume();
-        else audio.addEventListener("loadedmetadata", applyResume, { once: true });
+        else
+          audio.addEventListener("loadedmetadata", applyResume, { once: true });
       }
       // Actually start playback. loadTrack is always reached from a user
       // gesture (row click) or auto-advance, so autoplay is permitted —
@@ -1579,22 +1771,24 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     maybeAutofillQueue();
   };
 
-  const playTrack = (track: Playable, list?: (Playable)[]) => {
+  const playTrack = (track: Playable, list?: Playable[]) => {
     // Explicit list playback (playlist / liked / home rows) is not a search
     // context — drop any genre left over from a previous search.
     activeMixContext = null;
-    const list2 =
-      list && list.length > 0 ? list.map(norm) : [norm(track)];
+    const list2 = list && list.length > 0 ? list.map(norm) : [norm(track)];
     const t = norm(track);
     // Match by id OR youtubeId — history snapshots may carry a stored id that
     // differs from the live item id, which used to make findIndex fail and
     // silently play index 0 ("always the most recent song") instead.
     let idx = list2.findIndex((x) => x.id === t.id);
-    if (idx < 0 && t.youtubeId) idx = list2.findIndex((x) => x.youtubeId === t.youtubeId);
+    if (idx < 0 && t.youtubeId)
+      idx = list2.findIndex((x) => x.youtubeId === t.youtubeId);
     if (idx < 0 && t.title) {
       const normKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
       idx = list2.findIndex(
-        (x) => normKey(x.title) === normKey(t.title) && normKey(x.artistName) === normKey(t.artistName),
+        (x) =>
+          normKey(x.title) === normKey(t.title) &&
+          normKey(x.artistName) === normKey(t.artistName),
       );
     }
     let index = idx >= 0 ? idx : 0;
@@ -1619,7 +1813,12 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       queue = current ? [current, ...rest] : rest;
       index = 0;
     }
-    set({ queue, queueIndex: index, unshuffledQueue: null, unshuffledIndex: -1 });
+    set({
+      queue,
+      queueIndex: index,
+      unshuffledQueue: null,
+      unshuffledIndex: -1,
+    });
     loadTrack(queue[index]);
   };
 
@@ -1636,7 +1835,9 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     void fetchRelatedMix(seed, initial, 15, contextQuery).then((related) => {
       // Dedupe against the latest queue inside the updater (see autofill note).
       usePlayerStore.setState((st) => {
-        const fresh = related.filter((t) => !st.queue.some((q) => q.id === t.id));
+        const fresh = related.filter(
+          (t) => !st.queue.some((q) => q.id === t.id),
+        );
         if (fresh.length === 0) return st;
         return { queue: [...st.queue, ...fresh] };
       });
@@ -1702,7 +1903,9 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     if (s.queue.length === 0) return;
     // Shuffle ON: play a RANDOM other track (not the one directly below).
     if (s.shuffle && s.queue.length > 1) {
-      playIndex(pickShuffleIndex(s.queue.length, s.queueIndex, get().smartShuffle));
+      playIndex(
+        pickShuffleIndex(s.queue.length, s.queueIndex, get().smartShuffle),
+      );
       return;
     }
     if (s.queueIndex < s.queue.length - 1) {
@@ -1774,7 +1977,10 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       const currentId = s0.queueIndex >= 0 ? s0.queue[s0.queueIndex]?.id : null;
       if (next) {
         if (s0.unshuffledQueue === null) {
-          set({ unshuffledQueue: [...s0.queue], unshuffledIndex: s0.queueIndex });
+          set({
+            unshuffledQueue: [...s0.queue],
+            unshuffledIndex: s0.queueIndex,
+          });
         }
         const current = currentId ? s0.queue[s0.queueIndex] : null;
         const rest = s0.queue.filter((_, i) => i !== s0.queueIndex);
@@ -1792,7 +1998,12 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
           const found = restored.findIndex((t) => t.id === currentId);
           if (found >= 0) idx = found;
         }
-        set({ queue: restored, queueIndex: idx, unshuffledQueue: null, unshuffledIndex: -1 });
+        set({
+          queue: restored,
+          queueIndex: idx,
+          unshuffledQueue: null,
+          unshuffledIndex: -1,
+        });
         saveQueue(restored, idx, currentId);
       }
     }
@@ -1941,7 +2152,11 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       const resumeAt = s.currentTime;
       getAudio().pause();
       void ytEngine
-        .play(s.current.youtubeId, { volume: s.volume, muted: s.muted, startSeconds: resumeAt })
+        .play(s.current.youtubeId, {
+          volume: s.volume,
+          muted: s.muted,
+          startSeconds: resumeAt,
+        })
         .catch(() => undefined);
     }
     // When video is enabled and an effect activates, the sound now comes from
@@ -2012,9 +2227,12 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
           const s = usePlayerStore.getState();
           // Only swap if this song is still playing AND the effect is still
           // wanted — never hijack playback after the user moved on.
-          if (s.current?.youtubeId !== videoId || s.audioFilter === "off") return;
+          if (s.current?.youtubeId !== videoId || s.audioFilter === "off")
+            return;
           swapToFilteredStream(s.current, s.currentTime);
-          const label = AUDIO_FILTERS.find((f) => f.id === s.audioFilter)?.label ?? "Effect";
+          const label =
+            AUDIO_FILTERS.find((f) => f.id === s.audioFilter)?.label ??
+            "Effect";
           toast.success(`${label} applied`, { id: "fx-retry" });
           return;
         }
@@ -2049,10 +2267,14 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
           usePlayerStore.setState({ currentTime: at });
         };
         if (audio.readyState >= 1) applyResume();
-        else audio.addEventListener("loadedmetadata", applyResume, { once: true });
+        else
+          audio.addEventListener("loadedmetadata", applyResume, { once: true });
       }
       void audio.play().catch(() => undefined);
-      usePlayerStore.setState({ current: { ...track, audioUrl: url }, currentTime: at });
+      usePlayerStore.setState({
+        current: { ...track, audioUrl: url },
+        currentTime: at,
+      });
       syncVideoSlave();
     });
   };
@@ -2079,7 +2301,8 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       if (attempt >= 2) {
         toast("Effect still not processing", {
           id: "fx-verify",
-          description: "This song's stream resists processing \u2014 try another track",
+          description:
+            "This song's stream resists processing \u2014 try another track",
         });
         return;
       }
@@ -2092,14 +2315,19 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
           return;
         }
         const t = usePlayerStore.getState().current;
-        if (t?.youtubeId) swapToFilteredStream(t, usePlayerStore.getState().currentTime);
+        if (t?.youtubeId)
+          swapToFilteredStream(t, usePlayerStore.getState().currentTime);
       });
       verifyTimer = setTimeout(() => check(attempt + 1), 2500);
     };
     verifyTimer = setTimeout(() => check(0), 1800);
   };
 
-  const resolveAndPlayWithFilter = (track: Playable, resumeAt: number, forEffect = false) => {
+  const resolveAndPlayWithFilter = (
+    track: Playable,
+    resumeAt: number,
+    forEffect = false,
+  ) => {
     const videoId = track.youtubeId;
     if (!videoId) return;
     // Build the audio graph NOW (this runs inside the user-gesture click
@@ -2139,7 +2367,10 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
             usePlayerStore.setState({ currentTime: resumeAt });
           };
           if (audio.readyState >= 1) applyResume();
-          else audio.addEventListener("loadedmetadata", applyResume, { once: true });
+          else
+            audio.addEventListener("loadedmetadata", applyResume, {
+              once: true,
+            });
         }
         void audio.play().catch(() => undefined);
         set({ current: { ...track, audioUrl: url }, currentTime: resumeAt });
@@ -2162,15 +2393,24 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
           // toasting "unavailable") is what made the EQ look broken.
           toast("Applying effect\u2026", {
             id: "fx-fallback",
-            description: "Resolving an audio stream \u2014 it kicks in automatically",
+            description:
+              "Resolving an audio stream \u2014 it kicks in automatically",
           });
           scheduleEffectRetry(videoId);
         }
         getAudio().pause();
         ytEngine
-          .play(videoId, { volume: get().volume, muted: get().muted, startSeconds: resumeAt || undefined })
+          .play(videoId, {
+            volume: get().volume,
+            muted: get().muted,
+            startSeconds: resumeAt || undefined,
+          })
           .catch(() => {
-            set({ isPlaying: false, isBuffering: false, errorNonce: get().errorNonce + 1 });
+            set({
+              isPlaying: false,
+              isBuffering: false,
+              errorNonce: get().errorNonce + 1,
+            });
           });
       });
   };
@@ -2341,19 +2581,28 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     visualizerEnabled: initialVisualizer,
     toggleVisualizer: () =>
       set((state) => {
-        localStorage.setItem("ss.visualizer", state.visualizerEnabled ? "0" : "1");
+        localStorage.setItem(
+          "ss.visualizer",
+          state.visualizerEnabled ? "0" : "1",
+        );
         return { visualizerEnabled: !state.visualizerEnabled };
       }),
     performanceMode: initialPerformanceMode,
     togglePerformanceMode: () =>
       set((state) => {
-        localStorage.setItem("ss.performanceMode", state.performanceMode ? "0" : "1");
+        localStorage.setItem(
+          "ss.performanceMode",
+          state.performanceMode ? "0" : "1",
+        );
         return { performanceMode: !state.performanceMode };
       }),
     pointerEffects: initialPointerEffects,
     togglePointerEffects: () =>
       set((state) => {
-        localStorage.setItem("ss.pointerEffects", state.pointerEffects ? "0" : "1");
+        localStorage.setItem(
+          "ss.pointerEffects",
+          state.pointerEffects ? "0" : "1",
+        );
         return { pointerEffects: !state.pointerEffects };
       }),
 
@@ -2492,7 +2741,8 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
         const item = state.queue[index];
         if (index === state.queueIndex) return state; // don't remove the playing track
         const queue = state.queue.filter((_, i) => i !== index);
-        const queueIndex2 = index < state.queueIndex ? state.queueIndex - 1 : state.queueIndex;
+        const queueIndex2 =
+          index < state.queueIndex ? state.queueIndex - 1 : state.queueIndex;
         lastRemoved = { item, index };
         saveQueue(queue, queueIndex2, state.current?.id ?? null);
         return { queue, queueIndex: queueIndex2 };
@@ -2503,8 +2753,13 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       lastRemoved = null;
       set((state) => {
         const i = Math.min(index, state.queue.length);
-        const queue = [...state.queue.slice(0, i), item, ...state.queue.slice(i)];
-        const queueIndex = i <= state.queueIndex ? state.queueIndex + 1 : state.queueIndex;
+        const queue = [
+          ...state.queue.slice(0, i),
+          item,
+          ...state.queue.slice(i),
+        ];
+        const queueIndex =
+          i <= state.queueIndex ? state.queueIndex + 1 : state.queueIndex;
         // The remove path persists, so the undo has to as well. Without this
         // the queue looked restored in the UI, but a reload (or a crash) brought
         // the track straight back off the queue.
@@ -2516,8 +2771,13 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       const item = norm(track);
       set((state) => {
         const i = Math.max(0, Math.min(index, state.queue.length));
-        const queue = [...state.queue.slice(0, i), item, ...state.queue.slice(i)];
-        const queueIndex = i <= state.queueIndex ? state.queueIndex + 1 : state.queueIndex;
+        const queue = [
+          ...state.queue.slice(0, i),
+          item,
+          ...state.queue.slice(i),
+        ];
+        const queueIndex =
+          i <= state.queueIndex ? state.queueIndex + 1 : state.queueIndex;
         saveQueue(queue, queueIndex, state.current?.id ?? null);
         return { queue, queueIndex };
       });
@@ -2534,7 +2794,9 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       const s = get();
       const item = s.history[index];
       if (!item) return;
-      set((state) => ({ history: state.history.filter((_, i) => i !== index) }));
+      set((state) => ({
+        history: state.history.filter((_, i) => i !== index),
+      }));
       // play it, keeping the rest of the queue intact for "next"
       const queue = [...s.queue];
       const insertAt = Math.max(0, s.queueIndex) + 1;
@@ -2557,15 +2819,21 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       toast("Finding songs that match what's playing…");
       void fetchRelatedMix(base, s.queue, 10).then((related) => {
         const state = usePlayerStore.getState();
-        const fresh = related.filter((t) => !state.queue.some((q) => q.id === t.id));
+        const fresh = related.filter(
+          (t) => !state.queue.some((q) => q.id === t.id),
+        );
         if (fresh.length === 0) {
           toast.error("Couldn't find more songs like this right now");
           return;
         }
-        const picks = state.shuffle ? [...fresh].sort(() => Math.random() - 0.5) : fresh;
+        const picks = state.shuffle
+          ? [...fresh].sort(() => Math.random() - 0.5)
+          : fresh;
         usePlayerStore.setState((st) => ({
           queue: [...st.queue, ...picks],
-          unshuffledQueue: st.unshuffledQueue ? [...st.unshuffledQueue, ...picks] : null,
+          unshuffledQueue: st.unshuffledQueue
+            ? [...st.unshuffledQueue, ...picks]
+            : null,
         }));
         const after = usePlayerStore.getState();
         saveQueue(after.queue, after.queueIndex, after.current?.id ?? null);
@@ -2583,20 +2851,28 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     // [current, ...upcoming], which drops every already-played track and resets
     // queueIndex to 0. Splicing the new order into the existing queue keeps
     // history, the current track and the play position intact.
-    reorderUpcoming: (upcoming) =>
+    reorderUpcoming: (upcoming, base) =>
       set((state) => {
         const start = state.queueIndex >= 0 ? state.queueIndex + 1 : 0;
         const liveUpcoming = state.queue.slice(start);
-        // The queue panel hands us an order derived from the last render. If a
-        // track ended (or the queue changed) between that render and the drop,
-        // splicing the stale list in would duplicate and drop tracks, so the
-        // reorder is ignored instead of corrupting the queue.
+        // Staleness is judged against `base` — the list the panel RENDERED —
+        // and never against `upcoming`. Comparing the NEW order to the live
+        // queue cannot tell a genuine reorder from a stale render, because a
+        // genuine reorder differs by definition, so the guard rejected every
+        // single one: neither the up/down arrows nor drag-to-reorder did
+        // anything. If a track ended (or the queue changed) between that
+        // render and the drop, `base` no longer matches and the reorder is
+        // ignored rather than duplicating and dropping tracks.
         if (
-          liveUpcoming.length !== upcoming.length ||
-          liveUpcoming.some((track, i) => track.id !== upcoming[i]?.id)
+          !Array.isArray(base) ||
+          liveUpcoming.length !== base.length ||
+          liveUpcoming.some((track, i) => track.id !== base[i]?.id)
         ) {
           return {};
         }
+        // A new order that does not hold exactly what is queued would lose or
+        // invent tracks, so it is refused too.
+        if (upcoming.length !== liveUpcoming.length) return {};
         const queue = [...state.queue.slice(0, start), ...upcoming];
         saveQueue(queue, state.queueIndex, state.current?.id ?? null);
         return { queue };
