@@ -354,6 +354,8 @@ interface PlayerStore {
   setVolume: (volume: number) => void;
   toggleMute: () => void;
   toggleShuffle: () => void;
+  /** Transport-button shuffle: enables/disables shuffle AND smart shuffle. */
+  toggleShuffleSmart: () => void;
   toggleSmartShuffle: () => void;
   cycleRepeat: () => void;
   setRate: (rate: number) => void;
@@ -1788,6 +1790,19 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     set({ shuffle: next });
   };
 
+  const toggleShuffleSmart = () => {
+    // The transport shuffle button turns BOTH modes on, and both off again, so
+    // the button can never disagree with the mode the queue is actually in.
+    // `toggleShuffle` owns the physical queue reorder, so it is reused rather
+    // than duplicated: enabling smart shuffle has to go through the same
+    // save/restore of the unshuffled order, or turning shuffle back off would
+    // leave the queue stuck in shuffled order.
+    const turningOn = !get().shuffle;
+    toggleShuffle();
+    localStorage.setItem("ss.smartShuffle", turningOn ? "1" : "0");
+    set({ smartShuffle: turningOn });
+  };
+
   const toggleSmartShuffle = () => {
     const next = !get().smartShuffle;
     localStorage.setItem("ss.smartShuffle", next ? "1" : "0");
@@ -2404,6 +2419,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     setVolume,
     toggleMute,
     toggleShuffle,
+    toggleShuffleSmart,
     toggleSmartShuffle,
     cycleRepeat,
     setRate,

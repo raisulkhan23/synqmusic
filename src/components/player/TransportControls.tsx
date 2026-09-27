@@ -1,6 +1,17 @@
 import { cn } from "@/lib/utils";
 import { usePlayerStore } from "@/store/player";
-import { Loader2, Pause, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward } from "lucide-react";
+import { toast } from "sonner";
+import {
+  Loader2,
+  Pause,
+  Play,
+  Repeat,
+  Repeat1,
+  Shuffle,
+  SkipBack,
+  SkipForward,
+  Sparkles,
+} from "lucide-react";
 import type { ReactNode } from "react";
 
 function IconButton({
@@ -25,7 +36,8 @@ function IconButton({
       onClick={onClick}
       className={cn(
         "relative touch-manipulation flex size-9 items-center justify-center rounded-full text-foreground/70 transition-[color,background-color,transform,opacity] duration-200 hover:bg-white/[0.07] hover:text-foreground active:scale-90 disabled:pointer-events-none disabled:opacity-35",
-        active && "bg-[rgb(var(--tint)_/_0.1)] text-[rgb(var(--tint))] hover:bg-[rgb(var(--tint)_/_0.16)]",
+        active &&
+          "bg-[rgb(var(--tint)_/_0.1)] text-[rgb(var(--tint))] hover:bg-[rgb(var(--tint)_/_0.16)]",
       )}
     >
       {children}
@@ -33,7 +45,13 @@ function IconButton({
   );
 }
 
-export function TransportControls({ className, compact = false }: { className?: string; /** Mobile miniplayer mode: play/next only — prev, shuffle & repeat live in the fullscreen player. */ compact?: boolean }) {
+export function TransportControls({
+  className,
+  compact = false,
+}: {
+  className?: string;
+  /** Mobile miniplayer mode: play/next only — prev, shuffle & repeat live in the fullscreen player. */ compact?: boolean;
+}) {
   const current = usePlayerStore((s) => s.current);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const isBuffering = usePlayerStore((s) => s.isBuffering);
@@ -42,7 +60,8 @@ export function TransportControls({ className, compact = false }: { className?: 
   const togglePlay = usePlayerStore((s) => s.togglePlay);
   const next = usePlayerStore((s) => s.next);
   const prev = usePlayerStore((s) => s.prev);
-  const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
+  const toggleShuffle = usePlayerStore((s) => s.toggleShuffleSmart);
+  const smartShuffle = usePlayerStore((s) => s.smartShuffle);
   const cycleRepeat = usePlayerStore((s) => s.cycleRepeat);
 
   return (
@@ -57,8 +76,27 @@ export function TransportControls({ className, compact = false }: { className?: 
       )}
     >
       {!compact && (
-        <IconButton active={shuffle} onClick={toggleShuffle} label="Shuffle">
+        // Pressing shuffle engages smart shuffle with it, the way Spotify's
+        // shuffle button does, so repeats are avoided without a second trip to
+        // the queue panel. Pressing it again turns both back off.
+        <IconButton
+          active={shuffle}
+          onClick={() => {
+            toggleShuffle();
+            toast(shuffle ? "Shuffle off" : "Shuffle on — avoiding repeats");
+          }}
+          label={shuffle ? "Shuffle on" : "Shuffle off"}
+        >
           <Shuffle className="size-[18px] stroke-[1.9]" />
+          {/* Smart shuffle has no icon of its own, so the pressed state of the
+              button is the only place it can be seen. Without this marker the
+              behaviour was invisible: the mode was on and nothing showed it. */}
+          {shuffle && smartShuffle && (
+            <span className="absolute -top-0.5 -right-0.5 flex size-3 items-center justify-center rounded-full bg-[rgb(var(--tint))] text-black ring-2 ring-[rgb(var(--background))]">
+              <Sparkles className="size-2" strokeWidth={2.5} />
+              <span className="sr-only">Smart shuffle on</span>
+            </span>
+          )}
         </IconButton>
       )}
       {/* The miniplayer has no previous button: the compact row is play/next
@@ -93,7 +131,13 @@ export function TransportControls({ className, compact = false }: { className?: 
         <IconButton
           active={repeat !== "off"}
           onClick={cycleRepeat}
-          label={repeat === "one" ? "Repeat one" : repeat === "all" ? "Repeat all" : "Repeat off"}
+          label={
+            repeat === "one"
+              ? "Repeat one"
+              : repeat === "all"
+                ? "Repeat all"
+                : "Repeat off"
+          }
         >
           {repeat === "one" ? (
             <Repeat1 className="size-[18px] stroke-[1.9]" />
