@@ -29,9 +29,9 @@ function splitCsvLine(line: string): string[] {
   let inQuotes = false;
   for (let i = 0; i < line.length; i++) {
     const ch = line[i];
-    if (ch === "\"") {
-      if (inQuotes && line[i + 1] === "\"") {
-        cur += "\"";
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        cur += '"';
         i++;
       } else {
         inQuotes = !inQuotes;
@@ -71,10 +71,7 @@ const CLEAN_DURATION = /\s*[[(]\s*\d{1,2}:\d{2}(?::\d{2})?\s*[)\]]\s*/g;
 const CLEAN_PARENS = /\((?:feat|ft|with)\.?[^)]*\)/gi;
 
 function cleanTitle(raw: string): string {
-  return raw
-    .replace(CLEAN_DURATION, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  return raw.replace(CLEAN_DURATION, " ").replace(/\s+/g, " ").trim();
 }
 
 function cleanArtist(raw: string): string {
@@ -85,15 +82,24 @@ function cleanArtist(raw: string): string {
   return primary || stripped.trim();
 }
 
-const SKIP_RE = /^(track|title|song|video|no\.?|#|artist|duration|time|index|position)$/i;
+const SKIP_RE =
+  /^(track|title|song|video|no\.?|#|artist|duration|time|index|position)$/i;
 
 /** Guess the origin service from file content. */
 function guessOrigin(text: string): string {
   const head = text.slice(0, 2000).toLowerCase();
-  if (head.includes("video id") || head.includes("videotitle") || head.includes("channel")) {
+  if (
+    head.includes("video id") ||
+    head.includes("videotitle") ||
+    head.includes("channel")
+  ) {
     return "YouTube Music";
   }
-  if (head.includes("spotify") || head.includes("track name") || head.includes("artist name")) {
+  if (
+    head.includes("spotify") ||
+    head.includes("track name") ||
+    head.includes("artist name")
+  ) {
     return "Spotify";
   }
   return "Other";
@@ -103,7 +109,10 @@ function guessOrigin(text: string): string {
  * Parse exported playlist text (CSV or plain text list) into tracks.
  * Returns an empty list when nothing usable is found.
  */
-export function parsePlaylistImport(text: string, providedName?: string): ParsedPlaylist | null {
+export function parsePlaylistImport(
+  text: string,
+  providedName?: string,
+): ParsedPlaylist | null {
   const lines = text
     .split(/\r?\n/)
     .map((l) => l.trim())
@@ -113,21 +122,33 @@ export function parsePlaylistImport(text: string, providedName?: string): Parsed
 
   const origin = guessOrigin(text);
   const tracks: ParsedTrack[] = [];
-  let headerSkipped = false;
+  /**
+   * The header row's column NAMES, once one is found. Column roles are read
+   * from here — never from the data. The previous version tested each DATA
+   * value against /title|track|song|video/, so a Spotify row whose artist was
+   * called "Video Games" had that column promoted to the title, importing the
+   * wrong song under the wrong name.
+   */
+  let headerCols: string[] | null = null;
 
   for (const line of lines) {
     // Header detection: contains column-like keywords and no duration
     const lower = line.toLowerCase();
     const isHeader =
-      !headerSkipped &&
-      (lower.startsWith("\"track") ||
-        lower.startsWith("\"video") ||
+      headerCols === null &&
+      (lower.startsWith('"track') ||
+        lower.startsWith('"video') ||
+        lower.startsWith('"song') ||
         lower.startsWith("track,") ||
         lower.startsWith("video,") ||
+        lower.startsWith("song,") ||
+        lower.startsWith("name,") ||
         ((lower.includes("artist") || lower.includes("channel")) &&
-          (lower.includes("title") || lower.includes("track") || lower.includes("name"))));
+          (lower.includes("title") ||
+            lower.includes("track") ||
+            lower.includes("name"))));
     if (isHeader) {
-      headerSkipped = true;
+      headerCols = splitCsvLine(line).map((c) => c.toLowerCase());
       continue;
     }
 
@@ -137,29 +158,62 @@ export function parsePlaylistImport(text: string, providedName?: string): Parsed
     let duration: number | undefined;
 
     if (cols.length >= 2) {
-      // CSV-ish: find the best title/artist column pair. Heuristics:
-      // - "Video Title"/"Track Name"/"Title" column, or the first long column
-      // - "Artist"/"Artist Name(s)"/"Channel" column, or the next one after title
-      const titleIdx = cols.findIndex((c, i) =>
-        /title|track|song|video/i.test(headerSkipped || cols.length > 2 ? c : "") || (i === 0 && cols.length === 2),
-      );
-      // Fall back: first non-numeric, non-duration column as title
-      let tIdx = titleIdx >= 0 ? titleIdx : -1;
+      // CSV-ish: find the best title/artist column pair. When a header was
+      // read, the column NAMES decide the roles; otherwise fall back to shape
+      // heuristics on the data itself.
+      let tIdx = -1;
+      let aIdx = -1;
+      if (headerCols) {
+        tIdx = headerCols.findIndex((h) =>
+          /title|track name|song|video/i.test(h),
+        );
+        aIdx = headerCols.findIndex((h) =>
+          /artist|channel|album artist/i.test(h),
+        );
+        // A header that names no usable columns (or names more columns than
+        // the row has) tells us nothing, so fall through to the heuristics.
+        if (tIdx >= cols.length) tIdx = -1;
+        if (aIdx >= cols.length) aIdx = -1;
+      }
+      if (tIdx < 0 && !headerCols) {
+        tIdx = cols.findIndex((c, i) => i === 0 && cols.length === 2);
+      }
       if (tIdx < 0) {
+        // First non-numeric, non-duration column as title.
         tIdx = cols.findIndex((c) => c.length > 0 && !/^\d+[:\d.]*$/.test(c));
       }
       if (tIdx < 0) continue;
       title = cols[tIdx];
 
-      // artist: nearest following column that isn't a duration/url/id
-      for (let j = tIdx + 1; j < cols.length; j++) {
-        const c = cols[j];
-        if (!c || /^\d+[:\d.]*$/.test(c) || /^https?:/.test(c) || /^[A-Za-z0-9_-]{11}$/.test(c)) {
-          if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(c)) duration = parseDuration(c);
-          continue;
+      // Artist: the column the header named, else the nearest following column
+      // that isn't a duration/url/id.
+      if (aIdx > tIdx && cols[aIdx]) {
+        artist = cols[aIdx];
+      } else {
+        for (let j = tIdx + 1; j < cols.length; j++) {
+          const c = cols[j];
+          if (
+            !c ||
+            /^\d+[:\d.]*$/.test(c) ||
+            /^https?:/.test(c) ||
+            /^[A-Za-z0-9_-]{11}$/.test(c)
+          ) {
+            if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(c)) duration = parseDuration(c);
+            continue;
+          }
+          artist = c;
+          break;
         }
-        artist = c;
-        break;
+      }
+      // A duration is worth picking up wherever it sits when the header named
+      // the artist, since that loop above is skipped.
+      if (duration === undefined) {
+        for (const c of cols) {
+          if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(c)) {
+            duration = parseDuration(c);
+            break;
+          }
+        }
       }
     } else {
       // Plain text: "Artist - Title" / "Title - Artist" / "Title, Artist"
@@ -181,10 +235,16 @@ export function parsePlaylistImport(text: string, providedName?: string): Parsed
 
     title = cleanTitle(title);
     artist = cleanArtist(artist);
-    duration = duration ?? parseDuration(line.match(/(\d{1,2}:\d{2}(?::\d{2})?)/)?.[1]);
+    duration =
+      duration ?? parseDuration(line.match(/(\d{1,2}:\d{2}(?::\d{2})?)/)?.[1]);
 
     if (!title || title.length < 2) continue;
-    if (SKIP_RE.test(title) && !artist) continue;
+    // A header row that slipped past detection imports as a phantom track.
+    // It is only safe to drop a row when the WHOLE row reads like a header —
+    // a title of "Song" alongside an artist of "Artist" — because a song
+    // genuinely titled "Song" must survive. Detection above already catches
+    // the common shapes, so this is the backstop, not the main guard.
+    if (SKIP_RE.test(title) && SKIP_RE.test(artist)) continue;
     // Skip obvious non-track rows (urls, ids)
     if (/^https?:/i.test(title) || /^[A-Za-z0-9_-]{11}$/.test(title)) continue;
 

@@ -475,7 +475,14 @@ const initialVolume = Math.min(1, Math.max(0, readNum("ss.volume", 0.8)));
 const initialMuted = readBool("ss.muted", false);
 const initialShuffle = readBool("ss.shuffle", false);
 const initialSmartShuffle = readBool("ss.smartShuffle", false);
-const initialRepeat = (localStorage.getItem("ss.repeat") as RepeatMode | null) ?? "off";
+// Validated rather than cast: the repeat button shows itself as ACTIVE for
+// any value other than "off", while `handleEnded` only ever acts on the exact
+// strings "all" and "one". A stale or hand-edited value therefore lit the
+// button up and then behaved as if repeat was off — the one state where the
+// UI and the playback logic disagree.
+const storedRepeat = localStorage.getItem("ss.repeat");
+const initialRepeat: RepeatMode =
+  storedRepeat === "all" || storedRepeat === "one" ? storedRepeat : "off";
 const initialRate = Math.min(2, Math.max(0.5, readNum("ss.rate", 1)));
 const initialAutoplay = readBool("ss.autoplay", true);
 // Video presentation is temporarily disabled while the YouTube overlay is
