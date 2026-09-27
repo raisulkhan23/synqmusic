@@ -49,6 +49,10 @@ if (savedTheme === "light") {
 
 // Lazy load route components for better code splitting
 const Landing = lazy(() => import("./pages/Landing.tsx"));
+// A shared track link lands here and plays the song. Public, so the link works
+// for someone who has never signed in — RequireAuth redirects them to /auth
+// with this path preserved as `returnTo` and returns them afterwards.
+const TrackLink = lazy(() => import("./pages/TrackLink.tsx"));
 const AuthPage = lazy(() => import("./pages/Auth.tsx"));
 // AppShell (which owns PlayerBar / QueuePanel / FullscreenPlayer) is imported
 // eagerly so the player UI is NEVER unmounted during lazy page-chunk loads.
@@ -216,6 +220,7 @@ createRoot(document.getElementById("root")!).render(
                   path="/auth"
                   element={<AuthPage redirectAfterAuth="/home" />}
                 />
+                <Route path="/t/:trackId" element={<TrackLink />} />
                 <Route
                   path="/dashboard"
                   element={

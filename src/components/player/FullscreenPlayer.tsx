@@ -49,6 +49,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { copyText } from "@/lib/clipboard";
+import { buildTrackShareText, buildTrackShareUrl } from "@/lib/shareLink";
 import {
   IMAGE_WALLPAPER_MARKER,
   LIVE_WALLPAPER_MARKER,
@@ -868,16 +869,22 @@ export function FullscreenPlayer() {
                 aria-label="Share current song"
                 onClick={() => {
                   if (!current) return;
-                  const url = `${window.location.origin}/search?q=${encodeURIComponent(
-                    `${current.title} ${current.artistName.split(",")[0]?.trim() ?? ""}`.trim(),
-                  )}`;
-                  const data = {
-                    title: `${current.title} — ${current.artistName}`,
-                    text: `Listen to ${current.title} on SYNQ`,
-                    url,
-                  };
+                  // A link to a song should play that song. This used to build
+                  // a search link with the query pre-filled, which dropped the
+                  // recipient on a search box: they still had to run the
+                  // search and pick the right row, and a badly tagged track
+                  // came back as the wrong song entirely.
+                  const url = buildTrackShareUrl(
+                    window.location.origin,
+                    current,
+                  );
+                  const { title, text } = buildTrackShareText(current);
                   if (navigator.share) {
-                    void navigator.share(data).catch(() => undefined);
+                    void navigator
+                      .share({ title, text, url })
+                      // A cancelled share sheet rejects; that is not a failure
+                      // worth reporting to the user.
+                      .catch(() => undefined);
                   } else {
                     void copyText(url).then((ok) => {
                       if (ok) toast.success("Song link copied");
