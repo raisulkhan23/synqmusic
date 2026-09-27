@@ -2149,7 +2149,11 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       s.current?.youtubeId &&
       onStreamPath(s.current)
     ) {
-      const resumeAt = s.currentTime;
+      // The element is about to be stopped, so read its clock first. Handing
+      // the IFrame the polled `currentTime` instead rewound the track by up to
+      // a poll interval every time an effect was switched off.
+      const resumeAt =
+        livePlaybackPosition(s.current.youtubeId) ?? s.currentTime;
       getAudio().pause();
       void ytEngine
         .play(s.current.youtubeId, {
@@ -2242,6 +2246,27 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     effectRetryTimer = setTimeout(tryResolve, 12_000);
   };
 
+  /**
+   * The playhead of whichever source is ACTUALLY making sound right now.
+   *
+   * The store's `currentTime` is a polled snapshot — the IFrame reports it on
+   * `onTime` a few times a second — so a value captured before resolving a
+   * stream is already stale by the time it gets used. Re-seeking to such a
+   * snapshot is what made an effect-enabled track jump back to the moment the
+   * effect was switched on. Returns null when no source can be interrogated, so
+   * callers fall back to the position they were handed rather than invent one.
+   */
+  const livePlaybackPosition = (videoId?: string): number | null => {
+    const s = usePlayerStore.getState();
+    if (!videoId || s.current?.youtubeId !== videoId) return null;
+    if (audioElementIsSource(s.current)) {
+      const t = getAudio().currentTime;
+      return Number.isFinite(t) ? t : null;
+    }
+    const t = ytEngine.getEngineTime();
+    return Number.isFinite(t) && t > 0 ? t : null;
+  };
+
   /** Play a resolved stream through the <audio> element at `at` seconds. */
   const swapToFilteredStream = (track: Playable, at: number) => {
     const videoId = track.youtubeId;
@@ -2251,20 +2276,27 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     // Invalidate any other filtered-load in flight so we never end up with two
     // sources playing the same song at once (which sounds like the effect
     // "does nothing" because the dry IFrame audio is mixed on top).
-    ytEngine.pause();
-    getAudio().pause();
+    //
+    // The outgoing source is deliberately NOT paused here. Resolution is a
+    // network round-trip that regularly takes seconds, and pausing first left
+    // the listener in dead silence for the whole of it — the audible delay on
+    // every effect change. The old source keeps playing until the replacement
+    // stream is actually in hand.
     void ytResolve(videoId).then((url) => {
       if (!url || seq !== loadSeq || myFilterSeq !== filterLoadSeq) return;
       const audio = getAudio();
+      // Read the clock HERE, at the moment the new stream takes over, rather
+      // than reusing the position captured when the swap was requested.
+      const from = livePlaybackPosition(videoId) ?? at;
       ytEngine.pause();
       audio.pause();
       audio.src = url;
       audio.playbackRate = get().rate;
       audio.load();
-      if (at > 0) {
+      if (from > 0) {
         const applyResume = () => {
-          audio.currentTime = at;
-          usePlayerStore.setState({ currentTime: at });
+          audio.currentTime = from;
+          usePlayerStore.setState({ currentTime: from });
         };
         if (audio.readyState >= 1) applyResume();
         else
@@ -2273,7 +2305,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       void audio.play().catch(() => undefined);
       usePlayerStore.setState({
         current: { ...track, audioUrl: url },
-        currentTime: at,
+        currentTime: from,
       });
       syncVideoSlave();
     });
@@ -2306,17 +2338,23 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
         });
         return;
       }
+      // By now the <audio> element already owns the sound, so the graph is in
+      // the path by construction. The only fault left is a suspended
+      // AudioContext, and resuming it fixes that WITHOUT touching playback.
+      //
+      // This used to re-swap the stream instead — pause, re-resolve, reload,
+      // seek — every time the analyser dipped below the threshold above. An
+      // intro, a fade or any quiet passage dips below it routinely, so an
+      // effect-enabled track would stop and jump mid-song for no reason, and
+      // because the seek used a stale position it landed back at the point
+      // where the effect had been enabled. That was the random jump.
       void resumeGraph().then((ok) => {
         if (!ok) {
           toast("Tap play once to activate audio processing", {
             id: "fx-verify",
             description: "Your browser needs a click before the EQ can start",
           });
-          return;
         }
-        const t = usePlayerStore.getState().current;
-        if (t?.youtubeId)
-          swapToFilteredStream(t, usePlayerStore.getState().currentTime);
       });
       verifyTimer = setTimeout(() => check(attempt + 1), 2500);
     };
@@ -2334,37 +2372,58 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     // that started playback) — creating it later from a non-gesture context
     // leaves the AudioContext suspended and the effects silent.
     ensureGraph();
-    // Update UI immediately — resolution can take seconds (or fail), and the
-    // player must never show the previous song while the new one plays.
-    set({
-      current: track,
-      currentTime: resumeAt,
-      duration: track.duration,
-      bufferedEnd: 0,
-      isBuffering: true,
-      abA: null,
-      abB: null,
-    });
-    syncMediaSession(track, true);
     const seq = ++loadSeq;
     const myFilterSeq = ++filterLoadSeq;
-    // Only one source at a time: stop the IFrame engine before the filtered
-    // stream takes over, or both play and the effect is inaudible.
-    ytEngine.pause();
-    getAudio().pause();
+    // A "hot swap" is the same song already playing through the other source:
+    // the user just turned an effect on, or nudged an EQ slider. Nothing is
+    // wrong with the current playback, so it must not be interrupted — not
+    // paused, not flagged buffering, and not rewound to wherever the playhead
+    // happened to be when the effect was switched on. Freezing the position
+    // and tearing the source down up front is what produced the gap before an
+    // effect engaged.
+    const prev = usePlayerStore.getState();
+    const hotSwap =
+      !!prev.current?.youtubeId && prev.current?.youtubeId === videoId;
+    if (!hotSwap) {
+      // A genuine load. Update UI immediately — resolution can take seconds
+      // (or fail), and the player must never show the previous song while the
+      // new one plays.
+      set({
+        current: track,
+        currentTime: resumeAt,
+        duration: track.duration,
+        bufferedEnd: 0,
+        isBuffering: true,
+        abA: null,
+        abB: null,
+      });
+      syncMediaSession(track, true);
+      // Only one source at a time: stop the IFrame engine before the filtered
+      // stream takes over, or both play and the effect is inaudible.
+      ytEngine.pause();
+      getAudio().pause();
+    }
     ytResolve(videoId)
       .then((url) => {
         if (seq !== loadSeq || myFilterSeq !== filterLoadSeq) return; // superseded
         if (!url) throw new Error("no stream");
         const audio = getAudio();
+        // The clock is read HERE, where the new stream takes over. For a hot
+        // swap the old source has been playing throughout the resolve, so
+        // reusing the position captured up front rewound the track by however
+        // long resolution took.
+        const from = hotSwap
+          ? (livePlaybackPosition(videoId) ?? resumeAt)
+          : resumeAt;
         ytEngine.pause();
+        audio.pause();
         audio.src = url;
         audio.playbackRate = get().rate;
         audio.load();
-        if (resumeAt > 0) {
+        if (from > 0) {
           const applyResume = () => {
-            audio.currentTime = resumeAt;
-            usePlayerStore.setState({ currentTime: resumeAt });
+            audio.currentTime = from;
+            usePlayerStore.setState({ currentTime: from });
           };
           if (audio.readyState >= 1) applyResume();
           else
@@ -2373,7 +2432,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
             });
         }
         void audio.play().catch(() => undefined);
-        set({ current: { ...track, audioUrl: url }, currentTime: resumeAt });
+        set({ current: { ...track, audioUrl: url }, currentTime: from });
         // Sound now comes from the audio element — make sure the muted video
         // slave (fullscreen + video on) is playing the visuals for THIS track.
         // Without this, the engine stayed parked on the PREVIOUS video's
@@ -2398,12 +2457,21 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
           });
           scheduleEffectRetry(videoId);
         }
+        if (hotSwap) {
+          // The outgoing source was never stopped and is a real source, so
+          // starting the IFrame engine here would play the song twice at once.
+          // Leave it alone; the background retry moves it onto the filtered
+          // path as soon as any resolver succeeds.
+          set({ isBuffering: false });
+          return;
+        }
+        const from = livePlaybackPosition(videoId) ?? resumeAt;
         getAudio().pause();
         ytEngine
           .play(videoId, {
             volume: get().volume,
             muted: get().muted,
-            startSeconds: resumeAt || undefined,
+            startSeconds: from || undefined,
           })
           .catch(() => {
             set({
