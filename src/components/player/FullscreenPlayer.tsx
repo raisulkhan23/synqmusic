@@ -20,9 +20,18 @@ import {
   FULLSCREEN_TRAIL_TAUS,
   type CursorTrail,
 } from "@/lib/cursorTrail";
-import { dismissVideo, ensureVideoPlaying, getLoadedVideoId, presentOverlay, trackFrame } from "@/lib/youtubePlayer";
+import {
+  dismissVideo,
+  ensureVideoPlaying,
+  getLoadedVideoId,
+  presentOverlay,
+  trackFrame,
+} from "@/lib/youtubePlayer";
 import { hasAudioProcessing } from "@/lib/audio";
-import { AUDIO_EFFECT_DELAY_MESSAGE, AUDIO_FILTERS as FILTER_DEFS } from "@/lib/audio";
+import {
+  AUDIO_EFFECT_DELAY_MESSAGE,
+  AUDIO_FILTERS as FILTER_DEFS,
+} from "@/lib/audio";
 import { usePlayerStore } from "@/store/player";
 import { toast } from "sonner";
 import {
@@ -40,7 +49,10 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { copyText } from "@/lib/clipboard";
-import { IMAGE_WALLPAPER_MARKER, LIVE_WALLPAPER_MARKER } from "@/lib/wallpaperStorage";
+import {
+  IMAGE_WALLPAPER_MARKER,
+  LIVE_WALLPAPER_MARKER,
+} from "@/lib/wallpaperStorage";
 
 const SLEEP_OPTIONS: { label: string; value: number | "end" }[] = [
   { label: "5 minutes", value: 5 },
@@ -57,20 +69,20 @@ function formatRemaining(ms: number): string {
   const s = totalSec % 60;
   return m > 0 ? `${m}:${String(s).padStart(2, "0")}` : `${s}s`;
 }
-
 function useSleepCountdown(sleepEndsAt: number | null): number {
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     if (sleepEndsAt === null) return;
-    const tick = () => {
-      const remaining = sleepEndsAt - Date.now();
-      // Update only when the displayed second changes. This avoids a global
-      // fullscreen-player render every 250ms while the timer is idle.
-      if (remaining <= 0) setNow(Date.now());
-      else setNow((previous) => (Math.floor(previous / 1000) === Math.floor(Date.now() / 1000) ? previous : Date.now()));
-    };
-    const timer = window.setInterval(tick, 250);
+    // 250ms polling existed only to catch the second boundary. `remaining` is
+    // computed in state rather than from a `now` captured at mount, so the
+    // countdown cannot sit on a stale time: the previous version seeded
+    // `now` once and only ever re-rendered when the *second* changed, which
+    // meant the displayed remaining time drifted and, worse, kept ticking at
+    // 4 renders a second for the whole timer's life.
+    const tick = () => setNow(Date.now());
+    tick();
+    const timer = window.setInterval(tick, 1000);
     return () => window.clearInterval(timer);
   }, [sleepEndsAt]);
 
@@ -94,7 +106,9 @@ function SleepTimerButton() {
           title="Sleep timer"
           className={cn(
             "relative hidden rounded-full p-2 transition-colors hover:bg-white/[0.06] sm:block",
-            active ? "text-[rgb(var(--tint))]" : "text-muted-foreground hover:text-foreground",
+            active
+              ? "text-[rgb(var(--tint))]"
+              : "text-muted-foreground hover:text-foreground",
           )}
         >
           <Moon className="size-4" />
@@ -119,7 +133,9 @@ function SleepTimerButton() {
             onSelect={() => {
               setSleepTimer(value);
               toast.success(
-                value === "end" ? "Will stop after this song" : `Sleep timer: ${label}`,
+                value === "end"
+                  ? "Will stop after this song"
+                  : `Sleep timer: ${label}`,
               );
             }}
           >
@@ -147,9 +163,6 @@ function SleepTimerButton() {
 
 const RATES = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
-
-
-
 /**
  * YouTube titles/channel names don't match lyrics databases directly — strip
  * the noise ("(Official Video)", "- Topic", "VEVO", ...) before lookup.
@@ -157,8 +170,14 @@ const RATES = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 function cleanLyricsQuery(raw: string): string {
   return raw
     .replace(/\s*[-–]\s*(Topic|VEVO|Official)\s*$/i, "")
-    .replace(/\s*\([^)]*(official|video|audio|lyrics|hd|hq|mv|visualizer|remaster|lyric)[^)]*\)/gi, "")
-    .replace(/\s*\[[^\]]*(official|video|audio|lyrics|hd|hq|mv|visualizer|remaster|lyric)[^\]]*\]/gi, "")
+    .replace(
+      /\s*\([^)]*(official|video|audio|lyrics|hd|hq|mv|visualizer|remaster|lyric)[^)]*\)/gi,
+      "",
+    )
+    .replace(
+      /\s*\[[^\]]*(official|video|audio|lyrics|hd|hq|mv|visualizer|remaster|lyric)[^\]]*\]/gi,
+      "",
+    )
     .replace(/\s*【[^】]*】/g, "")
     .replace(/\s{2,}/g, " ")
     .trim();
@@ -172,7 +191,9 @@ function LyricsPanel({ onClose }: { onClose: () => void }) {
   const currentTime = usePlayerStore((s) => s.currentTime);
   const seek = usePlayerStore((s) => s.seek);
   const fetchLyrics = useAction(api.lyrics.fetchLyrics);
-  const [lines, setLines] = useState<{ t: number; text: string }[] | null>(null);
+  const [lines, setLines] = useState<{ t: number; text: string }[] | null>(
+    null,
+  );
   /** False when the lines are guesses spread over the track rather than real
    *  timings, so the panel can say so instead of pretending to follow along. */
   const [synced, setSynced] = useState(true);
@@ -204,7 +225,9 @@ function LyricsPanel({ onClose }: { onClose: () => void }) {
     fetchLyrics({
       title: cleanLyricsQuery(current.title),
       artist: cleanLyricsQuery(current.artistName),
-      album: current.albumName ? cleanLyricsQuery(current.albumName) : undefined,
+      album: current.albumName
+        ? cleanLyricsQuery(current.albumName)
+        : undefined,
       duration: current.duration,
     })
       .then((res) => {
@@ -246,7 +269,9 @@ function LyricsPanel({ onClose }: { onClose: () => void }) {
   // a line at a time through the song and read as broken.
   useEffect(() => {
     if (!synced) return;
-    const el = containerRef.current?.querySelector<HTMLElement>("[data-active='true']");
+    const el = containerRef.current?.querySelector<HTMLElement>(
+      "[data-active='true']",
+    );
     el?.scrollIntoView({ block: "center", behavior: "smooth" });
   }, [activeIndex, synced]);
 
@@ -278,7 +303,10 @@ function LyricsPanel({ onClose }: { onClose: () => void }) {
         </button>
       </div>
 
-      <div ref={containerRef} className="min-h-0 flex-1 overflow-y-auto px-6 py-8">
+      <div
+        ref={containerRef}
+        className="min-h-0 flex-1 overflow-y-auto px-6 py-8"
+      >
         {loading ? (
           <div className="flex h-full items-center justify-center">
             <Loader2 className="size-6 animate-spin text-muted-foreground" />
@@ -409,9 +437,12 @@ export function FullscreenPlayer() {
   // Tap-to-expand the clamped song title (touch devices have no hover). Storing
   // the track id instead of a boolean means a new track is collapsed for free —
   // no effect needed to reset it.
-  const [expandedMetaTrackId, setExpandedMetaTrackId] = useState<string | null>(null);
+  const [expandedMetaTrackId, setExpandedMetaTrackId] = useState<string | null>(
+    null,
+  );
   const [isMetaHovered, setIsMetaHovered] = useState(false);
-  const metaExpanded = expandedMetaTrackId !== null && expandedMetaTrackId === current?.id;
+  const metaExpanded =
+    expandedMetaTrackId !== null && expandedMetaTrackId === current?.id;
   const pointerEffects = usePlayerStore((s) => s.pointerEffects);
   const performanceMode = usePlayerStore((s) => s.performanceMode);
   // Performance mode removes the pointer layer entirely in fullscreen, where
@@ -438,10 +469,19 @@ export function FullscreenPlayer() {
       if (typeof enabled === "boolean") setWallpaperEnabled(enabled);
     };
     window.addEventListener("ss:wallpaper-blur-change", onWallpaperBlurChange);
-    window.addEventListener("ss:wallpaper-enabled-change", onWallpaperEnabledChange);
+    window.addEventListener(
+      "ss:wallpaper-enabled-change",
+      onWallpaperEnabledChange,
+    );
     return () => {
-      window.removeEventListener("ss:wallpaper-blur-change", onWallpaperBlurChange);
-      window.removeEventListener("ss:wallpaper-enabled-change", onWallpaperEnabledChange);
+      window.removeEventListener(
+        "ss:wallpaper-blur-change",
+        onWallpaperBlurChange,
+      );
+      window.removeEventListener(
+        "ss:wallpaper-enabled-change",
+        onWallpaperEnabledChange,
+      );
     };
   }, []);
 
@@ -579,7 +619,8 @@ export function FullscreenPlayer() {
         stopTracking = trackFrame(frame); // follow resizes every frame
         return;
       }
-      if (++tries < 40) timer = setTimeout(attempt, 100); // ~4s
+      if (++tries < 40)
+        timer = setTimeout(attempt, 100); // ~4s
       else setEmbedFallback(true); // overlaid live player failed — show an inline embed instead
     };
     // Longer warm-up when an effect is active: the muted video slave has to
@@ -611,7 +652,10 @@ export function FullscreenPlayer() {
     }
     const bounds = surfaceBoundsRef.current;
     pointerTargetRef.current = event.currentTarget;
-    cursorTrailRef.current?.push(event.clientX - bounds.left, event.clientY - bounds.top);
+    cursorTrailRef.current?.push(
+      event.clientX - bounds.left,
+      event.clientY - bounds.top,
+    );
   };
 
   const handlePointerEnter = (event: PointerEvent<HTMLDivElement>) => {
@@ -628,7 +672,8 @@ export function FullscreenPlayer() {
   };
 
   const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
-    if (!pointerFx || event.pointerType === "touch" || !rippleLayerRef.current) return;
+    if (!pointerFx || event.pointerType === "touch" || !rippleLayerRef.current)
+      return;
     const layer = rippleLayerRef.current;
     const rect = event.currentTarget.getBoundingClientRect();
     const ripple = document.createElement("span");
@@ -664,34 +709,52 @@ export function FullscreenPlayer() {
       >
         {/* User wallpaper stays behind the maximized player, with the same
             blur preference and glass treatment as the main app. */}
-        {wallpaperEnabled && wallpaper && wallpaper !== LIVE_WALLPAPER_MARKER && wallpaper !== IMAGE_WALLPAPER_MARKER && (
-          <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden bg-background/35" aria-hidden="true">
-            {wallpaperType === "video" ? (
-              <video
-                src={wallpaper}
-                autoPlay
-                muted
-                loop
-                playsInline
-                className={`perf-wallpaper-blur size-full scale-110 object-cover ${wallpaperBlur ? "blur-3xl" : ""}`}
-              />
-            ) : (
-              <img
-                src={wallpaper}
-                alt=""
-                className={`perf-wallpaper-blur size-full scale-110 object-cover ${wallpaperBlur ? "blur-3xl" : ""}`}
-              />
-            )}
-            <div className="absolute inset-0 bg-[#090a0f]/45" />
-            <div className="absolute inset-0 bg-gradient-to-b from-[#090a0f]/20 via-transparent to-[#090a0f]/70" />
-          </div>
-        )}
-        <div className="ambient-grid pointer-events-none absolute inset-0 z-[1] opacity-35" aria-hidden="true" />
-        <div className="pointer-events-none absolute inset-0 z-[1] bg-[#090a0f]/20" aria-hidden="true" />
+        {wallpaperEnabled &&
+          wallpaper &&
+          wallpaper !== LIVE_WALLPAPER_MARKER &&
+          wallpaper !== IMAGE_WALLPAPER_MARKER && (
+            <div
+              className="pointer-events-none absolute inset-0 z-0 overflow-hidden bg-background/35"
+              aria-hidden="true"
+            >
+              {wallpaperType === "video" ? (
+                <video
+                  src={wallpaper}
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  className={`perf-wallpaper-blur size-full scale-110 object-cover ${wallpaperBlur ? "blur-3xl" : ""}`}
+                />
+              ) : (
+                <img
+                  src={wallpaper}
+                  alt=""
+                  className={`perf-wallpaper-blur size-full scale-110 object-cover ${wallpaperBlur ? "blur-3xl" : ""}`}
+                />
+              )}
+              <div className="absolute inset-0 bg-[#090a0f]/45" />
+              <div className="absolute inset-0 bg-gradient-to-b from-[#090a0f]/20 via-transparent to-[#090a0f]/70" />
+            </div>
+          )}
+        <div
+          className="ambient-grid pointer-events-none absolute inset-0 z-[1] opacity-35"
+          aria-hidden="true"
+        />
+        <div
+          className="pointer-events-none absolute inset-0 z-[1] bg-[#090a0f]/20"
+          aria-hidden="true"
+        />
         {pointerFx && (
           <>
-            <div className="pointer-glow pointer-events-none absolute inset-0 z-[2]" aria-hidden="true" />
-            <div className="cursor-trail-layer pointer-events-none absolute inset-0 z-[2] overflow-hidden" aria-hidden="true">
+            <div
+              className="pointer-glow pointer-events-none absolute inset-0 z-[2]"
+              aria-hidden="true"
+            />
+            <div
+              className="cursor-trail-layer pointer-events-none absolute inset-0 z-[2] overflow-hidden"
+              aria-hidden="true"
+            >
               {Array.from({ length: 5 }, (_, index) => (
                 <span
                   key={index}
@@ -702,7 +765,11 @@ export function FullscreenPlayer() {
                 />
               ))}
             </div>
-            <div ref={rippleLayerRef} className="pointer-events-none absolute inset-0 z-[2] overflow-hidden" aria-hidden="true" />
+            <div
+              ref={rippleLayerRef}
+              className="pointer-events-none absolute inset-0 z-[2] overflow-hidden"
+              aria-hidden="true"
+            />
           </>
         )}
 
@@ -749,15 +816,31 @@ export function FullscreenPlayer() {
               <SleepTimerButton />
               <button
                 type="button"
-                aria-label={liked[current.id] ? "Remove from liked songs" : "Add to liked songs"}
+                aria-label={
+                  liked[current.id]
+                    ? "Remove from liked songs"
+                    : "Add to liked songs"
+                }
                 onClick={() => toggleLike(current.id)}
                 className="rounded-full p-2 transition-all hover:scale-110 sm:hidden"
               >
-                <Heart className={cn("size-5", liked[current.id] && "fill-current", liked[current.id] ? "text-[rgb(var(--tint))]" : "text-muted-foreground")} />
+                <Heart
+                  className={cn(
+                    "size-5",
+                    liked[current.id] && "fill-current",
+                    liked[current.id]
+                      ? "text-[rgb(var(--tint))]"
+                      : "text-muted-foreground",
+                  )}
+                />
               </button>
               <button
                 type="button"
-                aria-label={liked[current.id] ? "Remove from liked songs" : "Add to liked songs"}
+                aria-label={
+                  liked[current.id]
+                    ? "Remove from liked songs"
+                    : "Add to liked songs"
+                }
                 onClick={() => toggleLike(current.id)}
                 className={cn(
                   "hidden rounded-full p-2.5 transition-all hover:scale-110 sm:block",
@@ -766,7 +849,9 @@ export function FullscreenPlayer() {
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >
-                <Heart className={cn("size-5", liked[current.id] && "fill-current")} />
+                <Heart
+                  className={cn("size-5", liked[current.id] && "fill-current")}
+                />
               </button>
               <button
                 type="button"
@@ -836,7 +921,10 @@ export function FullscreenPlayer() {
                 <img
                   src={current.coverUrl}
                   alt=""
-                  className={cn("absolute inset-0 size-full object-cover", embedFallback && "opacity-0")}
+                  className={cn(
+                    "absolute inset-0 size-full object-cover",
+                    embedFallback && "opacity-0",
+                  )}
                 />
                 {embedFallback && current.youtubeId && (
                   <iframe
@@ -878,7 +966,11 @@ export function FullscreenPlayer() {
                 alt={`${current.title} cover art`}
                 className="size-[min(38vh,340px)] rounded-2xl object-cover shadow-[0_30px_80px_rgba(0,0,0,0.6)] ring-1 ring-white/10"
                 animate={{ y: [0, -12, 0] }}
-                transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
+                transition={{
+                  duration: 7,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                }}
               />
             )}
           </div>
@@ -907,14 +999,16 @@ export function FullscreenPlayer() {
               onPointerEnter={() => setIsMetaHovered(true)}
               onPointerLeave={() => setIsMetaHovered(false)}
               onClick={() =>
-                setExpandedMetaTrackId((id) => (id === current?.id ? null : (current?.id ?? null)))
+                setExpandedMetaTrackId((id) =>
+                  id === current?.id ? null : (current?.id ?? null),
+                )
               }
             >
               <h2
                 title={current.title}
                 className={cn(
                   "font-display text-lg font-bold tracking-tight transition-colors duration-200 sm:text-2xl lg:text-3xl",
-                  (metaExpanded || isMetaHovered)
+                  metaExpanded || isMetaHovered
                     ? "line-clamp-3"
                     : "line-clamp-1 group-hover/meta:line-clamp-3",
                 )}
@@ -924,12 +1018,14 @@ export function FullscreenPlayer() {
               <p
                 className={cn(
                   "mt-0.5 text-xs text-muted-foreground transition-colors duration-200 sm:mt-1 sm:text-sm",
-                  (metaExpanded || isMetaHovered)
+                  metaExpanded || isMetaHovered
                     ? "line-clamp-2"
                     : "line-clamp-1 group-hover/meta:line-clamp-2",
                 )}
               >
-                {current.albumName ? `${current.artistName} · ${current.albumName}` : current.artistName}
+                {current.albumName
+                  ? `${current.artistName} · ${current.albumName}`
+                  : current.artistName}
               </p>
             </div>
 
@@ -951,7 +1047,11 @@ export function FullscreenPlayer() {
               {/* like + queue, right beside the transport controls */}
               <button
                 type="button"
-                aria-label={liked[current.id] ? "Remove from liked songs" : "Add to liked songs"}
+                aria-label={
+                  liked[current.id]
+                    ? "Remove from liked songs"
+                    : "Add to liked songs"
+                }
                 title={liked[current.id] ? "Unlike" : "Like"}
                 onClick={() => toggleLike(current.id)}
                 className={cn(
@@ -961,7 +1061,9 @@ export function FullscreenPlayer() {
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >
-                <Heart className={cn("size-5", liked[current.id] && "fill-current")} />
+                <Heart
+                  className={cn("size-5", liked[current.id] && "fill-current")}
+                />
               </button>
               <button
                 type="button"
@@ -985,7 +1087,9 @@ export function FullscreenPlayer() {
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    title={rate !== 1 ? `Playback speed ${rate}×` : "Playback speed"}
+                    title={
+                      rate !== 1 ? `Playback speed ${rate}×` : "Playback speed"
+                    }
                     className={cn(
                       "flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[11px] font-semibold tabular-nums transition-colors hover:bg-white/[0.08]",
                       rate !== 1
@@ -1004,7 +1108,10 @@ export function FullscreenPlayer() {
                   {RATES.map((r) => (
                     <DropdownMenuItem
                       key={r}
-                      className={cn("gap-2", r === rate && "text-[rgb(var(--tint))]")}
+                      className={cn(
+                        "gap-2",
+                        r === rate && "text-[rgb(var(--tint))]",
+                      )}
                       onSelect={() => setRate(r)}
                     >
                       {r === 1 ? "Normal (1×)" : `${r}×`}
@@ -1019,7 +1126,11 @@ export function FullscreenPlayer() {
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    title={audioFilter !== "off" ? `Effect: ${FILTER_DEFS.find((f) => f.id === audioFilter)?.label}` : "Audio effects"}
+                    title={
+                      audioFilter !== "off"
+                        ? `Effect: ${FILTER_DEFS.find((f) => f.id === audioFilter)?.label}`
+                        : "Audio effects"
+                    }
                     className={cn(
                       "flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[11px] font-semibold transition-colors hover:bg-white/[0.08]",
                       audioFilter !== "off"
@@ -1028,7 +1139,8 @@ export function FullscreenPlayer() {
                     )}
                   >
                     <Waves className="size-4" />
-                    {audioFilter !== "off" && FILTER_DEFS.find((f) => f.id === audioFilter)?.label}
+                    {audioFilter !== "off" &&
+                      FILTER_DEFS.find((f) => f.id === audioFilter)?.label}
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="center" className="z-[80]">
@@ -1038,7 +1150,10 @@ export function FullscreenPlayer() {
                   {FILTER_DEFS.map((f) => (
                     <DropdownMenuItem
                       key={f.id}
-                      className={cn("gap-2", f.id === audioFilter && "text-[rgb(var(--tint))]")}
+                      className={cn(
+                        "gap-2",
+                        f.id === audioFilter && "text-[rgb(var(--tint))]",
+                      )}
                       onSelect={() => {
                         // Guarded: an exception thrown here aborts Radix's
                         // close sequence, leaving the menu's full-screen click
@@ -1053,7 +1168,9 @@ export function FullscreenPlayer() {
                     >
                       <span aria-hidden>{f.icon}</span>
                       {f.label}
-                      {f.id === audioFilter && <span className="ml-auto">●</span>}
+                      {f.id === audioFilter && (
+                        <span className="ml-auto">●</span>
+                      )}
                     </DropdownMenuItem>
                   ))}
                 </DropdownMenuContent>

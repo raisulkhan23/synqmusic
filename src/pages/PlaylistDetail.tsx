@@ -1,7 +1,14 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useAction, useMutation, useQuery } from "convex/react";
-import { ListMusic, Play, Search as SearchIcon, Shuffle, Trash2, X } from "lucide-react";
+import {
+  ListMusic,
+  Play,
+  Search as SearchIcon,
+  Shuffle,
+  Trash2,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
@@ -56,7 +63,9 @@ export default function PlaylistDetail() {
       <div className="flex flex-col items-center gap-4 py-20 text-center">
         <ListMusic className="size-10 text-muted-foreground/40" />
         <div>
-          <p className="font-display text-lg font-semibold">Playlist not found</p>
+          <p className="font-display text-lg font-semibold">
+            Playlist not found
+          </p>
           <p className="mt-1 text-sm text-muted-foreground">
             It may have been deleted, or it belongs to another account.
           </p>
@@ -86,13 +95,18 @@ export default function PlaylistDetail() {
       hasSnapshot: snapshot !== undefined,
     };
   });
-  const total = rows.reduce((sum, row) => sum + (Number.isFinite(row.duration) ? row.duration : 0), 0);
+  const total = rows.reduce(
+    (sum, row) => sum + (Number.isFinite(row.duration) ? row.duration : 0),
+    0,
+  );
   const query = filter.trim().toLocaleLowerCase();
   const visibleRows = rows
     .map((track, index) => ({ track, index }))
     .filter(({ track }) => {
       if (!query) return true;
-      return `${track.title} ${track.artist}`.toLocaleLowerCase().includes(query);
+      return `${track.title} ${track.artist}`
+        .toLocaleLowerCase()
+        .includes(query);
     });
 
   const directPlayable = (row: PlaylistRow): Playable | null => {
@@ -112,7 +126,9 @@ export default function PlaylistDetail() {
     return playable ? [playable] : [];
   });
 
-  const resolveLegacyRow = async (row: PlaylistRow): Promise<Playable | null> => {
+  const resolveLegacyRow = async (
+    row: PlaylistRow,
+  ): Promise<Playable | null> => {
     const direct = directPlayable(row);
     if (direct) return direct;
     const searchQuery = row.hasSnapshot
@@ -121,10 +137,17 @@ export default function PlaylistDetail() {
     const { items } = await searchYt({ query: searchQuery });
     const best =
       items.find((item) => item.id === row.youtubeId || item.id === row.id) ??
-      items.find((item) => item.title.toLocaleLowerCase() === row.title.toLocaleLowerCase()) ??
+      items.find(
+        (item) =>
+          item.title.toLocaleLowerCase() === row.title.toLocaleLowerCase(),
+      ) ??
       items[0];
     return best
-      ? toPlayableYoutube(best, `https://youtu.be/${best.id}`, items.filter((item) => item.id !== best.id))
+      ? toPlayableYoutube(
+          best,
+          `https://youtu.be/${best.id}`,
+          items.filter((item) => item.id !== best.id),
+        )
       : null;
   };
 
@@ -163,7 +186,9 @@ export default function PlaylistDetail() {
       }
       playTrack(resolved[0], resolved);
       if (resolved.length < rows.length) {
-        toast.warning(`Playing ${resolved.length} of ${rows.length} available tracks`);
+        toast.warning(
+          `Playing ${resolved.length} of ${rows.length} available tracks`,
+        );
       }
     } catch {
       toast.error("Couldn't start this playlist — try again");
@@ -173,18 +198,25 @@ export default function PlaylistDetail() {
   };
 
   const shuffleAll = () => {
+    // Both branches have to be guarded: reading past the end of an empty array
+    // throws inside the click handler, which the user sees as a dead button.
     if (directQueue.length > 0) {
       // eslint-disable-next-line react-hooks/purity -- user-triggered shuffle
-      const candidate = directQueue[Math.floor(Math.random() * directQueue.length)];
+      const i = Math.floor(Math.random() * directQueue.length);
+      const candidate = directQueue[i];
       if (!candidate) return;
       playTrack(candidate, directQueue);
     } else {
+      if (rows.length === 0) return;
       // eslint-disable-next-line react-hooks/purity -- user-triggered shuffle
-      const candidate = rows[Math.floor(Math.random() * rows.length)];
+      const i = Math.floor(Math.random() * rows.length);
+      const candidate = rows[i];
       if (!candidate) return;
       void playRow(candidate);
     }
-    if (!usePlayerStore.getState().shuffle) usePlayerStore.getState().toggleShuffle();
+    // One action, so the button can't leave the queue in a different mode than
+    // the transport control is showing.
+    usePlayerStore.getState().toggleShuffleSmart();
     toast.success("Shuffling the playlist");
   };
 
@@ -199,7 +231,10 @@ export default function PlaylistDetail() {
       toast.success(`Deleted "${playlist.name}"`);
       navigate("/playlists");
     } catch (error) {
-      const message = error instanceof Error && error.message ? error.message : "Unknown error";
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : "Unknown error";
       toast.error("Could not delete the playlist", { description: message });
       setConfirmDelete(false);
     } finally {
@@ -209,7 +244,11 @@ export default function PlaylistDetail() {
 
   const handleRemove = async (row: PlaylistRow) => {
     try {
-      await removeTrack({ playlistId: playlist._id, trackId: row.id, detail: row.title });
+      await removeTrack({
+        playlistId: playlist._id,
+        trackId: row.id,
+        detail: row.title,
+      });
       toast("Removed from playlist", {
         action: {
           label: "Undo",
@@ -251,7 +290,9 @@ export default function PlaylistDetail() {
             {playlist.name}
           </h1>
           {playlist.description && (
-            <p className="mt-2 max-w-xl text-sm text-muted-foreground">{playlist.description}</p>
+            <p className="mt-2 max-w-xl text-sm text-muted-foreground">
+              {playlist.description}
+            </p>
           )}
           <p className="mt-2 text-sm text-muted-foreground">
             {rows.length} {rows.length === 1 ? "song" : "songs"}
@@ -387,7 +428,9 @@ function ChangeHistory({ playlistId }: { playlistId: Id<"playlists"> }) {
   return (
     <section className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-4">
       <div className="flex items-center justify-between">
-        <h2 className="font-display text-sm font-bold tracking-tight">Recent activity</h2>
+        <h2 className="font-display text-sm font-bold tracking-tight">
+          Recent activity
+        </h2>
         {events.length > 3 && (
           <button
             type="button"
@@ -400,12 +443,21 @@ function ChangeHistory({ playlistId }: { playlistId: Id<"playlists"> }) {
       </div>
       <ul className="mt-2 space-y-1.5">
         {shown.map((event) => {
-          const kind = KIND_LABELS[event.kind] ?? { text: event.kind, className: "text-muted-foreground" };
+          const kind = KIND_LABELS[event.kind] ?? {
+            text: event.kind,
+            className: "text-muted-foreground",
+          };
           return (
             <li key={event._id} className="text-xs text-muted-foreground">
-              <span className={cn("font-semibold", kind.className)}>{kind.text}</span>{" "}
-              {event.detail ? <span className="text-foreground">{event.detail}</span> : null}
-              {event.kind === "renamed" && event.detail ? ` (was "${event.detail}")` : null}
+              <span className={cn("font-semibold", kind.className)}>
+                {kind.text}
+              </span>{" "}
+              {event.detail ? (
+                <span className="text-foreground">{event.detail}</span>
+              ) : null}
+              {event.kind === "renamed" && event.detail
+                ? ` (was "${event.detail}")`
+                : null}
               <span className="ml-2 opacity-60">
                 {new Date(event.at).toLocaleString(undefined, {
                   month: "short",

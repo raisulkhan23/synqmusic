@@ -160,8 +160,9 @@ describe("performance mode stops the frame loops CSS cannot reach", () => {
     expect(fullscreenSource).toMatch(
       /const pointerFx = pointerEffects && !performanceMode;/,
     );
+    // Whitespace-tolerant: the guard wraps across lines, which is formatting.
     expect(fullscreenSource).toMatch(
-      /if \(!pointerFx \|\| event\.pointerType === "touch" \|\| !rippleLayerRef\.current\) return;/,
+      /if \(\s*!pointerFx \|\| event\.pointerType === "touch" \|\| !rippleLayerRef\.current\s*\)\s*return;/,
     );
   });
 
@@ -183,14 +184,20 @@ describe("performance mode stops the frame loops CSS cannot reach", () => {
   test("a video wallpaper stops decoding", () => {
     // A full-screen looping video is a per-frame decode; pausing keeps the
     // first frame on screen and gives the decoder back to the music.
-    expect(shellSource).toMatch(/if \(fullscreen \|\| isBuffering \|\| performanceMode\) \{/);
-    expect(shellSource).toMatch(/\[fullscreen, isBuffering, performanceMode, wallpaper, wallpaperType\]/);
+    expect(shellSource).toMatch(
+      /if \(fullscreen \|\| isBuffering \|\| performanceMode\) \{/,
+    );
+    expect(shellSource).toMatch(
+      /\[fullscreen, isBuffering, performanceMode, wallpaper, wallpaperType\]/,
+    );
   });
 
   test("framer-motion animations are switched off at the root", () => {
     // framer-motion animates from JavaScript, so the `animation: none` blanket
     // rule never reached the hero, the queue panel or the sidebar.
-    expect(mainSource).toMatch(/import \{ MotionConfig \} from "framer-motion"/);
+    expect(mainSource).toMatch(
+      /import \{ MotionConfig \} from "framer-motion"/,
+    );
     expect(mainSource).toMatch(
       /<MotionConfig reducedMotion=\{performanceMode \? "always" : "never"\}>/,
     );

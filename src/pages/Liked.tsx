@@ -17,7 +17,9 @@ export default function Liked() {
   const playTrack = usePlayerStore((s) => s.playTrack);
   const searchYt = useAction(api.youtube.searchYoutube);
 
-  const [resolvingRemoteId, setResolvingRemoteId] = useState<string | null>(null);
+  const [resolvingRemoteId, setResolvingRemoteId] = useState<string | null>(
+    null,
+  );
   const remoteQuery = useQuery(api.likes.myLikedRemote);
   const remoteLikes = remoteQuery ?? [];
 
@@ -29,7 +31,8 @@ export default function Liked() {
 
     // Liked remote rows already carry the resolved YouTube id. Use it
     // directly instead of making the user wait for a second search request.
-    const knownYoutubeId = row.youtubeId ?? (row.source === "youtube" ? row.trackId : undefined);
+    const knownYoutubeId =
+      row.youtubeId ?? (row.source === "youtube" ? row.trackId : undefined);
     if (knownYoutubeId) {
       const item: YtItem = {
         id: row.trackId,
@@ -47,7 +50,9 @@ export default function Liked() {
     }
 
     setResolvingRemoteId(row.trackId);
-    searchYt({ query: `${row.title} ${cleanArtistName(row.artistName, row.title)}` })
+    searchYt({
+      query: `${row.title} ${cleanArtistName(row.artistName, row.title)}`,
+    })
       .then(({ items }) => {
         const best = items[0];
         if (!best) {
@@ -62,7 +67,11 @@ export default function Liked() {
           duration: row.duration,
         };
         const playable = {
-          ...toPlayableYoutube(item, `https://youtu.be/${best.id}`, items.slice(1)),
+          ...toPlayableYoutube(
+            item,
+            `https://youtu.be/${best.id}`,
+            items.slice(1),
+          ),
           youtubeId: best.id,
         };
         playTrack(playable, buildLikedQueue(playable));
@@ -76,7 +85,10 @@ export default function Liked() {
    * resolve through live search; placeholder stream entries are auto-rescued
    * by the player when they come up in the queue.
    */
-  const buildLikedQueue = (firstPlayable: Playable, firstIsRemote?: string): Playable[] => {
+  const buildLikedQueue = (
+    firstPlayable: Playable,
+    firstIsRemote?: string,
+  ): Playable[] => {
     const out: Playable[] = [];
     let firstInserted = false;
     for (const row of remoteLikes) {
@@ -110,8 +122,15 @@ export default function Liked() {
   const shuffleAll = () => {
     if (totalCount === 0) return;
     const row = remoteLikes[Math.floor(Math.random() * remoteLikes.length)];
+    // `totalCount` IS `remoteLikes.length`, but the guard has to be on the
+    // array actually being indexed: picking from an empty list yields
+    // `undefined`, and every field read off it below throws inside the click
+    // handler, which reads to the user as the button doing nothing at all.
+    if (!row) return;
     playRemoteLike(row);
-    if (!usePlayerStore.getState().shuffle) usePlayerStore.getState().toggleShuffle();
+    // One action, so the button can't leave the queue in a different mode than
+    // the transport control is showing.
+    usePlayerStore.getState().toggleShuffleSmart();
     toast.success("Shuffling your liked songs");
   };
 
@@ -138,8 +157,8 @@ export default function Liked() {
             </h1>
             <p className="mt-1.5 text-sm text-muted-foreground">
               {likedLoaded
-              ? totalCount > 0
-                ? `${totalCount} ${totalCount === 1 ? "song" : "songs"} · ${formatTime(total)}`
+                ? totalCount > 0
+                  ? `${totalCount} ${totalCount === 1 ? "song" : "songs"} · ${formatTime(total)}`
                   : "Nothing here yet"
                 : "Loading…"}
             </p>
@@ -165,7 +184,11 @@ export default function Liked() {
               disabled={resolvingRemoteId !== null}
               className="flex shrink-0 items-center gap-2 rounded-full border border-white/15 bg-white/[0.05] px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-white/[0.1] disabled:opacity-60"
             >
-              {resolvingRemoteId !== null ? <Loader2 className="size-4 animate-spin" /> : <Shuffle className="size-4" />}
+              {resolvingRemoteId !== null ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Shuffle className="size-4" />
+              )}
               Shuffle
             </button>
           </div>
@@ -192,7 +215,9 @@ export default function Liked() {
         <div className="flex flex-col items-center gap-4 py-16 text-center">
           <Heart className="size-10 text-muted-foreground/30" />
           <div>
-            <p className="font-display text-lg font-semibold">No liked songs yet</p>
+            <p className="font-display text-lg font-semibold">
+              No liked songs yet
+            </p>
             <p className="mt-1 max-w-sm text-sm text-muted-foreground">
               Tap the heart on any track to save it here for quick playback.
             </p>

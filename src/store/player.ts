@@ -2458,6 +2458,10 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
         const i = Math.min(index, state.queue.length);
         const queue = [...state.queue.slice(0, i), item, ...state.queue.slice(i)];
         const queueIndex = i <= state.queueIndex ? state.queueIndex + 1 : state.queueIndex;
+        // The remove path persists, so the undo has to as well. Without this
+        // the queue looked restored in the UI, but a reload (or a crash) brought
+        // the track straight back off the queue.
+        saveQueue(queue, queueIndex, state.current?.id ?? null);
         return { queue, queueIndex };
       });
     },
