@@ -1,4 +1,9 @@
 import { cn } from "@/lib/utils";
+import {
+  shuffleLabelFor,
+  shuffleStateOf,
+  shuffleToastFor,
+} from "@/lib/shuffleState";
 import { usePlayerStore } from "@/store/player";
 import { toast } from "sonner";
 import {
@@ -64,6 +69,10 @@ export function TransportControls({
   const smartShuffle = usePlayerStore((s) => s.smartShuffle);
   const cycleRepeat = usePlayerStore((s) => s.cycleRepeat);
 
+  // The button's whole presentation comes from one place, so the toast, the
+  // label and the badge can never describe different states.
+  const shuffleState = shuffleStateOf(shuffle, smartShuffle);
+
   return (
     <div
       className={cn(
@@ -81,30 +90,18 @@ export function TransportControls({
         // label and the toast describe, so the button always says what the
         // press will do rather than only what the current mode is.
         <IconButton
-          active={shuffle}
+          active={shuffleState !== "off"}
           onClick={() => {
             cycleShuffle();
-            toast(
-              shuffle
-                ? "Shuffle off"
-                : smartShuffle
-                  ? "Shuffle on"
-                  : "Smart shuffle on — avoiding repeats",
-            );
+            toast(shuffleToastFor(shuffleState));
           }}
-          label={
-            shuffle
-              ? smartShuffle
-                ? "Smart shuffle on — turn shuffle off"
-                : "Shuffle on — turn on smart shuffle"
-              : "Shuffle off — turn on shuffle"
-          }
+          label={shuffleLabelFor(shuffleState)}
         >
           <Shuffle className="size-[18px] stroke-[1.9]" />
           {/* Smart shuffle has no icon of its own, so the badge is the only way
               to tell the second state from the third. Without it both looked
               identical and there was no way to know which mode was running. */}
-          {shuffle && smartShuffle && (
+          {shuffleState === "smart" && (
             <span className="absolute -top-0.5 -right-0.5 flex size-3 items-center justify-center rounded-full bg-[rgb(var(--tint))] text-black ring-2 ring-[rgb(var(--background))]">
               <Sparkles className="size-2" strokeWidth={2.5} />
               <span className="sr-only">Smart shuffle on</span>

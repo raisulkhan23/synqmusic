@@ -36,6 +36,7 @@ import {
   WifiOff,
 } from "lucide-react";
 import { usePlayerStore, type RemoteLikeSnapshot } from "@/store/player";
+import { shuffleStateOf, shuffleToastFor } from "@/lib/shuffleState";
 import { track } from "@/lib/analytics";
 import {
   getWallpaperKey,
@@ -528,16 +529,11 @@ export function AppShell() {
       } else if (e.key.toLowerCase() === "p") {
         s.prev();
       } else if (e.key.toLowerCase() === "s") {
-        // Same action as the transport button, so the shortcut can never leave
-        // the button showing a mode the queue is not actually in.
+        // Same action, and the same derived message, as the transport button —
+        // a second copy of this table is how the toast ended up describing the
+        // previous state instead of the one you landed in.
         s.cycleShuffle();
-        toast(
-          s.shuffle
-            ? "Shuffle off"
-            : s.smartShuffle
-              ? "Shuffle on"
-              : "Smart shuffle on — avoiding repeats",
-        );
+        toast(shuffleToastFor(shuffleStateOf(s.shuffle, s.smartShuffle)));
       } else if (e.key.toLowerCase() === "r") {
         s.cycleRepeat();
         toast(`Repeat: ${s.repeat}`);

@@ -64,20 +64,12 @@ describe("the shuffle button is a three-state cycle, like Spotify's", () => {
     expect(fullscreenSource).toMatch(/<TransportControls \/>/);
   });
 
-  test("the second and third states are told apart, and both are announced", () => {
-    // Smart shuffle has no icon of its own, so the badge is the only way to
-    // see it. A mode that runs but cannot be seen is not a feature.
-    expect(transportSource).toMatch(/shuffle && smartShuffle &&/);
+  test("the second and third states are told apart", () => {
+    // The toast and label wording itself is covered behaviourally in
+    // tests/shuffle-state.test.js, against the one table both call sites
+    // share. What matters here is that neither component hardcodes it again.
+    expect(transportSource).toMatch(/shuffleState === "smart" &&/);
     expect(transportSource).toMatch(/sr-only">Smart shuffle on/);
-    // The label names the state AND what the next press will do.
-    expect(transportSource).toMatch(
-      /label=\{\s*shuffle\s*\?\s*smartShuffle\s*\?\s*"Smart shuffle on — turn shuffle off"\s*:\s*"Shuffle on — turn on smart shuffle"\s*:\s*"Shuffle off — turn on shuffle"\s*\}/,
-    );
-    // The toast describes the state just entered, which is the opposite of
-    // what a two-mode toggle did.
-    expect(transportSource).toMatch(
-      /shuffle\s*\?\s*"Shuffle off"\s*:\s*smartShuffle\s*\?\s*"Shuffle on"\s*:\s*"Smart shuffle on — avoiding repeats"/,
-    );
   });
 
   test("the S shortcut runs the same cycle as the button", () => {
