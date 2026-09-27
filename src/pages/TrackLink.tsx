@@ -1,54 +1,87 @@
-import { useEffect, useRef } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router";
+import { useEffect, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router";
+import { useAction } from "convex/react";
 import { Loader2, Music4, Play } from "lucide-react";
+import { api } from "@/convex/_generated/api";
 import { copyText } from "@/lib/clipboard";
-import { parseTrackLink, trackLinkToPlayable } from "@/lib/shareLink";
+import {
+  isTrackId,
+  trackMetaToPlayable,
+  type TrackMeta,
+} from "@/lib/shareLink";
 import { usePlayerStore } from "@/store/player";
 import { toast } from "sonner";
 
 /**
- * Landing page for a shared track link (`/t/:id?…`).
+ * Landing page for a shared track link (`/t/:id`).
  *
- * Opening the link plays that song. It is deliberately a separate route rather
- * than a query string on the home page, so a link is a stable, shareable
- * address for one track, and so the player can take over from here without the
- * home page's discovery fetches running underneath it.
+ * The URL carries nothing but the video id — that is all it takes to identify
+ * the song — so the title, artist and artwork are resolved from the id on
+ * open. Opening the link plays that song. It is deliberately a separate route
+ * rather than a query string on the home page, so a link is a stable,
+ * shareable address for one track, and so the player can take over from here
+ * without the home page's discovery fetches running underneath it.
  */
 export default function TrackLink() {
   const { trackId } = useParams();
-  const [params] = useSearchParams();
   const navigate = useNavigate();
+  const fetchMeta = useAction(api.youtube.trackMeta);
   const playTrack = usePlayerStore((s) => s.playTrack);
   const current = usePlayerStore((s) => s.current);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const togglePlay = usePlayerStore((s) => s.togglePlay);
-  // A link can be opened twice in the same session (React re-runs the effect on
-  // a param change), and re-playing the same track would restart it.
-  const startedFor = useRef<string | null>(null);
 
-  // Whether the link is usable is derived, not stored: an unparseable link
-  // simply has no parsed value, so there is nothing for a state flag to add —
-  // and mirroring it in state meant a setState on the first render.
-  const link = parseTrackLink(trackId, params);
+  const valid = isTrackId(trackId);
+
+  // The lookup result is tagged with the id it belongs to, so a stale answer
+  // can never be rendered against a different link. Deriving every branch from
+  // that (rather than storing a "not found" flag) means a bad id never needs a
+  // state write to render — it just never looks anything up.
+  const [resolved, setResolved] = useState<{
+    id: string;
+    meta: TrackMeta | null;
+  } | null>(null);
 
   useEffect(() => {
-    if (!link) return;
-    const key = `${link.id}|${link.title}`;
-    if (startedFor.current === key) return;
-    startedFor.current = key;
-    playTrack(trackLinkToPlayable(link));
-  }, [link, playTrack]);
+    if (!valid || !trackId) return;
+    let cancelled = false;
+    void fetchMeta({ videoId: trackId })
+      .then((meta) => {
+        if (!cancelled) setResolved({ id: trackId, meta });
+      })
+      .catch(() => {
+        if (!cancelled) setResolved({ id: trackId, meta: null });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchMeta, trackId, valid]);
 
-  if (!link) {
+  // The answer only counts if it belongs to the id currently in the URL, so
+  // navigating between two shared links can't render a stale one.
+  const forThisLink = resolved && resolved.id === trackId ? resolved : null;
+  const meta = forThisLink ? forThisLink.meta : null;
+
+  // Play once the metadata is in. Keyed on the id so navigating between two
+  // shared links restarts for the new one, while a re-render does not replay.
+  useEffect(() => {
+    if (!meta) return;
+    playTrack(trackMetaToPlayable(meta));
+  }, [meta, playTrack]);
+
+  // A malformed id (truncated by a chat app, or not an id at all) never gets
+  // as far as a lookup; a well-formed one that resolves to nothing is a
+  // private or removed video. Both are the same dead end to the visitor.
+  if (!valid || (forThisLink !== null && meta === null)) {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-background px-6 text-center text-foreground">
         <Music4 className="size-8 text-muted-foreground/40" />
         <p className="font-display text-lg font-semibold">
-          That link is incomplete
+          We couldn&apos;t find that song
         </p>
         <p className="max-w-sm text-sm text-muted-foreground">
-          This track link is missing its details. Ask for a fresh one, or search
-          for the song yourself.
+          This link doesn&apos;t point at a track we can play. It may have been
+          copied incompletely, or the video may be private.
         </p>
         <Link
           to="/search"
@@ -60,22 +93,30 @@ export default function TrackLink() {
     );
   }
 
-  // Until the store has picked the track up, show a resolving state rather than
-  // the final one — otherwise the page flashes "ready" before anything is
-  // actually playing.
-  const isCurrent = current?.id === link.id || current?.youtubeId === link.id;
+  // Still resolving. Rendering the "found" layout first would flash a blank
+  // title and a broken image for as long as the lookup takes.
+  if (!meta) {
+    return (
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-background px-6 text-center text-foreground">
+        <Loader2 className="size-8 animate-spin text-muted-foreground/40" />
+        <p className="text-sm text-muted-foreground">Loading track…</p>
+      </div>
+    );
+  }
+
   // Browsers block autoplay until the page has been interacted with, and a
   // link opened in a fresh tab has no gesture yet. Claiming "Playing now" from
   // the track merely being LOADED would be a lie in exactly that case, so the
   // label follows the real playback state and a play button appears instead.
+  const isCurrent = current?.id === meta.id || current?.youtubeId === meta.id;
   const playing = isCurrent && isPlaying;
 
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center gap-5 bg-background px-6 text-center text-foreground">
       <div className="w-40 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] shadow-2xl sm:w-56">
-        {link.coverUrl ? (
+        {meta.coverUrl ? (
           <img
-            src={link.coverUrl}
+            src={meta.coverUrl}
             alt=""
             className="aspect-square w-full object-cover"
           />
@@ -91,10 +132,10 @@ export default function TrackLink() {
           Shared track
         </p>
         <h1 className="mt-2 truncate font-display text-2xl font-bold tracking-tight sm:text-3xl">
-          {link.title}
+          {meta.title}
         </h1>
         <p className="mt-1 truncate text-sm text-muted-foreground">
-          {link.artist}
+          {meta.artist}
         </p>
       </div>
 

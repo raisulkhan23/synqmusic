@@ -1,11 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import {
-  buildTrackShareText,
   buildTrackShareUrl,
-  firstArtist,
-  parseTrackLink,
+  isTrackId,
   shareableId,
-  trackLinkToPlayable,
+  trackMetaToPlayable,
   TRACK_PATH,
 } from "../src/lib/shareLink";
 import { readSource } from "./helpers/tailwind-css.js";
@@ -14,6 +12,8 @@ const mainSource = readSource("src/main.tsx");
 const fullscreenSource = readSource(
   "src/components/player/FullscreenPlayer.tsx",
 );
+const trackLinkSource = readSource("src/pages/TrackLink.tsx");
+const youtubeSource = readSource("src/convex/youtube.ts");
 
 const track = {
   id: "row-id-42",
@@ -21,136 +21,145 @@ const track = {
   artistName: "Marconi Union, Someone Else",
   albumName: "Ambient Transmissions",
   coverUrl: "https://img.example/cover.jpg",
-  audioUrl: "https://youtu.be/videoid123",
   duration: 481,
   source: "youtube",
-  youtubeId: "videoid123",
+  youtubeId: "videoid1234",
+  audioUrl: "https://youtu.be/videoid1234",
 };
 
-const parse = (url) => {
-  const u = new URL(url);
-  const prefix = `https://site.example${TRACK_PATH}/`;
-  expect(
-    u.origin +
-      u.pathname.startsWith(prefix.slice(0, prefix.indexOf("/t/") + 3)),
-  ).toBeTruthy();
-  const id = decodeURIComponent(
-    u.pathname.slice(u.pathname.lastIndexOf("/") + 1),
-  );
-  return { id, params: u.searchParams };
+const meta = {
+  id: "videoid1234",
+  title: "Weightless",
+  artist: "Marconi Union, Someone Else",
+  coverUrl: "https://img.example/cover.jpg",
+  duration: 481,
 };
 
-describe("a shared track link points at the track, not at a search box", () => {
-  test("the id goes in the path, the metadata in the query", () => {
+describe("a shared track link is just the track id", () => {
+  test("the id alone is the whole URL", () => {
     // The old link was `/search?q=<title> <artist>`: the recipient landed on a
     // search box with the query pre-filled and still had to run the search and
-    // pick the right row.
+    // pick the right row. The next version fixed that but packed
+    // `?n=&a=&c=&d=` into every link — long enough for chat apps to truncate,
+    // and editable into a link that plays a different song.
     const url = buildTrackShareUrl("https://site.example", track);
-    expect(url.startsWith(`https://site.example${TRACK_PATH}/`)).toBe(true);
+    expect(url).toBe(`https://site.example${TRACK_PATH}/videoid1234`);
+    expect(url).not.toContain("?");
     expect(url).not.toContain("/search");
-
-    const { id, params } = parse(url);
-    expect(id).toBe("videoid123");
-    expect(params.get("n")).toBe("Weightless");
-    expect(params.get("a")).toBe("Marconi Union, Someone Else");
-    expect(params.get("c")).toBe("https://img.example/cover.jpg");
-    expect(params.get("d")).toBe("481");
   });
 
-  test("the link round-trips back to a playable track", () => {
-    // This is the whole contract: what is shared must be what plays.
-    const { id, params } = parse(
-      buildTrackShareUrl("https://site.example", track),
-    );
-    const parsed = parseTrackLink(id, params);
-    expect(parsed).not.toBeNull();
-    const playable = trackLinkToPlayable(parsed);
-    expect(playable.title).toBe(track.title);
-    expect(playable.artistName).toBe(track.artistName);
-    expect(playable.coverUrl).toBe(track.coverUrl);
-    expect(playable.duration).toBe(481);
-    // The engine resolves the stream from the id, so that has to be the one
-    // that travelled in the link, not the database row id.
-    expect(playable.youtubeId).toBe("videoid123");
+  test("no title, artist, cover or duration is smuggled into the link", () => {
+    const url = new URL(buildTrackShareUrl("https://site.example", track));
+    expect([...url.searchParams.keys()]).toEqual([]);
+    // The id has to be the only thing present, so nothing about the song is
+    // duplicated into someone's clipboard.
+    expect(url.pathname.split("/").filter(Boolean)).toEqual([
+      "t",
+      "videoid1234",
+    ]);
   });
 
   test("playback uses the youtube id, not the row id", () => {
     // A liked remote track's own `id` can be a database row id that means
     // nothing to the player, so a link built from it could not be played.
-    expect(shareableId(track)).toBe("videoid123");
+    expect(shareableId(track)).toBe("videoid1234");
     expect(shareableId({ ...track, youtubeId: undefined })).toBe("row-id-42");
   });
 
-  test("titles with awkward characters survive the round trip", () => {
-    const awkward = {
-      ...track,
-      title: 'Track #1 — 100% "Live" & more?',
-      artistName: "Sigur Rós / Jónsi",
-    };
-    const { id, params } = parse(
-      buildTrackShareUrl("https://site.example", awkward),
-    );
-    expect(parseTrackLink(id, params)?.title).toBe(awkward.title);
-    expect(parseTrackLink(id, params)?.artist).toBe(awkward.artistName);
-  });
-
   test("a trailing slash on the origin does not double up", () => {
-    expect(buildTrackShareUrl("https://site.example/", track)).toMatch(
-      /^https:\/\/site\.example\/t\//,
+    expect(buildTrackShareUrl("https://site.example/", track)).toBe(
+      `https://site.example${TRACK_PATH}/videoid1234`,
     );
   });
 });
 
-describe("a malformed link is refused rather than half-played", () => {
-  test("no id, or no title, yields null", () => {
-    // An id with no title would put a nameless unplayable row in the queue,
-    // which is worse than showing the "link is incomplete" state.
-    const good = new URLSearchParams({ n: "Weightless" });
-    expect(parseTrackLink(undefined, good)).toBeNull();
-    expect(parseTrackLink("", good)).toBeNull();
-    expect(parseTrackLink("videoid123", new URLSearchParams())).toBeNull();
-    expect(
-      parseTrackLink("videoid123", new URLSearchParams({ n: "   " })),
-    ).toBeNull();
+describe("the id identifies the track on its own", () => {
+  test("a well-formed video id is accepted", () => {
+    expect(isTrackId("videoid1234")).toBe(true);
+    expect(isTrackId("dQw4w9WgXcQ")).toBe(true);
+    expect(isTrackId("aB_-3xY9zQ1")).toBe(true);
   });
 
-  test("nonsense metadata falls back instead of producing NaN", () => {
-    const parsed = parseTrackLink(
-      "videoid123",
-      new URLSearchParams({ n: "Weightless", d: "not-a-number" }),
-    );
-    expect(parsed?.duration).toBe(0);
-    // No artist, no cover: placeholders rather than undefined leaking into
-    // the player and rendering as "undefined".
-    const bare = parseTrackLink("x", new URLSearchParams({ n: "Song" }));
-    expect(bare?.artist).toBe("Unknown artist");
-    expect(bare?.coverUrl).toBe("");
-  });
-
-  test("share text names the first artist, not the whole list", () => {
-    expect(firstArtist("Marconi Union, Someone Else")).toBe("Marconi Union");
-    expect(firstArtist("Sigur Rós")).toBe("Sigur Rós");
-    expect(firstArtist("")).toBe("SYNQ");
-    const { title, text } = buildTrackShareText(track);
-    expect(title).toBe("Weightless — Marconi Union");
-    expect(text).toContain("Marconi Union");
+  test("a truncated, missing or malformed id is refused", () => {
+    // A link clipped by a chat app used to still render, and rendered as
+    // garbage. Refusing it up front is what shows "we couldn't find that".
+    expect(isTrackId(undefined)).toBe(false);
+    expect(isTrackId(null)).toBe(false);
+    expect(isTrackId("")).toBe(false);
+    expect(isTrackId("short")).toBe(false);
+    expect(isTrackId("way-too-long-to-be-an-id")).toBe(false);
+    expect(isTrackId("has spaces!!")).toBe(false);
   });
 });
 
-describe("the share button and the route cannot disagree", () => {
-  test("the share button builds the link from the shared module", () => {
+describe("resolved metadata rebuilds a playable track", () => {
+  test("the id travels into the playable so the stream resolves", () => {
+    const playable = trackMetaToPlayable(meta);
+    expect(playable.youtubeId).toBe("videoid1234");
+    expect(playable.audioUrl).toBe("https://youtu.be/videoid1234");
+    expect(playable.source).toBe("youtube");
+  });
+
+  test("the display fields come through", () => {
+    const playable = trackMetaToPlayable(meta);
+    expect(playable.coverUrl).toBe(meta.coverUrl);
+    expect(playable.duration).toBe(481);
+  });
+
+  test("raw video titles get cleaned like every other result", () => {
+    // The raw value off a video id is the raw video title — "(Official
+    // Video)" and "- Topic" suffixes and all. A shared link should not be the
+    // one place in the UI that shows them.
+    const playable = trackMetaToPlayable({
+      ...meta,
+      title: "Weightless (Official Video)",
+    });
+    expect(playable.title).toBe("Weightless");
+  });
+
+  test("a non-finite duration does not become NaN in the player", () => {
+    const playable = trackMetaToPlayable({
+      ...meta,
+      duration: Number.NaN,
+    });
+    expect(playable.duration).toBe(0);
+  });
+});
+
+describe("the share button copies the link straight away", () => {
+  test("it builds the link from the shared module", () => {
     // The old inline template in the component is what made this drift; both
     // sides now go through one module.
     expect(fullscreenSource).toMatch(
       /buildTrackShareUrl\(\s*window\.location\.origin,\s*current,?\s*\)/,
     );
-    expect(fullscreenSource).toMatch(/buildTrackShareText\(current\)/);
     expect(fullscreenSource).not.toContain("/search?q=");
+  });
+
+  test("it copies instead of opening the share sheet", () => {
+    // `navigator.share` opened a modal the user then had to navigate a picker
+    // to get out of, and did not exist on desktop at all, so on the web the
+    // button appeared to do nothing. One tap now always lands the link on the
+    // clipboard.
+    expect(fullscreenSource).toMatch(/void copyText\(url\)/);
+    expect(fullscreenSource).not.toMatch(/navigator\s*\.\s*share/);
+  });
+
+  test("the landing page resolves the metadata instead of reading the URL", () => {
+    // The id is all the link carries, so the page has to look the rest up.
+    expect(trackLinkSource).toMatch(/api\.youtube\.trackMeta/);
+    expect(trackLinkSource).toMatch(/isTrackId\(trackId\)/);
+    expect(trackLinkSource).not.toMatch(/useSearchParams/);
+    expect(trackLinkSource).not.toMatch(/searchParams\.get/);
+  });
+
+  test("the resolver is public, so a link works for a first-time visitor", () => {
+    expect(youtubeSource).toMatch(/export const trackMeta = action\(/);
   });
 
   test("the route is public so a link works for a first-time visitor", () => {
     expect(mainSource).toMatch(
-      /<Route path="\/t\/:trackId" element=\{<TrackLink \/>\} \/>/,
+      /<Route path="\/t\/:trackId" element={<TrackLink \/>} \/>/,
     );
     // It must sit OUTSIDE the RequireAuth group, or sharing to someone who
     // has no account would bounce them to sign-up with no way back.

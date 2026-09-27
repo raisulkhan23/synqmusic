@@ -140,10 +140,17 @@ function cleanCreatorName(value: unknown): string {
   if (typeof value !== "string") return "Unknown artist";
   const name = value
     .replace(/\s+/g, " ")
-    .replace(/(?:\(|\[)(?:official|topic|audio|video|lyrics?|visualizer|hd|hq)[^\])]*(?:\)|\])/gi, "")
+    .replace(
+      /(?:\(|\[)(?:official|topic|audio|video|lyrics?|visualizer|hd|hq)[^\])]*(?:\)|\])/gi,
+      "",
+    )
     .replace(/\s+(?:topic|vevo)$/i, "")
     .trim();
-  if (!name || CREATOR_NAME_PLACEHOLDER_RE.test(name) || !/[\p{L}\p{N}]/u.test(name)) {
+  if (
+    !name ||
+    CREATOR_NAME_PLACEHOLDER_RE.test(name) ||
+    !/[\p{L}\p{N}]/u.test(name)
+  ) {
     return "Unknown artist";
   }
   return name;
@@ -159,7 +166,11 @@ function firstCreatorName(title: string, ...values: unknown[]): string {
       .map((part) => part.replace(/^[\s\-–—|·]+|[\s\-–—|·]+$/g, "").trim())
       .filter(Boolean);
     for (const candidate of candidates) {
-      if (CREATOR_NAME_PLACEHOLDER_RE.test(candidate) || !/[\p{L}\p{N}]/u.test(candidate)) continue;
+      if (
+        CREATOR_NAME_PLACEHOLDER_RE.test(candidate) ||
+        !/[\p{L}\p{N}]/u.test(candidate)
+      )
+        continue;
       if (normalizeMatchText(candidate) !== titleKey) return candidate;
     }
   }
@@ -173,7 +184,8 @@ function cleanTrackTitle(value: string): string {
     /\s+[-–—|]\s*(?:official\s+)?(?:music\s+video|music\s+audio|audio|lyrics?|visualizer)\s*$/i,
     /\s*(?:\(|\[)\s*(?:official\s+)?(?:music\s+video|music\s+audio|audio|lyrics?|visualizer)\s*(?:\)|\])\s*$/i,
   ];
-  for (const pattern of suffixPatterns) title = title.replace(pattern, "").trim();
+  for (const pattern of suffixPatterns)
+    title = title.replace(pattern, "").trim();
   return title || value.trim();
 }
 
@@ -188,7 +200,11 @@ const get = (obj: unknown, path: (string | number)[]): unknown =>
     if (typeof key === "number") {
       return Array.isArray(acc) && key < acc.length ? acc[key] : undefined;
     }
-    if (acc && typeof acc === "object" && key in (acc as Record<string, unknown>)) {
+    if (
+      acc &&
+      typeof acc === "object" &&
+      key in (acc as Record<string, unknown>)
+    ) {
       return (acc as Record<string, unknown>)[key];
     }
     return undefined;
@@ -209,7 +225,9 @@ function extractSearchResults(data: Record<string, unknown>): YtItem[] {
     const items = get(section, ["itemSectionRenderer", "contents"]);
     if (!Array.isArray(items)) continue;
     for (const item of items) {
-      const vr = get(item, ["videoRenderer"]) as Record<string, unknown> | undefined;
+      const vr = get(item, ["videoRenderer"]) as
+        | Record<string, unknown>
+        | undefined;
       const videoId = vr ? (vr.videoId as string | undefined) : undefined;
       if (!videoId) continue;
 
@@ -222,13 +240,21 @@ function extractSearchResults(data: Record<string, unknown>): YtItem[] {
         get(vr, ["ownerText", "runs", 0, "text"]),
         get(vr, ["longBylineText", "runs", 0, "text"]),
       );
-      const lengthText = get(vr, ["lengthText", "simpleText"]) as string | undefined;
+      const lengthText = get(vr, ["lengthText", "simpleText"]) as
+        | string
+        | undefined;
       const thumbs = get(vr, ["thumbnail", "thumbnails"]);
       const thumbnail = Array.isArray(thumbs)
         ? ((thumbs[thumbs.length - 1] as { url?: string })?.url ?? "")
         : "";
 
-      out.push({ id: videoId, title: cleanTrackTitle(title), artist, duration: parseLength(lengthText), thumbnail });
+      out.push({
+        id: videoId,
+        title: cleanTrackTitle(title),
+        artist,
+        duration: parseLength(lengthText),
+        thumbnail,
+      });
       if (out.length >= 10) return out;
     }
   }
@@ -280,7 +306,8 @@ async function musicSearch(query: string): Promise<YtItem[]> {
     }),
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
-  if (!res.ok) throw new ConvexError(`YouTube Music API returned ${res.status}`);
+  if (!res.ok)
+    throw new ConvexError(`YouTube Music API returned ${res.status}`);
   const data = (await res.json()) as Record<string, unknown>;
   return extractMusicResults(data);
 }
@@ -299,7 +326,8 @@ const NON_MUSIC_RE =
   /\b(podcast|episode|interview|full album|mix(?:ed)? by|megamix|dj set|live set|1 hour|10 hours|hours of|asmr|reaction|tutorial|karaoke|cover\s*\?*|how to deal with|football highlights?|soccer highlights?|basketball highlights?|sports highlights?|match highlights?|game highlights?|wta|atp|nba|nfl|ufc|formula 1|grand prix|china open|press conference|breaking news|news update|match review|match result|transfer news|sports news)\b/i;
 
 export function isMusicTrack(item: YtItem): boolean {
-  if (item.duration > 0 && (item.duration < 30 || item.duration > 900)) return false;
+  if (item.duration > 0 && (item.duration < 30 || item.duration > 900))
+    return false;
   const hay = `${item.title} ${item.artist}`;
   return !GAMING_CONTENT_RE.test(hay) && !NON_MUSIC_RE.test(hay);
 }
@@ -342,7 +370,9 @@ export function isLyricVideoTrack(item: YtItem, query: string): boolean {
   // Song-title searches are normally short, so require every meaningful term.
   // For longer searches, allow a small amount of artist/title noise without
   // accepting a result that shares only one generic word.
-  return terms.length <= 6 ? matches === terms.length : matches >= Math.ceil(terms.length * 0.7);
+  return terms.length <= 6
+    ? matches === terms.length
+    : matches >= Math.ceil(terms.length * 0.7);
 }
 
 /** Deduplicate by video id and by normalized title + artist. */
@@ -359,8 +389,11 @@ export function dedupeMusicItems(items: YtItem[]): YtItem[] {
 }
 
 function hasMusicEvidence(item: YtItem): boolean {
-  return item.duration >= 30 && item.duration <= 900 &&
-    MUSIC_VIDEO_MARKER_RE.test(`${item.title} ${item.artist}`);
+  return (
+    item.duration >= 30 &&
+    item.duration <= 900 &&
+    MUSIC_VIDEO_MARKER_RE.test(`${item.title} ${item.artist}`)
+  );
 }
 
 const DISCOVERY_QUERY_RE =
@@ -368,31 +401,76 @@ const DISCOVERY_QUERY_RE =
 
 const DISCOVERY_SEEDS: Array<[RegExp, string[]]> = [
   [/\bk[\s-]?pop\b/i, ["BLACKPINK songs", "TWICE songs", "Stray Kids songs"]],
-  [/\bpop\b/i, ["Taylor Swift songs", "Dua Lipa songs", "Olivia Rodrigo songs"]],
-  [/\bhip[\s-]?hop\b/i, ["Kendrick Lamar songs", "Drake songs", "Nicki Minaj songs"]],
+  [
+    /\bpop\b/i,
+    ["Taylor Swift songs", "Dua Lipa songs", "Olivia Rodrigo songs"],
+  ],
+  [
+    /\bhip[\s-]?hop\b/i,
+    ["Kendrick Lamar songs", "Drake songs", "Nicki Minaj songs"],
+  ],
   [/\brock\b/i, ["Foo Fighters songs", "Queen songs", "Nirvana songs"]],
-  [/\br\s*(?:&|and)\s*b\b/i, ["SZA songs", "The Weeknd songs", "Daniel Caesar songs"]],
+  [
+    /\br\s*(?:&|and)\s*b\b/i,
+    ["SZA songs", "The Weeknd songs", "Daniel Caesar songs"],
+  ],
   [/\belectronic\b/i, ["Daft Punk songs", "Justice songs", "Disclosure songs"]],
-  [/\bindie\b/i, ["Phoebe Bridgers songs", "Tame Impala songs", "Arctic Monkeys songs"]],
-  [/\bjazz\b/i, ["Miles Davis songs", "Ella Fitzgerald songs", "Kamasi Washington songs"]],
-  [/\bclassical\b/i, ["Ludwig van Beethoven songs", "Mozart songs", "Chopin songs"]],
+  [
+    /\bindie\b/i,
+    ["Phoebe Bridgers songs", "Tame Impala songs", "Arctic Monkeys songs"],
+  ],
+  [
+    /\bjazz\b/i,
+    ["Miles Davis songs", "Ella Fitzgerald songs", "Kamasi Washington songs"],
+  ],
+  [
+    /\bclassical\b/i,
+    ["Ludwig van Beethoven songs", "Mozart songs", "Chopin songs"],
+  ],
   [/\blo[\s-]?fi\b/i, ["Lofi Girl songs", "KSW songs", "Lofi beats songs"]],
   [/\bmetal\b/i, ["Metallica songs", "Slipknot songs", "Iron Maiden songs"]],
-  [/\bcountry\b/i, ["Morgan Wallen songs", "Luke Combs songs", "Maren Morris songs"]],
+  [
+    /\bcountry\b/i,
+    ["Morgan Wallen songs", "Luke Combs songs", "Maren Morris songs"],
+  ],
   [/\breggaeton\b/i, ["Bad Bunny songs", "Karol G songs", "J Balvin songs"]],
   [/\bafrobeats\b/i, ["Burna Boy songs", "Wizkid songs", "Tems songs"]],
-  [/\bambient\b/i, ["Brian Eno songs", "Max Richter songs", "Marconi Union songs"]],
+  [
+    /\bambient\b/i,
+    ["Brian Eno songs", "Max Richter songs", "Marconi Union songs"],
+  ],
   [/\bfunk\b/i, ["Jamiroquai songs", "Vulfpeck songs", "The Meters songs"]],
-  [/\bchill\b/i, ["Frank Ocean songs", "Daniel Caesar songs", "Khruangbin songs"]],
-  [/\bhappy\b/i, ["Pharrell Williams songs", "Olivia Rodrigo songs", "Dua Lipa songs"]],
-  [/\bsad\b/i, ["Billie Eilish songs", "Lana Del Rey songs", "The National songs"]],
-  [/\benergetic\b/i, ["Imagine Dragons songs", "The Killers songs", "Arctic Monkeys songs"]],
-  [/\bfocus\b/i, ["Ludovico Einaudi songs", "Max Richter songs", "Ólafur Arnalds songs"]],
+  [
+    /\bchill\b/i,
+    ["Frank Ocean songs", "Daniel Caesar songs", "Khruangbin songs"],
+  ],
+  [
+    /\bhappy\b/i,
+    ["Pharrell Williams songs", "Olivia Rodrigo songs", "Dua Lipa songs"],
+  ],
+  [
+    /\bsad\b/i,
+    ["Billie Eilish songs", "Lana Del Rey songs", "The National songs"],
+  ],
+  [
+    /\benergetic\b/i,
+    ["Imagine Dragons songs", "The Killers songs", "Arctic Monkeys songs"],
+  ],
+  [
+    /\bfocus\b/i,
+    ["Ludovico Einaudi songs", "Max Richter songs", "Ólafur Arnalds songs"],
+  ],
   [/\bworkout\b/i, ["Kendrick Lamar songs", "Drake songs", "Doja Cat songs"]],
   [/\bparty\b/i, ["Dua Lipa songs", "Doja Cat songs", "Kylie Minogue songs"]],
-  [/\bsleep\b/i, ["Norah Jones songs", "Billie Eilish songs", "Bon Iver songs"]],
+  [
+    /\bsleep\b/i,
+    ["Norah Jones songs", "Billie Eilish songs", "Bon Iver songs"],
+  ],
   [/\bromantic\b/i, ["Adele songs", "The Weeknd songs", "SZA songs"]],
-  [/\bnostalgic\b/i, ["Fleetwood Mac songs", "The Weeknd songs", "Tame Impala songs"]],
+  [
+    /\bnostalgic\b/i,
+    ["Fleetwood Mac songs", "The Weeknd songs", "Tame Impala songs"],
+  ],
 ];
 
 /**
@@ -408,15 +486,18 @@ export function discoverySeedQueries(
   query: string,
   limit = DISCOVERY_SEED_LIMIT,
 ): string[] {
-  const groups = DISCOVERY_SEEDS
-    .filter(([pattern]) => pattern.test(query))
+  const groups = DISCOVERY_SEEDS.filter(([pattern]) => pattern.test(query))
     .map(([, categorySeeds]) => categorySeeds)
     .filter((seeds) => seeds.length > 0);
   if (groups.length === 0) return [];
 
   const out: string[] = [];
   const seen = new Set<string>();
-  for (let round = 0; round < Math.max(...groups.map((seeds) => seeds.length)); round++) {
+  for (
+    let round = 0;
+    round < Math.max(...groups.map((seeds) => seeds.length));
+    round++
+  ) {
     for (const seeds of groups) {
       const seed = seeds[round];
       if (seed && !seen.has(seed)) {
@@ -451,7 +532,8 @@ function matchesSearchQuery(item: YtItem, query: string): boolean {
  * this permissive without reintroducing the broad gaming/sports false positives.
  */
 export function isPrimaryMusicResult(item: YtItem, query: string): boolean {
-  if (!isMusicTrack(item) || item.duration < 30 || item.duration > 900) return false;
+  if (!isMusicTrack(item) || item.duration < 30 || item.duration > 900)
+    return false;
   return matchesSearchQuery(item, query);
 }
 
@@ -468,7 +550,16 @@ function extractMusicResults(data: Record<string, unknown>): YtItem[] {
     else out.push(entry);
   };
 
-  const sections = get(data, ["contents", "tabbedSearchResultsRenderer", "tabs", 0, "tabRenderer", "content", "sectionListRenderer", "contents"]);
+  const sections = get(data, [
+    "contents",
+    "tabbedSearchResultsRenderer",
+    "tabs",
+    0,
+    "tabRenderer",
+    "content",
+    "sectionListRenderer",
+    "contents",
+  ]);
   const flat = Array.isArray(sections)
     ? sections
     : get(data, ["contents", "sectionListRenderer", "contents"]);
@@ -479,7 +570,9 @@ function extractMusicResults(data: Record<string, unknown>): YtItem[] {
     const shelf = get(section, ["musicShelfRenderer", "contents"]);
     if (Array.isArray(shelf)) {
       for (const item of shelf) {
-        const renderer = get(item, ["musicResponsiveListItemRenderer"]) as Record<string, unknown> | undefined;
+        const renderer = get(item, ["musicResponsiveListItemRenderer"]) as
+          | Record<string, unknown>
+          | undefined;
         if (renderer) {
           const entry = parseMusicListItem(renderer);
           if (entry) push(entry);
@@ -506,7 +599,9 @@ function extractMusicResults(data: Record<string, unknown>): YtItem[] {
     const isrItems = get(section, ["itemSectionRenderer", "contents"]);
     if (Array.isArray(isrItems)) {
       for (const item of isrItems) {
-        const renderer = get(item, ["musicResponsiveListItemRenderer"]) as Record<string, unknown> | undefined;
+        const renderer = get(item, ["musicResponsiveListItemRenderer"]) as
+          | Record<string, unknown>
+          | undefined;
         if (renderer) {
           const entry = parseMusicListItem(renderer);
           if (entry) push(entry);
@@ -534,28 +629,48 @@ function extractMusicResults(data: Record<string, unknown>): YtItem[] {
  * Also classifies the row: YouTube puts the type ("Song"/"Video"/"Playlist"…)
  * as the first subtitle run of column 1.
  */
-export function parseMusicListItem(renderer: Record<string, unknown>): (YtItem & { kind: "song" | "other" }) | null {
+export function parseMusicListItem(
+  renderer: Record<string, unknown>,
+): (YtItem & { kind: "song" | "other" }) | null {
   const videoId =
     (get(renderer, ["playlistItemData", "videoId"]) as string | undefined) ??
-    (get(renderer, ["overlay", "musicItemThumbnailOverlayRenderer", "content", "musicPlayButtonRenderer", "playNavigationEndpoint", "watchEndpoint", "videoId"]) as string | undefined) ??
-    (get(renderer, ["navigationEndpoint", "watchEndpoint", "videoId"]) as string | undefined);
+    (get(renderer, [
+      "overlay",
+      "musicItemThumbnailOverlayRenderer",
+      "content",
+      "musicPlayButtonRenderer",
+      "playNavigationEndpoint",
+      "watchEndpoint",
+      "videoId",
+    ]) as string | undefined) ??
+    (get(renderer, ["navigationEndpoint", "watchEndpoint", "videoId"]) as
+      | string
+      | undefined);
   if (!videoId) return null;
 
   const flex = get(renderer, ["flexColumns"]);
   if (!Array.isArray(flex)) return null;
   const runsOf = (col: unknown) =>
-    (get(col, ["musicResponsiveListItemFlexColumnRenderer", "text", "runs"]) as Array<{ text?: string }> | undefined) ?? [];
+    (get(col, ["musicResponsiveListItemFlexColumnRenderer", "text", "runs"]) as
+      | Array<{ text?: string }>
+      | undefined) ?? [];
   const textOf = (col: unknown) => runsOf(col)[0]?.text ?? "";
   const title = cleanTrackTitle(textOf(flex[0]) || "Untitled");
   // Column 1 interleaves metadata and separator runs. Depending on the
   // response shape it can be [artist, " • ", album, " • ", duration] or
   // [type, " • ", artist, " • ", duration], so separators must never be
   // mistaken for the artist.
-  const runs = (get(flex[1], ["musicResponsiveListItemFlexColumnRenderer", "text", "runs"]) as Array<{ text?: string }> | undefined) ?? [];
+  const runs =
+    (get(flex[1], [
+      "musicResponsiveListItemFlexColumnRenderer",
+      "text",
+      "runs",
+    ]) as Array<{ text?: string }> | undefined) ?? [];
   const metaRuns = runs
     .map((run) => run.text?.trim() ?? "")
     .filter((value) => value && !/^[•·,&]+$/.test(value));
-  const typePattern = /^(song|video|playlist|album|artist|episode|short|music video|live performance|single|ep)$/i;
+  const typePattern =
+    /^(song|video|playlist|album|artist|episode|short|music video|live performance|single|ep)$/i;
   const typeIndex = metaRuns.findIndex((value) => typePattern.test(value));
   const artistIndex = typeIndex >= 0 ? typeIndex + 1 : 0;
   const typeRun = typeIndex >= 0 ? metaRuns[typeIndex] : "";
@@ -564,7 +679,9 @@ export function parseMusicListItem(renderer: Record<string, unknown>): (YtItem &
   // promoted later only when they carry independent music evidence, while
   // explicitly non-track rows are always rejected.
   const kind: "song" | "other" =
-    typeRun === "" || /^(playlist|album|artist|episode)$/i.test(typeRun) ? "other" : "song";
+    typeRun === "" || /^(playlist|album|artist|episode)$/i.test(typeRun)
+      ? "other"
+      : "song";
   const artist = firstCreatorName(
     title,
     metaRuns[artistIndex],
@@ -576,7 +693,12 @@ export function parseMusicListItem(renderer: Record<string, unknown>): (YtItem &
     .find((value) => /^\d{1,2}:\d{2}(:\d{2})?$/.test(value));
   const durationRaw = durationMatch ?? textOf(flex[2]) ?? "";
 
-  const thumbs = get(renderer, ["thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails"]);
+  const thumbs = get(renderer, [
+    "thumbnail",
+    "musicThumbnailRenderer",
+    "thumbnail",
+    "thumbnails",
+  ]);
   const thumbnail = Array.isArray(thumbs)
     ? ((thumbs[thumbs.length - 1] as { url?: string })?.url ?? "")
     : "";
@@ -595,29 +717,60 @@ export function parseMusicListItem(renderer: Record<string, unknown>): (YtItem &
 function parseMusicCardShelf(card: Record<string, unknown>): YtItem | null {
   const videoId =
     (get(card, ["onTap", "watchEndpoint", "videoId"]) as string | undefined) ??
-    (get(card, ["buttons", 0, "buttonRenderer", "command", "watchEndpoint", "videoId"]) as string | undefined);
+    (get(card, [
+      "buttons",
+      0,
+      "buttonRenderer",
+      "command",
+      "watchEndpoint",
+      "videoId",
+    ]) as string | undefined);
   if (!videoId) return null;
 
   const title = cleanTrackTitle(
     (get(card, ["title", "runs", 0, "text"]) as string | undefined) ??
-    (get(card, ["header", "musicCardShelfHeaderBasicRenderer", "title", "runs", 0, "text"]) as string | undefined) ??
-    "Top result",
+      (get(card, [
+        "header",
+        "musicCardShelfHeaderBasicRenderer",
+        "title",
+        "runs",
+        0,
+        "text",
+      ]) as string | undefined) ??
+      "Top result",
   );
   // Subtitle runs pack artist • song • year.
-  const subtitle = (get(card, ["subtitle", "runs"]) as Array<{ text?: string }> | undefined) ?? [];
-  const parts = subtitle.map((r) => r.text ?? "").join("").split("•").map((s) => s.trim());
+  const subtitle =
+    (get(card, ["subtitle", "runs"]) as Array<{ text?: string }> | undefined) ??
+    [];
+  const parts = subtitle
+    .map((r) => r.text ?? "")
+    .join("")
+    .split("•")
+    .map((s) => s.trim());
   const artist = firstCreatorName(title, parts[0], parts[1]);
   const durationText =
     (get(card, ["lengthText", "simpleText"]) as string | undefined) ??
     parts.find((part) => /^\d{1,2}:\d{2}(?::\d{2})?$/.test(part)) ??
     "";
 
-  const thumbs = get(card, ["thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails"]);
+  const thumbs = get(card, [
+    "thumbnail",
+    "musicThumbnailRenderer",
+    "thumbnail",
+    "thumbnails",
+  ]);
   const thumbnail = Array.isArray(thumbs)
     ? ((thumbs[thumbs.length - 1] as { url?: string })?.url ?? "")
     : "";
 
-  return { id: videoId, title, artist, duration: parseLength(durationText), thumbnail };
+  return {
+    id: videoId,
+    title,
+    artist,
+    duration: parseLength(durationText),
+    thumbnail,
+  };
 }
 
 /**
@@ -671,7 +824,9 @@ export const searchYoutube = action({
     // uploads, otherwise a generic vlog can appear to be a song result.
     return {
       items: dedupeMusicItems(
-        extractSearchResults(data).filter((item) => isPrimaryMusicResult(item, query)),
+        extractSearchResults(data).filter((item) =>
+          isPrimaryMusicResult(item, query),
+        ),
       ),
     };
   },
@@ -700,12 +855,114 @@ export const searchLyricVideos = action({
         params: "EgIQAQ%3D%3D",
       });
       const items = dedupeMusicItems(
-        extractSearchResults(data).filter((item) => isLyricVideoTrack(item, rawQuery)),
+        extractSearchResults(data).filter((item) =>
+          isLyricVideoTrack(item, rawQuery),
+        ),
       );
       return { items: items.slice(0, 8) };
     } catch {
       return { items: [] };
     }
+  },
+});
+
+/**
+ * Display metadata for a YouTube video id, used by shared track links.
+ *
+ * A share link is just `/t/<videoId>` — the id alone identifies the song, so
+ * nothing else is carried in the URL. That means the landing page has to look
+ * the title/artist/art up from the id, which is what this does. Deliberately a
+ * separate call from `resolveStream`: a link is opened by someone who may
+ * never be able to play the audio (region blocked, bot-checked), and they
+ * still deserve a correct title on the page.
+ *
+ * Public and unauthenticated on purpose — the recipient of a shared link is
+ * not signed in. Returns null for an id that does not resolve, so the caller
+ * can show a "not found" state instead of rendering a blank row.
+ */
+export const trackMeta = action({
+  args: { videoId: v.string() },
+  handler: async (
+    _ctx,
+    { videoId },
+  ): Promise<{
+    id: string;
+    title: string;
+    artist: string;
+    coverUrl: string;
+    duration: number;
+  } | null> => {
+    // Cheap and key-free: oembed answers for any public video with a title,
+    // author and thumbnail, and does not care about the datacenter bot-check
+    // that bites the InnerTube clients below.
+    try {
+      const res = await fetch(
+        `https://www.youtube.com/oembed?url=${encodeURIComponent(
+          `https://www.youtube.com/watch?v=${videoId}`,
+        )}&format=json`,
+        { signal: AbortSignal.timeout(6_000) },
+      );
+      if (res.ok) {
+        const data = (await res.json()) as Record<string, unknown>;
+        const title = typeof data.title === "string" ? data.title.trim() : "";
+        if (title) {
+          return {
+            id: videoId,
+            title,
+            artist:
+              typeof data.author_name === "string" && data.author_name.trim()
+                ? data.author_name.trim()
+                : "Unknown artist",
+            // oembed hands back a 480px thumbnail; the `hqdefault` path is a
+            // stable square fallback when it omits one.
+            coverUrl:
+              typeof data.thumbnail_url === "string" && data.thumbnail_url
+                ? data.thumbnail_url
+                : `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+            // oembed carries no duration. 0 lets the player fill in the real
+            // length once the stream is loaded, instead of freezing a guess.
+            duration: 0,
+          };
+        }
+      }
+    } catch {
+      /* fall through to InnerTube */
+    }
+
+    // Fallback: InnerTube. A video that fails the bot-check can still return
+    // its videoDetails, which is enough to label the page.
+    for (const client of [ANDROID_VR, TV_EMBEDDED, ANDROID, IOS, MWEB, WEB]) {
+      try {
+        const data = await innerTube("player", client, {
+          context: clientContext(client),
+          videoId,
+          contentCheckOk: true,
+          racyCheckOk: true,
+          thirdParty: { embedUrl: "https://www.youtube.com" },
+        });
+        const details = get(data, ["videoDetails"]) as
+          | Record<string, unknown>
+          | undefined;
+        const title =
+          typeof details?.title === "string" ? details.title.trim() : "";
+        if (!title) continue;
+        const seconds = Number(details?.lengthSeconds);
+        return {
+          id: videoId,
+          title,
+          artist:
+            typeof details?.author === "string" && details.author.trim()
+              ? details.author.trim()
+              : "Unknown artist",
+          coverUrl: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+          duration: Number.isFinite(seconds) && seconds > 0 ? seconds : 0,
+        };
+      } catch {
+        continue;
+      }
+    }
+
+    return null;
   },
 });
 
@@ -719,9 +976,17 @@ export const resolveStream = action({
   args: {
     videoId: v.string(),
     /** "high" (default) picks the best bitrate; "low" prefers ≤ 96kbps for slow connections. */
-    quality: v.optional(v.union(v.literal("high"), v.literal("low")))
+    quality: v.optional(v.union(v.literal("high"), v.literal("low"))),
   },
-  handler: async (_ctx, { videoId, quality = "high" }): Promise<{ url: string | null; title: string; reason?: string; youtubeUrl?: string }> => {
+  handler: async (
+    _ctx,
+    { videoId, quality = "high" },
+  ): Promise<{
+    url: string | null;
+    title: string;
+    reason?: string;
+    youtubeUrl?: string;
+  }> => {
     let lastError: string | undefined;
     let lastTitle: string | undefined;
     let lastYoutubeUrl: string | undefined;
@@ -737,7 +1002,9 @@ export const resolveStream = action({
           thirdParty: { embedUrl: "https://www.youtube.com" },
         });
 
-        const status = get(data, ["playabilityStatus", "status"]) as string | undefined;
+        const status = get(data, ["playabilityStatus", "status"]) as
+          | string
+          | undefined;
         if (status && status !== "OK") {
           lastTitle =
             (get(data, ["videoDetails", "title"]) as string) ??
@@ -750,8 +1017,7 @@ export const resolveStream = action({
         }
 
         const videoTitle =
-          (get(data, ["videoDetails", "title"]) as string) ??
-          undefined;
+          (get(data, ["videoDetails", "title"]) as string) ?? undefined;
         if (videoTitle) lastTitle = videoTitle;
 
         const adaptive = get(data, ["streamingData", "adaptiveFormats"]);
@@ -765,7 +1031,9 @@ export const resolveStream = action({
             typeof f === "object" &&
             typeof (f as Record<string, unknown>).url === "string" &&
             typeof (f as Record<string, unknown>).mimeType === "string" &&
-            ((f as Record<string, unknown>).mimeType as string).startsWith("audio/"),
+            ((f as Record<string, unknown>).mimeType as string).startsWith(
+              "audio/",
+            ),
         );
 
         const sorted = formats.sort(
@@ -774,7 +1042,10 @@ export const resolveStream = action({
         // Network-aware: on "low", take the smallest stream that's still ≥ 48kbps.
         const best =
           quality === "low"
-            ? [...sorted].reverse().find((f) => (f.bitrate as number) >= 48000) ?? sorted[sorted.length - 1]
+            ? ([...sorted]
+                .reverse()
+                .find((f) => (f.bitrate as number) >= 48000) ??
+              sorted[sorted.length - 1])
             : sorted[0];
 
         if (best?.url) {

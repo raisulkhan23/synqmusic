@@ -6,21 +6,25 @@
  * press search and pick the right row, and a badly tagged track came back as
  * the wrong song entirely. A link to a song should just play that song.
  *
- * The URL carries the track's own id in the path, plus the metadata playback
- * needs in the query string. The metadata has to travel with the link rather
- * than be looked up: remote tracks exist in nobody's saved library, so there
- * is nothing server-side to resolve an id against for a first-time visitor.
+ *   /t/<trackId>
  *
- *   /t/<trackId>?n=<title>&a=<artist>&c=<cover>&d=<duration>
- *
- * Short keys, because this ends up in a chat app and gets truncated.
+ * The id alone identifies the song, so nothing else goes in the URL. An
+ * earlier version also carried `?n=&a=&c=&d=` (title, artist, cover,
+ * duration) so the landing page could render without a lookup, but that put
+ * a long pile of duplicated metadata in everyone's clipboard — it was long
+ * enough to be truncated by chat apps, it leaked the full raw artist string,
+ * and anyone editing the link could hand the recipient a different song
+ * entirely. The trade is one cheap metadata lookup on open
+ * (`api.youtube.trackMeta`), which is worth a clean `/t/dQw4w9WgXcQ`.
  */
 
 import type { Playable } from "@/lib/playable";
+import { cleanArtistName, cleanTrackTitle } from "@/lib/youtube";
 
 export const TRACK_PATH = "/t";
 
-export type TrackLink = {
+/** Metadata for a track resolved from its id by the backend. */
+export type TrackMeta = {
   id: string;
   title: string;
   artist: string;
@@ -37,82 +41,42 @@ export function shareableId(track: Playable): string {
   return track.youtubeId || track.id;
 }
 
-/** The absolute URL to share for a track. */
+/** A YouTube video id is exactly 11 URL-safe base64 characters. */
+const VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
+
+/** True when a path segment is a well-formed video id. */
+export function isTrackId(value: string | undefined | null): boolean {
+  return typeof value === "string" && VIDEO_ID_RE.test(value);
+}
+
+/** The absolute URL to share for a track — path only, no query string. */
 export function buildTrackShareUrl(origin: string, track: Playable): string {
   const id = shareableId(track);
-  const params = new URLSearchParams();
-  params.set("n", track.title);
-  // The raw artist string can hold several artists; the display layer already
-  // reduces it, so keep the full value rather than guessing here.
-  if (track.artistName) params.set("a", track.artistName);
-  if (track.coverUrl) params.set("c", track.coverUrl);
-  if (Number.isFinite(track.duration) && track.duration > 0) {
-    params.set("d", String(Math.round(track.duration)));
-  }
-  return `${origin.replace(/\/$/, "")}${TRACK_PATH}/${encodeURIComponent(id)}?${params.toString()}`;
-}
-
-/** Short, human-readable text for the share sheet. */
-export function buildTrackShareText(track: Playable): {
-  title: string;
-  text: string;
-} {
-  const artist = firstArtist(track.artistName);
-  return {
-    title: `${track.title} — ${artist}`,
-    text: `Listen to ${track.title} by ${artist} on SYNQ`,
-  };
-}
-
-/** The first artist in a possibly multi-artist string. */
-export function firstArtist(artistName: string): string {
-  const first = artistName.split(",")[0]?.trim();
-  return first || artistName.trim() || "SYNQ";
-}
-
-function finiteOr(raw: string | null, fallback: number): number {
-  if (raw === null) return fallback;
-  const n = Number(raw);
-  return Number.isFinite(n) && n > 0 ? n : fallback;
+  return `${origin.replace(/\/$/, "")}${TRACK_PATH}/${encodeURIComponent(id)}`;
 }
 
 /**
- * Parse a `/t/:id` link back into a playable track.
+ * Rebuild a playable from metadata resolved off the id.
  *
- * Returns null when the path has no id, or when the link carries no title —
- * a link with an id and nothing else would produce a nameless, unplayable row
- * in the queue, which is worse than showing the not-found state.
+ * Title and artist go through the same cleaners as every other YouTube result
+ * in the app, because the raw values off a video id are the raw video title —
+ * "(Official Video)", "- Topic" suffixes and all — and a shared link should
+ * not be the one place in the UI that shows them.
  */
-export function parseTrackLink(
-  id: string | undefined,
-  params: URLSearchParams,
-): TrackLink | null {
-  if (!id) return null;
-  const title = (params.get("n") ?? "").trim();
-  if (!title) return null;
-  const duration = finiteOr(params.get("d"), 0);
+export function trackMetaToPlayable(meta: TrackMeta): Playable {
+  const title = cleanTrackTitle(meta.title) || meta.title;
+  const artist = cleanArtistName(meta.artist, title) || meta.artist;
   return {
-    id,
+    id: meta.id,
     title,
-    artist: (params.get("a") ?? "").trim() || "Unknown artist",
-    coverUrl: (params.get("c") ?? "").trim(),
-    duration,
-  };
-}
-
-/** Rebuild a playable from a parsed link. */
-export function trackLinkToPlayable(link: TrackLink): Playable {
-  return {
-    id: link.id,
-    title: link.title,
-    artistName: link.artist,
+    artistName: artist,
     albumName: "Single",
-    coverUrl: link.coverUrl,
+    coverUrl: meta.coverUrl,
     // The engine resolves the stream from the id, so this is a placeholder
     // that is only used when the direct stream path is unavailable.
-    audioUrl: `https://youtu.be/${link.id}`,
-    duration: link.duration,
+    audioUrl: `https://youtu.be/${meta.id}`,
+    duration: Number.isFinite(meta.duration) ? meta.duration : 0,
     source: "youtube",
-    youtubeId: link.id,
+    youtubeId: meta.id,
   };
 }

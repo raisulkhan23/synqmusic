@@ -49,7 +49,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { copyText } from "@/lib/clipboard";
-import { buildTrackShareText, buildTrackShareUrl } from "@/lib/shareLink";
+import { buildTrackShareUrl } from "@/lib/shareLink";
 import {
   IMAGE_WALLPAPER_MARKER,
   LIVE_WALLPAPER_MARKER,
@@ -874,23 +874,24 @@ export function FullscreenPlayer() {
                   // recipient on a search box: they still had to run the
                   // search and pick the right row, and a badly tagged track
                   // came back as the wrong song entirely.
+                  //
+                  // The link is now just `/t/<videoId>` — the id alone names
+                  // the song, so no title/artist/cover is packed into the URL.
+                  //
+                  // It copies rather than opening the OS share sheet: the share
+                  // sheet is a modal the user then has to navigate a picker to
+                  // get back to, and on desktop it usually isn't available at
+                  // all, so the button felt broken. One tap now always lands
+                  // the link on the clipboard, where it can be pasted
+                  // anywhere.
                   const url = buildTrackShareUrl(
                     window.location.origin,
                     current,
                   );
-                  const { title, text } = buildTrackShareText(current);
-                  if (navigator.share) {
-                    void navigator
-                      .share({ title, text, url })
-                      // A cancelled share sheet rejects; that is not a failure
-                      // worth reporting to the user.
-                      .catch(() => undefined);
-                  } else {
-                    void copyText(url).then((ok) => {
-                      if (ok) toast.success("Song link copied");
-                      else toast.error("Couldn't copy the link");
-                    });
-                  }
+                  void copyText(url).then((ok) => {
+                    if (ok) toast.success("Song link copied");
+                    else toast.error("Couldn't copy the link");
+                  });
                 }}
                 className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground sm:p-2.5"
               >
