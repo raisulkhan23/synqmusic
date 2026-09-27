@@ -1,3 +1,5 @@
+import { cleanArtistName, cleanTrackTitle } from "@/lib/youtube";
+
 /**
  * Parse a playlist export from another music service.
  *
@@ -84,6 +86,26 @@ function cleanArtist(raw: string): string {
 
 const SKIP_RE =
   /^(track|title|song|video|no\.?|#|artist|duration|time|index|position)$/i;
+
+/**
+ * Strip upload noise from an imported title/artist.
+ *
+ * Reuses the SAME normalisation the player applies to every other track, which
+ * the importer previously skipped. An imported row kept its raw text, so a
+ * YouTube export landed as "Inferno Clash - Music for FlameFrags" and then
+ * searched YouTube with that whole string later — which is precisely the
+ * shape the player strips everywhere else. Normalising here means an imported
+ * playlist behaves like a native one.
+ */
+function normalizeImportedTitle(raw: string): string {
+  return cleanTrackTitle(raw);
+}
+
+function normalizeImportedArtist(raw: string): string {
+  // cleanArtistName needs a title to disambiguate "Artist • Song" subtitles;
+  // the title is already cleaned by the time it is called.
+  return cleanArtistName(raw);
+}
 
 /** Guess the origin service from file content. */
 function guessOrigin(text: string): string {
@@ -235,6 +257,10 @@ export function parsePlaylistImport(
 
     title = cleanTitle(title);
     artist = cleanArtist(artist);
+    // Then the shared player-side normalisation, so imported rows look and
+    // search exactly like native ones.
+    title = normalizeImportedTitle(title);
+    artist = normalizeImportedArtist(artist);
     duration =
       duration ?? parseDuration(line.match(/(\d{1,2}:\d{2}(?::\d{2})?)/)?.[1]);
 

@@ -62,6 +62,19 @@ describe("playlist import reads the right column", () => {
     expect(titles("Weightless")).toEqual(["Weightless"]);
   });
 
+  test("imported rows get the same normalisation as native tracks", () => {
+    // The importer used to keep the raw upload text, so a YouTube export landed
+    // as "Inferno Clash - Music for FlameFrags" and then searched YouTube with
+    // that whole string. The player already strips this everywhere else, so
+    // imported rows have to agree with native ones.
+    const csv = [
+      '"Video Title","Channel"',
+      '"Inferno Clash - Music for FlameFrags","FlameFrags"',
+      '"Weightless [Official Video]","Marconi Union"',
+    ].join("\n");
+    expect(titles(csv)).toEqual(["Inferno Clash", "Weightless"]);
+  });
+
   test("an empty or unparseable file reports nothing rather than junk", () => {
     expect(parsePlaylistImport("")).toBeNull();
     expect(parsePlaylistImport("   \n  \n")).toBeNull();

@@ -8,6 +8,7 @@ import {
   isPrimaryMusicResult,
   parseMusicListItem,
 } from "../src/convex/youtube";
+import { cleanTrackTitle } from "../src/lib/youtube";
 
 function column(...runs) {
   return {
@@ -39,7 +40,8 @@ describe("supplemental lyric-video filtering", () => {
       isLyricVideoTrack(
         {
           id: "lofi-1",
-          title: "This’ll Kill Me Yet | Mahe Mahe Tobo | LoFi Version | NURE AL MISKAT | MUSIC VIDEO",
+          title:
+            "This’ll Kill Me Yet | Mahe Mahe Tobo | LoFi Version | NURE AL MISKAT | MUSIC VIDEO",
           artist: "NURE AL MISKAT",
           duration: 304,
           thumbnail: "",
@@ -50,13 +52,18 @@ describe("supplemental lyric-video filtering", () => {
   });
 
   test("accepts the attached Bengali lyric-video shape", () => {
-    expect(isLyricVideoTrack(item(), "Khusir Anek Range Achena Atithi")).toBe(true);
+    expect(isLyricVideoTrack(item(), "Khusir Anek Range Achena Atithi")).toBe(
+      true,
+    );
   });
 
   test("does not treat a generic version label as music evidence", () => {
     expect(
       isLyricVideoTrack(
-        item({ title: "Khusir Anek Range Achena Atithi Version", artist: "Random Uploads" }),
+        item({
+          title: "Khusir Anek Range Achena Atithi Version",
+          artist: "Random Uploads",
+        }),
         "Khusir Anek Range Achena Atithi",
       ),
     ).toBe(false);
@@ -72,9 +79,18 @@ describe("supplemental lyric-video filtering", () => {
   });
 
   test("rejects mixes, interviews, and unknown-length results", () => {
-    expect(isLyricVideoTrack(item({ duration: 3600 }), "Khusir Anek Range")).toBe(false);
-    expect(isLyricVideoTrack(item({ title: "Song interview", duration: 245 }), "Khusir Anek Range")).toBe(false);
-    expect(isLyricVideoTrack(item({ duration: 0 }), "Khusir Anek Range")).toBe(false);
+    expect(
+      isLyricVideoTrack(item({ duration: 3600 }), "Khusir Anek Range"),
+    ).toBe(false);
+    expect(
+      isLyricVideoTrack(
+        item({ title: "Song interview", duration: 245 }),
+        "Khusir Anek Range",
+      ),
+    ).toBe(false);
+    expect(isLyricVideoTrack(item({ duration: 0 }), "Khusir Anek Range")).toBe(
+      false,
+    );
   });
 
   test("deduplicates ids and normalized title/artist pairs", () => {
@@ -82,7 +98,10 @@ describe("supplemental lyric-video filtering", () => {
       dedupeMusicItems([
         item(),
         item({ id: "lyric-2" }),
-        item({ id: "lyric-3", title: "  Khusir   Anek Range | Achena Atithi | Lyrical Video Song  " }),
+        item({
+          id: "lyric-3",
+          title: "  Khusir   Anek Range | Achena Atithi | Lyrical Video Song  ",
+        }),
       ]).map((entry) => entry.id),
     ).toEqual(["lyric-1"]);
   });
@@ -195,19 +214,70 @@ describe("primary music result filtering", () => {
   });
 });
 
+describe("cleanTrackTitle", () => {
+  test("strips the upload suffixes that survive in real search results", () => {
+    // These are the exact strings the existing parseMusicListItem tests assert
+    // on after parsing, so the cleaner has to agree with the parser.
+    for (const [raw, expected] of [
+      ["Inferno Clash - Music for FlameFrags", "Inferno Clash"],
+      ["Weightless", "Weightless"],
+      ["Song Name (Official Music Video)", "Song Name"],
+      ["Song Name (Official Video)", "Song Name"],
+      ["Song Name [Official Video]", "Song Name"],
+      ["Song Name (Lyrics)", "Song Name"],
+      ["Song Name (Visualizer)", "Song Name"],
+    ]) {
+      expect(cleanTrackTitle(raw)).toBe(expected);
+    }
+  });
+
+  test("never reduces a real title to nothing", () => {
+    // The fallback matters: an over-eager strip that emptied the title used to
+    // leave the queue with a nameless track.
+    for (const raw of ["(Official Video)", "Lyrics", "Video"]) {
+      expect(cleanTrackTitle(raw).length).toBeGreaterThan(0);
+    }
+  });
+
+  test("leaves ordinary titles untouched", () => {
+    for (const raw of [
+      "Video Games",
+      "Song 2",
+      "Music for Others",
+      "The Official Chart",
+    ]) {
+      expect(cleanTrackTitle(raw)).toBe(raw);
+    }
+  });
+});
+
 describe("discoverySeedQueries", () => {
   test("draws from every genre group a broad query matches", () => {
     // "indie pop" matches both the `pop` and `indie` groups.
     const seeds = discoverySeedQueries("indie pop", 10);
-    expect(seeds.some((seed) => /Phoebe Bridgers|Tame Impala|Arctic Monkeys/.test(seed))).toBe(true);
-    expect(seeds.some((seed) => /Taylor Swift|Dua Lipa|Olivia Rodrigo/.test(seed))).toBe(true);
+    expect(
+      seeds.some((seed) =>
+        /Phoebe Bridgers|Tame Impala|Arctic Monkeys/.test(seed),
+      ),
+    ).toBe(true);
+    expect(
+      seeds.some((seed) => /Taylor Swift|Dua Lipa|Olivia Rodrigo/.test(seed)),
+    ).toBe(true);
   });
 
   test("round-robins genres so the limit does not starve the second group", () => {
     const capped = discoverySeedQueries("indie pop");
     expect(capped).toHaveLength(DISCOVERY_SEED_LIMIT);
-    expect(capped.filter((seed) => /Taylor Swift|Dua Lipa|Olivia Rodrigo/.test(seed))).toHaveLength(2);
-    expect(capped.filter((seed) => /Phoebe Bridgers|Tame Impala|Arctic Monkeys/.test(seed))).toHaveLength(2);
+    expect(
+      capped.filter((seed) =>
+        /Taylor Swift|Dua Lipa|Olivia Rodrigo/.test(seed),
+      ),
+    ).toHaveLength(2);
+    expect(
+      capped.filter((seed) =>
+        /Phoebe Bridgers|Tame Impala|Arctic Monkeys/.test(seed),
+      ),
+    ).toHaveLength(2);
   });
 
   test("returns nothing for a query that matches no genre", () => {
@@ -219,8 +289,12 @@ describe("discoverySeedQueries", () => {
     // "k-pop" matches the `k-pop` group and also the bare `pop` group.
     const seeds = discoverySeedQueries("k-pop", 20);
     expect(new Set(seeds).size).toBe(seeds.length);
-    expect(seeds.some((seed) => /BLACKPINK|TWICE|Stray Kids/.test(seed))).toBe(true);
-    expect(seeds.some((seed) => /Taylor Swift|Dua Lipa|Olivia Rodrigo/.test(seed))).toBe(true);
+    expect(seeds.some((seed) => /BLACKPINK|TWICE|Stray Kids/.test(seed))).toBe(
+      true,
+    );
+    expect(
+      seeds.some((seed) => /Taylor Swift|Dua Lipa|Olivia Rodrigo/.test(seed)),
+    ).toBe(true);
   });
 
   test("a mood-only query still resolves to seeds", () => {
@@ -230,7 +304,9 @@ describe("discoverySeedQueries", () => {
 
 describe("parseMusicListItem", () => {
   test("uses the artist after a Song metadata run", () => {
-    expect(parseMusicListItem(renderer(["Song", " • ", "Daft Punk", " • ", "3:45"]))).toMatchObject({
+    expect(
+      parseMusicListItem(renderer(["Song", " • ", "Daft Punk", " • ", "3:45"])),
+    ).toMatchObject({
       id: "video-1",
       title: "Test Track",
       artist: "Daft Punk",
@@ -247,20 +323,26 @@ describe("parseMusicListItem", () => {
   });
 
   test("replaces placeholder creator metadata instead of rendering '*'", () => {
-    expect(parseMusicListItem(renderer(["Song", " • ", "*", " • ", "3:45"]))).toMatchObject({
+    expect(
+      parseMusicListItem(renderer(["Song", " • ", "*", " • ", "3:45"])),
+    ).toMatchObject({
       artist: "Unknown artist",
     });
   });
 
   test("keeps playlists classified as non-song rows", () => {
-    expect(parseMusicListItem(renderer(["Playlist", "Daft Punk", "3:45"]))).toMatchObject({
+    expect(
+      parseMusicListItem(renderer(["Playlist", "Daft Punk", "3:45"])),
+    ).toMatchObject({
       artist: "Daft Punk",
       kind: "other",
     });
   });
 
   test("does not promote an untyped row into the primary song results", () => {
-    expect(parseMusicListItem(renderer(["Phonk Artist", "3:45"]))).toMatchObject({
+    expect(
+      parseMusicListItem(renderer(["Phonk Artist", "3:45"])),
+    ).toMatchObject({
       artist: "Phonk Artist",
       kind: "other",
     });

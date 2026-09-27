@@ -7,7 +7,8 @@ export interface YtItem {
   thumbnail: string;
 }
 
-const INVALID_ARTIST_NAMES = /^(?:unknown artist|artist|song|video|single|album|ep|music|official|unknown|topic|records?|music video|official video|official audio|lyrics?)$/i;
+const INVALID_ARTIST_NAMES =
+  /^(?:unknown artist|artist|song|video|single|album|ep|music|official|unknown|topic|records?|music video|official video|official audio|lyrics?)$/i;
 
 function normalizeArtistText(value: string): string {
   return value
@@ -26,7 +27,10 @@ export function cleanArtistName(value: unknown, title?: string): string {
   if (typeof value !== "string") return "Unknown artist";
   const raw = value
     .replace(/\s+/g, " ")
-    .replace(/(?:\(|\[)(?:official|topic|audio|video|lyrics?|visualizer|hd|hq)[^\])]*(?:\)|\])/gi, "")
+    .replace(
+      /(?:\(|\[)(?:official|topic|audio|video|lyrics?|visualizer|hd|hq)[^\])]*(?:\)|\])/gi,
+      "",
+    )
     .replace(/\s+(?:topic|vevo)$/i, "")
     .trim();
   if (!raw || INVALID_ARTIST_NAMES.test(raw) || !/[\p{L}\p{N}]/u.test(raw)) {
@@ -44,7 +48,11 @@ export function cleanArtistName(value: unknown, title?: string): string {
     .filter(Boolean);
 
   for (const candidate of candidates) {
-    if (INVALID_ARTIST_NAMES.test(candidate) || !/[\p{L}\p{N}]/u.test(candidate)) continue;
+    if (
+      INVALID_ARTIST_NAMES.test(candidate) ||
+      !/[\p{L}\p{N}]/u.test(candidate)
+    )
+      continue;
     if (titleKey && normalizeArtistText(candidate) === titleKey) continue;
     return candidate.replace(/\s+(?:topic|vevo)$/i, "").trim() || candidate;
   }
@@ -57,9 +65,15 @@ export function cleanTrackTitle(value: string): string {
   const suffixPatterns = [
     /\s+[-–—]\s+music\s+for\s+.*$/i,
     /\s+[-–—|]\s*(?:official\s+)?(?:music\s+video|music\s+audio|audio|lyrics?|visualizer)\s*$/i,
-    /\s*(?:\(|\[)\s*(?:official\s+)?(?:music\s+video|music\s+audio|audio|lyrics?|visualizer)\s*(?:\)|\])\s*$/i,
+    // "Official Video" was missing from the alternation, so by far the most
+    // common YouTube suffix survived onto the displayed title — and then into
+    // every search built from it. `cleanArtistName` already stripped the same
+    // wording from the artist field, so the two disagreed about the same
+    // upload. Both bracketed and trailing forms are handled.
+    /\s*(?:\(|\[)\s*(?:official\s+)?(?:music\s+video|music\s+audio|official\s+video|video|audio|lyrics?|visualizer)\s*(?:\)|\])\s*$/i,
   ];
-  for (const pattern of suffixPatterns) title = title.replace(pattern, "").trim();
+  for (const pattern of suffixPatterns)
+    title = title.replace(pattern, "").trim();
   return title || value.trim();
 }
 
