@@ -194,7 +194,10 @@ async function ensurePlayer(): Promise<YtPlayerLike> {
   hostEl = host;
 
   player = await new Promise<YtPlayerLike>((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error("YT player init timed out")), 10_000);
+    const timeout = setTimeout(
+      () => reject(new Error("YT player init timed out")),
+      10_000,
+    );
     try {
       new YT.Player(mount, {
         height: "100%",
@@ -489,7 +492,9 @@ export function trackFrame(frame: HTMLElement): () => void {
 
 /** YT error code → human message (100/101/150 = unusable video). */
 export function isFatalError(code: number): boolean {
-  return code === 2 || code === 5 || code === 100 || code === 101 || code === 150;
+  return (
+    code === 2 || code === 5 || code === 100 || code === 101 || code === 150
+  );
 }
 
 /** The video id the engine currently has loaded — null when nothing loaded. */
@@ -523,20 +528,25 @@ export function getActualVideoId(): string | null {
  * the <audio> element (Web Audio effects chain) supplies the sound. All
  * engine events are suppressed while in this mode.
  */
-export function startSlave(videoId: string, startSeconds: number): Promise<void> {
+export function startSlave(
+  videoId: string,
+  startSeconds: number,
+): Promise<void> {
   slaveMode = true;
-  return play(videoId, { volume: 0, muted: true, startSeconds: Math.max(0, startSeconds) }).finally(
-    () => {
-      // Re-assert silence: play() may have run before slaveMode was observed
-      // by a concurrent volume/mute call, leaving the slave audible.
-      try {
-        player?.setVolume(0);
-        player?.mute();
-      } catch {
-        /* not ready */
-      }
-    },
-  );
+  return play(videoId, {
+    volume: 0,
+    muted: true,
+    startSeconds: Math.max(0, startSeconds),
+  }).finally(() => {
+    // Re-assert silence: play() may have run before slaveMode was observed
+    // by a concurrent volume/mute call, leaving the slave audible.
+    try {
+      player?.setVolume(0);
+      player?.mute();
+    } catch {
+      /* not ready */
+    }
+  });
 }
 
 /** Exit slave mode: events resume, video pauses. */
@@ -610,6 +620,19 @@ export async function ensureVideoPlaying(
     if (state === 0) break;
   }
   return false;
+}
+
+/**
+ * Raw IFrame player state: -1 unstarted, 0 ended, 1 playing, 2 paused,
+ * 3 buffering, 5 cued. -1 also means "not ready yet", so callers should fall
+ * back to their own bookkeeping rather than treating it as paused.
+ */
+export function getEngineState(): number {
+  try {
+    return player?.getPlayerState?.() ?? -1;
+  } catch {
+    return -1;
+  }
 }
 
 /** Current playback position of the engine (for drift resync). */

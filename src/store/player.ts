@@ -882,6 +882,19 @@ let lastResumeSave = 0;
 
 function restartCurrent(): void {
   const s = usePlayerStore.getState();
+  // When the sound comes from the <audio> element (any active effect or EQ)
+  // the IFrame is NOT the source. Restarting the IFrame there left the
+  // element sitting at the end of the song while a second, dry copy of the
+  // track started playing on top of it — "repeat one" then either did nothing
+  // or came back as two overlapping copies with the effect inaudible.
+  if (s.current && audioElementIsSource(s.current)) {
+    const audio = getAudio();
+    usePlayerStore.setState({ currentTime: 0, isBuffering: false });
+    audio.currentTime = 0;
+    void audio.play().catch(() => undefined);
+    syncMediaSession(s.current, true);
+    return;
+  }
   if (s.current?.youtubeId) {
     // The engine is built with `autoplay: 1`, so by the time the repeat-one
     // hook runs the player has ALREADY rolled on to a YouTube-chosen related
@@ -1172,17 +1185,24 @@ function handleEnded(): void {
       // Filter INSIDE the updater: maybeAutofillQueue may have appended the
       // same related mix while this fetch was in flight — filtering against a
       // stale queue snapshot used to double-append the same tracks.
+      let appended = 0;
       usePlayerStore.setState((st) => {
         const fresh = related.filter(
           (t) => !st.queue.some((q) => q.id === t.id),
         );
         if (fresh.length === 0) return st;
+        appended = fresh.length;
         return { queue: [...st.queue, ...fresh] };
       });
+      // Count what was ACTUALLY appended. `related.length` overcounts whenever
+      // some of the mix was already queued, and advancing by
+      // `queue.length - related.length` then started the wrong track — or, if
+      // every track was a duplicate, jumped to a random earlier one.
+      if (appended === 0) return;
       // Only auto-advance if nothing else started playing meanwhile.
       const after = usePlayerStore.getState();
       if (after.current?.id === seed.id && !after.isPlaying) {
-        after.playIndex(after.queue.length - related.length);
+        after.playIndex(after.queue.length - appended);
       }
     });
     return;
@@ -1878,9 +1898,28 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     const s = get();
     if (s.current) {
       if (s.current.youtubeId && !audioElementIsSource(s.current)) {
-        // The engine emits state events, so just nudge it in the right direction.
-        if (s.isPlaying) ytEngine.pause();
-        else ytEngine.resume();
+        // Decide from the engine's REAL state rather than the polled
+        // `isPlaying` flag. When the two disagree the Pause button did
+        // nothing at all: pressing it called pauseVideo() on a player that was
+        // already paused, the store kept saying "playing", and the transport
+        // looked stuck.
+        const engineState = ytEngine.getEngineState();
+        const enginePlaying =
+          engineState === 1 || engineState === 3
+            ? true
+            : engineState === 0 || engineState === 2 || engineState === 5
+              ? false
+              : s.isPlaying;
+        if (enginePlaying) {
+          ytEngine.pause();
+        } else if (ytEngine.getLoadedVideoId() === s.current.youtubeId) {
+          // Already has this video — resume in place so the position survives.
+          ytEngine.resume();
+        } else {
+          void ytEngine
+            .play(s.current.youtubeId, { volume: s.volume, muted: s.muted })
+            .catch(() => undefined);
+        }
         return;
       }
       const audio = getAudio();
@@ -2199,9 +2238,15 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
   setInterval(() => {
     const s = usePlayerStore.getState();
     if (!ytEngine.isSlaveMode()) return;
-    const engineT = ytEngine.getEngineTime();
-    if (Math.abs(engineT - s.currentTime) > 1.5 && s.isPlaying) {
-      ytEngine.seek(s.currentTime);
+    // Skip while stalled: seeking a buffering player only digs it deeper.
+    if (!s.isPlaying || s.isBuffering) return;
+    // Align the picture to the element's LIVE clock. `currentTime` is a
+    // polled snapshot that lags by up to a tick, so correcting against it
+    // could visibly yank the video backwards on every pass.
+    const live = getAudio().currentTime;
+    if (!Number.isFinite(live)) return;
+    if (Math.abs(ytEngine.getEngineTime() - live) > 1.5) {
+      ytEngine.seek(live);
     }
   }, 3000);
 
@@ -2224,24 +2269,32 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
   const scheduleEffectRetry = (videoId: string) => {
     if (effectRetryTimer) clearTimeout(effectRetryTimer);
     let attempts = 0;
+    const retryLater = () => {
+      if (attempts < 8) effectRetryTimer = setTimeout(tryResolve, 15_000);
+    };
     const tryResolve = () => {
       attempts += 1;
-      void ytResolve(videoId).then((url) => {
-        if (url) {
-          const s = usePlayerStore.getState();
-          // Only swap if this song is still playing AND the effect is still
-          // wanted — never hijack playback after the user moved on.
-          if (s.current?.youtubeId !== videoId || s.audioFilter === "off")
+      void ytResolve(videoId)
+        .then((url) => {
+          if (url) {
+            const s = usePlayerStore.getState();
+            // Only swap if this song is still playing AND the effect is still
+            // wanted — never hijack playback after the user moved on.
+            if (s.current?.youtubeId !== videoId || s.audioFilter === "off")
+              return;
+            swapToFilteredStream(s.current, s.currentTime);
+            const label =
+              AUDIO_FILTERS.find((f) => f.id === s.audioFilter)?.label ??
+              "Effect";
+            toast.success(`${label} applied`, { id: "fx-retry" });
             return;
-          swapToFilteredStream(s.current, s.currentTime);
-          const label =
-            AUDIO_FILTERS.find((f) => f.id === s.audioFilter)?.label ??
-            "Effect";
-          toast.success(`${label} applied`, { id: "fx-retry" });
-          return;
-        }
-        if (attempts < 8) effectRetryTimer = setTimeout(tryResolve, 15_000);
-      });
+          }
+          retryLater();
+        })
+        // A rejected resolve (dropped connection, aborted fetch) must not end
+        // the chain: with no catch the retry timer was never armed again, so
+        // one network blip left the effect off for the rest of the session.
+        .catch(() => retryLater());
     };
     effectRetryTimer = setTimeout(tryResolve, 12_000);
   };
@@ -2282,33 +2335,37 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     // the listener in dead silence for the whole of it — the audible delay on
     // every effect change. The old source keeps playing until the replacement
     // stream is actually in hand.
-    void ytResolve(videoId).then((url) => {
-      if (!url || seq !== loadSeq || myFilterSeq !== filterLoadSeq) return;
-      const audio = getAudio();
-      // Read the clock HERE, at the moment the new stream takes over, rather
-      // than reusing the position captured when the swap was requested.
-      const from = livePlaybackPosition(videoId) ?? at;
-      ytEngine.pause();
-      audio.pause();
-      audio.src = url;
-      audio.playbackRate = get().rate;
-      audio.load();
-      if (from > 0) {
-        const applyResume = () => {
-          audio.currentTime = from;
-          usePlayerStore.setState({ currentTime: from });
-        };
-        if (audio.readyState >= 1) applyResume();
-        else
-          audio.addEventListener("loadedmetadata", applyResume, { once: true });
-      }
-      void audio.play().catch(() => undefined);
-      usePlayerStore.setState({
-        current: { ...track, audioUrl: url },
-        currentTime: from,
-      });
-      syncVideoSlave();
-    });
+    void ytResolve(videoId)
+      .then((url) => {
+        if (!url || seq !== loadSeq || myFilterSeq !== filterLoadSeq) return;
+        const audio = getAudio();
+        // Read the clock HERE, at the moment the new stream takes over, rather
+        // than reusing the position captured when the swap was requested.
+        const from = livePlaybackPosition(videoId) ?? at;
+        ytEngine.pause();
+        audio.pause();
+        audio.src = url;
+        audio.playbackRate = get().rate;
+        audio.load();
+        if (from > 0) {
+          const applyResume = () => {
+            audio.currentTime = from;
+            usePlayerStore.setState({ currentTime: from });
+          };
+          if (audio.readyState >= 1) applyResume();
+          else
+            audio.addEventListener("loadedmetadata", applyResume, {
+              once: true,
+            });
+        }
+        void audio.play().catch(() => undefined);
+        usePlayerStore.setState({
+          current: { ...track, audioUrl: url },
+          currentTime: from,
+        });
+        syncVideoSlave();
+      })
+      .catch(() => undefined);
   };
 
   /**
