@@ -24,7 +24,11 @@ import {
   AUDIO_EFFECT_DELAY_MESSAGE,
 } from "@/lib/audio";
 import { useAuth } from "@/hooks/use-auth";
-import { clearPlayHistory, prewarmYoutubeStream, usePlayerStore } from "@/store/player";
+import {
+  clearPlayHistory,
+  prewarmYoutubeStream,
+  usePlayerStore,
+} from "@/store/player";
 import { cn } from "@/lib/utils";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -51,7 +55,13 @@ import {
   Trash2,
   UserRound,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+} from "react";
 import { Link } from "react-router";
 import { toast } from "sonner";
 import {
@@ -78,7 +88,10 @@ const MAX_LIVE_WALLPAPER_BYTES = 100_000_000;
 const DEFAULT_WALLPAPER_BLUR_AMOUNT = 24;
 const MAX_WALLPAPER_BLUR_AMOUNT = 48;
 
-type WallpaperLibraryEntry = StoredWallpaper & { url: string; kind: WallpaperKind };
+type WallpaperLibraryEntry = StoredWallpaper & {
+  url: string;
+  kind: WallpaperKind;
+};
 
 const SHORTCUTS: [string, string][] = [
   ["Space", "Play / pause"],
@@ -101,12 +114,18 @@ const FOCUS_LAYOUTS = [
   { id: "sleep", name: "Sleep", detail: "Dim with end-of-song stop" },
 ] as const;
 
+/**
+ * Ordered by how often a listener has a reason to open each category, and in
+ * the SAME order the sections render. The two used to disagree — the rail
+ * opened on Playback while the document started on Profile — so the
+ * highlighted chip disagreed with the content on first paint.
+ */
 const SETTINGS_SECTIONS = [
   ["Playback", "settings-playback", Gauge],
   ["Audio", "settings-audio", SlidersHorizontal],
   ["Appearance", "settings-appearance", Palette],
-  ["Profile", "settings-profile", UserRound],
   ["Personalize", "settings-personalization", Sparkles],
+  ["Profile", "settings-profile", UserRound],
   ["Shortcuts", "settings-shortcuts", Keyboard],
   ["Data", "settings-data", Database],
 ] as const;
@@ -198,7 +217,9 @@ export function SettingsDialog({
   const setWallpaper = usePlayerStore((s) => s.setWallpaper);
   const setWallpaperType = usePlayerStore((s) => s.setWallpaperType);
   const hideSidebarEmail = usePlayerStore((s) => s.hideSidebarEmail);
-  const toggleHideSidebarEmail = usePlayerStore((s) => s.toggleHideSidebarEmail);
+  const toggleHideSidebarEmail = usePlayerStore(
+    (s) => s.toggleHideSidebarEmail,
+  );
   const currentTrack = usePlayerStore((s) => s.current);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const togglePlay = usePlayerStore((s) => s.togglePlay);
@@ -231,14 +252,17 @@ export function SettingsDialog({
   const glowFrameRef = useRef<number | null>(null);
   const liveWallpaperInputRef = useRef<HTMLInputElement>(null);
   const [liveWallpaperFileName, setLiveWallpaperFileName] = useState("");
-  const [wallpaperLibrary, setWallpaperLibrary] = useState<WallpaperLibraryEntry[]>([]);
-  const [activeWallpaperKey, setActiveWallpaperKey] = useState<string | null>(() =>
-    getWallpaperKey(localStorage.getItem("ss.wallpaper")),
+  const [wallpaperLibrary, setWallpaperLibrary] = useState<
+    WallpaperLibraryEntry[]
+  >([]);
+  const [activeWallpaperKey, setActiveWallpaperKey] = useState<string | null>(
+    () => getWallpaperKey(localStorage.getItem("ss.wallpaper")),
   );
   const wallpaperLibraryUrlsRef = useRef<string[]>([]);
   const [liveWallpaperUrl, setLiveWallpaperUrl] = useState(() => {
     const saved = localStorage.getItem("ss.wallpaper");
-    return localStorage.getItem("ss.wallpaperType") === "video" && saved?.startsWith("http")
+    return localStorage.getItem("ss.wallpaperType") === "video" &&
+      saved?.startsWith("http")
       ? saved
       : "";
   });
@@ -250,7 +274,9 @@ export function SettingsDialog({
     if (Number.isFinite(storedAmount) && storedAmount > 0) {
       return Math.min(MAX_WALLPAPER_BLUR_AMOUNT, Math.round(storedAmount));
     }
-    return localStorage.getItem("ss.wallpaperBlur") === "0" ? 0 : DEFAULT_WALLPAPER_BLUR_AMOUNT;
+    return localStorage.getItem("ss.wallpaperBlur") === "0"
+      ? 0
+      : DEFAULT_WALLPAPER_BLUR_AMOUNT;
   });
   const [lowMemoryWallpaperPreviews, setLowMemoryWallpaperPreviews] = useState(
     () => localStorage.getItem("ss.lowMemoryWallpaperPreviews") !== "0",
@@ -263,22 +289,28 @@ export function SettingsDialog({
     const next = records.map((record) => ({
       ...record,
       kind: wallpaperKind(record),
-      url: activeKey === record.key && current?.startsWith("blob:")
-        ? current
-        : URL.createObjectURL(record.blob),
+      url:
+        activeKey === record.key && current?.startsWith("blob:")
+          ? current
+          : URL.createObjectURL(record.blob),
     }));
     wallpaperLibraryUrlsRef.current.forEach((url) => {
       if (url !== current) URL.revokeObjectURL(url);
     });
     wallpaperLibraryUrlsRef.current = next.map((entry) => entry.url);
     setWallpaperLibrary(next);
-    setActiveWallpaperKey(getWallpaperKey(localStorage.getItem("ss.wallpaper")));
+    setActiveWallpaperKey(
+      getWallpaperKey(localStorage.getItem("ss.wallpaper")),
+    );
   }, []);
 
   useEffect(() => {
     // Wallpaper library loading intentionally refreshes state when Settings opens.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (open) void loadWallpaperLibrary().catch(() => toast.error("Couldn't load saved wallpapers"));
+    if (open)
+      void loadWallpaperLibrary().catch(() =>
+        toast.error("Couldn't load saved wallpapers"),
+      );
   }, [open, loadWallpaperLibrary]);
 
   useEffect(() => {
@@ -293,18 +325,29 @@ export function SettingsDialog({
     window.addEventListener("synq:track-palettes-change", onTrackPaletteChange);
     window.addEventListener("synq:focus-layout-change", onFocusLayoutChange);
     return () => {
-      window.removeEventListener("synq:track-palettes-change", onTrackPaletteChange);
-      window.removeEventListener("synq:focus-layout-change", onFocusLayoutChange);
+      window.removeEventListener(
+        "synq:track-palettes-change",
+        onTrackPaletteChange,
+      );
+      window.removeEventListener(
+        "synq:focus-layout-change",
+        onFocusLayoutChange,
+      );
     };
   }, []);
 
   useEffect(() => {
     const onFocusLayoutChange = (event: Event) => {
       const next = (event as CustomEvent<string>).detail;
-      if (!pageMode && isFocusLayout(next) && next !== "off") onOpenChange(false);
+      if (!pageMode && isFocusLayout(next) && next !== "off")
+        onOpenChange(false);
     };
     window.addEventListener("synq:focus-layout-change", onFocusLayoutChange);
-    return () => window.removeEventListener("synq:focus-layout-change", onFocusLayoutChange);
+    return () =>
+      window.removeEventListener(
+        "synq:focus-layout-change",
+        onFocusLayoutChange,
+      );
   }, [onOpenChange, pageMode]);
 
   useEffect(() => {
@@ -321,7 +364,8 @@ export function SettingsDialog({
     window.addEventListener("resize", invalidateBounds);
     return () => {
       window.removeEventListener("resize", invalidateBounds);
-      if (glowFrameRef.current !== null) cancelAnimationFrame(glowFrameRef.current);
+      if (glowFrameRef.current !== null)
+        cancelAnimationFrame(glowFrameRef.current);
     };
   }, []);
 
@@ -379,11 +423,11 @@ export function SettingsDialog({
   // can then switch to the filtered audio path without waiting on a second
   // network round-trip when the user moves a slider.
   useEffect(() => {
-    if (open && currentTrack?.youtubeId) prewarmYoutubeStream(currentTrack.youtubeId);
+    if (open && currentTrack?.youtubeId)
+      prewarmYoutubeStream(currentTrack.youtubeId);
   }, [open, currentTrack?.youtubeId]);
 
-  const displayName =
-    user?.name ?? (user?.isAnonymous ? "Guest" : "Listener");
+  const displayName = user?.name ?? (user?.isAnonymous ? "Guest" : "Listener");
   const avatarInitials = displayName
     .split(/\s+/)
     .map((part) => part[0])
@@ -424,7 +468,9 @@ export function SettingsDialog({
     try {
       const n = await clearHistory({});
       clearPlayHistory();
-      toast.success(`Cleared ${n} ${n === 1 ? "entry" : "entries"} from your history`);
+      toast.success(
+        `Cleared ${n} ${n === 1 ? "entry" : "entries"} from your history`,
+      );
     } catch {
       toast.error("Couldn't clear history — try again");
     } finally {
@@ -457,7 +503,11 @@ export function SettingsDialog({
         await updateImage({ image: reader.result });
         toast.success("Profile picture updated");
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Couldn't update your profile picture");
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Couldn't update your profile picture",
+        );
       } finally {
         setSavingAvatar(false);
       }
@@ -498,7 +548,9 @@ export function SettingsDialog({
     toast.success("Live wallpaper applied");
   };
 
-  const handleLiveWallpaperFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+  const handleLiveWallpaperFileChange = async (
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
     const input = event.currentTarget;
     const file = input.files?.[0];
     input.value = "";
@@ -516,7 +568,10 @@ export function SettingsDialog({
       const record = await saveWallpaperLibraryFile(file);
       const url = await getWallpaperUrl(record.key);
       if (!url) throw new Error("Wallpaper file was not found after saving");
-      if (wallpaper?.startsWith("blob:") && !wallpaperLibraryUrlsRef.current.includes(wallpaper)) {
+      if (
+        wallpaper?.startsWith("blob:") &&
+        !wallpaperLibraryUrlsRef.current.includes(wallpaper)
+      ) {
         URL.revokeObjectURL(wallpaper);
       }
       setWallpaper(url, "video");
@@ -549,7 +604,10 @@ export function SettingsDialog({
       .then(async (record) => {
         const url = await getWallpaperUrl(record.key);
         if (!url) throw new Error("Wallpaper file was not found after saving");
-        if (wallpaper?.startsWith("blob:") && !wallpaperLibraryUrlsRef.current.includes(wallpaper)) {
+        if (
+          wallpaper?.startsWith("blob:") &&
+          !wallpaperLibraryUrlsRef.current.includes(wallpaper)
+        ) {
           URL.revokeObjectURL(wallpaper);
         }
         setWallpaper(url, "image");
@@ -564,7 +622,10 @@ export function SettingsDialog({
   };
 
   const activateWallpaperEntry = (entry: WallpaperLibraryEntry) => {
-    if (wallpaper?.startsWith("blob:") && !wallpaperLibraryUrlsRef.current.includes(wallpaper)) {
+    if (
+      wallpaper?.startsWith("blob:") &&
+      !wallpaperLibraryUrlsRef.current.includes(wallpaper)
+    ) {
       URL.revokeObjectURL(wallpaper);
     }
     setWallpaper(entry.url, entry.kind);
@@ -577,7 +638,9 @@ export function SettingsDialog({
     await deleteWallpaperFile(entry.key);
     if (wallpaperLibraryUrlsRef.current.includes(entry.url)) {
       URL.revokeObjectURL(entry.url);
-      wallpaperLibraryUrlsRef.current = wallpaperLibraryUrlsRef.current.filter((url) => url !== entry.url);
+      wallpaperLibraryUrlsRef.current = wallpaperLibraryUrlsRef.current.filter(
+        (url) => url !== entry.url,
+      );
     }
     if (activeWallpaperKey === entry.key) {
       setWallpaper(null, entry.kind);
@@ -596,7 +659,9 @@ export function SettingsDialog({
     setSettingsDepth(true);
     setReduceMotion(false);
     if (!liquidGlass) toggleLiquidGlass();
-    if (usePlayerStore.getState().cardTransparency !== DEFAULT_CARD_TRANSPARENCY) {
+    if (
+      usePlayerStore.getState().cardTransparency !== DEFAULT_CARD_TRANSPARENCY
+    ) {
       usePlayerStore.getState().setCardTransparency(DEFAULT_CARD_TRANSPARENCY);
     }
     if (!ambientGlow) toggleAmbientGlow();
@@ -615,12 +680,17 @@ export function SettingsDialog({
     localStorage.setItem("ss.visualizer", "1");
     localStorage.setItem("ss.performanceMode", "0");
     document.documentElement.classList.remove("no-glass", "reduce-motion");
-    window.dispatchEvent(new CustomEvent("synq:track-palettes-change", { detail: true }));
+    window.dispatchEvent(
+      new CustomEvent("synq:track-palettes-change", { detail: true }),
+    );
     toast.success("Visual preferences reset");
   };
 
   const clearWallpaper = () => {
-    if (wallpaper?.startsWith("blob:") && !wallpaperLibraryUrlsRef.current.includes(wallpaper)) {
+    if (
+      wallpaper?.startsWith("blob:") &&
+      !wallpaperLibraryUrlsRef.current.includes(wallpaper)
+    ) {
       URL.revokeObjectURL(wallpaper);
     }
     wallpaperLibraryUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
@@ -646,7 +716,10 @@ export function SettingsDialog({
    * silently resurrected the wallpaper the user just reverted away from.
    */
   const revertWallpaper = () => {
-    if (wallpaper?.startsWith("blob:") && !wallpaperLibraryUrlsRef.current.includes(wallpaper)) {
+    if (
+      wallpaper?.startsWith("blob:") &&
+      !wallpaperLibraryUrlsRef.current.includes(wallpaper)
+    ) {
       URL.revokeObjectURL(wallpaper);
     }
     setActiveWallpaperKey(null);
@@ -659,16 +732,23 @@ export function SettingsDialog({
     setWallpaperType("image");
     setWallpaperBlurAmount(DEFAULT_WALLPAPER_BLUR_AMOUNT);
     localStorage.setItem("ss.wallpaperBlur", "1");
-    localStorage.setItem("ss.wallpaperBlurAmount", String(DEFAULT_WALLPAPER_BLUR_AMOUNT));
+    localStorage.setItem(
+      "ss.wallpaperBlurAmount",
+      String(DEFAULT_WALLPAPER_BLUR_AMOUNT),
+    );
     window.dispatchEvent(
-      new CustomEvent("ss:wallpaper-blur-change", { detail: DEFAULT_WALLPAPER_BLUR_AMOUNT }),
+      new CustomEvent("ss:wallpaper-blur-change", {
+        detail: DEFAULT_WALLPAPER_BLUR_AMOUNT,
+      }),
     );
     toast("Back to the default background");
   };
 
   // Which settings category is currently on screen. The rail marks it, so the
   // section list reads as tabs instead of seven more buttons.
-  const [activeSection, setActiveSection] = useState<string>(SETTINGS_SECTIONS[0][1]);
+  const [activeSection, setActiveSection] = useState<string>(
+    SETTINGS_SECTIONS[0][1],
+  );
 
   // Keep the marked tab in step with the category actually being read. Only
   // the full settings page scrolls the whole list; the compact dialog is short
@@ -682,7 +762,10 @@ export function SettingsDialog({
         // A section hidden at this width (the keyboard panel below `lg`) has a
         // zero rect, which would read as "at the top" and pin the highlight to
         // it, so unrendered sections are left out entirely.
-        .filter((element): element is HTMLElement => element !== null && element.offsetParent !== null);
+        .filter(
+          (element): element is HTMLElement =>
+            element !== null && element.offsetParent !== null,
+        );
 
     // The marked tab has to agree with what is on screen, so it is computed
     // from the sections' own positions. The IntersectionObserver version only
@@ -713,10 +796,13 @@ export function SettingsDialog({
       const atBottom =
         container instanceof HTMLElement &&
         container.scrollHeight > container.clientHeight + 4 &&
-        container.scrollTop + container.clientHeight >= container.scrollHeight - 4;
+        container.scrollTop + container.clientHeight >=
+          container.scrollHeight - 4;
       if (atBottom) {
         const last = tops.reduce((a, b) => (b.top > a.top ? b : a));
-        setActiveSection((previous) => (previous === last.id ? previous : last.id));
+        setActiveSection((previous) =>
+          previous === last.id ? previous : last.id,
+        );
         return;
       }
 
@@ -757,7 +843,11 @@ export function SettingsDialog({
   }, [pageMode, open]);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange} modal={pageMode ? false : undefined}>
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+      modal={pageMode ? false : undefined}
+    >
       <DialogContent
         hideOverlay={pageMode}
         showCloseButton={!pageMode}
@@ -770,18 +860,21 @@ export function SettingsDialog({
                    `jumpToSetting` scrolls `<main>` by hand — a second scroll
                    container here clipped the sections and broke that math. */
                 "settings-page-grid liquid-glass settings-liquid-glass relative !static !top-auto !left-auto !z-10 !mx-auto !grid !w-full !max-w-5xl !max-h-none !translate-x-0 !translate-y-0 !gap-0 !overflow-y-visible !rounded-3xl !border !border-white/10 !p-3.5 !shadow-xl sm:!p-8",
-                settingsShimmer ? "settings-glass-shimmer" : "settings-glass-still",
+                settingsShimmer
+                  ? "settings-glass-shimmer"
+                  : "settings-glass-still",
                 settingsDepth && "settings-glass-depth",
               )
-            /* 85dvh, not 85vh: `vh` ignores the collapsing browser chrome, so
+            : /* 85dvh, not 85vh: `vh` ignores the collapsing browser chrome, so
                on a phone the dialog ran off under the URL bar. */
-            : "glass-card !fixed max-h-[85dvh] max-w-md overflow-y-auto"
+              "glass-card !fixed max-h-[85dvh] max-w-md overflow-y-auto"
         }
         onPointerEnter={(event) => {
           if (pointerEffects && event.pointerType !== "touch") {
             // Re-measure on enter: the window can have been resized while this
             // surface was open, and a stale rect would offset the glow.
-            surfaceBoundsRef.current = event.currentTarget.getBoundingClientRect();
+            surfaceBoundsRef.current =
+              event.currentTarget.getBoundingClientRect();
             event.currentTarget.style.setProperty("--pointer-opacity", "1");
           }
         }}
@@ -791,7 +884,8 @@ export function SettingsDialog({
           // sheets on it, so a forced layout read on every pointer move is
           // exactly the kind of cost the pointer effects are meant to avoid.
           if (surfaceBoundsRef.current === null) {
-            surfaceBoundsRef.current = event.currentTarget.getBoundingClientRect();
+            surfaceBoundsRef.current =
+              event.currentTarget.getBoundingClientRect();
           }
           const rect = surfaceBoundsRef.current;
           pointerPositionRef.current = {
@@ -840,9 +934,7 @@ export function SettingsDialog({
         <nav
           className={cn(
             "settings-jump-bar settings-jump-glass relative z-30 -mx-1 rounded-2xl border border-white/[0.14] px-1 py-2",
-            pageMode
-              ? "!sticky top-3 z-50"
-              : "sticky top-0 bg-white/[0.03]",
+            pageMode ? "!sticky top-3 z-50" : "sticky top-0 bg-white/[0.03]",
           )}
           aria-label="Settings sections"
         >
@@ -865,7 +957,8 @@ export function SettingsDialog({
                   aria-current={activeSection === id ? "true" : undefined}
                   className={cn(
                     "inline-flex shrink-0 items-center gap-1.5 rounded-full border border-transparent px-2.5 py-1.5 text-[11px] font-semibold text-foreground/70 transition-colors hover:border-white/15 hover:bg-white/[0.07] hover:text-foreground",
-                    activeSection === id && "settings-tab-active border-white/15 bg-white/[0.09] text-foreground",
+                    activeSection === id &&
+                      "settings-tab-active border-white/15 bg-white/[0.09] text-foreground",
                     // Keyboard shortcuts are a pointer-and-keyboard feature:
                     // no tab, no panel, nothing to tap on a phone. The cutoff is
                     // `lg`, not `md`, because a phone in landscape is wider than
@@ -881,8 +974,1116 @@ export function SettingsDialog({
           </div>
         </nav>
 
+        {/* playback */}
+        <section
+          id="settings-playback"
+          className="scroll-mt-20 flex flex-col gap-2.5"
+        >
+          <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
+            <Gauge className="size-3.5" />
+            Playback
+          </p>
+
+          {currentTrack && (
+            <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-3">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium">Now playing</p>
+                  <p className="text-xs text-muted-foreground">
+                    Quick controls without leaving Settings
+                  </p>
+                </div>
+                <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-[rgb(var(--tint))]">
+                  <span
+                    className={cn(
+                      "size-1.5 rounded-full",
+                      isPlaying
+                        ? "animate-pulse bg-[rgb(var(--tint))]"
+                        : "bg-white/30",
+                    )}
+                  />
+                  {isPlaying ? "Live" : "Paused"}
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                {currentTrack.coverUrl ? (
+                  <img
+                    src={currentTrack.coverUrl}
+                    alt=""
+                    className="size-12 shrink-0 rounded-lg object-cover shadow-md"
+                  />
+                ) : (
+                  <div className="size-12 shrink-0 rounded-lg bg-white/[0.08]" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold">
+                    {currentTrack.title}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {currentTrack.artistName}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={togglePlay}
+                  aria-label={
+                    isPlaying ? "Pause current track" : "Play current track"
+                  }
+                  className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[rgb(var(--tint))] text-black transition-transform hover:scale-105 active:scale-95"
+                >
+                  {isPlaying ? (
+                    <Pause className="size-4 fill-current" />
+                  ) : (
+                    <Play className="size-4 fill-current" />
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={next}
+                  aria-label="Skip to next track"
+                  className="flex size-9 shrink-0 items-center justify-center rounded-full border border-white/10 text-muted-foreground transition-colors hover:border-white/25 hover:text-foreground"
+                >
+                  <SkipForward className="size-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          <ToggleRow
+            label="Shuffle by default"
+            description="Start queues shuffled"
+            on={shuffle}
+            onToggle={toggleShuffle}
+          />
+          <ToggleRow
+            label="Smart shuffle"
+            description="Avoid recently played tracks when filling shuffle queues"
+            on={smartShuffle}
+            onToggle={() => {
+              toggleSmartShuffle();
+              toast(smartShuffle ? "Smart shuffle off" : "Smart shuffle on");
+            }}
+          />
+
+          <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
+            <div className="flex items-center gap-2">
+              <Clock3 className="size-4 text-[rgb(var(--tint))]" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium">Sleep timer</p>
+                <p className="text-xs text-muted-foreground">
+                  Stop playback automatically
+                </p>
+              </div>
+              {sleepAtSongEnd || sleepEndsAt !== null ? (
+                <span className="text-[10px] font-semibold uppercase tracking-widest text-[rgb(var(--tint))]">
+                  Active
+                </span>
+              ) : null}
+            </div>
+            <div className="mt-2.5 grid grid-cols-3 gap-1.5">
+              {[
+                { label: "Off", value: null },
+                { label: "Song end", value: "end" as const },
+                { label: "15 min", value: 15 },
+                { label: "30 min", value: 30 },
+                { label: "60 min", value: 60 },
+              ].map((option) => {
+                const active =
+                  option.value === null
+                    ? sleepEndsAt === null && !sleepAtSongEnd
+                    : option.value === "end"
+                      ? sleepAtSongEnd
+                      : // The timer preview is intentionally based on the current time.
+                        // eslint-disable-next-line react-hooks/purity
+                        sleepEndsAt !== null &&
+                        sleepEndsAt - Date.now() >
+                          (option.value - 1) * 60_000 &&
+                        sleepEndsAt - Date.now() < (option.value + 1) * 60_000;
+                return (
+                  <button
+                    key={option.label}
+                    type="button"
+                    onClick={() => {
+                      setSleepTimer(option.value);
+                      toast(
+                        option.value === null
+                          ? "Sleep timer off"
+                          : option.value === "end"
+                            ? "Stopping after this song"
+                            : `Sleep timer set for ${option.value} minutes`,
+                      );
+                    }}
+                    className={cn(
+                      "rounded-lg border px-2 py-1.5 text-[11px] font-semibold transition-colors",
+                      active
+                        ? "border-[rgb(var(--tint))] bg-[rgb(var(--tint)_/_0.14)] text-[rgb(var(--tint))]"
+                        : "border-white/10 text-muted-foreground hover:border-white/25 hover:text-foreground",
+                    )}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* default playback speed */}
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
+            <div className="min-w-0">
+              <p className="text-sm font-medium">Default speed</p>
+              <p className="text-xs text-muted-foreground">
+                Applies to new tracks
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-1">
+              {[0.75, 1, 1.25, 1.5].map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setRate(r)}
+                  className={cn(
+                    "rounded-full px-2 py-1 text-[11px] font-semibold tabular-nums transition-colors",
+                    rate === r
+                      ? "bg-[rgb(var(--tint)_/_0.2)] text-[rgb(var(--tint))]"
+                      : "text-muted-foreground hover:bg-white/[0.06] hover:text-foreground",
+                  )}
+                >
+                  {r}×
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <Separator className="bg-white/[0.07]" />
+
+        {/* audio */}
+        <section
+          id="settings-audio"
+          className="scroll-mt-20 flex flex-col gap-2.5"
+        >
+          <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
+            <SlidersHorizontal className="size-3.5" />
+            Audio
+          </p>
+
+          {/* presets */}
+          <div className="flex flex-wrap gap-1.5">
+            {[
+              { label: "Flat", bass: 0, treble: 0 },
+              { label: "Bass Boost", bass: 10, treble: 0 },
+              { label: "Treble Boost", bass: 0, treble: 8 },
+              { label: "Vocal", bass: -3, treble: 5 },
+              { label: "Rock", bass: 5, treble: 4 },
+              { label: "Pop", bass: 3, treble: 3 },
+              { label: "Classical", bass: 1, treble: 2 },
+              { label: "Electronic", bass: 8, treble: 3 },
+            ].map((p) => (
+              <button
+                key={p.label}
+                type="button"
+                onClick={() => {
+                  applyEqPreset({ bass: p.bass, treble: p.treble });
+                  persistEq({ ...eq, bass: p.bass, treble: p.treble });
+                  toast(`EQ preset: ${p.label}`);
+                }}
+                className={cn(
+                  "rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
+                  eq.bass === p.bass && eq.treble === p.treble
+                    ? "border-transparent bg-[rgb(var(--tint)_/_0.2)] text-[rgb(var(--tint))]"
+                    : "border-white/10 text-muted-foreground hover:border-white/30 hover:text-foreground",
+                )}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+
+          {/* bass */}
+          <EqSlider
+            label="Bass"
+            value={eq.bass ?? 0}
+            onChange={(v) => {
+              setEqBass(v);
+              persistEq({ ...eq, bass: v });
+              if (v !== 0) toast(AUDIO_EFFECT_DELAY_MESSAGE);
+            }}
+          />
+          <EqSlider
+            label="Treble"
+            value={eq.treble ?? 0}
+            onChange={(v) => {
+              setEqTreble(v);
+              persistEq({ ...eq, treble: v });
+            }}
+          />
+          <EqSlider
+            label="Balance"
+            min={-1}
+            max={1}
+            step={0.1}
+            value={eq.balance ?? 0}
+            format={(v) =>
+              v === 0
+                ? "Center"
+                : v < 0
+                  ? `L ${Math.round(-v * 100)}%`
+                  : `R ${Math.round(v * 100)}%`
+            }
+            onChange={(v) => {
+              setEqBalance(v);
+              persistEq({ ...eq, balance: v });
+            }}
+          />
+
+          <ToggleRow
+            label="Mono audio"
+            description="Same signal in both ears — good for single-ear listening"
+            on={eq.mono ?? false}
+            onToggle={() => {
+              const next = !(eq.mono ?? false);
+              setEqMono(next);
+              persistEq({ ...eq, mono: next });
+              if (next) toast(AUDIO_EFFECT_DELAY_MESSAGE);
+            }}
+          />
+
+          {/* live sound filters (8D etc.) */}
+          <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
+            <p className="text-sm font-medium">Sound effects</p>
+            <p className="text-xs text-muted-foreground">
+              Applies to what's playing right now
+            </p>
+            <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground/80">
+              Turning on sound effects may add a small delay before music
+              starts.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {AUDIO_FILTERS.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => {
+                    if (setAudioFilter(f.id)) {
+                      persistEq({ ...eq, filter: f.id });
+                      if (f.id !== "off") toast(AUDIO_EFFECT_DELAY_MESSAGE);
+                    } else toast.error("Effects need a browser with Web Audio");
+                  }}
+                  className={cn(
+                    "flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors",
+                    (eq.filter ?? "off") === f.id
+                      ? "border-transparent bg-[rgb(var(--tint)_/_0.2)] text-[rgb(var(--tint))]"
+                      : "border-white/10 text-muted-foreground hover:border-white/30 hover:text-foreground",
+                  )}
+                >
+                  <span>{f.icon}</span>
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <Separator className="bg-white/[0.07]" />
+
+        {/* appearance */}
+        <section
+          id="settings-appearance"
+          className="scroll-mt-20 flex flex-col gap-2.5"
+        >
+          <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-3">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold">Interface finish</p>
+                <p className="text-xs text-muted-foreground">
+                  Tune the light and depth of this settings surface.
+                </p>
+              </div>
+              <Sparkles className="size-4 text-[rgb(var(--tint))]" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <ToggleRow
+                label="Animated glass sheen"
+                description="Let light drift across the settings surface"
+                on={settingsShimmer}
+                onToggle={() => {
+                  const next = !settingsShimmer;
+                  setSettingsShimmer(next);
+                  localStorage.setItem("ss.settingsShimmer", next ? "1" : "0");
+                  toast(next ? "Settings sheen on" : "Settings sheen paused");
+                }}
+              />
+              <p className="px-1 text-[11px] leading-relaxed text-muted-foreground/80">
+                The animated sheen may pause or appear static when Reduce motion
+                is turned on.
+              </p>
+              <ToggleRow
+                label="Deep surface depth"
+                description="Add a softer floating shadow beneath the glass"
+                on={settingsDepth}
+                onToggle={() => {
+                  const next = !settingsDepth;
+                  setSettingsDepth(next);
+                  localStorage.setItem("ss.settingsDepth", next ? "1" : "0");
+                  toast(next ? "Surface depth on" : "Surface depth off");
+                }}
+              />
+              <ToggleRow
+                label="Reduce motion"
+                description="Minimize animation for a calmer, more accessible interface"
+                on={reduceMotion}
+                onToggle={() => {
+                  const next = !reduceMotion;
+                  setReduceMotion(next);
+                  localStorage.setItem("ss.reduceMotion", next ? "1" : "0");
+                  toast(next ? "Reduced motion on" : "Reduced motion off");
+                }}
+              />
+              <button
+                type="button"
+                onClick={resetVisualPreferences}
+                className="mt-1 inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:border-white/25 hover:bg-white/[0.05] hover:text-foreground"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                Reset visual preferences
+              </button>
+            </div>
+          </div>
+          <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
+            <Palette className="size-3.5" />
+            Appearance
+          </p>
+
+          <ToggleRow
+            label="Adaptive track palettes"
+            description="Build a smooth new color theme from every song's artwork"
+            on={trackPalettes}
+            onToggle={() => {
+              const next = !trackPalettes;
+              setTrackPalettes(next);
+              if (next) setAccentTheme("auto");
+              localStorage.setItem("ss.trackPalettes", next ? "1" : "0");
+              window.dispatchEvent(
+                new CustomEvent("synq:track-palettes-change", { detail: next }),
+              );
+              toast(next ? "Track palettes on" : "Track palettes off");
+            }}
+          />
+
+          {/* accent color */}
+          <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">Accent color</p>
+                <p className="text-xs text-muted-foreground">
+                  Tints buttons, highlights and the ambient glow
+                </p>
+              </div>
+            </div>
+            <div className="mt-2.5 flex flex-wrap items-center gap-2">
+              {(
+                [
+                  {
+                    id: "auto",
+                    label: "Auto",
+                    swatch: "linear-gradient(135deg,#f472b6,#60a5fa,#a3e635)",
+                  },
+                  { id: "lime", label: "Lime", swatch: "rgb(203 244 143)" },
+                  { id: "violet", label: "Violet", swatch: "rgb(167 139 250)" },
+                  { id: "blue", label: "Blue", swatch: "rgb(96 165 250)" },
+                  { id: "rose", label: "Rose", swatch: "rgb(251 113 133)" },
+                  { id: "amber", label: "Amber", swatch: "rgb(251 191 36)" },
+                  { id: "teal", label: "Teal", swatch: "rgb(45 212 191)" },
+                  { id: "orange", label: "Orange", swatch: "rgb(251 146 60)" },
+                ] as const
+              ).map(({ id, label, swatch }) => (
+                <button
+                  key={id}
+                  type="button"
+                  title={label}
+                  onClick={() => {
+                    setAccentTheme(id);
+                    const adaptive = id === "auto";
+                    setTrackPalettes(adaptive);
+                    localStorage.setItem(
+                      "ss.trackPalettes",
+                      adaptive ? "1" : "0",
+                    );
+                    window.dispatchEvent(
+                      new CustomEvent("synq:track-palettes-change", {
+                        detail: adaptive,
+                      }),
+                    );
+                  }}
+                  className={cn(
+                    "flex h-8 items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-semibold transition-all",
+                    accentTheme === id
+                      ? "border-white/60 bg-white/[0.1] text-foreground"
+                      : "border-white/10 text-muted-foreground hover:border-white/30",
+                  )}
+                >
+                  <span
+                    className="size-4 rounded-full ring-1 ring-white/20"
+                    style={{ background: swatch }}
+                  />
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* theme mode */}
+          <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
+            <p className="text-sm font-medium">Theme</p>
+            <div className="mt-2 grid grid-cols-3 gap-1.5">
+              {(
+                [
+                  { id: "dark", label: "Dark" },
+                  { id: "light", label: "Light" },
+                  { id: "amoled", label: "AMOLED" },
+                ] as const
+              ).map(({ id, label }) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setThemeMode(id)}
+                  className={cn(
+                    "rounded-lg border px-2 py-1.5 text-xs font-semibold transition-colors",
+                    themeMode === id
+                      ? "border-[rgb(var(--tint))] bg-[rgb(var(--tint)_/_0.14)] text-[rgb(var(--tint))]"
+                      : "border-white/10 text-muted-foreground hover:border-white/30 hover:text-foreground",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <ToggleRow
+            label="Personal wallpaper"
+            description="Show your saved image or video behind the app"
+            on={wallpaperEnabled}
+            onToggle={() => {
+              const next = !wallpaperEnabled;
+              setWallpaperEnabled(next);
+              localStorage.setItem("ss.wallpaperEnabled", next ? "1" : "0");
+              window.dispatchEvent(
+                new CustomEvent("ss:wallpaper-enabled-change", {
+                  detail: next,
+                }),
+              );
+              toast(next ? "Personal wallpaper on" : "Personal wallpaper off");
+            }}
+          />
+
+          {/* personal wallpaper */}
+          <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
+            <div className="flex items-center gap-3">
+              <div className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-black/20">
+                {wallpaper &&
+                wallpaperType === "video" &&
+                wallpaper !== LIVE_WALLPAPER_MARKER ? (
+                  <video
+                    src={wallpaper}
+                    muted
+                    loop
+                    autoPlay
+                    playsInline
+                    className="size-full object-cover"
+                  />
+                ) : wallpaper &&
+                  wallpaper !== LIVE_WALLPAPER_MARKER &&
+                  wallpaper !== IMAGE_WALLPAPER_MARKER ? (
+                  <img
+                    src={wallpaper}
+                    alt="Wallpaper preview"
+                    className="size-full object-cover"
+                  />
+                ) : (
+                  <ImagePlus className="size-5 text-muted-foreground" />
+                )}
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-medium">Personal wallpaper</p>
+                <p className="text-xs leading-5 text-muted-foreground">
+                  {wallpaperType === "video"
+                    ? "A looping video sits behind the app with a soft blur and dark glass overlay."
+                    : "Your image sits behind the app with a soft blur and dark glass overlay."}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-3 grid grid-cols-2 gap-1.5 rounded-lg border border-white/[0.07] bg-black/10 p-1">
+              {(["image", "video"] as const).map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => {
+                    if (type === wallpaperType) return;
+                    const hasVideoWallpaper = Boolean(
+                      wallpaper &&
+                      (wallpaper.startsWith("http") ||
+                        wallpaper.startsWith("blob:") ||
+                        wallpaper.startsWith("data:video/") ||
+                        wallpaper === LIVE_WALLPAPER_MARKER),
+                    );
+                    if (type === "video") {
+                      const savedEntry = wallpaperLibrary.find(
+                        (entry) => entry.kind === "video",
+                      );
+                      if (savedEntry) {
+                        activateWallpaperEntry(savedEntry);
+                        return;
+                      }
+                      // Restore the legacy single uploaded file when switching
+                      // back from Photo; switching modes never deletes it.
+                      void getLiveWallpaperUrl()
+                        .then((url) => {
+                          if (url) {
+                            if (
+                              wallpaper?.startsWith("blob:") &&
+                              !wallpaperLibraryUrlsRef.current.includes(
+                                wallpaper,
+                              )
+                            ) {
+                              URL.revokeObjectURL(wallpaper);
+                            }
+                            setWallpaper(url, "video");
+                            localStorage.setItem(
+                              "ss.wallpaper",
+                              LIVE_WALLPAPER_MARKER,
+                            );
+                            setActiveWallpaperKey(LIVE_WALLPAPER_KEY);
+                            return;
+                          }
+                          if (
+                            wallpaper &&
+                            !hasVideoWallpaper &&
+                            !wallpaper.startsWith("blob:")
+                          ) {
+                            localStorage.setItem(
+                              "ss.savedImageWallpaper",
+                              wallpaper,
+                            );
+                          }
+                          if (wallpaper && !hasVideoWallpaper) {
+                            setWallpaper(null, "video");
+                          } else {
+                            const savedVideoUrl =
+                              localStorage.getItem("ss.savedVideoUrl");
+                            if (savedVideoUrl)
+                              setWallpaper(savedVideoUrl, "video");
+                            else setWallpaperType("video");
+                          }
+                        })
+                        .catch(() => {
+                          if (wallpaper && !hasVideoWallpaper)
+                            setWallpaper(null, "video");
+                          else setWallpaperType("video");
+                        });
+                    } else {
+                      const savedEntry = wallpaperLibrary.find(
+                        (entry) => entry.kind === "image",
+                      );
+                      if (savedEntry) {
+                        activateWallpaperEntry(savedEntry);
+                        return;
+                      }
+                      // Restore the legacy single image file when switching back
+                      // from Live video.
+                      void getImageWallpaperUrl()
+                        .then((url) => {
+                          if (url) {
+                            if (
+                              wallpaper?.startsWith("blob:") &&
+                              !wallpaperLibraryUrlsRef.current.includes(
+                                wallpaper,
+                              )
+                            ) {
+                              URL.revokeObjectURL(wallpaper);
+                            }
+                            setWallpaper(url, "image");
+                            localStorage.setItem(
+                              "ss.wallpaper",
+                              IMAGE_WALLPAPER_MARKER,
+                            );
+                            setActiveWallpaperKey(IMAGE_WALLPAPER_KEY);
+                            return;
+                          }
+                          const savedImage = localStorage.getItem(
+                            "ss.savedImageWallpaper",
+                          );
+                          if (savedImage) setWallpaper(savedImage, "image");
+                          else if (wallpaper && hasVideoWallpaper)
+                            setWallpaper(null, "image");
+                          else setWallpaperType("image");
+                        })
+                        .catch(() => {
+                          if (wallpaper && hasVideoWallpaper)
+                            setWallpaper(null, "image");
+                          else setWallpaperType("image");
+                        });
+                    }
+                  }}
+                  className={cn(
+                    "rounded-md px-2 py-1.5 text-[11px] font-semibold transition-colors",
+                    wallpaperType === type
+                      ? "bg-white/[0.1] text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {type === "image" ? "Photo" : "Live video"}
+                </button>
+              ))}
+            </div>
+
+            {wallpaperType === "image" ? (
+              <>
+                <input
+                  ref={wallpaperInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/avif"
+                  className="hidden"
+                  onChange={handleWallpaperChange}
+                />
+                <div className="mt-2.5 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => wallpaperInputRef.current?.click()}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-white/25 hover:bg-white/[0.1]"
+                  >
+                    <ImagePlus className="size-3.5" />
+                    {wallpaper ? "Add another image" : "Choose image"}
+                  </button>
+                </div>
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  PNG, JPG, WebP or AVIF · up to 100 MB
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="mt-2.5 flex gap-2">
+                  <Input
+                    value={liveWallpaperUrl}
+                    onChange={(event) =>
+                      setLiveWallpaperUrl(event.target.value)
+                    }
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") applyLiveWallpaper();
+                    }}
+                    placeholder="https://.../wallpaper.mp4"
+                    aria-label="Live wallpaper video URL"
+                    className="min-w-0 text-xs"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={applyLiveWallpaper}
+                    className="shrink-0"
+                  >
+                    <Film className="size-3.5" />
+                    Apply
+                  </Button>
+                </div>
+                <p className="mt-2 text-[11px] leading-4 text-muted-foreground">
+                  Use a direct MP4/WebM URL, or choose a video file from your
+                  device.
+                </p>
+                <input
+                  ref={liveWallpaperInputRef}
+                  type="file"
+                  accept="video/mp4,video/webm,video/ogg"
+                  className="hidden"
+                  onChange={handleLiveWallpaperFileChange}
+                />
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => liveWallpaperInputRef.current?.click()}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-white/25 hover:bg-white/[0.1]"
+                  >
+                    <Film className="size-3.5" />
+                    Add video file
+                  </button>
+                  {liveWallpaperFileName && (
+                    <span className="max-w-full truncate py-1.5 text-xs text-[rgb(var(--tint))]">
+                      {liveWallpaperFileName}
+                    </span>
+                  )}
+                </div>
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  MP4, WebM or OGG · up to 100 MB
+                </p>
+              </>
+            )}
+
+            {wallpaperLibrary.length > 0 && (
+              <div className="mt-3 border-t border-white/[0.07] pt-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <p className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
+                    Saved wallpapers
+                  </p>
+                  <span className="text-[10px] text-muted-foreground">
+                    {wallpaperLibrary.length}{" "}
+                    {wallpaperLibrary.length === 1 ? "file" : "files"}
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {wallpaperLibrary.map((entry) => {
+                    const selected = activeWallpaperKey === entry.key;
+                    return (
+                      <div key={entry.key} className="group relative">
+                        <button
+                          type="button"
+                          onClick={() => activateWallpaperEntry(entry)}
+                          className={cn(
+                            "relative aspect-square w-full overflow-hidden rounded-lg border bg-black/20 transition-all hover:scale-[1.03]",
+                            selected
+                              ? "border-[rgb(var(--tint))] ring-2 ring-[rgb(var(--tint)_/_0.35]"
+                              : "border-white/10 hover:border-white/30",
+                          )}
+                          aria-label={`Use ${entry.name}`}
+                        >
+                          {entry.kind === "video" &&
+                            (lowMemoryWallpaperPreviews && !selected ? (
+                              <span className="flex size-full flex-col items-center justify-center gap-1 bg-gradient-to-br from-white/[0.1] to-black/30 text-white/55">
+                                <Film className="size-5" />
+                                <span className="text-[9px] font-medium">
+                                  Video
+                                </span>
+                              </span>
+                            ) : (
+                              <video
+                                src={entry.url}
+                                muted
+                                loop={!lowMemoryWallpaperPreviews}
+                                autoPlay={!lowMemoryWallpaperPreviews}
+                                playsInline
+                                preload={
+                                  lowMemoryWallpaperPreviews
+                                    ? "metadata"
+                                    : "auto"
+                                }
+                                className="size-full object-cover"
+                              />
+                            ))}
+                          {entry.kind === "image" && (
+                            <img
+                              src={entry.url}
+                              alt=""
+                              loading="lazy"
+                              decoding="async"
+                              className="size-full object-cover"
+                            />
+                          )}
+                          {selected && (
+                            <span className="absolute right-1.5 top-1.5 flex size-5 items-center justify-center rounded-full bg-[rgb(var(--tint))] text-black shadow-lg">
+                              <Check className="size-3" />
+                            </span>
+                          )}
+                        </button>
+                        <p
+                          className="mt-1 truncate text-[10px] text-muted-foreground"
+                          title={entry.name}
+                        >
+                          {entry.name}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => void removeWallpaperEntry(entry)}
+                          className="absolute right-1 top-1 hidden size-6 items-center justify-center rounded-full bg-black/70 text-red-300 backdrop-blur transition hover:bg-red-500/80 hover:text-white group-hover:flex"
+                          aria-label={`Remove ${entry.name}`}
+                        >
+                          <Trash2 className="size-3" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  Click any saved wallpaper to switch instantly. Files stay in
+                  this browser.
+                </p>
+              </div>
+            )}
+
+            {(wallpaper || wallpaperLibrary.length > 0) && (
+              /* Two distinct actions, deliberately side by side: "Revert" is
+                 safe and keeps every saved file, while "Remove library" is
+                 destructive and deletes them from IndexedDB. */
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={revertWallpaper}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-[rgb(var(--tint))]/40 hover:bg-[rgb(var(--tint))]/10 hover:text-[rgb(var(--tint))]"
+                >
+                  <RotateCcw className="size-3.5" />
+                  Revert to default
+                </button>
+                <button
+                  type="button"
+                  onClick={clearWallpaper}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-red-400/30 hover:bg-red-400/[0.08] hover:text-red-300"
+                >
+                  <ImageOff className="size-3.5" />
+                  Remove wallpaper library
+                </button>
+              </div>
+            )}
+          </div>
+
+          <ToggleRow
+            label="Wallpaper blur"
+            description="Keep the personal wallpaper softly blurred behind the UI"
+            on={wallpaperBlurAmount > 0}
+            onToggle={() => {
+              const nextAmount =
+                wallpaperBlurAmount > 0 ? 0 : DEFAULT_WALLPAPER_BLUR_AMOUNT;
+              setWallpaperBlurAmount(nextAmount);
+              localStorage.setItem(
+                "ss.wallpaperBlur",
+                nextAmount > 0 ? "1" : "0",
+              );
+              localStorage.setItem(
+                "ss.wallpaperBlurAmount",
+                String(nextAmount),
+              );
+              window.dispatchEvent(
+                new CustomEvent("ss:wallpaper-blur-change", {
+                  detail: nextAmount,
+                }),
+              );
+              toast(
+                nextAmount > 0 ? "Wallpaper blur on" : "Wallpaper blur off",
+              );
+            }}
+          />
+
+          <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">Blur intensity</p>
+                <p className="text-xs text-muted-foreground">
+                  Adjust the softness of your live or image wallpaper
+                </p>
+              </div>
+              <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                {wallpaperBlurAmount === 0 ? "Off" : `${wallpaperBlurAmount}px`}
+              </span>
+            </div>
+            <Slider
+              value={[wallpaperBlurAmount]}
+              min={0}
+              max={MAX_WALLPAPER_BLUR_AMOUNT}
+              step={2}
+              onValueChange={([value]) => {
+                const nextAmount = Math.max(
+                  0,
+                  Math.min(MAX_WALLPAPER_BLUR_AMOUNT, value),
+                );
+                setWallpaperBlurAmount(nextAmount);
+                localStorage.setItem(
+                  "ss.wallpaperBlur",
+                  nextAmount > 0 ? "1" : "0",
+                );
+                localStorage.setItem(
+                  "ss.wallpaperBlurAmount",
+                  String(nextAmount),
+                );
+                window.dispatchEvent(
+                  new CustomEvent("ss:wallpaper-blur-change", {
+                    detail: nextAmount,
+                  }),
+                );
+              }}
+              className="mt-2"
+              aria-label="Wallpaper blur intensity"
+            />
+            <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
+              <span>None</span>
+              <span>Strong</span>
+            </div>
+          </div>
+
+          <CardTransparencySection />
+
+          <ToggleRow
+            label="Low-memory wallpaper previews"
+            description="Avoid playing saved video previews until you select one; switching stays instant"
+            on={lowMemoryWallpaperPreviews}
+            onToggle={() => {
+              const next = !lowMemoryWallpaperPreviews;
+              setLowMemoryWallpaperPreviews(next);
+              localStorage.setItem(
+                "ss.lowMemoryWallpaperPreviews",
+                next ? "1" : "0",
+              );
+              toast(next ? "Low-memory previews on" : "Live previews on");
+            }}
+          />
+
+          <ToggleRow
+            label="Hide explicit content"
+            description="Filter out tracks flagged explicit"
+            on={hideExplicit}
+            onToggle={() => {
+              toggleHideExplicit();
+              toast(
+                hideExplicit
+                  ? "Explicit content shown"
+                  : "Explicit content hidden",
+              );
+            }}
+          />
+          <ToggleRow
+            label="Compact mode"
+            description="Tighter player bar, wider content layout"
+            on={compactMode}
+            onToggle={() => {
+              toggleCompactMode();
+              toast(compactMode ? "Compact mode off" : "Compact mode on");
+            }}
+          />
+          <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
+            <p className="text-sm font-medium">Focus layout</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Adapt the canvas and player to your session
+            </p>
+            <div className="mt-2.5 grid grid-cols-2 gap-2">
+              {FOCUS_LAYOUTS.map((layout) => {
+                const selected = focusLayout === layout.id;
+                return (
+                  <button
+                    key={layout.id}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => {
+                      setFocusLayout(layout.id);
+                      localStorage.setItem("ss.focusLayout", layout.id);
+                      localStorage.setItem(
+                        "ss.focusMode",
+                        layout.id === "off" ? "0" : "1",
+                      );
+                      window.dispatchEvent(
+                        new CustomEvent("synq:focus-layout-change", {
+                          detail: layout.id,
+                        }),
+                      );
+                      toast(
+                        layout.id === "off"
+                          ? "Focus layout off"
+                          : `${layout.name} focus on`,
+                      );
+                    }}
+                    className={cn(
+                      "rounded-lg border px-2.5 py-2 text-left transition-all hover:-translate-y-0.5",
+                      selected
+                        ? "border-[rgb(var(--tint))] bg-[rgb(var(--tint)_/_0.1)] ring-2 ring-[rgb(var(--tint)_/_0.18)]"
+                        : "border-white/10 hover:border-white/25",
+                    )}
+                  >
+                    <span className="block text-xs font-semibold">
+                      {layout.name}
+                    </span>
+                    <span className="mt-0.5 block text-[10px] text-muted-foreground">
+                      {layout.detail}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <ToggleRow
+            label="Ambient glow"
+            description="Soft colored glow at the top of the page"
+            on={ambientGlow}
+            onToggle={() => {
+              toggleAmbientGlow();
+              toast(ambientGlow ? "Ambient glow off" : "Ambient glow on");
+            }}
+          />
+          <ToggleRow
+            label="Liquid glass"
+            description="Frosted, refractive panels with a moving light sheen"
+            on={liquidGlass}
+            onToggle={() => {
+              toggleLiquidGlass();
+              toast(liquidGlass ? "Liquid glass off" : "Liquid glass on");
+            }}
+          />
+          <ToggleRow
+            label="Visualizer"
+            description="Animated bars that vibe with the song"
+            on={visualizerEnabled}
+            onToggle={() => {
+              toggleVisualizer();
+              toast(visualizerEnabled ? "Visualizer off" : "Visualizer on");
+            }}
+          />
+          <ToggleRow
+            label="Pointer glow"
+            description="A soft liquid-glass light that follows your cursor"
+            on={pointerEffects}
+            onToggle={() => {
+              togglePointerEffects();
+              toast(pointerEffects ? "Pointer glow off" : "Pointer glow on");
+            }}
+          />
+          <ToggleRow
+            label="Performance mode"
+            description="Turn off glass blur, the light sheen, aurora orbs, pointer glow and cursor trail for a smoother page"
+            on={performanceMode}
+            onToggle={() => {
+              togglePerformanceMode();
+              toast(
+                performanceMode
+                  ? "Performance mode off"
+                  : "Performance mode on",
+              );
+            }}
+          />
+          <p className="px-1 text-xs leading-5 text-muted-foreground">
+            Performance mode only changes how the page is drawn — playback, the
+            queue and every setting stay exactly as they are. It is the one
+            switch to reach for if scrolling, the visualizer or fullscreen ever
+            feel stuttery on your device.
+          </p>
+        </section>
+
+        <Separator className="bg-white/[0.07]" />
+
+        {/* personalization */}
+        <section
+          id="settings-personalization"
+          className="scroll-mt-20 flex flex-col gap-2"
+        >
+          <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
+            <Sparkles className="size-3.5" />
+            Personalization
+          </p>
+          <ToggleRow
+            label="Autoplay"
+            description="Keep playing similar music when the queue ends"
+            on={autoplay}
+            onToggle={() => {
+              toggleAutoplay();
+              toast(autoplay ? "Autoplay off" : "Autoplay on");
+            }}
+          />
+          <p className="px-1 text-xs leading-5 text-muted-foreground">
+            Home adapts to what you play: your most-heard artists shape
+            recommendations, recently played fills Continue Listening, and
+            Discover Weekly refreshes with a new mix for you every week.
+          </p>
+        </section>
+
+        <Separator className="bg-white/[0.07]" />
+
         {/* profile */}
-        <section id="settings-profile" className="settings-profile scroll-mt-20 flex flex-col gap-2.5">
+        <section
+          id="settings-profile"
+          className="settings-profile scroll-mt-20 flex flex-col gap-2.5"
+        >
           <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
             <UserRound className="size-3.5" />
             Profile
@@ -895,7 +2096,11 @@ export function SettingsDialog({
               aria-label="Change profile picture"
             >
               {user?.image ? (
-                <img src={user.image} alt="Your profile picture" className="size-full object-cover" />
+                <img
+                  src={user.image}
+                  alt="Your profile picture"
+                  className="size-full object-cover"
+                />
               ) : (
                 <span>{avatarInitials}</span>
               )}
@@ -993,913 +2198,14 @@ export function SettingsDialog({
               on={hideSidebarEmail}
               onToggle={() => {
                 toggleHideSidebarEmail();
-                toast(hideSidebarEmail ? "Email shown in sidebar" : "Email hidden in sidebar");
+                toast(
+                  hideSidebarEmail
+                    ? "Email shown in sidebar"
+                    : "Email hidden in sidebar",
+                );
               }}
             />
           )}
-        </section>
-
-        <Separator className="bg-white/[0.07]" />
-
-        {/* playback */}
-        <section id="settings-playback" className="scroll-mt-20 flex flex-col gap-2.5">
-          <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
-            <Gauge className="size-3.5" />
-            Playback
-          </p>
-
-          {currentTrack && (
-            <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-3">
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-medium">Now playing</p>
-                  <p className="text-xs text-muted-foreground">Quick controls without leaving Settings</p>
-                </div>
-                <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-[rgb(var(--tint))]">
-                  <span className={cn("size-1.5 rounded-full", isPlaying ? "animate-pulse bg-[rgb(var(--tint))]" : "bg-white/30")} />
-                  {isPlaying ? "Live" : "Paused"}
-                </span>
-              </div>
-              <div className="flex items-center gap-3">
-                {currentTrack.coverUrl ? (
-                  <img src={currentTrack.coverUrl} alt="" className="size-12 shrink-0 rounded-lg object-cover shadow-md" />
-                ) : (
-                  <div className="size-12 shrink-0 rounded-lg bg-white/[0.08]" />
-                )}
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">{currentTrack.title}</p>
-                  <p className="truncate text-xs text-muted-foreground">{currentTrack.artistName}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={togglePlay}
-                  aria-label={isPlaying ? "Pause current track" : "Play current track"}
-                  className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[rgb(var(--tint))] text-black transition-transform hover:scale-105 active:scale-95"
-                >
-                  {isPlaying ? <Pause className="size-4 fill-current" /> : <Play className="size-4 fill-current" />}
-                </button>
-                <button
-                  type="button"
-                  onClick={next}
-                  aria-label="Skip to next track"
-                  className="flex size-9 shrink-0 items-center justify-center rounded-full border border-white/10 text-muted-foreground transition-colors hover:border-white/25 hover:text-foreground"
-                >
-                  <SkipForward className="size-4" />
-                </button>
-              </div>
-            </div>
-          )}
-
-          <ToggleRow
-            label="Shuffle by default"
-            description="Start queues shuffled"
-            on={shuffle}
-            onToggle={toggleShuffle}
-          />
-          <ToggleRow
-            label="Smart shuffle"
-            description="Avoid recently played tracks when filling shuffle queues"
-            on={smartShuffle}
-            onToggle={() => {
-              toggleSmartShuffle();
-              toast(smartShuffle ? "Smart shuffle off" : "Smart shuffle on");
-            }}
-          />
-
-          <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
-            <div className="flex items-center gap-2">
-              <Clock3 className="size-4 text-[rgb(var(--tint))]" />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium">Sleep timer</p>
-                <p className="text-xs text-muted-foreground">Stop playback automatically</p>
-              </div>
-              {sleepAtSongEnd || sleepEndsAt !== null ? (
-                <span className="text-[10px] font-semibold uppercase tracking-widest text-[rgb(var(--tint))]">Active</span>
-              ) : null}
-            </div>
-            <div className="mt-2.5 grid grid-cols-3 gap-1.5">
-              {[
-                { label: "Off", value: null },
-                { label: "Song end", value: "end" as const },
-                { label: "15 min", value: 15 },
-                { label: "30 min", value: 30 },
-                { label: "60 min", value: 60 },
-              ].map((option) => {
-                const active = option.value === null
-                  ? sleepEndsAt === null && !sleepAtSongEnd
-                  : option.value === "end"
-                    ? sleepAtSongEnd
-                    // The timer preview is intentionally based on the current time.
-                    // eslint-disable-next-line react-hooks/purity
-                    : sleepEndsAt !== null && sleepEndsAt - Date.now() > (option.value - 1) * 60_000 && sleepEndsAt - Date.now() < (option.value + 1) * 60_000;
-                return (
-                  <button
-                    key={option.label}
-                    type="button"
-                    onClick={() => {
-                      setSleepTimer(option.value);
-                      toast(option.value === null ? "Sleep timer off" : option.value === "end" ? "Stopping after this song" : `Sleep timer set for ${option.value} minutes`);
-                    }}
-                    className={cn(
-                      "rounded-lg border px-2 py-1.5 text-[11px] font-semibold transition-colors",
-                      active
-                        ? "border-[rgb(var(--tint))] bg-[rgb(var(--tint)_/_0.14)] text-[rgb(var(--tint))]"
-                        : "border-white/10 text-muted-foreground hover:border-white/25 hover:text-foreground",
-                    )}
-                  >
-                    {option.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* default playback speed */}
-          <div className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
-            <div className="min-w-0">
-              <p className="text-sm font-medium">Default speed</p>
-              <p className="text-xs text-muted-foreground">
-                Applies to new tracks
-              </p>
-            </div>
-            <div className="flex shrink-0 items-center gap-1">
-              {[0.75, 1, 1.25, 1.5].map((r) => (
-                <button
-                  key={r}
-                  type="button"
-                  onClick={() => setRate(r)}
-                  className={cn(
-                    "rounded-full px-2 py-1 text-[11px] font-semibold tabular-nums transition-colors",
-                    rate === r
-                      ? "bg-[rgb(var(--tint)_/_0.2)] text-[rgb(var(--tint))]"
-                      : "text-muted-foreground hover:bg-white/[0.06] hover:text-foreground",
-                  )}
-                >
-                  {r}×
-                </button>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <Separator className="bg-white/[0.07]" />
-
-        {/* audio */}
-        <section id="settings-audio" className="scroll-mt-20 flex flex-col gap-2.5">
-          <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
-            <SlidersHorizontal className="size-3.5" />
-            Audio
-          </p>
-
-          {/* presets */}
-          <div className="flex flex-wrap gap-1.5">
-            {[
-              { label: "Flat", bass: 0, treble: 0 },
-              { label: "Bass Boost", bass: 10, treble: 0 },
-              { label: "Treble Boost", bass: 0, treble: 8 },
-              { label: "Vocal", bass: -3, treble: 5 },
-              { label: "Rock", bass: 5, treble: 4 },
-              { label: "Pop", bass: 3, treble: 3 },
-              { label: "Classical", bass: 1, treble: 2 },
-              { label: "Electronic", bass: 8, treble: 3 },
-            ].map((p) => (
-              <button
-                key={p.label}
-                type="button"
-                onClick={() => {
-                  applyEqPreset({ bass: p.bass, treble: p.treble });
-                  persistEq({ ...eq, bass: p.bass, treble: p.treble });
-                  toast(`EQ preset: ${p.label}`);
-                }}
-                className={cn(
-                  "rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
-                  eq.bass === p.bass && eq.treble === p.treble
-                    ? "border-transparent bg-[rgb(var(--tint)_/_0.2)] text-[rgb(var(--tint))]"
-                    : "border-white/10 text-muted-foreground hover:border-white/30 hover:text-foreground",
-                )}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-
-          {/* bass */}
-          <EqSlider
-            label="Bass"
-            value={eq.bass ?? 0}
-            onChange={(v) => {
-              setEqBass(v);
-              persistEq({ ...eq, bass: v });
-              if (v !== 0) toast(AUDIO_EFFECT_DELAY_MESSAGE);
-            }}
-          />
-          <EqSlider
-            label="Treble"
-            value={eq.treble ?? 0}
-            onChange={(v) => {
-              setEqTreble(v);
-              persistEq({ ...eq, treble: v });
-            }}
-          />
-          <EqSlider
-            label="Balance"
-            min={-1}
-            max={1}
-            step={0.1}
-            value={eq.balance ?? 0}
-            format={(v) => (v === 0 ? "Center" : v < 0 ? `L ${Math.round(-v * 100)}%` : `R ${Math.round(v * 100)}%`)}
-            onChange={(v) => {
-              setEqBalance(v);
-              persistEq({ ...eq, balance: v });
-            }}
-          />
-
-          <ToggleRow
-            label="Mono audio"
-            description="Same signal in both ears — good for single-ear listening"
-            on={eq.mono ?? false}
-            onToggle={() => {
-              const next = !(eq.mono ?? false);
-              setEqMono(next);
-              persistEq({ ...eq, mono: next });
-              if (next) toast(AUDIO_EFFECT_DELAY_MESSAGE);
-            }}
-          />
-
-          {/* live sound filters (8D etc.) */}
-          <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
-            <p className="text-sm font-medium">Sound effects</p>
-            <p className="text-xs text-muted-foreground">Applies to what's playing right now</p>
-            <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground/80">
-              Turning on sound effects may add a small delay before music starts.
-            </p>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {AUDIO_FILTERS.map((f) => (
-                <button
-                  key={f.id}
-                  type="button"
-                  onClick={() => {
-                    if (setAudioFilter(f.id)) {
-                      persistEq({ ...eq, filter: f.id });
-                      if (f.id !== "off") toast(AUDIO_EFFECT_DELAY_MESSAGE);
-                    } else toast.error("Effects need a browser with Web Audio");
-                  }}
-                  className={cn(
-                    "flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors",
-                    (eq.filter ?? "off") === f.id
-                      ? "border-transparent bg-[rgb(var(--tint)_/_0.2)] text-[rgb(var(--tint))]"
-                      : "border-white/10 text-muted-foreground hover:border-white/30 hover:text-foreground",
-                  )}
-                >
-                  <span>{f.icon}</span>
-                  {f.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <Separator className="bg-white/[0.07]" />
-
-        {/* appearance */}
-        <section id="settings-appearance" className="scroll-mt-20 flex flex-col gap-2.5">
-          <CardTransparencySection />
-          <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-3">
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold">Interface finish</p>
-                <p className="text-xs text-muted-foreground">Tune the light and depth of this settings surface.</p>
-              </div>
-              <Sparkles className="size-4 text-[rgb(var(--tint))]" />
-            </div>
-            <div className="flex flex-col gap-2">
-              <ToggleRow
-                label="Animated glass sheen"
-                description="Let light drift across the settings surface"
-                on={settingsShimmer}
-                onToggle={() => {
-                  const next = !settingsShimmer;
-                  setSettingsShimmer(next);
-                  localStorage.setItem("ss.settingsShimmer", next ? "1" : "0");
-                  toast(next ? "Settings sheen on" : "Settings sheen paused");
-                }}
-              />
-              <p className="px-1 text-[11px] leading-relaxed text-muted-foreground/80">
-                The animated sheen may pause or appear static when Reduce motion is turned on.
-              </p>
-              <ToggleRow
-                label="Deep surface depth"
-                description="Add a softer floating shadow beneath the glass"
-                on={settingsDepth}
-                onToggle={() => {
-                  const next = !settingsDepth;
-                  setSettingsDepth(next);
-                  localStorage.setItem("ss.settingsDepth", next ? "1" : "0");
-                  toast(next ? "Surface depth on" : "Surface depth off");
-                }}
-              />
-              <ToggleRow
-                label="Reduce motion"
-                description="Minimize animation for a calmer, more accessible interface"
-                on={reduceMotion}
-                onToggle={() => {
-                  const next = !reduceMotion;
-                  setReduceMotion(next);
-                  localStorage.setItem("ss.reduceMotion", next ? "1" : "0");
-                  toast(next ? "Reduced motion on" : "Reduced motion off");
-                }}
-              />
-              <button
-                type="button"
-                onClick={resetVisualPreferences}
-                className="mt-1 inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:border-white/25 hover:bg-white/[0.05] hover:text-foreground"
-              >
-                <RotateCcw className="h-3.5 w-3.5" />
-                Reset visual preferences
-              </button>
-            </div>
-          </div>
-          <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
-            <Palette className="size-3.5" />
-            Appearance
-          </p>
-
-          <ToggleRow
-            label="Adaptive track palettes"
-            description="Build a smooth new color theme from every song's artwork"
-            on={trackPalettes}
-            onToggle={() => {
-              const next = !trackPalettes;
-              setTrackPalettes(next);
-              if (next) setAccentTheme("auto");
-              localStorage.setItem("ss.trackPalettes", next ? "1" : "0");
-              window.dispatchEvent(new CustomEvent("synq:track-palettes-change", { detail: next }));
-              toast(next ? "Track palettes on" : "Track palettes off");
-            }}
-          />
-
-          {/* accent color */}
-          <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-sm font-medium">Accent color</p>
-                <p className="text-xs text-muted-foreground">
-                  Tints buttons, highlights and the ambient glow
-                </p>
-              </div>
-            </div>
-            <div className="mt-2.5 flex flex-wrap items-center gap-2">
-              {(
-                [
-                  { id: "auto", label: "Auto", swatch: "linear-gradient(135deg,#f472b6,#60a5fa,#a3e635)" },
-                  { id: "lime", label: "Lime", swatch: "rgb(203 244 143)" },
-                  { id: "violet", label: "Violet", swatch: "rgb(167 139 250)" },
-                  { id: "blue", label: "Blue", swatch: "rgb(96 165 250)" },
-                  { id: "rose", label: "Rose", swatch: "rgb(251 113 133)" },
-                  { id: "amber", label: "Amber", swatch: "rgb(251 191 36)" },
-                  { id: "teal", label: "Teal", swatch: "rgb(45 212 191)" },
-                  { id: "orange", label: "Orange", swatch: "rgb(251 146 60)" },
-                ] as const
-              ).map(({ id, label, swatch }) => (
-                <button
-                  key={id}
-                  type="button"
-                  title={label}
-                  onClick={() => {
-                    setAccentTheme(id);
-                    const adaptive = id === "auto";
-                    setTrackPalettes(adaptive);
-                    localStorage.setItem("ss.trackPalettes", adaptive ? "1" : "0");
-                    window.dispatchEvent(
-                      new CustomEvent("synq:track-palettes-change", { detail: adaptive }),
-                    );
-                  }}
-                  className={cn(
-                    "flex h-8 items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-semibold transition-all",
-                    accentTheme === id
-                      ? "border-white/60 bg-white/[0.1] text-foreground"
-                      : "border-white/10 text-muted-foreground hover:border-white/30",
-                  )}
-                >
-                  <span
-                    className="size-4 rounded-full ring-1 ring-white/20"
-                    style={{ background: swatch }}
-                  />
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* theme mode */}
-          <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
-            <p className="text-sm font-medium">Theme</p>
-            <div className="mt-2 grid grid-cols-3 gap-1.5">
-              {([
-                { id: "dark", label: "Dark" },
-                { id: "light", label: "Light" },
-                { id: "amoled", label: "AMOLED" },
-              ] as const).map(({ id, label }) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setThemeMode(id)}
-                  className={cn(
-                    "rounded-lg border px-2 py-1.5 text-xs font-semibold transition-colors",
-                    themeMode === id
-                      ? "border-[rgb(var(--tint))] bg-[rgb(var(--tint)_/_0.14)] text-[rgb(var(--tint))]"
-                      : "border-white/10 text-muted-foreground hover:border-white/30 hover:text-foreground",
-                  )}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <ToggleRow
-            label="Personal wallpaper"
-            description="Show your saved image or video behind the app"
-            on={wallpaperEnabled}
-            onToggle={() => {
-              const next = !wallpaperEnabled;
-              setWallpaperEnabled(next);
-              localStorage.setItem("ss.wallpaperEnabled", next ? "1" : "0");
-              window.dispatchEvent(new CustomEvent("ss:wallpaper-enabled-change", { detail: next }));
-              toast(next ? "Personal wallpaper on" : "Personal wallpaper off");
-            }}
-          />
-
-          {/* personal wallpaper */}
-          <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
-            <div className="flex items-center gap-3">
-              <div className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-black/20">
-                {wallpaper && wallpaperType === "video" && wallpaper !== LIVE_WALLPAPER_MARKER ? (
-                  <video src={wallpaper} muted loop autoPlay playsInline className="size-full object-cover" />
-                ) : wallpaper && wallpaper !== LIVE_WALLPAPER_MARKER && wallpaper !== IMAGE_WALLPAPER_MARKER ? (
-                  <img src={wallpaper} alt="Wallpaper preview" className="size-full object-cover" />
-                ) : (
-                  <ImagePlus className="size-5 text-muted-foreground" />
-                )}
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-medium">Personal wallpaper</p>
-                <p className="text-xs leading-5 text-muted-foreground">
-                  {wallpaperType === "video"
-                    ? "A looping video sits behind the app with a soft blur and dark glass overlay."
-                    : "Your image sits behind the app with a soft blur and dark glass overlay."}
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-3 grid grid-cols-2 gap-1.5 rounded-lg border border-white/[0.07] bg-black/10 p-1">
-              {(["image", "video"] as const).map((type) => (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => {
-                    if (type === wallpaperType) return;
-                    const hasVideoWallpaper = Boolean(
-                      wallpaper &&
-                        (wallpaper.startsWith("http") ||
-                          wallpaper.startsWith("blob:") ||
-                          wallpaper.startsWith("data:video/") ||
-                          wallpaper === LIVE_WALLPAPER_MARKER),
-                    );
-                    if (type === "video") {
-                      const savedEntry = wallpaperLibrary.find((entry) => entry.kind === "video");
-                      if (savedEntry) {
-                        activateWallpaperEntry(savedEntry);
-                        return;
-                      }
-                      // Restore the legacy single uploaded file when switching
-                      // back from Photo; switching modes never deletes it.
-                      void getLiveWallpaperUrl().then((url) => {
-                        if (url) {
-                          if (wallpaper?.startsWith("blob:") && !wallpaperLibraryUrlsRef.current.includes(wallpaper)) {
-                            URL.revokeObjectURL(wallpaper);
-                          }
-                          setWallpaper(url, "video");
-                          localStorage.setItem("ss.wallpaper", LIVE_WALLPAPER_MARKER);
-                          setActiveWallpaperKey(LIVE_WALLPAPER_KEY);
-                          return;
-                        }
-                        if (wallpaper && !hasVideoWallpaper && !wallpaper.startsWith("blob:")) {
-                          localStorage.setItem("ss.savedImageWallpaper", wallpaper);
-                        }
-                        if (wallpaper && !hasVideoWallpaper) {
-                          setWallpaper(null, "video");
-                        } else {
-                          const savedVideoUrl = localStorage.getItem("ss.savedVideoUrl");
-                          if (savedVideoUrl) setWallpaper(savedVideoUrl, "video");
-                          else setWallpaperType("video");
-                        }
-                      }).catch(() => {
-                        if (wallpaper && !hasVideoWallpaper) setWallpaper(null, "video");
-                        else setWallpaperType("video");
-                      });
-                    } else {
-                      const savedEntry = wallpaperLibrary.find((entry) => entry.kind === "image");
-                      if (savedEntry) {
-                        activateWallpaperEntry(savedEntry);
-                        return;
-                      }
-                      // Restore the legacy single image file when switching back
-                      // from Live video.
-                      void getImageWallpaperUrl().then((url) => {
-                        if (url) {
-                          if (wallpaper?.startsWith("blob:") && !wallpaperLibraryUrlsRef.current.includes(wallpaper)) {
-                            URL.revokeObjectURL(wallpaper);
-                          }
-                          setWallpaper(url, "image");
-                          localStorage.setItem("ss.wallpaper", IMAGE_WALLPAPER_MARKER);
-                          setActiveWallpaperKey(IMAGE_WALLPAPER_KEY);
-                          return;
-                        }
-                        const savedImage = localStorage.getItem("ss.savedImageWallpaper");
-                        if (savedImage) setWallpaper(savedImage, "image");
-                        else if (wallpaper && hasVideoWallpaper) setWallpaper(null, "image");
-                        else setWallpaperType("image");
-                      }).catch(() => {
-                        if (wallpaper && hasVideoWallpaper) setWallpaper(null, "image");
-                        else setWallpaperType("image");
-                      });
-                    }
-                  }}
-                  className={cn(
-                    "rounded-md px-2 py-1.5 text-[11px] font-semibold transition-colors",
-                    wallpaperType === type
-                      ? "bg-white/[0.1] text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {type === "image" ? "Photo" : "Live video"}
-                </button>
-              ))}
-            </div>
-
-            {wallpaperType === "image" ? (
-              <>
-                <input
-                  ref={wallpaperInputRef}
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp,image/avif"
-                  className="hidden"
-                  onChange={handleWallpaperChange}
-                />
-                <div className="mt-2.5 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => wallpaperInputRef.current?.click()}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-white/25 hover:bg-white/[0.1]"
-                  >
-                    <ImagePlus className="size-3.5" />
-                    {wallpaper ? "Add another image" : "Choose image"}
-                  </button>
-                </div>
-                <p className="mt-2 text-[11px] text-muted-foreground">PNG, JPG, WebP or AVIF · up to 100 MB</p>
-              </>
-            ) : (
-              <>
-                <div className="mt-2.5 flex gap-2">
-                  <Input
-                    value={liveWallpaperUrl}
-                    onChange={(event) => setLiveWallpaperUrl(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") applyLiveWallpaper();
-                    }}
-                    placeholder="https://.../wallpaper.mp4"
-                    aria-label="Live wallpaper video URL"
-                    className="min-w-0 text-xs"
-                  />
-                  <Button size="sm" onClick={applyLiveWallpaper} className="shrink-0">
-                    <Film className="size-3.5" />
-                    Apply
-                  </Button>
-                </div>
-                <p className="mt-2 text-[11px] leading-4 text-muted-foreground">
-                  Use a direct MP4/WebM URL, or choose a video file from your device.
-                </p>
-                <input
-                  ref={liveWallpaperInputRef}
-                  type="file"
-                  accept="video/mp4,video/webm,video/ogg"
-                  className="hidden"
-                  onChange={handleLiveWallpaperFileChange}
-                />
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => liveWallpaperInputRef.current?.click()}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-white/25 hover:bg-white/[0.1]"
-                  >
-                    <Film className="size-3.5" />
-                    Add video file
-                  </button>
-                  {liveWallpaperFileName && (
-                    <span className="max-w-full truncate py-1.5 text-xs text-[rgb(var(--tint))]">
-                      {liveWallpaperFileName}
-                    </span>
-                  )}
-                </div>
-                <p className="mt-2 text-[11px] text-muted-foreground">MP4, WebM or OGG · up to 100 MB</p>
-              </>
-            )}
-
-            {wallpaperLibrary.length > 0 && (
-              <div className="mt-3 border-t border-white/[0.07] pt-3">
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <p className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
-                    Saved wallpapers
-                  </p>
-                  <span className="text-[10px] text-muted-foreground">
-                    {wallpaperLibrary.length} {wallpaperLibrary.length === 1 ? "file" : "files"}
-                  </span>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {wallpaperLibrary.map((entry) => {
-                    const selected = activeWallpaperKey === entry.key;
-                    return (
-                      <div key={entry.key} className="group relative">
-                        <button
-                          type="button"
-                          onClick={() => activateWallpaperEntry(entry)}
-                          className={cn(
-                            "relative aspect-square w-full overflow-hidden rounded-lg border bg-black/20 transition-all hover:scale-[1.03]",
-                            selected
-                              ? "border-[rgb(var(--tint))] ring-2 ring-[rgb(var(--tint)_/_0.35]"
-                              : "border-white/10 hover:border-white/30",
-                          )}
-                          aria-label={`Use ${entry.name}`}
-                        >
-                        {entry.kind === "video" &&
-                        (lowMemoryWallpaperPreviews && !selected ? (
-                          <span className="flex size-full flex-col items-center justify-center gap-1 bg-gradient-to-br from-white/[0.1] to-black/30 text-white/55">
-                            <Film className="size-5" />
-                            <span className="text-[9px] font-medium">Video</span>
-                          </span>
-                        ) : (
-                          <video
-                            src={entry.url}
-                            muted
-                            loop={!lowMemoryWallpaperPreviews}
-                            autoPlay={!lowMemoryWallpaperPreviews}
-                            playsInline
-                            preload={lowMemoryWallpaperPreviews ? "metadata" : "auto"}
-                            className="size-full object-cover"
-                          />
-                        ))}
-                        {entry.kind === "image" && (
-                          <img
-                            src={entry.url}
-                            alt=""
-                            loading="lazy"
-                            decoding="async"
-                            className="size-full object-cover"
-                          />
-                        )}
-                          {selected && (
-                            <span className="absolute right-1.5 top-1.5 flex size-5 items-center justify-center rounded-full bg-[rgb(var(--tint))] text-black shadow-lg">
-                              <Check className="size-3" />
-                            </span>
-                          )}
-                        </button>
-                        <p className="mt-1 truncate text-[10px] text-muted-foreground" title={entry.name}>
-                          {entry.name}
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => void removeWallpaperEntry(entry)}
-                          className="absolute right-1 top-1 hidden size-6 items-center justify-center rounded-full bg-black/70 text-red-300 backdrop-blur transition hover:bg-red-500/80 hover:text-white group-hover:flex"
-                          aria-label={`Remove ${entry.name}`}
-                        >
-                          <Trash2 className="size-3" />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-                <p className="mt-2 text-[11px] text-muted-foreground">
-                  Click any saved wallpaper to switch instantly. Files stay in this browser.
-                </p>
-              </div>
-            )}
-
-            {(wallpaper || wallpaperLibrary.length > 0) && (
-              /* Two distinct actions, deliberately side by side: "Revert" is
-                 safe and keeps every saved file, while "Remove library" is
-                 destructive and deletes them from IndexedDB. */
-              <div className="mt-2 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={revertWallpaper}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-[rgb(var(--tint))]/40 hover:bg-[rgb(var(--tint))]/10 hover:text-[rgb(var(--tint))]"
-                >
-                  <RotateCcw className="size-3.5" />
-                  Revert to default
-                </button>
-                <button
-                  type="button"
-                  onClick={clearWallpaper}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-red-400/30 hover:bg-red-400/[0.08] hover:text-red-300"
-                >
-                  <ImageOff className="size-3.5" />
-                  Remove wallpaper library
-                </button>
-              </div>
-            )}
-          </div>
-
-          <ToggleRow
-            label="Wallpaper blur"
-            description="Keep the personal wallpaper softly blurred behind the UI"
-            on={wallpaperBlurAmount > 0}
-            onToggle={() => {
-              const nextAmount = wallpaperBlurAmount > 0 ? 0 : DEFAULT_WALLPAPER_BLUR_AMOUNT;
-              setWallpaperBlurAmount(nextAmount);
-              localStorage.setItem("ss.wallpaperBlur", nextAmount > 0 ? "1" : "0");
-              localStorage.setItem("ss.wallpaperBlurAmount", String(nextAmount));
-              window.dispatchEvent(
-                new CustomEvent("ss:wallpaper-blur-change", { detail: nextAmount }),
-              );
-              toast(nextAmount > 0 ? "Wallpaper blur on" : "Wallpaper blur off");
-            }}
-          />
-
-          <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-sm font-medium">Blur intensity</p>
-                <p className="text-xs text-muted-foreground">Adjust the softness of your live or image wallpaper</p>
-              </div>
-              <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                {wallpaperBlurAmount === 0 ? "Off" : `${wallpaperBlurAmount}px`}
-              </span>
-            </div>
-            <Slider
-              value={[wallpaperBlurAmount]}
-              min={0}
-              max={MAX_WALLPAPER_BLUR_AMOUNT}
-              step={2}
-              onValueChange={([value]) => {
-                const nextAmount = Math.max(0, Math.min(MAX_WALLPAPER_BLUR_AMOUNT, value));
-                setWallpaperBlurAmount(nextAmount);
-                localStorage.setItem("ss.wallpaperBlur", nextAmount > 0 ? "1" : "0");
-                localStorage.setItem("ss.wallpaperBlurAmount", String(nextAmount));
-                window.dispatchEvent(
-                  new CustomEvent("ss:wallpaper-blur-change", { detail: nextAmount }),
-                );
-              }}
-              className="mt-2"
-              aria-label="Wallpaper blur intensity"
-            />
-            <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
-              <span>None</span>
-              <span>Strong</span>
-            </div>
-          </div>
-
-          <ToggleRow
-            label="Low-memory wallpaper previews"
-            description="Avoid playing saved video previews until you select one; switching stays instant"
-            on={lowMemoryWallpaperPreviews}
-            onToggle={() => {
-              const next = !lowMemoryWallpaperPreviews;
-              setLowMemoryWallpaperPreviews(next);
-              localStorage.setItem("ss.lowMemoryWallpaperPreviews", next ? "1" : "0");
-              toast(next ? "Low-memory previews on" : "Live previews on");
-            }}
-          />
-
-          <ToggleRow
-            label="Hide explicit content"
-            description="Filter out tracks flagged explicit"
-            on={hideExplicit}
-            onToggle={() => {
-              toggleHideExplicit();
-              toast(hideExplicit ? "Explicit content shown" : "Explicit content hidden");
-            }}
-          />
-          <ToggleRow
-            label="Compact mode"
-            description="Tighter player bar, wider content layout"
-            on={compactMode}
-            onToggle={() => {
-              toggleCompactMode();
-              toast(compactMode ? "Compact mode off" : "Compact mode on");
-            }}
-          />
-          <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
-            <p className="text-sm font-medium">Focus layout</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Adapt the canvas and player to your session
-            </p>
-            <div className="mt-2.5 grid grid-cols-2 gap-2">
-              {FOCUS_LAYOUTS.map((layout) => {
-                const selected = focusLayout === layout.id;
-                return (
-                  <button
-                    key={layout.id}
-                    type="button"
-                    aria-pressed={selected}
-                    onClick={() => {
-                      setFocusLayout(layout.id);
-                      localStorage.setItem("ss.focusLayout", layout.id);
-                      localStorage.setItem("ss.focusMode", layout.id === "off" ? "0" : "1");
-                      window.dispatchEvent(
-                        new CustomEvent("synq:focus-layout-change", { detail: layout.id }),
-                      );
-                      toast(layout.id === "off" ? "Focus layout off" : `${layout.name} focus on`);
-                    }}
-                    className={cn(
-                      "rounded-lg border px-2.5 py-2 text-left transition-all hover:-translate-y-0.5",
-                      selected
-                        ? "border-[rgb(var(--tint))] bg-[rgb(var(--tint)_/_0.1)] ring-2 ring-[rgb(var(--tint)_/_0.18)]"
-                        : "border-white/10 hover:border-white/25",
-                    )}
-                  >
-                    <span className="block text-xs font-semibold">{layout.name}</span>
-                    <span className="mt-0.5 block text-[10px] text-muted-foreground">{layout.detail}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          <ToggleRow
-            label="Ambient glow"
-            description="Soft colored glow at the top of the page"
-            on={ambientGlow}
-            onToggle={() => {
-              toggleAmbientGlow();
-              toast(ambientGlow ? "Ambient glow off" : "Ambient glow on");
-            }}
-          />
-          <ToggleRow
-            label="Liquid glass"
-            description="Frosted, refractive panels with a moving light sheen"
-            on={liquidGlass}
-            onToggle={() => {
-              toggleLiquidGlass();
-              toast(liquidGlass ? "Liquid glass off" : "Liquid glass on");
-            }}
-          />
-          <ToggleRow
-            label="Visualizer"
-            description="Animated bars that vibe with the song"
-            on={visualizerEnabled}
-            onToggle={() => {
-              toggleVisualizer();
-              toast(visualizerEnabled ? "Visualizer off" : "Visualizer on");
-            }}
-          />
-          <ToggleRow
-            label="Pointer glow"
-            description="A soft liquid-glass light that follows your cursor"
-            on={pointerEffects}
-            onToggle={() => {
-              togglePointerEffects();
-              toast(pointerEffects ? "Pointer glow off" : "Pointer glow on");
-            }}
-          />
-          <ToggleRow
-            label="Performance mode"
-            description="Turn off glass blur, the light sheen, aurora orbs, pointer glow and cursor trail for a smoother page"
-            on={performanceMode}
-            onToggle={() => {
-              togglePerformanceMode();
-              toast(performanceMode ? "Performance mode off" : "Performance mode on");
-            }}
-          />
-          <p className="px-1 text-xs leading-5 text-muted-foreground">
-            Performance mode only changes how the page is drawn — playback,
-            the queue and every setting stay exactly as they are. It is the one
-            switch to reach for if scrolling, the visualizer or fullscreen ever
-            feel stuttery on your device.
-          </p>
-        </section>
-
-        <Separator className="bg-white/[0.07]" />
-
-        {/* personalization */}
-        <section id="settings-personalization" className="scroll-mt-20 flex flex-col gap-2">
-          <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
-            <Sparkles className="size-3.5" />
-            Personalization
-          </p>
-          <ToggleRow
-            label="Autoplay"
-            description="Keep playing similar music when the queue ends"
-            on={autoplay}
-            onToggle={() => {
-              toggleAutoplay();
-              toast(autoplay ? "Autoplay off" : "Autoplay on");
-            }}
-          />
-          <p className="px-1 text-xs leading-5 text-muted-foreground">
-            Home adapts to what you play: your most-heard artists shape
-            recommendations, recently played fills Continue Listening, and
-            Discover Weekly refreshes with a new mix for you every week.
-          </p>
         </section>
 
         {/* This divider belongs to the shortcuts block below. Hiding the block
@@ -1912,14 +2218,20 @@ export function SettingsDialog({
             one in landscape, which is wider than the `md` breakpoint — never
             sees any of it. The global key handler still works wherever there is
             a physical keyboard. */}
-        <section id="settings-shortcuts" className="hidden flex-col gap-2 lg:flex">
+        <section
+          id="settings-shortcuts"
+          className="hidden flex-col gap-2 lg:flex"
+        >
           <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
             <Keyboard className="size-3.5" />
             Keyboard shortcuts
           </p>
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
             {SHORTCUTS.map(([key, label]) => (
-              <div key={key} className="flex items-center justify-between gap-2 text-xs">
+              <div
+                key={key}
+                className="flex items-center justify-between gap-2 text-xs"
+              >
                 <kbd className="rounded border border-white/10 bg-white/[0.06] px-1.5 py-0.5 font-mono text-[10px] text-foreground">
                   {key}
                 </kbd>
@@ -2025,7 +2337,9 @@ function ToggleRow({
     >
       <span className="min-w-0">
         <span className="block text-sm font-medium">{label}</span>
-        <span className="block text-xs text-muted-foreground">{description}</span>
+        <span className="block text-xs text-muted-foreground">
+          {description}
+        </span>
       </span>
       <span
         className={cn(

@@ -9,7 +9,9 @@ const footerSource = readSource("src/components/landing/SiteFooter.tsx");
 function moveHandlerOf(source) {
   return source.match(/const handlePointerMove = [\s\S]*?\n  };/)?.[0] ?? "";
 }
-const fullscreenSource = readSource("src/components/player/FullscreenPlayer.tsx");
+const fullscreenSource = readSource(
+  "src/components/player/FullscreenPlayer.tsx",
+);
 const cssSource = readSource("src/index.css");
 
 describe("settings page category tabs", () => {
@@ -41,7 +43,9 @@ describe("settings page category tabs", () => {
     // At the top of the page the topmost section wins, not the rail's first
     // item: the rail is ordered by category size, the document is not.
     expect(settingsSource).toMatch(/current\?\.id \?\? earliest!\.id/);
-    expect(settingsSource).toMatch(/if \(!earliest \|\| entry\.top < earliest\.top\)/);
+    expect(settingsSource).toMatch(
+      /if \(!earliest \|\| entry\.top < earliest\.top\)/,
+    );
   });
 
   test("the last category can be marked without reaching the probe line", () => {
@@ -50,11 +54,16 @@ describe("settings page category tabs", () => {
     // low on the screen, and the probe rule keeps reporting the category
     // above it. At the end of the scroll the last section is the one being
     // read, whatever its top says.
-    expect(settingsSource).toMatch(/container\.scrollHeight > container\.clientHeight \+ 4/);
     expect(settingsSource).toMatch(
+      /container\.scrollHeight > container\.clientHeight \+ 4/,
+    );
+    // Whitespace-tolerant: prettier reflows this comparison across lines.
+    expect(settingsSource.replace(/\s+/g, " ")).toMatch(
       /container\.scrollTop \+ container\.clientHeight >= container\.scrollHeight - 4/,
     );
-    expect(settingsSource).toMatch(/const last = tops\.reduce\(\(a, b\) => \(b\.top > a\.top \? b : a\)\)/);
+    expect(settingsSource).toMatch(
+      /const last = tops\.reduce\(\(a, b\) => \(b\.top > a\.top \? b : a\)\)/,
+    );
   });
 
   test("every tab has a real section to jump to", () => {
@@ -65,19 +74,34 @@ describe("settings page category tabs", () => {
     // fallback; it found nothing and failed silently.
     const tabs = settingsSource
       .slice(settingsSource.indexOf("const SETTINGS_SECTIONS"))
-      .slice(0, settingsSource.indexOf("];", settingsSource.indexOf("const SETTINGS_SECTIONS")));
-    const ids = [...tabs.matchAll(/"(settings-[a-z]+)"/g)].map((match) => match[1]);
+      .slice(
+        0,
+        settingsSource.indexOf(
+          "];",
+          settingsSource.indexOf("const SETTINGS_SECTIONS"),
+        ),
+      );
+    const ids = [...tabs.matchAll(/"(settings-[a-z]+)"/g)].map(
+      (match) => match[1],
+    );
+    // Ordered by how often a listener has a reason to open each category, and
+    // in the SAME order the sections render — see the note on
+    // SETTINGS_SECTIONS. Profile sits low because it changes rarely.
     expect(ids).toEqual([
       "settings-playback",
       "settings-audio",
       "settings-appearance",
-      "settings-profile",
       "settings-personalization",
+      "settings-profile",
       "settings-shortcuts",
       "settings-data",
     ]);
+    // Whitespace-tolerant: prettier wraps a section's attributes onto separate
+    // lines once the line runs long, and a source assertion should track the
+    // code, not the formatter's line width.
+    const flattened = settingsSource.replace(/\s+/g, " ");
     for (const id of ids) {
-      expect(settingsSource).toContain(`<section id="${id}"`);
+      expect(flattened).toContain(`<section id="${id}"`);
     }
     // No content-sniffing fallback left to fail silently.
     const jump = settingsSource.slice(
@@ -136,7 +160,9 @@ describe("settings page category tabs", () => {
       /\.settings-page-grid>\.settings-jump-bar:hover\{[^}]*box-shadow:none/,
     );
     // The shouty uppercase label describes the chip strip, not a sidebar.
-    expect(css).toMatch(/\.settings-page-grid \.settings-jump-label\{display:none\}/);
+    expect(css).toMatch(
+      /\.settings-page-grid \.settings-jump-label\{display:none\}/,
+    );
     // The active row matches the app's own sidebar nav, not a louder accent.
     expect(css).toMatch(
       /\.settings-jump-list>\.settings-tab-active\{[^}]*background:#ffffff12/,
@@ -151,8 +177,12 @@ describe("settings page category tabs", () => {
     // A sticky item can only travel inside its own grid area, so the rail has
     // to span the rows rather than sit in the first one. Lightning CSS folds
     // `grid-row: 2 / span 60` into the `grid-area` shorthand.
-    expect(css).toMatch(/\.settings-page-grid>\.settings-jump-bar\{[^}]*grid-area:2\/1\/span 60/);
-    expect(css).toMatch(/\.settings-page-grid>\.settings-jump-bar\{[^}]*align-self:start/);
+    expect(css).toMatch(
+      /\.settings-page-grid>\.settings-jump-bar\{[^}]*grid-area:2\/1\/span 60/,
+    );
+    expect(css).toMatch(
+      /\.settings-page-grid>\.settings-jump-bar\{[^}]*align-self:start/,
+    );
     // The rail spans 60 rows, so most of them are empty. With the default
     // `align-content: normal` any spare height would be shared across all of
     // them and shove the last section down.
@@ -165,7 +195,9 @@ describe("settings page category tabs", () => {
     expect(css).toMatch(
       /\.settings-page-grid>:not\(\.settings-jump-bar\):not\(\.settings-pointer-glow\):not\(\.settings-header\)\{grid-column:2/,
     );
-    expect(css).toMatch(/\.settings-page-grid>\.settings-header\{grid-column:1\/-1\}/);
+    expect(css).toMatch(
+      /\.settings-page-grid>\.settings-header\{grid-column:1\/-1\}/,
+    );
     // `gap: 0 !important` on the panel is a shorthand, so the clearance between
     // rail and content is padding, not column-gap. Without it the rail sits
     // flush against the section headings.
@@ -191,13 +223,19 @@ describe("keyboard shortcuts are desktop only", () => {
     // they can never drift apart again — a hidden panel behind a visible tab
     // (or a divider left with nothing to separate) is what a partial gate
     // produces.
-    expect(settingsSource).toContain('label === "Shortcuts" && "hidden lg:inline-flex"');
-    expect(settingsSource).toMatch(
-      /<section id="settings-shortcuts" className="hidden flex-col gap-2 lg:flex">/,
+    expect(settingsSource).toContain(
+      'label === "Shortcuts" && "hidden lg:inline-flex"',
     );
-    expect(settingsSource).not.toMatch(/className="hidden flex-col gap-2 sm:flex"/);
+    expect(settingsSource.replace(/\s+/g, " ")).toMatch(
+      /<section id="settings-shortcuts" className="hidden flex-col gap-2 lg:flex"\s*>/,
+    );
+    expect(settingsSource).not.toMatch(
+      /className="hidden flex-col gap-2 sm:flex"/,
+    );
     // The divider belongs to the shortcuts block.
-    expect(settingsSource).toContain('<Separator className="hidden bg-white/[0.07] lg:block" />');
+    expect(settingsSource).toContain(
+      '<Separator className="hidden bg-white/[0.07] lg:block" />',
+    );
     expect(settingsSource).not.toContain(
       '<Separator className="hidden bg-white/[0.07] sm:block" />',
     );
@@ -205,7 +243,8 @@ describe("keyboard shortcuts are desktop only", () => {
 
   test("the landing shortcuts showcase is desktop only, with no dead anchor", () => {
     // Whitespace-tolerant: JSX attribute wrapping is formatting, not meaning.
-    const section = landingSource.match(/<section\s+id="shortcuts"[\s\S]*?>/)?.[0] ?? "";
+    const section =
+      landingSource.match(/<section\s+id="shortcuts"[\s\S]*?>/)?.[0] ?? "";
     expect(section).toContain("lg:block");
     expect(section).toContain("hidden");
     // The footer entry was removed earlier, so nothing can jump to a section
@@ -239,7 +278,9 @@ describe("glass sheen", () => {
     // no-repeat`.
     expect(css).toMatch(/\.liquid-glass:before\{[^}]*\/420% 100% no-repeat/);
     expect(css).not.toMatch(/\.liquid-glass:before\{[^}]*\/250% 100%/);
-    expect(css).toMatch(/\.settings-jump-glass:before\{[^}]*\/420% 100% no-repeat/);
+    expect(css).toMatch(
+      /\.settings-jump-glass:before\{[^}]*\/420% 100% no-repeat/,
+    );
   });
 
   test("the sweep stays on the surface for the whole cycle", () => {
@@ -248,10 +289,11 @@ describe("glass sheen", () => {
     // off-panel once the band went to 420%: the shine was invisible for most
     // of the cycle and the panels read as flat. A 420% band is on screen
     // roughly between -3% and 102%.
-    const keyframes = cssSource.match(/@keyframes glass-sheen \{[\s\S]*?\n  \}/)?.[0] ?? "";
-    const stops = [...keyframes.matchAll(/background-position: (-?[\d.]+%) 0/g)].map((match) =>
-      Number.parseFloat(match[1]),
-    );
+    const keyframes =
+      cssSource.match(/@keyframes glass-sheen \{[\s\S]*?\n  \}/)?.[0] ?? "";
+    const stops = [
+      ...keyframes.matchAll(/background-position: (-?[\d.]+%) 0/g),
+    ].map((match) => Number.parseFloat(match[1]));
     expect(stops.length).toBe(2);
     for (const stop of stops) {
       expect(stop).toBeGreaterThan(-10);
@@ -285,7 +327,9 @@ describe("fullscreen player cursor follow", () => {
     // `src/lib/cursorTrail.ts`, whose easing is unit tested in
     // tests/cursor-trail.test.js.
     expect(fullscreenSource).toContain("createCursorTrail");
-    expect(moveHandlerOf(fullscreenSource)).toContain("cursorTrailRef.current?.push(");
+    expect(moveHandlerOf(fullscreenSource)).toContain(
+      "cursorTrailRef.current?.push(",
+    );
     expect(fullscreenSource).not.toContain("trailFrameRef");
     expect(fullscreenSource).not.toContain("mote.style.");
   });
