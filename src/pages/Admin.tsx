@@ -239,7 +239,12 @@ export default function Admin() {
   const methodCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const u of users ?? []) {
-      for (const p of u.providers ?? []) counts[p] = (counts[p] ?? 0) + 1;
+      // `providers` carries one entry per linked auth account, so a user with
+      // two GitHub credentials would otherwise be counted twice and the label
+      // would promise more rows than the filter can show.
+      for (const p of new Set(u.providers ?? [])) {
+        counts[p] = (counts[p] ?? 0) + 1;
+      }
     }
     return counts;
   }, [users]);

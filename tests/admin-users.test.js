@@ -48,6 +48,26 @@ describe("the accounts table can be narrowed by sign-in method", () => {
     );
     expect(admin).toMatch(/counts\[p\] = \(counts\[p\] \?\? 0\) \+ 1;/);
   });
+
+  test("an account with two credentials for one method is counted once", () => {
+    // `providers` holds one entry per linked auth account. Counting the raw
+    // array made the label promise more rows than the filter can ever return.
+    expect(admin).toMatch(
+      /for \(const p of new Set\(u\.providers \?\? \[\]\)\)/,
+    );
+  });
+
+  test("every provider the deployment configures is offered", () => {
+    // auth.ts configures emailOtp + Google + GitHub, and those are the only
+    // sign-in methods that can produce an authAccounts row here.
+    const auth = readSource("src/convex/auth.ts");
+    for (const provider of ["emailOtp", "Google", "GitHub"]) {
+      expect(auth).toMatch(new RegExp(`\\b${provider}\\b`));
+    }
+    for (const id of ["github", "google", "email-otp"]) {
+      expect(admin).toMatch(new RegExp(`id: "${id}"`));
+    }
+  });
 });
 
 describe("a GitHub account can be looked up by its external id", () => {

@@ -112,12 +112,22 @@ describe("the video slave is corrected against a live clock", () => {
       start,
       storeSource.indexOf("}, 3000);", start),
     );
-    expect(body).toMatch(/const live = getAudio\(\)\.currentTime/);
+    expect(body).toMatch(/const live = audio\.currentTime/);
     expect(body).toMatch(
       /Math\.abs\(ytEngine\.getEngineTime\(\) - live\) > 1\.5/,
     );
     // No resync while stalled — seeking a buffering player digs it deeper.
     expect(body).toMatch(/if \(!s\.isPlaying \|\| s\.isBuffering\) return;/);
+    // ...and never against an element that has not loaded metadata. Right
+    // after a stream swap `audio.src` has just been reassigned and
+    // `currentTime` reads 0 until `loadedmetadata` fires, so correcting
+    // against it snapped the picture to the start of the track while the
+    // audio was already minutes in. A swap does not set `isBuffering`, so the
+    // guard above does not catch it.
+    expect(body.indexOf("HAVE_METADATA")).toBeLessThan(
+      body.indexOf("const live = audio.currentTime"),
+    );
+    expect(body.indexOf("HAVE_METADATA")).toBeGreaterThan(-1);
   });
 });
 

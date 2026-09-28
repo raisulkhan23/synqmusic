@@ -2243,7 +2243,15 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     // Align the picture to the element's LIVE clock. `currentTime` is a
     // polled snapshot that lags by up to a tick, so correcting against it
     // could visibly yank the video backwards on every pass.
-    const live = getAudio().currentTime;
+    //
+    // The live read is only trustworthy once the element has metadata. Right
+    // after a stream swap `audio.src` has just been reassigned and
+    // `currentTime` reads 0 until `loadedmetadata` fires — correcting the
+    // slave against that would snap the video to the start of the track while
+    // the audio is already minutes in.
+    const audio = getAudio();
+    if (audio.readyState < HTMLMediaElement.HAVE_METADATA) return;
+    const live = audio.currentTime;
     if (!Number.isFinite(live)) return;
     if (Math.abs(ytEngine.getEngineTime() - live) > 1.5) {
       ytEngine.seek(live);
