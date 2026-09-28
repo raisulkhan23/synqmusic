@@ -11,6 +11,8 @@
  *    `=cmd|...` is a real (if unlikely) input, not a hypothetical.
  */
 
+import { downloadFile } from "@/lib/download";
+
 export type CsvColumn<T> = {
   header: string;
   value: (row: T) => string | number | boolean | null | undefined;
@@ -33,27 +35,16 @@ export function toCsv<T>(rows: T[], columns: CsvColumn<T>[]): string {
   return lines.join("\r\n") + "\r\n";
 }
 
+/** UTF-8 byte order mark, written as an escape so it survives source review. */
+const BOM = "\uFEFF";
+
 /**
  * Hand the CSV to the browser as a download. Returns false when there is no
  * DOM to do it in, so a caller can report a failure instead of silently
  * doing nothing.
  */
 export function downloadCsv(filename: string, csv: string): boolean {
-  if (typeof document === "undefined") return false;
   // The BOM makes Excel read the file as UTF-8; without it, accented names
   // come out as mojibake.
-  const blob = new Blob(["﻿" + csv], {
-    type: "text/csv;charset=utf-8;",
-  });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  // Revoked on the next tick: revoking synchronously can cancel the download
-  // in Safari before it has read the blob.
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-  return true;
+  return downloadFile(filename, BOM + csv, "text/csv;charset=utf-8;");
 }

@@ -7,6 +7,7 @@ const row = readSource("src/components/tracks/RemoteTrackRow.tsx");
 const recent = readSource("src/pages/Recent.tsx");
 const admin = readSource("src/pages/Admin.tsx");
 const csv = readSource("src/lib/csvExport.ts");
+const download = readSource("src/lib/download.ts");
 
 describe("the queue can be tidied without reordering it by hand", () => {
   test("duplicates are dropped, keeping the first occurrence", () => {
@@ -145,13 +146,15 @@ describe("the admin accounts table can be exported", () => {
   });
 
   test("the download carries a BOM so Excel reads UTF-8", () => {
-    expect(csv).toMatch(/new Blob\(\["﻿" \+ csv\]/);
-    expect(csv).toMatch(/type: "text\/csv;charset=utf-8;"/);
+    expect(csv).toMatch(/const BOM = "\\uFEFF";/);
+    expect(csv).toMatch(
+      /downloadFile\(filename, BOM \+ csv, "text\/csv;charset=utf-8;"\)/,
+    );
   });
 
   test("the object URL is revoked after the click, not during it", () => {
     // Revoking synchronously cancels the download in Safari.
-    expect(csv).toMatch(
+    expect(download).toMatch(
       /setTimeout\(\(\) => URL\.revokeObjectURL\(url\), 1000\)/,
     );
   });

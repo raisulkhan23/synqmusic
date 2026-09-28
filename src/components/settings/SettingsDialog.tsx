@@ -12,6 +12,8 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { DEFAULT_CARD_TRANSPARENCY } from "@/lib/cardTransparency";
+import { downloadJson } from "@/lib/download";
+import { useSleepCountdown } from "@/lib/sleepTimer";
 import {
   applyEqPreset,
   setAudioFilter,
@@ -30,12 +32,13 @@ import {
   usePlayerStore,
 } from "@/store/player";
 import { cn } from "@/lib/utils";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import {
   Check,
   Clock3,
   Database,
+  Download,
   Film,
   Gauge,
   ImageOff,
@@ -193,6 +196,11 @@ export function SettingsDialog({
   const toggleSmartShuffle = usePlayerStore((s) => s.toggleSmartShuffle);
   const sleepEndsAt = usePlayerStore((s) => s.sleepEndsAt);
   const sleepAtSongEnd = usePlayerStore((s) => s.sleepAtSongEnd);
+  // Ticking clock for the preset highlight below. Reading `Date.now()` during
+  // render made the check an impure render, and it went stale: the preset only
+  // repainted when something else in the dialog changed, so a timer that had
+  // counted down into the next bucket kept the old button lit.
+  const sleepNow = useSleepCountdown(sleepEndsAt);
   const setSleepTimer = usePlayerStore((s) => s.setSleepTimer);
   const accentTheme = usePlayerStore((s) => s.accentTheme);
   const setAccentTheme = usePlayerStore((s) => s.setAccentTheme);
@@ -305,12 +313,16 @@ export function SettingsDialog({
   }, []);
 
   useEffect(() => {
-    // Wallpaper library loading intentionally refreshes state when Settings opens.
+    if (!open) return;
+    // Wallpaper library loading intentionally refreshes state when Settings
+    // opens. The directive has to sit directly above the call that sets state:
+    // an earlier version put it above the `if`, and when that block was
+    // reformatted onto several lines the directive stopped applying — which is
+    // why this showed up as a real error next to an "unused directive" warning.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (open)
-      void loadWallpaperLibrary().catch(() =>
-        toast.error("Couldn't load saved wallpapers"),
-      );
+    void loadWallpaperLibrary().catch(() =>
+      toast.error("Couldn't load saved wallpapers"),
+    );
   }, [open, loadWallpaperLibrary]);
 
   useEffect(() => {
@@ -477,6 +489,8 @@ export function SettingsDialog({
       setClearing(false);
     }
   };
+
+  const [exporting, setExporting] = useState(false);
 
   const handleAvatarChange = (event: ChangeEvent<HTMLInputElement>) => {
     const input = event.currentTarget;
@@ -1093,12 +1107,12 @@ export function SettingsDialog({
                     ? sleepEndsAt === null && !sleepAtSongEnd
                     : option.value === "end"
                       ? sleepAtSongEnd
-                      : // The timer preview is intentionally based on the current time.
-                        // eslint-disable-next-line react-hooks/purity
+                      : // Compared against the ticking clock, not a value
+                        // captured once: a timer that counted down into the
+                        // next bucket has to move the highlight with it.
                         sleepEndsAt !== null &&
-                        sleepEndsAt - Date.now() >
-                          (option.value - 1) * 60_000 &&
-                        sleepEndsAt - Date.now() < (option.value + 1) * 60_000;
+                        sleepEndsAt - sleepNow > (option.value - 1) * 60_000 &&
+                        sleepEndsAt - sleepNow < (option.value + 1) * 60_000;
                 return (
                   <button
                     key={option.label}
@@ -2254,6 +2268,24 @@ export function SettingsDialog({
             <Moon className="size-3.5" />
             Your data
           </p>
+          {exporting ? (
+            <DataExportRow onDone={() => setExporting(false)} />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setExporting(true)}
+              className="flex items-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5 text-left text-sm transition-colors hover:border-[rgb(var(--tint)_/_0.35)] hover:bg-white/[0.05]"
+            >
+              <Download className="size-4 text-[rgb(var(--tint))]" />
+              <span className="min-w-0">
+                <span className="block font-medium">Download my data</span>
+                <span className="block text-xs text-muted-foreground">
+                  A JSON copy of your profile, likes, playlists and listening
+                  history.
+                </span>
+              </span>
+            </button>
+          )}
           <button
             type="button"
             onClick={() => void handleClearHistory()}
@@ -2276,6 +2308,46 @@ export function SettingsDialog({
         </section>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Fetches the account export and hands it to the browser as JSON.
+ *
+ * Mounted only on demand: the query pulls every like, playlist and history
+ * row for the account, which is not something to run for someone who merely
+ * opened Settings.
+ */
+function DataExportRow({ onDone }: { onDone: () => void }) {
+  const data = useQuery(api.me.exportData);
+
+  useEffect(() => {
+    if (data === undefined) return;
+    if (data === null) {
+      toast.error("Sign in to export your data");
+      onDone();
+      return;
+    }
+    const stamp = new Date().toISOString().slice(0, 10);
+    const ok = downloadJson(`synq-my-data-${stamp}.json`, data);
+    if (!ok) {
+      toast.error("Couldn't build the export");
+    } else {
+      toast.success("Your data is downloading");
+    }
+    onDone();
+  }, [data, onDone]);
+
+  return (
+    <div className="flex items-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5 text-sm">
+      <Loader2 className="size-4 animate-spin text-[rgb(var(--tint))]" />
+      <span className="min-w-0">
+        <span className="block font-medium">Preparing your export…</span>
+        <span className="block text-xs text-muted-foreground">
+          Collecting your profile, likes, playlists and history.
+        </span>
+      </span>
+    </div>
   );
 }
 

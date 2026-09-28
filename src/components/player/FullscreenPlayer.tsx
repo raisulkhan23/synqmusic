@@ -50,6 +50,7 @@ import {
 import { cn } from "@/lib/utils";
 import { copyText } from "@/lib/clipboard";
 import { buildTrackShareUrl } from "@/lib/shareLink";
+import { formatRemaining, useSleepCountdown } from "@/lib/sleepTimer";
 import {
   IMAGE_WALLPAPER_MARKER,
   LIVE_WALLPAPER_MARKER,
@@ -63,32 +64,6 @@ const SLEEP_OPTIONS: { label: string; value: number | "end" }[] = [
   { label: "60 minutes", value: 60 },
   { label: "After current song", value: "end" },
 ];
-
-function formatRemaining(ms: number): string {
-  const totalSec = Math.max(0, Math.round(ms / 1000));
-  const m = Math.floor(totalSec / 60);
-  const s = totalSec % 60;
-  return m > 0 ? `${m}:${String(s).padStart(2, "0")}` : `${s}s`;
-}
-function useSleepCountdown(sleepEndsAt: number | null): number {
-  const [now, setNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    if (sleepEndsAt === null) return;
-    // 250ms polling existed only to catch the second boundary. `remaining` is
-    // computed in state rather than from a `now` captured at mount, so the
-    // countdown cannot sit on a stale time: the previous version seeded
-    // `now` once and only ever re-rendered when the *second* changed, which
-    // meant the displayed remaining time drifted and, worse, kept ticking at
-    // 4 renders a second for the whole timer's life.
-    const tick = () => setNow(Date.now());
-    tick();
-    const timer = window.setInterval(tick, 1000);
-    return () => window.clearInterval(timer);
-  }, [sleepEndsAt]);
-
-  return now;
-}
 
 function SleepTimerButton() {
   const sleepEndsAt = usePlayerStore((s) => s.sleepEndsAt);

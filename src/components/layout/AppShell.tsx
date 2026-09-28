@@ -909,6 +909,7 @@ export function AppShell() {
 
       <QueuePanel />
       <FullscreenPlayer />
+      <NowPlayingAnnouncer />
       <SettingsDialog
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
@@ -922,3 +923,26 @@ export function AppShell() {
 }
 
 export default AppShell;
+
+/**
+ * Screen-reader announcements for what is playing.
+ *
+ * The player is a wall of buttons and artwork: a track change is a silent,
+ * purely visual event, and nothing in the app told a screen-reader user that
+ * the song had changed or that playback had started and stopped. A polite
+ * live region announces it without interrupting whatever is being read.
+ */
+function NowPlayingAnnouncer() {
+  const current = usePlayerStore((s) => s.current);
+  const isPlaying = usePlayerStore((s) => s.isPlaying);
+
+  const message = current
+    ? `${isPlaying ? "Playing" : "Paused"}: ${current.title} by ${current.artistName}`
+    : "";
+
+  return (
+    <div aria-live="polite" aria-atomic="true" className="sr-only">
+      {message}
+    </div>
+  );
+}

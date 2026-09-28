@@ -3,6 +3,7 @@ import { readSource } from "./helpers/tailwind-css.js";
 
 const storeSource = readSource("src/store/player.ts");
 const volumeSource = readSource("src/components/player/VolumeControl.tsx");
+const sleepSource = readSource("src/lib/sleepTimer.ts");
 const fullscreenSource = readSource(
   "src/components/player/FullscreenPlayer.tsx",
 );
@@ -44,14 +45,21 @@ describe("the sleep countdown cannot drift", () => {
     // SECOND changed, so the label could lag behind the real remaining time —
     // and the 250ms interval kept firing renders four times a second for the
     // whole life of the timer.
-    const hook = fullscreenSource.slice(
-      fullscreenSource.indexOf("function useSleepCountdown"),
-      fullscreenSource.indexOf("function SleepTimerButton"),
+    // The hook moved to src/lib/sleepTimer.ts when the player bar grew its
+    // own countdown; the regression is about the hook, not where it lives.
+    const hook = sleepSource.slice(
+      sleepSource.indexOf("export function useSleepCountdown"),
+      sleepSource.length,
     );
-    expect(hook).toMatch(/const tick = \(\) => setNow\(Date\.now\(\)\);/);
-    expect(hook).toMatch(/setInterval\(tick, 1000\)/);
+    expect(hook).toMatch(
+      /setInterval\(\(\) => setNow\(Date\.now\(\)\), 1000\)/,
+    );
     // The interval is torn down when the timer changes or is cleared.
-    expect(hook).toMatch(/clearInterval\(timer\)/);
+    expect(hook).toMatch(/clearInterval\(id\)/);
+    // Every surface that counts down shares this one implementation.
+    expect(fullscreenSource).toMatch(
+      /import \{ formatRemaining, useSleepCountdown \} from "@\/lib\/sleepTimer"/,
+    );
   });
 });
 
