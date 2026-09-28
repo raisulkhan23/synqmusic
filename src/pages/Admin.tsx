@@ -34,6 +34,20 @@ function formatDate(ts: number): string {
   });
 }
 
+/**
+ * Sign-in methods Convex Auth records for an account. These are the values
+ * carried in `authAccounts.tokenIdentifier` and surfaced as `providers` on
+ * each row of the accounts table.
+ */
+const SIGN_IN_METHODS = [
+  { id: "github", label: "GitHub" },
+  { id: "google", label: "Google" },
+  { id: "email-otp", label: "Email" },
+  { id: "anonymous", label: "Guest" },
+] as const;
+
+type SignInMethod = (typeof SIGN_IN_METHODS)[number]["id"];
+
 function ResultGroup({
   title,
   count,
@@ -58,7 +72,9 @@ function ResultRow({ title, detail }: { title: string; detail: string }) {
   return (
     <div className="flex min-w-0 items-baseline justify-between gap-3 rounded-lg px-2 py-1.5 text-sm hover:bg-white/[0.05]">
       <span className="min-w-0 truncate font-medium">{title}</span>
-      <span className="shrink-0 truncate text-xs text-muted-foreground">{detail}</span>
+      <span className="shrink-0 truncate text-xs text-muted-foreground">
+        {detail}
+      </span>
     </div>
   );
 }
@@ -128,9 +144,15 @@ export default function Admin() {
   const rooms = useQuery(api.admin.listRooms, {});
   const imports = useQuery(api.admin.listImports, {});
 
-  const [renaming, setRenaming] = useState<{ id: Id<"playlists">; name: string } | null>(null);
+  const [renaming, setRenaming] = useState<{
+    id: Id<"playlists">;
+    name: string;
+  } | null>(null);
 
-  const handleRenamePlaylist = async (playlistId: Id<"playlists">, name: string) => {
+  const handleRenamePlaylist = async (
+    playlistId: Id<"playlists">,
+    name: string,
+  ) => {
     try {
       await renamePlaylist({ playlistId, name });
       toast.success("Playlist renamed");
@@ -172,9 +194,14 @@ export default function Admin() {
   // through long lists, and so they work without extra round trips on mobile.
   const [userQuery, setUserQuery] = useState("");
   const [userRole, setUserRole] = useState<"all" | "admin" | "user">("all");
-  const [userSort, setUserSort] = useState<"newest" | "oldest" | "name">("newest");
+  const [userMethod, setUserMethod] = useState<"all" | SignInMethod>("all");
+  const [userSort, setUserSort] = useState<"newest" | "oldest" | "name">(
+    "newest",
+  );
   const [playlistQuery, setPlaylistQuery] = useState("");
-  const [playlistSort, setPlaylistSort] = useState<"newest" | "largest" | "name">("newest");
+  const [playlistSort, setPlaylistSort] = useState<
+    "newest" | "largest" | "name"
+  >("newest");
   const [globalQuery, setGlobalQuery] = useState("");
 
   const filteredUsers = useMemo(() => {
@@ -182,17 +209,40 @@ export default function Admin() {
     const rows = (users ?? []).filter((u) => {
       if (userRole === "admin" && u.role !== "admin") return false;
       if (userRole === "user" && u.role === "admin") return false;
+      // Narrow by sign-in method: "who signed up with GitHub" is the question
+      // admins ask most, and the per-row badges can't answer it once the
+      // accounts table is long.
+      if (userMethod !== "all" && !(u.providers ?? []).includes(userMethod))
+        return false;
       if (!q) return true;
       const name = (u.name ?? "").toLowerCase();
       const email = (u.email ?? "").toLowerCase();
-      return name.includes(q) || email.includes(q) || u._id.includes(q);
+      // The external GitHub account id is searchable for the same reason the
+      // badge shows it: looking it up should land on that row.
+      const github = (u.githubId ?? "").toLowerCase();
+      return (
+        name.includes(q) ||
+        email.includes(q) ||
+        github.includes(q) ||
+        u._id.includes(q)
+      );
     });
     return rows.sort((a, b) => {
-      if (userSort === "name") return (a.name ?? "").localeCompare(b.name ?? "");
+      if (userSort === "name")
+        return (a.name ?? "").localeCompare(b.name ?? "");
       if (userSort === "oldest") return a._creationTime - b._creationTime;
       return b._creationTime - a._creationTime;
     });
-  }, [users, userQuery, userRole, userSort]);
+  }, [users, userQuery, userRole, userMethod, userSort]);
+
+  /** How many accounts use each sign-in method, shown on the filter labels. */
+  const methodCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const u of users ?? []) {
+      for (const p of u.providers ?? []) counts[p] = (counts[p] ?? 0) + 1;
+    }
+    return counts;
+  }, [users]);
 
   const filteredPlaylists = useMemo(() => {
     const q = playlistQuery.trim().toLowerCase();
@@ -215,28 +265,43 @@ export default function Admin() {
     const q = globalQuery.trim().toLowerCase();
     if (!q) return null;
     return {
-      users: (users ?? []).filter(
-        (u) =>
-          (u.name ?? "").toLowerCase().includes(q) ||
-          (u.email ?? "").toLowerCase().includes(q),
-      ).slice(0, 25),
-      playlists: (playlists ?? []).filter(
-        (p) => p.name.toLowerCase().includes(q) || p._id.includes(q),
-      ).slice(0, 25),
-      likes: (allLikes ?? []).filter(
-        (l) => l.title.toLowerCase().includes(q) || l.artistName.toLowerCase().includes(q),
-      ).slice(0, 25),
-      rooms: (rooms ?? []).filter((r) =>
-        (r.name ?? "").toLowerCase().includes(q),
-      ).slice(0, 25),
-      imports: (imports ?? []).filter((i) =>
-        (i.name ?? "").toLowerCase().includes(q),
-      ).slice(0, 25),
+      users: (users ?? [])
+        .filter(
+          (u) =>
+            (u.name ?? "").toLowerCase().includes(q) ||
+            (u.email ?? "").toLowerCase().includes(q),
+        )
+        .slice(0, 25),
+      playlists: (playlists ?? [])
+        .filter((p) => p.name.toLowerCase().includes(q) || p._id.includes(q))
+        .slice(0, 25),
+      likes: (allLikes ?? [])
+        .filter(
+          (l) =>
+            l.title.toLowerCase().includes(q) ||
+            l.artistName.toLowerCase().includes(q),
+        )
+        .slice(0, 25),
+      rooms: (rooms ?? [])
+        .filter((r) => (r.name ?? "").toLowerCase().includes(q))
+        .slice(0, 25),
+      imports: (imports ?? [])
+        .filter((i) => (i.name ?? "").toLowerCase().includes(q))
+        .slice(0, 25),
     };
   }, [globalQuery, users, playlists, allLikes, rooms, imports]);
-  const [gh, setGh] = useState<{ userId: string; name: string; loading: boolean; data: Awaited<ReturnType<typeof fetchGithub>> } | null>(null);
+  const [gh, setGh] = useState<{
+    userId: string;
+    name: string;
+    loading: boolean;
+    data: Awaited<ReturnType<typeof fetchGithub>>;
+  } | null>(null);
 
-  const openGithub = async (userId: string, githubId: string | null, name: string) => {
+  const openGithub = async (
+    userId: string,
+    githubId: string | null,
+    name: string,
+  ) => {
     setGh({ userId, name, loading: true, data: null });
     try {
       const data = githubId ? await fetchGithub({ githubId }) : null;
@@ -252,7 +317,10 @@ export default function Admin() {
         <div className="h-9 w-64 animate-pulse rounded bg-white/[0.05]" />
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="h-28 animate-pulse rounded-2xl bg-white/[0.04]" />
+            <div
+              key={i}
+              className="h-28 animate-pulse rounded-2xl bg-white/[0.04]"
+            />
           ))}
         </div>
       </div>
@@ -293,7 +361,11 @@ export default function Admin() {
   ) => {
     try {
       await setRole({ userId, role });
-      toast.success(role === "admin" ? `${name} is now an admin` : `${name} is now a standard user`);
+      toast.success(
+        role === "admin"
+          ? `${name} is now an admin`
+          : `${name} is now a standard user`,
+      );
     } catch {
       toast.error("Could not update the role");
     }
@@ -329,7 +401,8 @@ export default function Admin() {
               Admin
             </h1>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              Manage accounts, content, and listening activity across the deployment.
+              Manage accounts, content, and listening activity across the
+              deployment.
             </p>
           </div>
         </div>
@@ -339,21 +412,41 @@ export default function Admin() {
         {/* 7 tabs wrapped into a tall stack on a phone. Scroll the rail
             sideways instead so the admin area stays one-handed. */}
         <TabsList className="slider-rail h-auto w-full justify-start gap-1 overflow-x-auto bg-white/[0.05] p-1">
-          <TabsTrigger value="overview" className="shrink-0">Overview</TabsTrigger>
-          <TabsTrigger value="users" className="shrink-0">Users</TabsTrigger>
-          <TabsTrigger value="insights" className="shrink-0">Insights</TabsTrigger>
-          <TabsTrigger value="likes" className="shrink-0">Liked songs</TabsTrigger>
-          <TabsTrigger value="playlists" className="shrink-0">Playlists</TabsTrigger>
-          <TabsTrigger value="rooms" className="shrink-0">Listening rooms</TabsTrigger>
-          <TabsTrigger value="imports" className="shrink-0">Imports</TabsTrigger>
-          <TabsTrigger value="search" className="shrink-0">Search</TabsTrigger>
+          <TabsTrigger value="overview" className="shrink-0">
+            Overview
+          </TabsTrigger>
+          <TabsTrigger value="users" className="shrink-0">
+            Users
+          </TabsTrigger>
+          <TabsTrigger value="insights" className="shrink-0">
+            Insights
+          </TabsTrigger>
+          <TabsTrigger value="likes" className="shrink-0">
+            Liked songs
+          </TabsTrigger>
+          <TabsTrigger value="playlists" className="shrink-0">
+            Playlists
+          </TabsTrigger>
+          <TabsTrigger value="rooms" className="shrink-0">
+            Listening rooms
+          </TabsTrigger>
+          <TabsTrigger value="imports" className="shrink-0">
+            Imports
+          </TabsTrigger>
+          <TabsTrigger value="search" className="shrink-0">
+            Search
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-6 flex flex-col gap-6">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard icon={Users} label="Accounts" value={counts.users} />
             <StatCard icon={ShieldCheck} label="Admins" value={counts.admins} />
-            <StatCard icon={ListMusic} label="Playlists" value={counts.playlists} />
+            <StatCard
+              icon={ListMusic}
+              label="Playlists"
+              value={counts.playlists}
+            />
             <StatCard icon={Heart} label="Liked songs" value={counts.likes} />
           </div>
 
@@ -365,14 +458,22 @@ export default function Admin() {
               </p>
               <div className="mt-3 flex flex-col gap-2">
                 {recentSignups.map((u) => (
-                  <div key={u._id} className="flex items-center justify-between gap-3 text-sm">
+                  <div
+                    key={u._id}
+                    className="flex items-center justify-between gap-3 text-sm"
+                  >
                     <span className="min-w-0 truncate">
-                      {u.name ?? (u.isAnonymous ? "Guest listener" : "Unnamed listener")}
+                      {u.name ??
+                        (u.isAnonymous ? "Guest listener" : "Unnamed listener")}
                       {u.role === "admin" && (
-                        <span className="ml-2 text-xs text-[rgb(var(--tint))]">admin</span>
+                        <span className="ml-2 text-xs text-[rgb(var(--tint))]">
+                          admin
+                        </span>
                       )}
                     </span>
-                    <span className="shrink-0 text-xs text-muted-foreground">{formatDate(u._creationTime)}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {formatDate(u._creationTime)}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -405,41 +506,75 @@ export default function Admin() {
           ) : (
             <div className="flex flex-col gap-4">
               {globalResults.users.length > 0 && (
-                <ResultGroup title="Accounts" count={globalResults.users.length}>
+                <ResultGroup
+                  title="Accounts"
+                  count={globalResults.users.length}
+                >
                   {globalResults.users.map((u) => (
                     <ResultRow
                       key={u._id}
-                      title={u.name ?? (u.isAnonymous ? "Guest listener" : "Unnamed listener")}
+                      title={
+                        u.name ??
+                        (u.isAnonymous ? "Guest listener" : "Unnamed listener")
+                      }
                       detail={u.email ?? "Anonymous sign-in"}
                     />
                   ))}
                 </ResultGroup>
               )}
               {globalResults.playlists.length > 0 && (
-                <ResultGroup title="Playlists" count={globalResults.playlists.length}>
+                <ResultGroup
+                  title="Playlists"
+                  count={globalResults.playlists.length}
+                >
                   {globalResults.playlists.map((p) => (
-                    <ResultRow key={p._id} title={p.name} detail={`${p.trackCount} tracks · ${p.ownerName ?? "unknown owner"}`} />
+                    <ResultRow
+                      key={p._id}
+                      title={p.name}
+                      detail={`${p.trackCount} tracks · ${p.ownerName ?? "unknown owner"}`}
+                    />
                   ))}
                 </ResultGroup>
               )}
               {globalResults.likes.length > 0 && (
-                <ResultGroup title="Liked songs" count={globalResults.likes.length}>
+                <ResultGroup
+                  title="Liked songs"
+                  count={globalResults.likes.length}
+                >
                   {globalResults.likes.map((l) => (
-                    <ResultRow key={`${l._id}`} title={l.title} detail={l.artistName} />
+                    <ResultRow
+                      key={`${l._id}`}
+                      title={l.title}
+                      detail={l.artistName}
+                    />
                   ))}
                 </ResultGroup>
               )}
               {globalResults.rooms.length > 0 && (
-                <ResultGroup title="Listening rooms" count={globalResults.rooms.length}>
+                <ResultGroup
+                  title="Listening rooms"
+                  count={globalResults.rooms.length}
+                >
                   {globalResults.rooms.map((r) => (
-                    <ResultRow key={r._id} title={r.name} detail={`${r.memberCount} listeners · ${r.hostName}`} />
+                    <ResultRow
+                      key={r._id}
+                      title={r.name}
+                      detail={`${r.memberCount} listeners · ${r.hostName}`}
+                    />
                   ))}
                 </ResultGroup>
               )}
               {globalResults.imports.length > 0 && (
-                <ResultGroup title="Imports" count={globalResults.imports.length}>
+                <ResultGroup
+                  title="Imports"
+                  count={globalResults.imports.length}
+                >
                   {globalResults.imports.map((i) => (
-                    <ResultRow key={i._id} title={i.name ?? "Untitled import"} detail={`${i.trackCount ?? 0} tracks`} />
+                    <ResultRow
+                      key={i._id}
+                      title={i.name ?? "Untitled import"}
+                      detail={`${i.trackCount ?? 0} tracks`}
+                    />
                   ))}
                 </ResultGroup>
               )}
@@ -461,7 +596,7 @@ export default function Admin() {
             <input
               value={userQuery}
               onChange={(e) => setUserQuery(e.target.value)}
-              placeholder="Search name, email or id…"
+              placeholder="Search name, email or GitHub id…"
               aria-label="Search accounts"
               className="h-10 w-full rounded-full border border-white/10 bg-white/[0.04] px-4 text-sm outline-none placeholder:text-muted-foreground/70 focus:border-[rgb(var(--tint)_/_0.5)] sm:max-w-xs"
             />
@@ -482,6 +617,21 @@ export default function Admin() {
                 </button>
               ))}
               <select
+                value={userMethod}
+                onChange={(e) =>
+                  setUserMethod(e.target.value as typeof userMethod)
+                }
+                aria-label="Filter by sign-in method"
+                className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-muted-foreground outline-none"
+              >
+                <option value="all">Any sign-in</option>
+                {SIGN_IN_METHODS.map((method) => (
+                  <option key={method.id} value={method.id}>
+                    {method.label} ({methodCounts[method.id] ?? 0})
+                  </option>
+                ))}
+              </select>
+              <select
                 value={userSort}
                 onChange={(e) => setUserSort(e.target.value as typeof userSort)}
                 aria-label="Sort accounts"
@@ -501,9 +651,13 @@ export default function Admin() {
               <thead>
                 <tr className="border-b border-white/[0.07] bg-white/[0.03] text-[11px] tracking-widest text-muted-foreground uppercase">
                   <th className="px-4 py-3 font-semibold">Account</th>
-                  <th className="hidden px-4 py-3 font-semibold md:table-cell">Member since</th>
+                  <th className="hidden px-4 py-3 font-semibold md:table-cell">
+                    Member since
+                  </th>
                   <th className="px-4 py-3 font-semibold">Role</th>
-                  <th className="px-4 py-3 text-right font-semibold">Actions</th>
+                  <th className="px-4 py-3 text-right font-semibold">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -517,14 +671,24 @@ export default function Admin() {
                   ))}
                 {filteredUsers.map((user) => {
                   const isSelf = user._id === me?._id;
-                  const name = user.name ?? (user.isAnonymous ? "Guest listener" : "Unnamed listener");
+                  const name =
+                    user.name ??
+                    (user.isAnonymous ? "Guest listener" : "Unnamed listener");
                   const email = user.email ?? "Anonymous sign-in";
                   return (
-                    <tr key={user._id} className="border-b border-white/[0.04] last:border-0">
+                    <tr
+                      key={user._id}
+                      className="border-b border-white/[0.04] last:border-0"
+                    >
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           {user.image ? (
-                            <img src={user.image} alt="" className="size-9 shrink-0 rounded-full object-cover ring-1 ring-white/10" loading="lazy" />
+                            <img
+                              src={user.image}
+                              alt=""
+                              className="size-9 shrink-0 rounded-full object-cover ring-1 ring-white/10"
+                              loading="lazy"
+                            />
                           ) : (
                             <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[rgb(var(--tint)_/_0.14)] text-xs font-bold text-[rgb(var(--tint))]">
                               {name
@@ -538,29 +702,47 @@ export default function Admin() {
                           <div className="min-w-0">
                             <p className="truncate font-medium">
                               {name}
-                              {isSelf && <span className="ml-2 text-xs text-muted-foreground">(you)</span>}
+                              {isSelf && (
+                                <span className="ml-2 text-xs text-muted-foreground">
+                                  (you)
+                                </span>
+                              )}
                             </p>
                             <p className="flex items-center gap-1.5 truncate text-xs text-muted-foreground">
                               {email}
                               {user.providers?.includes("github") && (
                                 <button
                                   type="button"
-                                  onClick={() => openGithub(user._id, user.githubId, name)}
+                                  onClick={() =>
+                                    openGithub(user._id, user.githubId, name)
+                                  }
                                   title={`GitHub account${user.githubId ? ` #${user.githubId}` : ""} — click for profile`}
                                   className="inline-flex items-center rounded bg-white/[0.07] px-1.5 py-0.5 text-[10px] font-semibold transition-colors hover:bg-white/[0.15] hover:text-foreground"
                                 >
-                                  <svg viewBox="0 0 24 24" className="mr-1 size-3 fill-current" aria-hidden="true"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.55v-2.17c-3.2.7-3.87-1.36-3.87-1.36-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.72-1.54-2.55-.29-5.23-1.28-5.23-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.79 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.12 3.05.74.81 1.18 1.83 1.18 3.09 0 4.41-2.69 5.38-5.25 5.67.41.36.78 1.06.78 2.14v3.17c0 .3.21.67.8.55A11.5 11.5 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5z" /></svg>
+                                  <svg
+                                    viewBox="0 0 24 24"
+                                    className="mr-1 size-3 fill-current"
+                                    aria-hidden="true"
+                                  >
+                                    <path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.55v-2.17c-3.2.7-3.87-1.36-3.87-1.36-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.72-1.54-2.55-.29-5.23-1.28-5.23-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.79 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.12 3.05.74.81 1.18 1.83 1.18 3.09 0 4.41-2.69 5.38-5.25 5.67.41.36.78 1.06.78 2.14v3.17c0 .3.21.67.8.55A11.5 11.5 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5z" />
+                                  </svg>
                                   GitHub
                                 </button>
                               )}
                               {user.providers?.includes("google") && (
-                                <span className="inline-flex items-center rounded bg-white/[0.07] px-1.5 py-0.5 text-[10px] font-semibold">Google</span>
+                                <span className="inline-flex items-center rounded bg-white/[0.07] px-1.5 py-0.5 text-[10px] font-semibold">
+                                  Google
+                                </span>
                               )}
                               {user.providers?.includes("email-otp") && (
-                                <span className="inline-flex items-center rounded bg-white/[0.07] px-1.5 py-0.5 text-[10px] font-semibold">Email</span>
+                                <span className="inline-flex items-center rounded bg-white/[0.07] px-1.5 py-0.5 text-[10px] font-semibold">
+                                  Email
+                                </span>
                               )}
                               {user.providers?.includes("anonymous") && (
-                                <span className="inline-flex items-center rounded bg-white/[0.07] px-1.5 py-0.5 text-[10px] font-semibold">Guest</span>
+                                <span className="inline-flex items-center rounded bg-white/[0.07] px-1.5 py-0.5 text-[10px] font-semibold">
+                                  Guest
+                                </span>
                               )}
                             </p>
                           </div>
@@ -575,7 +757,10 @@ export default function Admin() {
                             Admin
                           </Badge>
                         ) : (
-                          <Badge variant="secondary" className="bg-white/[0.05] text-muted-foreground">
+                          <Badge
+                            variant="secondary"
+                            className="bg-white/[0.05] text-muted-foreground"
+                          >
                             Standard
                           </Badge>
                         )}
@@ -587,7 +772,9 @@ export default function Admin() {
                               {user.role === "admin" ? (
                                 <button
                                   type="button"
-                                  onClick={() => handleSetRole(user._id, name, "user")}
+                                  onClick={() =>
+                                    handleSetRole(user._id, name, "user")
+                                  }
                                   className="flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
                                 >
                                   <ArrowDownToLine className="size-3.5" />
@@ -596,7 +783,9 @@ export default function Admin() {
                               ) : (
                                 <button
                                   type="button"
-                                  onClick={() => handleSetRole(user._id, name, "admin")}
+                                  onClick={() =>
+                                    handleSetRole(user._id, name, "admin")
+                                  }
                                   className="flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
                                 >
                                   <ArrowUpFromLine className="size-3.5" />
@@ -606,11 +795,15 @@ export default function Admin() {
                               <ConfirmButton
                                 label="Clear history"
                                 confirmLabel="Clear all plays?"
-                                onConfirm={() => handleClearHistory(user._id, name)}
+                                onConfirm={() =>
+                                  handleClearHistory(user._id, name)
+                                }
                               />
                               <ConfirmButton
                                 label="Delete"
-                                onConfirm={() => handleDeleteUser(user._id, name)}
+                                onConfirm={() =>
+                                  handleDeleteUser(user._id, name)
+                                }
                               />
                             </>
                           )}
@@ -632,9 +825,13 @@ export default function Admin() {
                 <tr className="border-b border-white/[0.07] bg-white/[0.03] text-[11px] tracking-widest text-muted-foreground uppercase">
                   <th className="px-4 py-3 font-semibold">Listener</th>
                   <th className="px-4 py-3 font-semibold">Likes</th>
-                  <th className="hidden px-4 py-3 font-semibold sm:table-cell">Playlists</th>
+                  <th className="hidden px-4 py-3 font-semibold sm:table-cell">
+                    Playlists
+                  </th>
                   <th className="px-4 py-3 font-semibold">Plays</th>
-                  <th className="hidden px-4 py-3 font-semibold md:table-cell">Last played</th>
+                  <th className="hidden px-4 py-3 font-semibold md:table-cell">
+                    Last played
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -647,11 +844,22 @@ export default function Admin() {
                     </tr>
                   ))}
                 {activity?.map((row) => (
-                  <tr key={row._id} className="border-b border-white/[0.04] last:border-0">
-                    <td className="px-4 py-3 font-medium">{row.name ?? row.email ?? "Anonymous"}</td>
-                    <td className="px-4 py-3 text-muted-foreground tabular-nums">{row.likes}</td>
-                    <td className="hidden px-4 py-3 text-muted-foreground tabular-nums sm:table-cell">{row.playlists}</td>
-                    <td className="px-4 py-3 text-muted-foreground tabular-nums">{row.plays}</td>
+                  <tr
+                    key={row._id}
+                    className="border-b border-white/[0.04] last:border-0"
+                  >
+                    <td className="px-4 py-3 font-medium">
+                      {row.name ?? row.email ?? "Anonymous"}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground tabular-nums">
+                      {row.likes}
+                    </td>
+                    <td className="hidden px-4 py-3 text-muted-foreground tabular-nums sm:table-cell">
+                      {row.playlists}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground tabular-nums">
+                      {row.plays}
+                    </td>
                     <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">
                       {row.lastPlayedAt ? formatDate(row.lastPlayedAt) : "—"}
                     </td>
@@ -681,10 +889,18 @@ export default function Admin() {
                       </tr>
                     ))}
                   {allLikes?.map((like) => (
-                    <tr key={like._id} className="border-b border-white/[0.04] last:border-0">
+                    <tr
+                      key={like._id}
+                      className="border-b border-white/[0.04] last:border-0"
+                    >
                       <td className="w-12 px-4 py-2">
                         {like.coverUrl ? (
-                          <img src={like.coverUrl} alt="" loading="lazy" className="size-10 rounded-md object-cover" />
+                          <img
+                            src={like.coverUrl}
+                            alt=""
+                            loading="lazy"
+                            className="size-10 rounded-md object-cover"
+                          />
                         ) : (
                           <span className="flex size-10 items-center justify-center rounded-md bg-white/[0.06]">
                             <Heart className="size-4 text-muted-foreground/50" />
@@ -693,7 +909,9 @@ export default function Admin() {
                       </td>
                       <td className="px-2 py-2">
                         <p className="truncate font-medium">{like.title}</p>
-                        <p className="truncate text-xs text-muted-foreground">{like.artistName}</p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {like.artistName}
+                        </p>
                       </td>
                       <td className="px-4 py-2 text-xs text-muted-foreground">
                         {like.ownerName ?? like.ownerEmail ?? "Unknown"}
@@ -705,7 +923,10 @@ export default function Admin() {
                   ))}
                   {allLikes !== undefined && allLikes.length === 0 && (
                     <tr>
-                      <td colSpan={4} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                      <td
+                        colSpan={4}
+                        className="px-4 py-10 text-center text-sm text-muted-foreground"
+                      >
                         No liked songs yet.
                       </td>
                     </tr>
@@ -722,18 +943,28 @@ export default function Admin() {
               Most played across the deployment
             </p>
             <div className="mt-3 flex flex-col gap-1.5">
-              {topTracks === undefined && <div className="h-16 animate-pulse rounded bg-white/[0.05]" />}
+              {topTracks === undefined && (
+                <div className="h-16 animate-pulse rounded bg-white/[0.05]" />
+              )}
               {topTracks?.map((t, i) => (
-                <div key={t.trackId} className="flex items-center gap-3 text-sm">
-                  <span className="w-6 text-right text-xs tabular-nums text-muted-foreground">{i + 1}</span>
+                <div
+                  key={t.trackId}
+                  className="flex items-center gap-3 text-sm"
+                >
+                  <span className="w-6 text-right text-xs tabular-nums text-muted-foreground">
+                    {i + 1}
+                  </span>
                   <span className="min-w-0 flex-1 truncate">{t.trackId}</span>
                   <span className="text-xs tabular-nums text-muted-foreground">
-                    {t.plays} plays · {t.listeners} listener{t.listeners === 1 ? "" : "s"}
+                    {t.plays} plays · {t.listeners} listener
+                    {t.listeners === 1 ? "" : "s"}
                   </span>
                 </div>
               ))}
               {topTracks !== undefined && topTracks.length === 0 && (
-                <p className="text-sm text-muted-foreground">No listening history yet.</p>
+                <p className="text-sm text-muted-foreground">
+                  No listening history yet.
+                </p>
               )}
             </div>
           </div>
@@ -751,7 +982,9 @@ export default function Admin() {
             <div className="flex flex-wrap items-center gap-1.5">
               <select
                 value={playlistSort}
-                onChange={(e) => setPlaylistSort(e.target.value as typeof playlistSort)}
+                onChange={(e) =>
+                  setPlaylistSort(e.target.value as typeof playlistSort)
+                }
                 aria-label="Sort playlists"
                 className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-muted-foreground outline-none"
               >
@@ -769,10 +1002,16 @@ export default function Admin() {
               <thead>
                 <tr className="border-b border-white/[0.07] bg-white/[0.03] text-[11px] tracking-widest text-muted-foreground uppercase">
                   <th className="px-4 py-3 font-semibold">Playlist</th>
-                  <th className="hidden px-4 py-3 font-semibold sm:table-cell">Owner</th>
+                  <th className="hidden px-4 py-3 font-semibold sm:table-cell">
+                    Owner
+                  </th>
                   <th className="px-4 py-3 font-semibold">Tracks</th>
-                  <th className="hidden px-4 py-3 font-semibold md:table-cell">Created</th>
-                  <th className="px-4 py-3 text-right font-semibold">Actions</th>
+                  <th className="hidden px-4 py-3 font-semibold md:table-cell">
+                    Created
+                  </th>
+                  <th className="px-4 py-3 text-right font-semibold">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -785,12 +1024,17 @@ export default function Admin() {
                     </tr>
                   ))}
                 {filteredPlaylists.map((playlist) => (
-                  <tr key={playlist._id} className="border-b border-white/[0.04] last:border-0">
+                  <tr
+                    key={playlist._id}
+                    className="border-b border-white/[0.04] last:border-0"
+                  >
                     <td className="px-4 py-3 font-medium">{playlist.name}</td>
                     <td className="hidden px-4 py-3 text-muted-foreground sm:table-cell">
                       {playlist.ownerName ?? playlist.ownerEmail ?? "Unknown"}
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground">{playlist.trackCount}</td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {playlist.trackCount}
+                    </td>
                     <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">
                       {formatDate(playlist._creationTime)}
                     </td>
@@ -800,14 +1044,23 @@ export default function Admin() {
                           <form
                             onSubmit={(e) => {
                               e.preventDefault();
-                              if (renaming.name.trim()) handleRenamePlaylist(playlist._id, renaming.name);
+                              if (renaming.name.trim())
+                                handleRenamePlaylist(
+                                  playlist._id,
+                                  renaming.name,
+                                );
                             }}
                             className="flex items-center gap-1.5"
                           >
                             <input
                               autoFocus
                               value={renaming.name}
-                              onChange={(e) => setRenaming({ id: playlist._id, name: e.target.value })}
+                              onChange={(e) =>
+                                setRenaming({
+                                  id: playlist._id,
+                                  name: e.target.value,
+                                })
+                              }
                               className="w-40 rounded-full border border-white/15 bg-white/[0.05] px-3 py-1.5 text-xs outline-none focus:border-[rgb(var(--tint))]"
                             />
                             <button
@@ -830,7 +1083,12 @@ export default function Admin() {
                               type="button"
                               aria-label={`Rename ${playlist.name}`}
                               title="Rename"
-                              onClick={() => setRenaming({ id: playlist._id, name: playlist.name })}
+                              onClick={() =>
+                                setRenaming({
+                                  id: playlist._id,
+                                  name: playlist.name,
+                                })
+                              }
                               className="flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
                             >
                               <Pencil className="size-3.5" />
@@ -839,7 +1097,9 @@ export default function Admin() {
                             <ConfirmButton
                               label="Delete"
                               confirmLabel="Delete playlist?"
-                              onConfirm={() => handleDeletePlaylist(playlist._id)}
+                              onConfirm={() =>
+                                handleDeletePlaylist(playlist._id)
+                              }
                             />
                           </>
                         )}
@@ -849,7 +1109,10 @@ export default function Admin() {
                 ))}
                 {playlists !== undefined && playlists.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                    <td
+                      colSpan={5}
+                      className="px-4 py-10 text-center text-sm text-muted-foreground"
+                    >
                       No playlists exist yet.
                     </td>
                   </tr>
@@ -861,8 +1124,16 @@ export default function Admin() {
 
         <TabsContent value="insights" className="mt-6 flex flex-col gap-6">
           <div className="grid gap-3 sm:grid-cols-3">
-            <StatCard icon={Activity} label="Plays · last 14 days" value={listeningStats?.totalPlays ?? 0} />
-            <StatCard icon={BarChart3} label="Unique tracks · 14 days" value={listeningStats?.uniqueTracks ?? 0} />
+            <StatCard
+              icon={Activity}
+              label="Plays · last 14 days"
+              value={listeningStats?.totalPlays ?? 0}
+            />
+            <StatCard
+              icon={BarChart3}
+              label="Unique tracks · 14 days"
+              value={listeningStats?.uniqueTracks ?? 0}
+            />
             <StatCard
               icon={Clock3}
               label="Peak listening hour"
@@ -875,13 +1146,17 @@ export default function Admin() {
           </div>
 
           <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-5">
-            <p className="text-sm font-semibold">Plays per day — last 14 days</p>
+            <p className="text-sm font-semibold">
+              Plays per day — last 14 days
+            </p>
             {listeningStats === undefined ? (
               <div className="mt-3 h-32 animate-pulse rounded bg-white/[0.05]" />
             ) : listeningStats.totalPlays === 0 ? (
               <div className="mt-3 flex h-32 flex-col items-center justify-center rounded-xl border border-dashed border-white/[0.08] bg-black/10 px-4 text-center">
                 <BarChart3 className="size-6 text-muted-foreground/45" />
-                <p className="mt-2 text-sm font-semibold">No listening activity yet</p>
+                <p className="mt-2 text-sm font-semibold">
+                  No listening activity yet
+                </p>
                 <p className="mt-1 max-w-sm text-xs text-muted-foreground">
                   Plays from the last 14 days will appear here as people listen.
                 </p>
@@ -889,12 +1164,20 @@ export default function Admin() {
             ) : (
               <div className="mt-4 flex h-32 items-end gap-1.5">
                 {listeningStats.daily.map((d) => {
-                  const max = Math.max(1, ...listeningStats.daily.map((x) => x.plays));
+                  const max = Math.max(
+                    1,
+                    ...listeningStats.daily.map((x) => x.plays),
+                  );
                   return (
-                    <div key={d.day} className="group relative z-10 flex h-full min-w-0 flex-1 flex-col items-center gap-1 hover:z-20">
+                    <div
+                      key={d.day}
+                      className="group relative z-10 flex h-full min-w-0 flex-1 flex-col items-center gap-1 hover:z-20"
+                    >
                       <div
                         className="relative w-full rounded-t bg-[rgb(var(--tint)_/_0.55)] transition-colors group-hover:bg-[rgb(var(--tint))]"
-                        style={{ height: `${Math.max(3, (d.plays / max) * 100)}%` }}
+                        style={{
+                          height: `${Math.max(3, (d.plays / max) * 100)}%`,
+                        }}
                         aria-label={`${d.label}: ${d.plays} plays`}
                       >
                         <span className="pointer-events-none absolute bottom-[calc(100%+8px)] left-1/2 z-20 hidden w-max -translate-x-1/2 rounded-lg border border-white/10 bg-[#12151d]/95 px-2.5 py-1.5 text-left text-[10px] text-foreground shadow-xl backdrop-blur-xl group-hover:block">
@@ -921,10 +1204,16 @@ export default function Admin() {
               <thead>
                 <tr className="border-b border-white/[0.07] bg-white/[0.03] text-[11px] tracking-widest text-muted-foreground uppercase">
                   <th className="px-4 py-3 font-semibold">Room</th>
-                  <th className="hidden px-4 py-3 font-semibold sm:table-cell">Host</th>
+                  <th className="hidden px-4 py-3 font-semibold sm:table-cell">
+                    Host
+                  </th>
                   <th className="px-4 py-3 font-semibold">Members</th>
-                  <th className="hidden px-4 py-3 font-semibold md:table-cell">Now playing</th>
-                  <th className="px-4 py-3 text-right font-semibold">Actions</th>
+                  <th className="hidden px-4 py-3 font-semibold md:table-cell">
+                    Now playing
+                  </th>
+                  <th className="px-4 py-3 text-right font-semibold">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -937,13 +1226,20 @@ export default function Admin() {
                     </tr>
                   ))}
                 {rooms?.map((room) => (
-                  <tr key={room._id} className="border-b border-white/[0.04] last:border-0">
+                  <tr
+                    key={room._id}
+                    className="border-b border-white/[0.04] last:border-0"
+                  >
                     <td className="flex items-center gap-2 px-4 py-3 font-medium">
                       <Radio className="size-4 text-[rgb(var(--tint))]" />
                       {room.name}
                     </td>
-                    <td className="hidden px-4 py-3 text-muted-foreground sm:table-cell">{room.hostName}</td>
-                    <td className="px-4 py-3 text-muted-foreground tabular-nums">{room.memberCount}</td>
+                    <td className="hidden px-4 py-3 text-muted-foreground sm:table-cell">
+                      {room.hostName}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground tabular-nums">
+                      {room.memberCount}
+                    </td>
                     <td className="hidden max-w-[220px] truncate px-4 py-3 text-muted-foreground md:table-cell">
                       {room.nowPlaying ?? "—"}
                     </td>
@@ -960,7 +1256,10 @@ export default function Admin() {
                 ))}
                 {rooms !== undefined && rooms.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                    <td
+                      colSpan={5}
+                      className="px-4 py-10 text-center text-sm text-muted-foreground"
+                    >
                       No listening rooms exist yet.
                     </td>
                   </tr>
@@ -976,11 +1275,19 @@ export default function Admin() {
               <thead>
                 <tr className="border-b border-white/[0.07] bg-white/[0.03] text-[11px] tracking-widest text-muted-foreground uppercase">
                   <th className="px-4 py-3 font-semibold">Playlist</th>
-                  <th className="hidden px-4 py-3 font-semibold sm:table-cell">Origin</th>
-                  <th className="hidden px-4 py-3 font-semibold sm:table-cell">Owner</th>
+                  <th className="hidden px-4 py-3 font-semibold sm:table-cell">
+                    Origin
+                  </th>
+                  <th className="hidden px-4 py-3 font-semibold sm:table-cell">
+                    Owner
+                  </th>
                   <th className="px-4 py-3 font-semibold">Tracks</th>
-                  <th className="hidden px-4 py-3 font-semibold md:table-cell">Imported</th>
-                  <th className="px-4 py-3 text-right font-semibold">Actions</th>
+                  <th className="hidden px-4 py-3 font-semibold md:table-cell">
+                    Imported
+                  </th>
+                  <th className="px-4 py-3 text-right font-semibold">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -993,12 +1300,23 @@ export default function Admin() {
                     </tr>
                   ))}
                 {imports?.map((imp) => (
-                  <tr key={imp._id} className="border-b border-white/[0.04] last:border-0">
+                  <tr
+                    key={imp._id}
+                    className="border-b border-white/[0.04] last:border-0"
+                  >
                     <td className="px-4 py-3 font-medium">{imp.name}</td>
-                    <td className="hidden px-4 py-3 text-muted-foreground sm:table-cell">{imp.origin}</td>
-                    <td className="hidden px-4 py-3 text-muted-foreground sm:table-cell">{imp.ownerName}</td>
-                    <td className="px-4 py-3 text-muted-foreground tabular-nums">{imp.trackCount}</td>
-                    <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">{formatDate(imp.createdAt)}</td>
+                    <td className="hidden px-4 py-3 text-muted-foreground sm:table-cell">
+                      {imp.origin}
+                    </td>
+                    <td className="hidden px-4 py-3 text-muted-foreground sm:table-cell">
+                      {imp.ownerName}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground tabular-nums">
+                      {imp.trackCount}
+                    </td>
+                    <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">
+                      {formatDate(imp.createdAt)}
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex justify-end">
                         <ConfirmButton
@@ -1012,7 +1330,10 @@ export default function Admin() {
                 ))}
                 {imports !== undefined && imports.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                    <td
+                      colSpan={6}
+                      className="px-4 py-10 text-center text-sm text-muted-foreground"
+                    >
                       No imported playlists yet.
                     </td>
                   </tr>
@@ -1042,23 +1363,40 @@ export default function Admin() {
             {!gh.loading && gh.data && (
               <div className="mt-4 flex items-start gap-4">
                 {gh.data.avatarUrl && (
-                  <img src={gh.data.avatarUrl} alt="" className="size-14 rounded-full ring-1 ring-white/10" loading="lazy" />
+                  <img
+                    src={gh.data.avatarUrl}
+                    alt=""
+                    className="size-14 rounded-full ring-1 ring-white/10"
+                    loading="lazy"
+                  />
                 )}
                 <div className="min-w-0 text-sm">
-                  <p className="truncate font-medium">{gh.data.name ?? gh.data.login}</p>
-                  <a href={gh.data.htmlUrl ?? undefined} target="_blank" rel="noreferrer" className="text-xs text-[rgb(var(--tint))] hover:underline">
+                  <p className="truncate font-medium">
+                    {gh.data.name ?? gh.data.login}
+                  </p>
+                  <a
+                    href={gh.data.htmlUrl ?? undefined}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs text-[rgb(var(--tint))] hover:underline"
+                  >
                     @{gh.data.login} — open on GitHub
                   </a>
-                  <p className="mt-1 text-xs text-muted-foreground">{gh.data.publicRepos} public repos</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {gh.data.publicRepos} public repos
+                  </p>
                   {gh.data.createdAt && (
-                    <p className="text-xs text-muted-foreground">Joined GitHub {new Date(gh.data.createdAt).getFullYear()}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Joined GitHub {new Date(gh.data.createdAt).getFullYear()}
+                    </p>
                   )}
                 </div>
               </div>
             )}
             {!gh.loading && !gh.data && (
               <p className="mt-4 text-sm text-muted-foreground">
-                Couldn&apos;t load this GitHub profile (account may be private or deleted).
+                Couldn&apos;t load this GitHub profile (account may be private
+                or deleted).
               </p>
             )}
             <button
