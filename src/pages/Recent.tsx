@@ -3,14 +3,30 @@ import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { RemoteTrackRow } from "@/components/tracks/RemoteTrackRow";
 import { toPlayableYoutube, type Playable } from "@/lib/playable";
 import { cleanArtistName, type YtItem } from "@/lib/youtube";
-import { clearSingleHistoryEntry, readPlayHistory, subscribePlayHistory, usePlayerStore, type HistoryEntry } from "@/store/player";
-import { Dices, History, Loader2, X } from "lucide-react";
+import {
+  clearSingleHistoryEntry,
+  readPlayHistory,
+  subscribePlayHistory,
+  usePlayerStore,
+  type HistoryEntry,
+} from "@/store/player";
+import { Dices, History, Loader2, Play, Shuffle, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 
 const FILTERS = ["All", "Today", "This week"] as const;
+
+/** Fisher–Yates on a copy, so the caller's list keeps its order. */
+function shuffleItems<T>(list: T[]): T[] {
+  const out = [...list];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
 
 function timeAgo(ts?: number): string {
   if (!ts) return "";
@@ -56,7 +72,8 @@ export default function Recent() {
     const now = Date.now();
     return history.filter((h) => {
       if (filter === "Today" && (!h.at || now - h.at > 86400_000)) return false;
-      if (filter === "This week" && (!h.at || now - h.at > 7 * 86400_000)) return false;
+      if (filter === "This week" && (!h.at || now - h.at > 7 * 86400_000))
+        return false;
       if (query) {
         const q = query.toLowerCase();
         return (
@@ -73,7 +90,10 @@ export default function Recent() {
   const play = (item: YtItem, rest: YtItem[]) => {
     const entry = history.find((h) => (h.youtubeId ?? h.id) === item.id);
     if (entry?.audioUrl) {
-      playTrack(snapshotToPlayable(entry), rest.filter((r) => r.id !== item.id).map(toPlayableFromItem));
+      playTrack(
+        snapshotToPlayable(entry),
+        rest.filter((r) => r.id !== item.id).map(toPlayableFromItem),
+      );
       return;
     }
     setResolvingId(item.id);
@@ -132,6 +152,20 @@ export default function Recent() {
       .finally(() => setResolvingId(null));
   };
 
+  // "Play all" / "Shuffle all" — the page had a random pick and row-level
+  // play, but no way to hand the whole (filtered) history to the player as a
+  // queue, so a listener who wanted a session from it had to press play on
+  // every row.
+  const playAll = (shuffled: boolean) => {
+    if (items.length === 0) {
+      toast.error("No plays match this filter");
+      return;
+    }
+    const rest = shuffled ? shuffleItems(items.slice(1)) : items.slice(1);
+    if (shuffled) usePlayerStore.getState().startShuffle();
+    play(items[0], rest);
+  };
+
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
@@ -144,15 +178,37 @@ export default function Recent() {
             Everything you've listened to, most recent first.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={feelingLucky}
-          className="flex items-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.03] px-4 py-2.5 text-sm font-semibold transition-all hover:border-[rgb(var(--tint)_/_0.35)] hover:bg-white/[0.05]"
-        >
-          <Dices className="size-4 text-[rgb(var(--tint))]" />
-          I'm feeling lucky
-          {resolvingId && <Loader2 className="size-3.5 animate-spin text-muted-foreground" />}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => playAll(false)}
+            disabled={items.length === 0}
+            className="flex items-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.03] px-4 py-2.5 text-sm font-semibold transition-all hover:border-[rgb(var(--tint)_/_0.35)] hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Play className="size-4 text-[rgb(var(--tint))]" />
+            Play all
+          </button>
+          <button
+            type="button"
+            onClick={() => playAll(true)}
+            disabled={items.length === 0}
+            className="flex items-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.03] px-4 py-2.5 text-sm font-semibold transition-all hover:border-[rgb(var(--tint)_/_0.35)] hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Shuffle className="size-4 text-[rgb(var(--tint))]" />
+            Shuffle all
+          </button>
+          <button
+            type="button"
+            onClick={feelingLucky}
+            className="flex items-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.03] px-4 py-2.5 text-sm font-semibold transition-all hover:border-[rgb(var(--tint)_/_0.35)] hover:bg-white/[0.05]"
+          >
+            <Dices className="size-4 text-[rgb(var(--tint))]" />
+            I&apos;m feeling lucky
+            {resolvingId && (
+              <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+            )}
+          </button>
+        </div>
       </header>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -182,7 +238,9 @@ export default function Recent() {
       {history.length === 0 ? (
         <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-10 text-center">
           <History className="mx-auto size-10 text-muted-foreground/50" />
-          <p className="mt-3 font-display text-lg font-semibold">Nothing here yet</p>
+          <p className="mt-3 font-display text-lg font-semibold">
+            Nothing here yet
+          </p>
           <p className="mt-1 text-sm text-muted-foreground">
             Songs you play will show up here with when you last heard them.
           </p>

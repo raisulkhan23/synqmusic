@@ -13,13 +13,25 @@ import { formatTime } from "@/lib/format";
 import { toPlayableYoutube } from "@/lib/playable";
 import { cn } from "@/lib/utils";
 import { copyText } from "@/lib/clipboard";
+import { buildTrackShareUrl } from "@/lib/shareLink";
 import { usePlayerStore } from "@/store/player";
-import { Heart, ListEnd, ListMusic, ListStart, Loader2, MoreVertical, Pause, Play, Radio } from "lucide-react";
+import {
+  Heart,
+  ListEnd,
+  ListMusic,
+  ListStart,
+  Loader2,
+  MoreVertical,
+  Pause,
+  Play,
+  Radio,
+} from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
 const isRowActionTarget = (target: EventTarget | null) =>
-  target instanceof Element && Boolean(target.closest("button, [role='menuitem']"));
+  target instanceof Element &&
+  Boolean(target.closest("button, [role='menuitem']"));
 
 export function RemoteTrackRow({
   item,
@@ -56,7 +68,9 @@ export function RemoteTrackRow({
   const [playlistDialogOpen, setPlaylistDialogOpen] = useState(false);
   const playlistTrack = useMemo(() => {
     const playable = toPlayableYoutube(item, "");
-    return source === "youtube" ? playable : { ...playable, youtubeId: undefined };
+    return source === "youtube"
+      ? playable
+      : { ...playable, youtubeId: undefined };
   }, [item, source]);
   const { addTo } = useAddToPlaylist(playlistTrack);
 
@@ -169,7 +183,9 @@ export function RemoteTrackRow({
 
         <div className="flex shrink-0 items-center gap-1 sm:ml-auto sm:gap-2">
           {trailing ? (
-            <div className="hidden shrink-0 items-center gap-2 sm:flex">{trailing}</div>
+            <div className="hidden shrink-0 items-center gap-2 sm:flex">
+              {trailing}
+            </div>
           ) : null}
           {/* Secondary controls live in the overflow menu on touch devices. */}
           <button
@@ -229,8 +245,13 @@ export function RemoteTrackRow({
               <DropdownMenuItem
                 className="gap-2"
                 onSelect={() => {
+                  // A deep link to the song itself. This used to copy
+                  // `/search?q=<title> <artist>`, which dumped the recipient on
+                  // a pre-filled search box: they still had to press search and
+                  // pick the right row, and a badly tagged track came back as a
+                  // completely different song.
                   void copyText(
-                    `${window.location.origin}/search?q=${encodeURIComponent(`${displayTitle} ${artistName}`)}`,
+                    buildTrackShareUrl(window.location.origin, playlistTrack),
                   ).then((ok) => {
                     if (ok) toast.success("Song link copied");
                     else toast.error("Couldn't copy the link");
@@ -247,7 +268,12 @@ export function RemoteTrackRow({
                   likeThis();
                 }}
               >
-                <Heart className={cn("size-4", isLiked && "fill-current text-[rgb(var(--tint))]")} />
+                <Heart
+                  className={cn(
+                    "size-4",
+                    isLiked && "fill-current text-[rgb(var(--tint))]",
+                  )}
+                />
                 {isLiked ? "Remove from liked songs" : "Add to liked songs"}
               </DropdownMenuItem>
               {menuItems ? (
@@ -265,7 +291,9 @@ export function RemoteTrackRow({
           </DropdownMenu>
           <button
             type="button"
-            aria-label={isLiked ? "Remove from liked songs" : "Add to liked songs"}
+            aria-label={
+              isLiked ? "Remove from liked songs" : "Add to liked songs"
+            }
             onClick={(e) => {
               e.stopPropagation();
               likeThis();

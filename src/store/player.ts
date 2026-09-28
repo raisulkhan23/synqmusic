@@ -463,6 +463,19 @@ interface PlayerStore {
    */
   reorderUpcoming: (upcoming: Playable[], base: Playable[]) => void;
   clearQueue: () => void;
+  /**
+   * Drop every repeat from the queue, keeping the first occurrence. Returns
+   * how many entries went, so the UI can say "removed 3 repeats" instead of
+   * silently reshuffling a list the user was reading.
+   */
+  removeQueueDuplicates: () => number;
+  /**
+   * Forget what has already been played, keeping the current track at the
+   * head of the queue. Returns how many history entries went.
+   */
+  clearPlayedTracks: () => number;
+  /** Randomize only the "playing next" list; what is playing never moves. */
+  shuffleUpcoming: () => void;
   setHistoryRecorder: (fn: ((trackId: string) => void) | null) => void;
 
   setLiked: (liked: Record<string, number>) => void;
@@ -3143,6 +3156,77 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
         saveQueue(queue, state.queueIndex, state.current?.id ?? null);
         return { queue };
       }),
+    removeQueueDuplicates: () => {
+      let removed = 0;
+      set((s2) => {
+        const seen = new Set<string>();
+        const queue: Playable[] = [];
+        for (const track of s2.queue) {
+          if (seen.has(track.id)) {
+            removed += 1;
+            continue;
+          }
+          seen.add(track.id);
+          queue.push(track);
+        }
+        if (removed === 0) return {};
+        // The playing track is the one entry that must survive, and the index
+        // has to follow it: deduping rows above it would otherwise leave
+        // queueIndex pointing at a different song and "next" would skip one.
+        const playing =
+          s2.current ??
+          (s2.queueIndex >= 0 ? s2.queue[s2.queueIndex] : undefined);
+        const found = playing
+          ? queue.findIndex((t) => t.id === playing.id)
+          : -1;
+        const queueIndex =
+          found >= 0 ? found : Math.min(s2.queueIndex, queue.length - 1);
+        saveQueue(queue, queueIndex, playing?.id ?? null);
+        // Same reasoning as clearQueue: an unshuffle snapshot taken before the
+        // cleanup would bring every removed repeat back.
+        return {
+          queue,
+          queueIndex,
+          unshuffledQueue: null,
+          unshuffledIndex: -1,
+        };
+      });
+      return removed;
+    },
+    clearPlayedTracks: () => {
+      let removed = 0;
+      set((s2) => {
+        if (s2.queueIndex <= 0) return {};
+        const playing = s2.queue[s2.queueIndex] ?? s2.current;
+        const upcoming = s2.queue.slice(s2.queueIndex + 1);
+        const queue = playing ? [playing, ...upcoming] : upcoming;
+        removed = s2.queueIndex;
+        saveQueue(queue, playing ? 0 : -1, playing?.id ?? null);
+        return {
+          queue,
+          queueIndex: playing ? 0 : -1,
+          unshuffledQueue: null,
+          unshuffledIndex: -1,
+        };
+      });
+      return removed;
+    },
+    shuffleUpcoming: () => {
+      set((s2) => {
+        const start = s2.queueIndex >= 0 ? s2.queueIndex + 1 : 0;
+        if (s2.queue.length - start < 2) return {};
+        const head = s2.queue.slice(0, start);
+        const tail = [...s2.queue.slice(start)];
+        for (let i = tail.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [tail[i], tail[j]] = [tail[j], tail[i]];
+        }
+        const queue = [...head, ...tail];
+        // The head is untouched, so queueIndex stays valid by construction.
+        saveQueue(queue, s2.queueIndex, s2.current?.id ?? null);
+        return { queue, unshuffledQueue: null, unshuffledIndex: -1 };
+      });
+    },
     clearQueue: () =>
       set((s2) => {
         const queue = s2.current ? [s2.current] : [];

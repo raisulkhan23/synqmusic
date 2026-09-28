@@ -20,17 +20,21 @@ import {
   ChevronDown,
   ChevronUp,
   Clock3,
+  CopyMinus,
+  Eraser,
   GripVertical,
   Link2,
   ListMusic,
   Plus,
   Save,
+  Shuffle,
   Sparkles,
   Trash2,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { copyText } from "@/lib/clipboard";
+import { buildTrackShareUrl } from "@/lib/shareLink";
 import { moveQueueRow, queueReorderKeys } from "@/lib/queueOrder";
 
 type QueueReorderRowProps = {
@@ -192,6 +196,9 @@ export function QueuePanel() {
   const autoplay = usePlayerStore((s) => s.autoplay);
   const toggleAutoplay = usePlayerStore((s) => s.toggleAutoplay);
   const addToQueue = usePlayerStore((s) => s.addToQueue);
+  const removeQueueDuplicates = usePlayerStore((s) => s.removeQueueDuplicates);
+  const clearPlayedTracks = usePlayerStore((s) => s.clearPlayedTracks);
+  const shuffleUpcoming = usePlayerStore((s) => s.shuffleUpcoming);
   const extendQueueWithSimilar = usePlayerStore(
     (s) => s.extendQueueWithSimilar,
   );
@@ -379,6 +386,59 @@ export function QueuePanel() {
                 Save
               </button>
             )}
+            {/* Queue housekeeping: a long session queue collects repeats (radio,
+                a track added from two places) and already-heard songs, and
+                there was no way to tidy either without reordering one by one. */}
+            {upcoming.length > 1 && (
+              <button
+                type="button"
+                aria-label="Randomize playing next"
+                title="Randomize the playing next list"
+                onClick={() => {
+                  shuffleUpcoming();
+                  toast.success("Shuffled what's next");
+                }}
+                className="flex items-center gap-1 rounded-full px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+              >
+                <Shuffle className="size-3.5" />
+              </button>
+            )}
+            {queue.length > 1 && (
+              <button
+                type="button"
+                aria-label="Remove duplicate songs"
+                title="Remove duplicate songs"
+                onClick={() => {
+                  const removed = removeQueueDuplicates();
+                  toast(
+                    removed > 0
+                      ? `Removed ${removed} duplicate${removed === 1 ? "" : "s"}`
+                      : "No duplicates in the queue",
+                  );
+                }}
+                className="flex items-center gap-1 rounded-full px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+              >
+                <CopyMinus className="size-3.5" />
+              </button>
+            )}
+            {queueIndex > 0 && (
+              <button
+                type="button"
+                aria-label="Remove already played songs"
+                title="Remove already played songs"
+                onClick={() => {
+                  const removed = clearPlayedTracks();
+                  toast(
+                    removed > 0
+                      ? `Cleared ${removed} played song${removed === 1 ? "" : "s"}`
+                      : "Nothing played yet",
+                  );
+                }}
+                className="flex items-center gap-1 rounded-full px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+              >
+                <Eraser className="size-3.5" />
+              </button>
+            )}
             {queue.length > 1 && (
               <button
                 type="button"
@@ -425,8 +485,12 @@ export function QueuePanel() {
                       // Awaited: the old code toasted success immediately, so a
                       // failed copy (no clipboard API / denied permission) still
                       // told the user the link was on their clipboard.
+                      //
+                      // An in-app deep link, not `youtu.be/…`: the recipient is
+                      // on a sharing app, and a YouTube URL drops them out of
+                      // SYNQ onto someone else's player with ads and no queue.
                       void copyText(
-                        `https://youtu.be/${current.youtubeId}`,
+                        buildTrackShareUrl(window.location.origin, current),
                       ).then((ok) => {
                         if (ok) toast.success("Track link copied");
                         else toast.error("Couldn't copy the link");

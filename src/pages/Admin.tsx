@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { downloadCsv, toCsv } from "@/lib/csvExport";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useAction, useMutation, useQuery } from "convex/react";
@@ -685,6 +686,47 @@ export default function Admin() {
               <span className="text-[11px] text-muted-foreground">
                 {filteredUsers.length} of {users?.length ?? 0}
               </span>
+              <button
+                type="button"
+                onClick={() => {
+                  // Exports exactly what the table is showing, so the active
+                  // search / role / sign-in filters carry into the file.
+                  const stamp = new Date().toISOString().slice(0, 10);
+                  const ok = downloadCsv(
+                    `synq-accounts-${stamp}.csv`,
+                    toCsv(filteredUsers, [
+                      { header: "Name", value: (u) => u.name ?? "" },
+                      { header: "Email", value: (u) => u.email ?? "" },
+                      { header: "Role", value: (u) => u.role ?? "user" },
+                      {
+                        header: "Sign-in",
+                        value: (u) => (u.providers ?? []).join(" + "),
+                      },
+                      { header: "GitHub id", value: (u) => u.githubId ?? "" },
+                      {
+                        header: "Guest",
+                        value: (u) => (u.isAnonymous ? "yes" : "no"),
+                      },
+                      {
+                        header: "Joined",
+                        value: (u) => new Date(u._creationTime).toISOString(),
+                      },
+                      { header: "Account id", value: (u) => u._id },
+                    ]),
+                  );
+                  if (!ok) {
+                    toast.error("Couldn't export the accounts");
+                    return;
+                  }
+                  toast.success(
+                    `Exported ${filteredUsers.length} account${filteredUsers.length === 1 ? "" : "s"}`,
+                  );
+                }}
+                className="flex items-center gap-1 rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-white/25 hover:text-foreground"
+              >
+                <ArrowDownToLine className="size-3.5" />
+                CSV
+              </button>
             </div>
           </div>
           <div className="overflow-x-auto rounded-2xl border border-white/[0.07]">
