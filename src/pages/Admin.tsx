@@ -35,9 +35,9 @@ function formatDate(ts: number): string {
 }
 
 /**
- * Sign-in methods Convex Auth records for an account. These are the values
- * carried in `authAccounts.tokenIdentifier` and surfaced as `providers` on
- * each row of the accounts table.
+ * Sign-in methods Convex Auth records for an account. These are the normalized
+ * `authAccounts.provider` ids (see `normalizeAuthProvider` in
+ * `src/convex/admin.ts`) surfaced as `providers` on each accounts-table row.
  */
 const SIGN_IN_METHODS = [
   { id: "github", label: "GitHub" },
@@ -47,6 +47,25 @@ const SIGN_IN_METHODS = [
 ] as const;
 
 type SignInMethod = (typeof SIGN_IN_METHODS)[number]["id"];
+
+const KNOWN_SIGN_IN_METHODS = new Set<string>(SIGN_IN_METHODS.map((m) => m.id));
+
+/** Bucket for providers the filter doesn't name (password, phone, custom…). */
+const OTHER_SIGN_IN_METHOD = "other";
+type UserMethodFilter = "all" | SignInMethod | typeof OTHER_SIGN_IN_METHOD;
+
+/** Does this account match the chosen sign-in filter? */
+function userMatchesMethod(
+  providers: string[] | undefined,
+  method: UserMethodFilter,
+): boolean {
+  if (method === "all") return true;
+  const list = providers ?? [];
+  if (method === OTHER_SIGN_IN_METHOD) {
+    return list.some((p) => !KNOWN_SIGN_IN_METHODS.has(p));
+  }
+  return list.includes(method);
+}
 
 function ResultGroup({
   title,
@@ -194,7 +213,7 @@ export default function Admin() {
   // through long lists, and so they work without extra round trips on mobile.
   const [userQuery, setUserQuery] = useState("");
   const [userRole, setUserRole] = useState<"all" | "admin" | "user">("all");
-  const [userMethod, setUserMethod] = useState<"all" | SignInMethod>("all");
+  const [userMethod, setUserMethod] = useState<UserMethodFilter>("all");
   const [userSort, setUserSort] = useState<"newest" | "oldest" | "name">(
     "newest",
   );
@@ -211,9 +230,10 @@ export default function Admin() {
       if (userRole === "user" && u.role === "admin") return false;
       // Narrow by sign-in method: "who signed up with GitHub" is the question
       // admins ask most, and the per-row badges can't answer it once the
-      // accounts table is long.
-      if (userMethod !== "all" && !(u.providers ?? []).includes(userMethod))
-        return false;
+      // accounts table is long. "Any sign-in" clears the filter entirely;
+      // "Other" catches providers the named methods don't cover, so no
+      // account can become invisible.
+      if (!userMatchesMethod(u.providers, userMethod)) return false;
       if (!q) return true;
       const name = (u.name ?? "").toLowerCase();
       const email = (u.email ?? "").toLowerCase();
@@ -237,13 +257,22 @@ export default function Admin() {
 
   /** How many accounts use each sign-in method, shown on the filter labels. */
   const methodCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
+    // `all` is the "Any sign-in" total; `other` counts accounts carrying at
+    // least one provider the named methods don't cover, so the numbers add up
+    // instead of leaving rows unexplained.
+    const counts: Record<string, number> = {
+      all: 0,
+      [OTHER_SIGN_IN_METHOD]: 0,
+    };
     for (const u of users ?? []) {
+      counts.all += 1;
       // `providers` carries one entry per linked auth account, so a user with
       // two GitHub credentials would otherwise be counted twice and the label
       // would promise more rows than the filter can show.
-      for (const p of new Set(u.providers ?? [])) {
-        counts[p] = (counts[p] ?? 0) + 1;
+      const unique = new Set(u.providers ?? []);
+      for (const p of unique) {
+        if (KNOWN_SIGN_IN_METHODS.has(p)) counts[p] = (counts[p] ?? 0) + 1;
+        else counts[OTHER_SIGN_IN_METHOD] += 1;
       }
     }
     return counts;
@@ -629,12 +658,19 @@ export default function Admin() {
                 aria-label="Filter by sign-in method"
                 className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-muted-foreground outline-none"
               >
-                <option value="all">Any sign-in</option>
+                <option value="all">
+                  Any sign-in ({methodCounts.all ?? 0})
+                </option>
                 {SIGN_IN_METHODS.map((method) => (
                   <option key={method.id} value={method.id}>
                     {method.label} ({methodCounts[method.id] ?? 0})
                   </option>
                 ))}
+                {(methodCounts[OTHER_SIGN_IN_METHOD] ?? 0) > 0 && (
+                  <option value={OTHER_SIGN_IN_METHOD}>
+                    Other ({methodCounts[OTHER_SIGN_IN_METHOD] ?? 0})
+                  </option>
+                )}
               </select>
               <select
                 value={userSort}

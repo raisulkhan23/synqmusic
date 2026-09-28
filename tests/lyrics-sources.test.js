@@ -19,8 +19,11 @@ describe("every lyrics provider actually gets to run", () => {
     // and what exhausted the budget.
     expect(lyrics).toMatch(/async function firstHit<T>\(/);
     expect(lyrics).toMatch(
-      /const results: \(\{ candidate: Candidate; value: T \| null \} \| null\)\[\] =\s*\n?\s*await Promise\.all\(/,
+      /const settled: Promise<\(\{ candidate: Candidate; value: T \| null \} \| null\)\[]> =\s*\n?\s*Promise\.all\(/,
     );
+    // The whole pass is still bounded, so one stalling provider can't hold up
+    // the passes queued behind it.
+    expect(lyrics).toMatch(/Promise\.race\(\[\s*\n\s*settled,/);
   });
 
   test("the first-hit helper survives a rejecting provider", () => {

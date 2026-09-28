@@ -1,6 +1,12 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
-import { action, mutation, query, MutationCtx, QueryCtx } from "./_generated/server";
+import {
+  action,
+  mutation,
+  query,
+  MutationCtx,
+  QueryCtx,
+} from "./_generated/server";
 
 type Ctx = QueryCtx | MutationCtx;
 
@@ -69,6 +75,29 @@ export const status = query({
   },
 });
 
+/**
+ * Normalize a Convex Auth provider id into the slug the admin UI filters on.
+ *
+ * The `authAccounts.provider` column stores whatever id the provider was
+ * registered with ("github", "google", "email-otp", "anonymous", …), and the
+ * built-in email provider is registered by the deployment as "email" or
+ * "email-otp" depending on config. Anything we don't recognise is kept as-is
+ * (lowercased) so it still shows up under the "Other" bucket instead of
+ * silently disappearing from the accounts table.
+ */
+function normalizeAuthProvider(raw: string | undefined | null): string {
+  const value = (raw ?? "").trim().toLowerCase();
+  if (!value) return "unknown";
+  if (value.includes("github")) return "github";
+  if (value.includes("google")) return "google";
+  if (value.includes("anonymous") || value.includes("guest"))
+    return "anonymous";
+  if (value.includes("email") || value.includes("otp")) return "email-otp";
+  if (value.includes("password")) return "password";
+  if (value.includes("phone")) return "phone";
+  return value;
+}
+
 /** Every account on the deployment (admin only). */
 export const listUsers = query({
   args: {},
@@ -77,18 +106,20 @@ export const listUsers = query({
     const users = await ctx.db.query("users").collect();
     // Enrich with the auth provider(s) each account signed up with —
     // Convex Auth keeps one authAccounts row per linked credential
-    // ("github", "google", "email-otp", "anonymous", …).
+    // ("github", "google", "email-otp", "anonymous", …). Both fields live on
+    // the row itself: `provider` is the registered provider id and
+    // `providerAccountId` is the external id (e.g. the GitHub numeric id).
     const accounts = await ctx.db.query("authAccounts").collect();
-    const byUser = new Map<string, { provider: string; accountId: string | null }[]>();
+    const byUser = new Map<
+      string,
+      { provider: string; accountId: string | null }[]
+    >();
     for (const acc of accounts) {
       const arr = byUser.get(acc.userId) ?? [];
-      // tokenIdentifier embeds the provider prefix, e.g. "github:123456" —
-      // extract a readable provider + external account id when present.
-      const raw = (acc as unknown as { tokenIdentifier?: string }).tokenIdentifier ?? "";
-      const providerMatch = raw.match(/^(github|google|email-otp|anonymous)/);
-      const provider = providerMatch?.[1] ?? "credentials";
-      const externalId = raw.includes(":") ? raw.split(":").slice(1).join(":") : null;
-      arr.push({ provider, accountId: externalId });
+      arr.push({
+        provider: normalizeAuthProvider(acc.provider),
+        accountId: acc.providerAccountId ?? null,
+      });
       byUser.set(acc.userId, arr);
     }
     return users
@@ -101,7 +132,9 @@ export const listUsers = query({
         isAnonymous: u.isAnonymous ?? false,
         role: u.role ?? null,
         providers: (byUser.get(u._id) ?? []).map((a) => a.provider),
-        githubId: (byUser.get(u._id) ?? []).find((a) => a.provider === "github")?.accountId ?? null,
+        githubId:
+          (byUser.get(u._id) ?? []).find((a) => a.provider === "github")
+            ?.accountId ?? null,
       }))
       .sort((a, b) => a._creationTime - b._creationTime);
   },
@@ -117,7 +150,10 @@ export const githubProfile = action({
   handler: async (_ctx, { githubId }) => {
     const numeric = githubId.replace(/[^0-9]/g, "");
     const res = await fetch(`https://api.github.com/user/${numeric}`, {
-      headers: { "User-Agent": "soniq-admin", Accept: "application/vnd.github+json" },
+      headers: {
+        "User-Agent": "soniq-admin",
+        Accept: "application/vnd.github+json",
+      },
     });
     if (!res.ok) return null;
     const j = (await res.json()) as Record<string, unknown>;
@@ -145,7 +181,12 @@ export const moderateDeletePlaylist = mutation({
 export const setRole = mutation({
   args: {
     userId: v.id("users"),
-    role: v.union(v.literal("admin"), v.literal("user"), v.literal("member"), v.null()),
+    role: v.union(
+      v.literal("admin"),
+      v.literal("user"),
+      v.literal("member"),
+      v.null(),
+    ),
   },
   handler: async (ctx, { userId, role }) => {
     const adminId = await getAdminUser(ctx);
@@ -314,13 +355,16 @@ export const platformListeningStats = query({
     for (let i = 13; i >= 0; i--) {
       const start = today.getTime() - i * dayMs;
       const next = start + dayMs;
-      const plays = events
-        .filter((h) => h.playedAt >= start && h.playedAt < next)
-        .length;
+      const plays = events.filter(
+        (h) => h.playedAt >= start && h.playedAt < next,
+      ).length;
       const d = new Date(start);
       daily.push({
         day: d.toISOString().slice(0, 10),
-        label: d.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+        label: d.toLocaleDateString(undefined, {
+          month: "short",
+          day: "numeric",
+        }),
         plays,
       });
     }
@@ -328,7 +372,8 @@ export const platformListeningStats = query({
     // most active hour of day (0-23)
     const hourBuckets = new Array(24).fill(0) as number[];
     for (const h of events) hourBuckets[new Date(h.playedAt).getHours()] += 1;
-    const peakHour = totalPlays === 0 ? null : hourBuckets.indexOf(Math.max(...hourBuckets));
+    const peakHour =
+      totalPlays === 0 ? null : hourBuckets.indexOf(Math.max(...hourBuckets));
 
     // distinct tracks in the catalog history
     const uniqueTracks = new Set(events.map((h) => h.trackId)).size;
@@ -346,7 +391,9 @@ export const listRooms = query({
     await getAdminUser(ctx);
     const rooms = await ctx.db.query("listeningRooms").collect();
     const users = await ctx.db.query("users").collect();
-    const names = new Map(users.map((u) => [u._id, u.name ?? u.email ?? "Anonymous"]));
+    const names = new Map(
+      users.map((u) => [u._id, u.name ?? u.email ?? "Anonymous"]),
+    );
     return rooms
       .map((r) => ({
         _id: r._id,
@@ -382,7 +429,9 @@ export const listImports = query({
       ctx.db.query("importedPlaylists").collect(),
       ctx.db.query("users").collect(),
     ]);
-    const names = new Map(users.map((u) => [u._id, u.name ?? u.email ?? "Anonymous"]));
+    const names = new Map(
+      users.map((u) => [u._id, u.name ?? u.email ?? "Anonymous"]),
+    );
     return imports
       .map((i) => ({
         _id: i._id,
@@ -445,15 +494,25 @@ export const globalTopTracks = query({
   handler: async (ctx) => {
     await getAdminUser(ctx);
     const history = await ctx.db.query("playHistory").collect();
-    const byTrack = new Map<string, { plays: number; listeners: Set<string> }>();
+    const byTrack = new Map<
+      string,
+      { plays: number; listeners: Set<string> }
+    >();
     for (const h of history) {
-      const entry = byTrack.get(h.trackId) ?? { plays: 0, listeners: new Set<string>() };
+      const entry = byTrack.get(h.trackId) ?? {
+        plays: 0,
+        listeners: new Set<string>(),
+      };
       entry.plays += h.playCount;
       entry.listeners.add(h.userId);
       byTrack.set(h.trackId, entry);
     }
     return [...byTrack.entries()]
-      .map(([trackId, v]) => ({ trackId, plays: v.plays, listeners: v.listeners.size }))
+      .map(([trackId, v]) => ({
+        trackId,
+        plays: v.plays,
+        listeners: v.listeners.size,
+      }))
       .sort((a, b) => b.plays - a.plays)
       .slice(0, 25);
   },

@@ -22,6 +22,7 @@ const CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 30;
  * text provider was, in practice, dead code. Each pass now gets its own budget
  * and its candidates run concurrently, so every provider is genuinely tried.
  */
+/** Wall-clock ceiling for a single provider pass, across all its candidates. */
 const STAGE_BUDGET_MS = 4000;
 /** Per-request ceiling, comfortably under the stage budget. */
 const REQUEST_TIMEOUT_MS = 3500;
@@ -297,8 +298,8 @@ async function firstHit<T>(
   candidates: Candidate[],
   run: (candidate: Candidate) => Promise<T | null>,
 ): Promise<{ candidate: Candidate; value: NonNullable<T> } | null> {
-  const results: ({ candidate: Candidate; value: T | null } | null)[] =
-    await Promise.all(
+  const settled: Promise<({ candidate: Candidate; value: T | null } | null)[]> =
+    Promise.all(
       candidates.map(
         async (
           candidate,
@@ -311,6 +312,15 @@ async function firstHit<T>(
         },
       ),
     );
+  // The pass gets its own wall-clock budget. A provider that stalls (a slow
+  // Musixmatch action, say) must not hold up the passes after it.
+  const results = await Promise.race([
+    settled,
+    new Promise<null>((resolve) =>
+      setTimeout(() => resolve(null), STAGE_BUDGET_MS),
+    ),
+  ]);
+  if (!results) return null;
   for (const result of results) {
     if (result && result.value) {
       return { candidate: result.candidate, value: result.value };
