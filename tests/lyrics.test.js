@@ -9,8 +9,12 @@ describe("lyrics lookup matches more songs", () => {
   test("titles are normalised instead of searched verbatim", () => {
     // The catalogue shape is "Artist - Title (Remaster) [feat. X]", and a
     // verbatim search for that finds nothing in any provider.
-    expect(lyricsSource).toMatch(/export function cleanTitle\(title: string\): string/);
-    expect(lyricsSource).toMatch(/export function cleanArtist\(artist: string\): string/);
+    expect(lyricsSource).toMatch(
+      /export function cleanTitle\(title: string\): string/,
+    );
+    expect(lyricsSource).toMatch(
+      /export function cleanArtist\(artist: string\): string/,
+    );
     expect(lyricsSource).toContain('out.replace(/\\((?:[^()]*)\\)/g, " ")');
     expect(lyricsSource).toContain('out.replace(/\\[(?:[^\\][]*)\\]/g, " ")');
     expect(lyricsSource).toMatch(/FEATURED/);
@@ -18,7 +22,9 @@ describe("lyrics lookup matches more songs", () => {
   });
 
   test("every plausible pair is tried, most literal first", () => {
-    const body = lyricsSource.slice(lyricsSource.indexOf("export function buildCandidates"));
+    const body = lyricsSource.slice(
+      lyricsSource.indexOf("export function buildCandidates"),
+    );
     const fn = body.slice(0, body.indexOf("\n}"));
     expect(fn).toMatch(/tidy\(title\), artist: tidy\(artist\)/);
     expect(fn).toMatch(/title: cleanT, artist: cleanA/);
@@ -28,14 +34,22 @@ describe("lyrics lookup matches more songs", () => {
   });
 
   test("a title that is only decoration never searches for nothing", () => {
-    const body = lyricsSource.slice(lyricsSource.indexOf("export function cleanTitle"));
+    const body = lyricsSource.slice(
+      lyricsSource.indexOf("export function cleanTitle"),
+    );
     const fn = body.slice(0, body.indexOf("\n}"));
     expect(fn).toMatch(/return out\.length >= 2 \? out : tidy\(title\)/);
   });
 
   test("search results are ranked instead of taken first-come", () => {
-    expect(lyricsSource).toMatch(/function similarity\(a: string, b: string\): number/);
-    expect(lyricsSource).toMatch(/function rank\(results: LrcRecord\[\], candidate: Candidate/);
+    expect(lyricsSource).toMatch(
+      /function similarity\(a: string, b: string\): number/,
+    );
+    // Whitespace-tolerant: prettier reflows the parameter list across lines,
+    // and a source assertion should track the code, not the formatter.
+    expect(lyricsSource.replace(/\s+/g, " ")).toMatch(
+      /function rank\( results: LrcRecord\[\], candidate: Candidate/,
+    );
     expect(lyricsSource).toMatch(/if \(score > bestScore\)/);
     // A live/acoustic cut is a worse answer than the studio recording, and a
     // duration that is 20s out is usually a different song entirely.
@@ -65,7 +79,9 @@ describe("lyrics lookup matches more songs", () => {
       lyricsSource.indexOf("export function cleanTitle"),
       lyricsSource.indexOf("export function cleanArtist"),
     );
-    expect(lyricsSource).toMatch(/function isVersionWord\(value: string\): boolean/);
+    expect(lyricsSource).toMatch(
+      /function isVersionWord\(value: string\): boolean/,
+    );
     expect(lyricsSource).toMatch(/VERSION_WORDS\.lastIndex = 0;/);
     expect(body).toMatch(/!isVersionWord\(dash\[1\]\)/);
     expect(body).not.toMatch(/VERSION_WORDS\.test\(/);
@@ -81,7 +97,10 @@ describe("lyrics lookup matches more songs", () => {
 
   test("a miss is cached too, so a song with no lyrics is only looked up once", () => {
     expect(lyricsSource).toMatch(/CACHE_TTL_MS = 1000 \* 60 \* 60 \* 24 \* 30/);
-    expect(lyricsSource).toMatch(/LOOKUP_BUDGET_MS/);
+    // Each provider pass gets its own budget now. A single shared deadline
+    // across all providers is what starved the later ones.
+    expect(lyricsSource).toMatch(/STAGE_BUDGET_MS/);
+    expect(lyricsSource).not.toMatch(/LOOKUP_BUDGET_MS/);
     expect(schemaSource).toMatch(/lyricsCache/);
     expect(schemaSource).toMatch(/byKey/);
   });

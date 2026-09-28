@@ -12,9 +12,19 @@ const UA = { "User-Agent": "SYNQ/1.0 (web player)" };
 /** Upstream providers are free and rate limited; a miss is cached too so a
  *  song with genuinely no lyrics anywhere is only looked up once. */
 const CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 30;
-/** Wall-clock budget for the whole lookup. Providers are tried in order, so a
- *  slow first provider must not eat the budget of the ones after it. */
-const LOOKUP_BUDGET_MS = 6000;
+/**
+ * Wall-clock budget for ONE provider pass.
+ *
+ * This used to be a single budget shared by every provider, which is why so
+ * many songs came back empty. Five candidates at up to 4s each could burn the
+ * whole 6s inside the LRCLIB exact pass alone, so the deadline check tripped
+ * before the LRCLIB *search* pass and before lyrics.ovh ever ran — the plain
+ * text provider was, in practice, dead code. Each pass now gets its own budget
+ * and its candidates run concurrently, so every provider is genuinely tried.
+ */
+const STAGE_BUDGET_MS = 4000;
+/** Per-request ceiling, comfortably under the stage budget. */
+const REQUEST_TIMEOUT_MS = 3500;
 
 /** Parse LRC-format text into timed lines. */
 function parseLrc(lrc: string): LyricLine[] {
@@ -22,7 +32,8 @@ function parseLrc(lrc: string): LyricLine[] {
   for (const raw of lrc.split("\n")) {
     const m = raw.match(/^\[(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?\](.*)$/);
     if (!m) continue;
-    const t = Number(m[1]) * 60 + Number(m[2]) + (m[3] ? Number(`0.${m[3]}`) : 0);
+    const t =
+      Number(m[1]) * 60 + Number(m[2]) + (m[3] ? Number(`0.${m[3]}`) : 0);
     const text = m[4].trim();
     if (text) lines.push({ t, text });
   }
@@ -43,7 +54,10 @@ function distributePlain(text: string, duration: number): LyricLine[] {
   // Reserve 8% at the end for the outro; spread lines over the rest.
   const usable = duration > 60 ? duration * 0.92 : duration * 0.8;
   const step = usable / rawLines.length;
-  return rawLines.map((text, i) => ({ t: Number((i * step).toFixed(2)), text }));
+  return rawLines.map((text, i) => ({
+    t: Number((i * step).toFixed(2)),
+    text,
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -59,7 +73,8 @@ function distributePlain(text: string, duration: number): LyricLine[] {
 const VERSION_WORDS =
   /\b(radio edit|single version|album version|extended mix|extended edit|remaster(?:ed)?(?: \d{4})?|deluxe|bonus track|explicit|clean version|edit|remix|version|live|acoustic|instrumental|demo|mono|stereo|album edit|full album video|official (?:music )?video|official audio|lyric video|lyrics|visualizer|audio|hd|hq|4k|mv|visualiser)\b/gi;
 
-const FEATURED = /\s*[([]?\s*\b(?:feat|ft|featuring|with)\b\.?\s[^)\]]*[)\]]?/gi;
+const FEATURED =
+  /\s*[([]?\s*\b(?:feat|ft|featuring|with)\b\.?\s[^)\]]*[)\]]?/gi;
 
 /** `test` against a /g regex is stateful, so the flag is cleared first. */
 function isVersionWord(value: string): boolean {
@@ -67,7 +82,8 @@ function isVersionWord(value: string): boolean {
   return VERSION_WORDS.test(value);
 }
 
-const ARTIST_NOISE = /\s*[-–—]\s*(?:topic|official|video|audio|lyrics?|hd|hq|mv|visualizer)\s*$/i;
+const ARTIST_NOISE =
+  /\s*[-–—]\s*(?:topic|official|video|audio|lyrics?|hd|hq|mv|visualizer)\s*$/i;
 
 /** Strip quotes, collapse whitespace, tidy punctuation. */
 function tidy(value: string): string {
@@ -134,8 +150,14 @@ export function buildCandidates(title: string, artist: string): Candidate[] {
 
 /** Cheap similarity in [0,1] used to rank search results. */
 function similarity(a: string, b: string): number {
-  const left = a.toLowerCase().replace(/[^a-z0-9 ]/g, "").trim();
-  const right = b.toLowerCase().replace(/[^a-z0-9 ]/g, "").trim();
+  const left = a
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g, "")
+    .trim();
+  const right = b
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g, "")
+    .trim();
   if (!left || !right) return 0;
   if (left === right) return 1;
   if (left.includes(right) || right.includes(left)) return 0.8;
@@ -167,11 +189,12 @@ async function lrclibGet(
   // Only send a duration when we trust it: `/api/get` matches on duration to
   // the second, and a live/radio cut differs from the studio one, which turns
   // a would-be hit into a 404.
-  if (duration && duration > 0) params.set("duration", String(Math.round(duration)));
+  if (duration && duration > 0)
+    params.set("duration", String(Math.round(duration)));
   try {
     const res = await fetch(`https://lrclib.net/api/get?${params.toString()}`, {
       headers: UA,
-      signal: AbortSignal.timeout(4000),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
     if (!res.ok) return null;
     return (await res.json()) as LrcRecord;
@@ -185,7 +208,11 @@ async function lrclibGet(
  * the title/artist and the duration is worth far more than the first row of a
  * loose search, and a live version is worth less when we did not ask for one.
  */
-function rank(results: LrcRecord[], candidate: Candidate, duration?: number): LrcRecord | null {
+function rank(
+  results: LrcRecord[],
+  candidate: Candidate,
+  duration?: number,
+): LrcRecord | null {
   let best: LrcRecord | null = null;
   let bestScore = -Infinity;
   let bestTitleMatch = 0;
@@ -199,7 +226,8 @@ function rank(results: LrcRecord[], candidate: Candidate, duration?: number): Lr
     const titleMatch = similarity(candidate.title, result.trackName ?? "");
     if (titleMatch === 0) continue;
     score += titleMatch * 40;
-    if (candidate.artist) score += similarity(candidate.artist, result.artistName ?? "") * 30;
+    if (candidate.artist)
+      score += similarity(candidate.artist, result.artistName ?? "") * 30;
     if (result.syncedLyrics) score += 18;
     if (duration && result.duration) {
       const delta = Math.abs(result.duration - duration);
@@ -208,8 +236,10 @@ function rank(results: LrcRecord[], candidate: Candidate, duration?: number): Lr
       else if (delta > 20) score -= 10;
     }
     // A live/acoustic cut is a worse match than the studio recording.
-    const name = `${result.trackName ?? ""} ${result.albumName ?? ""}`.toLowerCase();
-    if (/\b(live|acoustic|remaster|cover|karaoke|instrumental)\b/.test(name)) score -= 12;
+    const name =
+      `${result.trackName ?? ""} ${result.albumName ?? ""}`.toLowerCase();
+    if (/\b(live|acoustic|remaster|cover|karaoke|instrumental)\b/.test(name))
+      score -= 12;
     if (score > bestScore) {
       bestScore = score;
       bestTitleMatch = titleMatch;
@@ -231,7 +261,7 @@ async function lrclibSearch(
         track_name: candidate.title,
         ...(candidate.artist ? { artist_name: candidate.artist } : {}),
       }).toString()}`,
-      { headers: UA, signal: AbortSignal.timeout(4000) },
+      { headers: UA, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) },
     );
     if (!res.ok) return null;
     return rank((await res.json()) as LrcRecord[], candidate, duration);
@@ -245,7 +275,7 @@ async function lyricsOvh(candidate: Candidate): Promise<string | null> {
   try {
     const res = await fetch(
       `https://api.lyrics.ovh/v1/${encodeURIComponent(candidate.artist)}/${encodeURIComponent(candidate.title)}`,
-      { headers: UA, signal: AbortSignal.timeout(4000) },
+      { headers: UA, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) },
     );
     if (!res.ok) return null;
     const data = (await res.json()) as { lyrics?: string };
@@ -253,6 +283,40 @@ async function lyricsOvh(candidate: Candidate): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * Run every candidate for one provider at the same time and take the first
+ * hit, in candidate order so the most faithful match still wins a tie.
+ *
+ * Sequential awaits meant five candidates cost five round trips. That is both
+ * slow and the reason the shared budget ran out before the later providers
+ * were reached.
+ */
+async function firstHit<T>(
+  candidates: Candidate[],
+  run: (candidate: Candidate) => Promise<T | null>,
+): Promise<{ candidate: Candidate; value: NonNullable<T> } | null> {
+  const results: ({ candidate: Candidate; value: T | null } | null)[] =
+    await Promise.all(
+      candidates.map(
+        async (
+          candidate,
+        ): Promise<{ candidate: Candidate; value: T | null } | null> => {
+          try {
+            return { candidate, value: await run(candidate) };
+          } catch {
+            return null;
+          }
+        },
+      ),
+    );
+  for (const result of results) {
+    if (result && result.value) {
+      return { candidate: result.candidate, value: result.value };
+    }
+  }
+  return null;
 }
 
 export type FetchLyricsResult = {
@@ -300,17 +364,21 @@ export const fetchLyrics = action({
     album: v.optional(v.string()),
     duration: v.optional(v.number()),
   },
-  handler: async (ctx, { title, artist, album, duration }): Promise<FetchLyricsResult | null> => {
+  handler: async (
+    ctx,
+    { title, artist, album, duration },
+  ): Promise<FetchLyricsResult | null> => {
     const dur = duration && duration > 0 ? duration : 210; // reasonable default
     const candidates = buildCandidates(title, artist);
-    const deadline = Date.now() + LOOKUP_BUDGET_MS;
-    const left = () => Date.now() < deadline;
 
     // Cached hits and cached misses both come back immediately.
     for (const candidate of candidates) {
-      const cached = await ctx.runQuery(api.lyrics.cacheGet, { key: cacheKey(candidate) });
+      const cached = await ctx.runQuery(api.lyrics.cacheGet, {
+        key: cacheKey(candidate),
+      });
       if (cached) {
-        if (cached.missing) return { lines: [], synced: false, source: "cache", missing: true };
+        if (cached.missing)
+          return { lines: [], synced: false, source: "cache", missing: true };
         return {
           lines: cached.lines as LyricLine[],
           synced: cached.synced,
@@ -319,7 +387,10 @@ export const fetchLyrics = action({
       }
     }
 
-    const store = async (candidate: Candidate, result: FetchLyricsResult | null) => {
+    const store = async (
+      candidate: Candidate,
+      result: FetchLyricsResult | null,
+    ) => {
       await ctx.runMutation(internal.lyrics.cachePut, {
         key: cacheKey(candidate),
         lines: result?.lines ?? [],
@@ -330,41 +401,71 @@ export const fetchLyrics = action({
       });
     };
 
-    // 1. LRCLIB, exact lookup per candidate. One request yields both forms.
-    for (const candidate of candidates) {
-      if (!left()) break;
-      const record = await lrclibGet(candidate, album, dur);
-      if (!record) continue;
-      const result = toResult(record, "lrclib", dur);
-      if (result) {
-        await store(candidate, result);
+    // Each pass gets its own budget and fans its candidates out in parallel,
+    // so a slow provider can no longer starve the ones behind it.
+
+    // 1. LRCLIB, exact lookup. One request yields both forms.
+    {
+      const hit = await firstHit(candidates, (c) => lrclibGet(c, album, dur));
+      const result = hit ? toResult(hit.value, "lrclib", dur) : null;
+      if (hit && result) {
+        await store(hit.candidate, result);
         return result;
       }
     }
 
     // 2. LRCLIB search, ranked. Reaches versions LRCLIB stores under a
     //    slightly different name than the one we were handed.
-    for (const candidate of candidates) {
-      if (!left()) break;
-      const record = await lrclibSearch(candidate, dur);
-      if (!record) continue;
-      const result = toResult(record, "lrclib", dur);
-      if (result) {
-        await store(candidate, result);
+    {
+      const hit = await firstHit(candidates, (c) => lrclibSearch(c, dur));
+      const result = hit ? toResult(hit.value, "lrclib", dur) : null;
+      if (hit && result) {
+        await store(hit.candidate, result);
         return result;
       }
     }
 
-    // 3. Plain-text provider, for the tracks LRCLIB does not carry at all.
-    for (const candidate of candidates) {
-      if (!left() || !candidate.artist) break;
-      const text = await lyricsOvh(candidate);
-      if (!text) continue;
-      const lines = distributePlain(text, dur);
-      if (lines.length > 0) {
-        const result: FetchLyricsResult = { lines, synced: false, source: "lyrics.ovh" };
-        await store(candidate, result);
+    // 3. Musixmatch, synced first — the widest catalogue, and it can return
+    //    real timings, so it is worth asking for LRC before plain text.
+    //    Inert unless MUSIXMATCH_API_KEY is set on the deployment.
+    for (const wantSynced of [true, false]) {
+      const hit = await firstHit(candidates, (c) =>
+        ctx.runAction(internal.lyricsProviders.musixmatch, {
+          title: c.title,
+          artist: c.artist,
+          synced: wantSynced,
+        }),
+      );
+      if (!hit) continue;
+      const record: LrcRecord = {
+        syncedLyrics: wantSynced ? hit.value.lrc : null,
+        plainLyrics: hit.value.plain,
+      };
+      const result = toResult(record, "musixmatch", dur);
+      if (result) {
+        await store(hit.candidate, result);
         return result;
+      }
+    }
+
+    // 4. Plain-text provider, for the tracks nothing else carries at all.
+    //    Only the artist-bearing candidates: lyrics.ovh keys on both, and the
+    //    old loop `break`ed on the first artist-less candidate instead of just
+    //    skipping it.
+    {
+      const withArtist = candidates.filter((c) => !!c.artist);
+      const hit = await firstHit(withArtist, (c) => lyricsOvh(c));
+      if (hit) {
+        const lines = distributePlain(hit.value, dur);
+        if (lines.length > 0) {
+          const result: FetchLyricsResult = {
+            lines,
+            synced: false,
+            source: "lyrics.ovh",
+          };
+          await store(hit.candidate, result);
+          return result;
+        }
       }
     }
 
