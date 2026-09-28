@@ -4,6 +4,7 @@ import { useAction, useMutation, useQuery } from "convex/react";
 import {
   ListMusic,
   Play,
+  Radio,
   Search as SearchIcon,
   Shuffle,
   Trash2,
@@ -42,6 +43,9 @@ export default function PlaylistDetail() {
   const addTrack = useMutation(api.playlists.addTrack);
   const searchYt = useAction(api.youtube.searchYoutube);
   const playTrack = usePlayerStore((s) => s.playTrack);
+  const startPlaylistRadio = usePlayerStore((s) => s.startPlaylistRadio);
+  const stopRadio = usePlayerStore((s) => s.stopRadio);
+  const radioSource = usePlayerStore((s) => s.radioSource);
 
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
@@ -169,17 +173,23 @@ export default function PlaylistDetail() {
     }
   };
 
+  /** Every row resolved to a playable, in playlist order. */
+  const resolveAll = async (): Promise<Playable[]> => {
+    const resolved: Playable[] = [];
+    // New playlists are fully playable without a network round-trip. Only
+    // legacy id-only rows need the compatibility resolver.
+    for (const row of rows) {
+      const playable = await resolveLegacyRow(row);
+      if (playable) resolved.push(playable);
+    }
+    return resolved;
+  };
+
   const playAll = async () => {
     if (rows.length === 0 || resolvingId) return;
     setResolvingId("__all__");
     try {
-      const resolved: Playable[] = [];
-      // New playlists are fully playable without a network round-trip. Only
-      // legacy id-only rows need the compatibility resolver.
-      for (const row of rows) {
-        const playable = await resolveLegacyRow(row);
-        if (playable) resolved.push(playable);
-      }
+      const resolved = await resolveAll();
       if (resolved.length === 0) {
         toast.error("None of these tracks could be resolved right now");
         return;
@@ -192,6 +202,28 @@ export default function PlaylistDetail() {
       }
     } catch {
       toast.error("Couldn't start this playlist — try again");
+    } finally {
+      setResolvingId(null);
+    }
+  };
+
+  /**
+   * "Playlist radio": play this playlist, then keep going with similar music
+   * instead of stopping at the last track.
+   */
+  const startRadio = async () => {
+    if (rows.length === 0 || resolvingId) return;
+    setResolvingId("__radio__");
+    try {
+      const resolved = await resolveAll();
+      if (resolved.length === 0) {
+        toast.error("None of these tracks could be resolved right now");
+        return;
+      }
+      startPlaylistRadio(resolved, playlist.name);
+      toast.success(`Radio on — ${playlist.name} and similar`);
+    } catch {
+      toast.error("Couldn't start the radio — try again");
     } finally {
       setResolvingId(null);
     }
@@ -316,6 +348,30 @@ export default function PlaylistDetail() {
               >
                 <Shuffle className="size-4" />
                 Shuffle
+              </button>
+            )}
+            {rows.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (radioSource === playlist.name) {
+                    stopRadio();
+                    toast("Radio off — playing the playlist only");
+                  } else {
+                    void startRadio();
+                  }
+                }}
+                disabled={resolvingId !== null}
+                aria-pressed={radioSource === playlist.name}
+                className={cn(
+                  "flex items-center gap-2 rounded-full border px-5 py-2.5 text-sm font-semibold transition-colors disabled:opacity-60",
+                  radioSource === playlist.name
+                    ? "border-[rgb(var(--tint))] bg-[rgb(var(--tint)_/_0.14)] text-[rgb(var(--tint))]"
+                    : "border-white/15 bg-white/[0.05] hover:bg-white/[0.1]",
+                )}
+              >
+                <Radio className="size-4" />
+                {resolvingId === "__radio__" ? "Loading…" : "Radio"}
               </button>
             )}
             {/* Delete stays available even for an empty playlist. */}

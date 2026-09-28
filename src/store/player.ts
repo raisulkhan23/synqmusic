@@ -387,6 +387,13 @@ interface PlayerStore {
   /** When the queue runs dry, automatically continue with similar music. */
   autoplay: boolean;
   toggleAutoplay: () => void;
+  /**
+   * Endless "radio" mode. While it is on the queue is topped up forever, so
+   * playback never stops at the end of a list.
+   */
+  radioActive: boolean;
+  /** What the current radio was seeded from, shown as a label in the UI. */
+  radioSource: string | null;
 
   /** Show the actual video in the fullscreen player (YouTube sources). */
   videoEnabled: boolean;
@@ -406,6 +413,13 @@ interface PlayerStore {
   playTrack: (track: Playable, list?: Playable[]) => void;
   /** Start an endless related-mix radio from any track (any source). */
   startRadio: (track: Playable, contextQuery?: string) => void;
+  /**
+   * Start endless radio seeded by a playlist (Spotify's "playlist radio"):
+   * the playlist plays first, then similar music keeps coming.
+   */
+  startPlaylistRadio: (tracks: Playable[], label: string) => void;
+  /** Leave radio mode; the queue goes back to behaving like a finite list. */
+  stopRadio: () => void;
   /** Play a YouTube track through the proxy/audio path (rescues non-embeddable videos). */
   playViaStream: (track: Playable, startSeconds?: number) => void;
   playIndex: (index: number) => void;
@@ -485,11 +499,16 @@ function saveQueue(
   currentId: string | null,
 ): void {
   try {
+    // Keep the CURRENT track plus what follows rather than the head of the
+    // list. A radio session appends for as long as it runs, so the head is
+    // routinely dozens of tracks stale — persisting it restored a queue
+    // pointing at an unrelated old song.
+    const start = Math.max(0, Math.min(queueIndex, queue.length - 60));
     localStorage.setItem(
       QUEUE_KEY,
       JSON.stringify({
-        items: queue.slice(0, 60).map(persistPlayable),
-        queueIndex,
+        items: queue.slice(start, start + 60).map(persistPlayable),
+        queueIndex: queueIndex - start,
         currentId,
       }),
     );
@@ -1021,6 +1040,28 @@ function inferGenre(seed: Playable): string | null {
 }
 
 /**
+ * The dominant genre across a playlist's tracks, used as the radio's mix
+ * context. A single seed track is a weak signal — one ballad in an otherwise
+ * dance playlist would pull the whole radio off-genre.
+ */
+function playlistMixContext(tracks: Playable[]): string | null {
+  const tally = new Map<string, number>();
+  for (const t of tracks) {
+    const g = inferGenre(t);
+    if (g) tally.set(g, (tally.get(g) ?? 0) + 1);
+  }
+  let best: string | null = null;
+  let bestCount = 0;
+  for (const [genre, count] of tally) {
+    if (count > bestCount) {
+      best = genre;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
+/**
  * Fetch a related-mix from YouTube Music based on the seed track's GENRE.
  * Returns Playables ready for the queue (empty on failure).
  */ async function fetchRelatedMix(
@@ -1179,7 +1220,7 @@ function handleEnded(): void {
   // End of queue, repeat off — autoplay related music when enabled.
   // Fetches a related mix (same vibe/genre as the seed) from YouTube Music
   // so the music never stops, for ANY source.
-  if (s.autoplay && s.current) {
+  if ((s.autoplay || s.radioActive) && s.current) {
     const seed = s.current;
     void fetchRelatedMix(seed, s.queue, 5, activeMixContext).then((related) => {
       // Filter INSIDE the updater: maybeAutofillQueue may have appended the
@@ -1593,7 +1634,9 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
   let autofillSeedId: string | null = null;
   const maybeAutofillQueue = () => {
     const s = get();
-    if (!s.autoplay || !s.current) return;
+    // Radio is explicitly "never stop", so it tops up even when the user's
+    // autoplay preference is off.
+    if ((!s.autoplay && !s.radioActive) || !s.current) return;
     const upcoming =
       s.queueIndex >= 0 ? s.queue.length - 1 - s.queueIndex : s.queue.length;
     if (upcoming >= 3) return;
@@ -1795,6 +1838,10 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     // Explicit list playback (playlist / liked / home rows) is not a search
     // context — drop any genre left over from a previous search.
     activeMixContext = null;
+    // Choosing a list is an explicit "play this", so it ends any radio that
+    // was running. In-queue navigation goes through playIndex, which leaves
+    // radio alone, so clicking a row in the queue does not switch it off.
+    if (get().radioActive) set({ radioActive: false, radioSource: null });
     const list2 = list && list.length > 0 ? list.map(norm) : [norm(track)];
     const t = norm(track);
     // Match by id OR youtubeId — history snapshots may carry a stored id that
@@ -1850,7 +1897,12 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     // Start the seed immediately; the related mix (same vibe/genre) is
     // fetched in the background and appended as it arrives.
     const initial: Playable[] = [seed];
-    set({ queue: initial, queueIndex: 0 });
+    set({
+      queue: initial,
+      queueIndex: 0,
+      radioActive: true,
+      radioSource: seed.title,
+    });
     loadTrack(seed);
     void fetchRelatedMix(seed, initial, 15, contextQuery).then((related) => {
       // Dedupe against the latest queue inside the updater (see autofill note).
@@ -1867,6 +1919,57 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
         usePlayerStore.getState().current?.id ?? null,
       );
     });
+  };
+
+  /**
+   * Emulate the "playlist radio" Spotify used to ship: play the playlist, then
+   * keep seeding similar music forever instead of stopping at the last track.
+   * The mix is seeded from the dominant genre across the playlist's own tracks
+   * so the radio stays on the playlist's vibe even once the seed track that
+   * started it has long finished.
+   */
+  const startPlaylistRadio = (tracks: Playable[], label: string) => {
+    const list = tracks.map(norm).filter((t) => !!t.youtubeId || !!t.audioUrl);
+    const first = list[0];
+    if (!first) return;
+
+    activeMixContext = playlistMixContext(list);
+    // The WHOLE playlist is queued, not just the first track: this is a
+    // playlist radio, so the playlist plays through in order and only then
+    // does the endless part begin.
+    set({
+      queue: list,
+      queueIndex: 0,
+      radioActive: true,
+      radioSource: label || first.title,
+    });
+    loadTrack(first);
+
+    // Prime the tail straight away, deduped against the full playlist so the
+    // radio cannot hand back one of the playlist's own songs as a "related"
+    // track later. The playlist still plays first — this only guarantees the
+    // first fill is already waiting by the time it runs out, so the radio
+    // never audibly stops to think.
+    void fetchRelatedMix(first, list, 15, activeMixContext).then((related) => {
+      const state = usePlayerStore.getState();
+      if (state.current?.id !== first.id || !state.radioActive) return;
+      usePlayerStore.setState((st) => {
+        const fresh = related.filter(
+          (t) => !st.queue.some((q) => q.id === t.id),
+        );
+        if (fresh.length === 0) return st;
+        return { queue: [...st.queue, ...fresh] };
+      });
+      const after = usePlayerStore.getState();
+      saveQueue(after.queue, after.queueIndex, after.current?.id ?? null);
+    });
+  };
+
+  /** Leave radio mode; the queue stops being topped up. */
+  const stopRadio = () => {
+    if (!get().radioActive) return;
+    activeMixContext = null;
+    set({ radioActive: false, radioSource: null });
   };
 
   const playViaStream = (track: Playable, startSeconds?: number) => {
@@ -2665,6 +2768,11 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     audioFilter: "off",
 
     autoplay: initialAutoplay,
+    // Radio is session-only, like sound effects: restoring a persisted
+    // endless queue on startup would silently keep fetching tracks for
+    // someone who just wanted their playlist back.
+    radioActive: false,
+    radioSource: null,
     toggleAutoplay: () =>
       set((state) => {
         localStorage.setItem("ss.autoplay", state.autoplay ? "0" : "1");
@@ -2835,6 +2943,8 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       }),
 
     playTrack,
+    startPlaylistRadio,
+    stopRadio,
     startRadio,
     playViaStream,
     setAudioFilter: setAudioFilterAction,
