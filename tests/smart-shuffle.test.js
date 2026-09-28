@@ -46,7 +46,7 @@ describe("the shuffle button is a three-state cycle, like Spotify's", () => {
     // State 3: everything off, and the original queue order comes back. Only
     // this transition (and the first) may reorder, via the existing action.
     expect(body).toMatch(
-      /toggleShuffle\(\);\s*\n\s*localStorage\.setItem\("ss\.smartShuffle", "0"\);\s*\n\s*set\(\{ smartShuffle: false \}\);/,
+      /toggleShuffle\(\);\s*\n\s*writeSetting\("ss\.smartShuffle", "0"\);\s*\n\s*set\(\{ smartShuffle: false \}\);/,
     );
     // Registered on the store, and the old two-mode action is gone.
     expect(storeSource).toMatch(/cycleShuffle: \(\) => void;/);

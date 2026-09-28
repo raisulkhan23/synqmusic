@@ -483,6 +483,33 @@ interface PersistedPlayable {
 
 const QUEUE_KEY = "ss.queue";
 
+/**
+ * Storage writes must never break a control.
+ *
+ * `localStorage.setItem` throws outright when storage is blocked (private
+ * browsing, disabled cookies) or full. Every one of these calls sits inside a
+ * zustand setter, so a throw skipped the `set(...)` that follows it: the
+ * volume slider, mute, repeat, shuffle and the whole settings dialog would
+ * silently do nothing, and settings that mutate the DOM before persisting
+ * would visibly desync. Swallowing the failure keeps the session usable —
+ * the same trade-off the wallpaper and history writers already make.
+ */
+function writeSetting(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* storage unavailable or full */
+  }
+}
+
+function removeSetting(key: string): void {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    /* storage unavailable */
+  }
+}
+
 /** Shrink a Playable to its storable essence. */
 const persistPlayable = (p: Playable): PersistedPlayable => ({
   id: p.id,
@@ -504,7 +531,7 @@ function saveQueue(
     // routinely dozens of tracks stale — persisting it restored a queue
     // pointing at an unrelated old song.
     const start = Math.max(0, Math.min(queueIndex, queue.length - 60));
-    localStorage.setItem(
+    writeSetting(
       QUEUE_KEY,
       JSON.stringify({
         items: queue.slice(start, start + 60).map(persistPlayable),
@@ -605,7 +632,7 @@ const readIdSet = (key: string): Record<string, true> => {
 };
 const writeIdSet = (key: string, set: Record<string, true>): void => {
   try {
-    localStorage.setItem(key, JSON.stringify(Object.keys(set)));
+    writeSetting(key, JSON.stringify(Object.keys(set)));
   } catch {
     /* ignore */
   }
@@ -653,7 +680,7 @@ function saveResumePosition(id: string, t: number): void {
   const entries = Object.entries(map)
     .sort((a, b) => b[1].at - a[1].at)
     .slice(0, 50);
-  localStorage.setItem(RESUME_KEY, JSON.stringify(Object.fromEntries(entries)));
+  writeSetting(RESUME_KEY, JSON.stringify(Object.fromEntries(entries)));
 }
 
 function getResumePosition(id: string, duration: number): number {
@@ -755,7 +782,7 @@ function saveLastPlayed(track: Playable): void {
       audioUrl: track.audioUrl,
       at: Date.now(),
     };
-    localStorage.setItem(LAST_PLAYED_KEY, JSON.stringify(snap));
+    writeSetting(LAST_PLAYED_KEY, JSON.stringify(snap));
   } catch {
     /* storage unavailable */
   }
@@ -847,7 +874,7 @@ function recordHistory(track: Playable): void {
   if (next.length > HISTORY_MAX) next.length = HISTORY_MAX;
   historyCache = next;
   try {
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+    writeSetting(HISTORY_KEY, JSON.stringify(next));
   } catch {
     /* storage unavailable */
   }
@@ -873,8 +900,8 @@ function lastSnapshotOf(track: Playable): LastPlayedSnapshot {
 export function clearPlayHistory(): void {
   historyCache = [];
   try {
-    localStorage.removeItem(HISTORY_KEY);
-    localStorage.removeItem(LAST_PLAYED_KEY);
+    removeSetting(HISTORY_KEY);
+    removeSetting(LAST_PLAYED_KEY);
   } catch {
     /* storage unavailable */
   }
@@ -887,7 +914,7 @@ export function clearSingleHistoryEntry(id: string): void {
   const next = history.filter((h) => h.id !== id);
   historyCache = next;
   try {
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+    writeSetting(HISTORY_KEY, JSON.stringify(next));
   } catch {
     /* storage unavailable */
   }
@@ -2075,6 +2102,11 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
 
   const seek = (time: number) => {
     const s = get();
+    // A non-finite position reaches us from a zero-width seek bar (dividing by
+    // rect.width yields NaN, and Math.max(0, NaN) is still NaN). Assigning
+    // NaN to audio.currentTime THROWS "non-finite", which killed the whole
+    // click handler and left the transport stuck.
+    if (!Number.isFinite(time)) return;
     const duration = s.duration;
     const t = Math.max(0, Math.min(time, duration || time));
     // Seek whichever engine actually owns the sound (see audioElementIsSource).
@@ -2090,7 +2122,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     const v = Math.min(1, Math.max(0, volume));
     getAudio().volume = v;
     ytEngine.setVolume(v);
-    localStorage.setItem("ss.volume", String(v));
+    writeSetting("ss.volume", String(v));
     set({ volume: v });
   };
 
@@ -2099,7 +2131,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     const nextMuted = !s.muted;
     getAudio().muted = nextMuted;
     ytEngine.setMuted(nextMuted);
-    localStorage.setItem("ss.muted", nextMuted ? "1" : "0");
+    writeSetting("ss.muted", nextMuted ? "1" : "0");
     if (!nextMuted && s.volume === 0) {
       get().setVolume(0.8);
     }
@@ -2109,7 +2141,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
   const toggleShuffle = () => {
     const s0 = get();
     const next = !s0.shuffle;
-    localStorage.setItem("ss.shuffle", next ? "1" : "0");
+    writeSetting("ss.shuffle", next ? "1" : "0");
     // Physically reorder the queue so shuffle takes effect immediately and the
     // queue panel reflects it. The currently playing track keeps its slot; the
     // rest are Fisher–Yates shuffled. Turning shuffle off restores the saved
@@ -2181,13 +2213,13 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     }
     // Plain shuffle -> smart shuffle: the queue order stays exactly as it is.
     if (s.shuffle && !s.smartShuffle) {
-      localStorage.setItem("ss.smartShuffle", "1");
+      writeSetting("ss.smartShuffle", "1");
       set({ smartShuffle: true });
       return;
     }
     // Anything else (shuffle on, or both on) -> fully off, restoring the order.
     toggleShuffle();
-    localStorage.setItem("ss.smartShuffle", "0");
+    writeSetting("ss.smartShuffle", "0");
     set({ smartShuffle: false });
   };
 
@@ -2204,10 +2236,10 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
 
   const toggleSmartShuffle = () => {
     const next = !get().smartShuffle;
-    localStorage.setItem("ss.smartShuffle", next ? "1" : "0");
+    writeSetting("ss.smartShuffle", next ? "1" : "0");
     // smart shuffle implies shuffle
     if (next && !get().shuffle) {
-      localStorage.setItem("ss.shuffle", "1");
+      writeSetting("ss.shuffle", "1");
       set({ shuffle: true, smartShuffle: true });
       return;
     }
@@ -2218,7 +2250,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     const order: RepeatMode[] = ["off", "all", "one"];
     const idx = order.indexOf(get().repeat);
     const next = order[(idx + 1) % order.length];
-    localStorage.setItem("ss.repeat", next);
+    writeSetting("ss.repeat", next);
     set({ repeat: next });
   };
 
@@ -2226,7 +2258,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     const r = Math.min(2, Math.max(0.5, rate));
     getAudio().playbackRate = r;
     ytEngine.setRate(r);
-    localStorage.setItem("ss.rate", String(r));
+    writeSetting("ss.rate", String(r));
     set({ rate: r });
     // Nudge the seek bar / HUD to re-sync: the YouTube engine reports time in
     // wall-clock seconds, which drifts from the seek bar's duration-based
@@ -2775,7 +2807,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     radioSource: null,
     toggleAutoplay: () =>
       set((state) => {
-        localStorage.setItem("ss.autoplay", state.autoplay ? "0" : "1");
+        writeSetting("ss.autoplay", state.autoplay ? "0" : "1");
         return { autoplay: !state.autoplay };
       }),
 
@@ -2783,7 +2815,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     toggleVideo: () =>
       set((state) => {
         const next = !state.videoEnabled;
-        localStorage.setItem("ss.video", next ? "1" : "0");
+        writeSetting("ss.video", next ? "1" : "0");
         // Starting/stopping video while fullscreen + effect active must
         // start/stop the muted visual slave immediately, not on the next
         // fullscreen open — otherwise toggling video on shows a thumbnail.
@@ -2804,53 +2836,44 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     accentTheme: initialAccentTheme,
     setAccentTheme: (id) =>
       set(() => {
-        localStorage.setItem("ss.accentTheme", id);
+        writeSetting("ss.accentTheme", id);
         return { accentTheme: id };
       }),
     compactMode: initialCompact,
     toggleCompactMode: () =>
       set((state) => {
-        localStorage.setItem("ss.compact", state.compactMode ? "0" : "1");
+        writeSetting("ss.compact", state.compactMode ? "0" : "1");
         return { compactMode: !state.compactMode };
       }),
     ambientGlow: initialGlow,
     toggleAmbientGlow: () =>
       set((state) => {
-        localStorage.setItem("ss.ambientGlow", state.ambientGlow ? "0" : "1");
+        writeSetting("ss.ambientGlow", state.ambientGlow ? "0" : "1");
         return { ambientGlow: !state.ambientGlow };
       }),
     visualizerEnabled: initialVisualizer,
     toggleVisualizer: () =>
       set((state) => {
-        localStorage.setItem(
-          "ss.visualizer",
-          state.visualizerEnabled ? "0" : "1",
-        );
+        writeSetting("ss.visualizer", state.visualizerEnabled ? "0" : "1");
         return { visualizerEnabled: !state.visualizerEnabled };
       }),
     performanceMode: initialPerformanceMode,
     togglePerformanceMode: () =>
       set((state) => {
-        localStorage.setItem(
-          "ss.performanceMode",
-          state.performanceMode ? "0" : "1",
-        );
+        writeSetting("ss.performanceMode", state.performanceMode ? "0" : "1");
         return { performanceMode: !state.performanceMode };
       }),
     pointerEffects: initialPointerEffects,
     togglePointerEffects: () =>
       set((state) => {
-        localStorage.setItem(
-          "ss.pointerEffects",
-          state.pointerEffects ? "0" : "1",
-        );
+        writeSetting("ss.pointerEffects", state.pointerEffects ? "0" : "1");
         return { pointerEffects: !state.pointerEffects };
       }),
 
     themeMode: localStorage.getItem("ss.themeMode") ?? "dark",
     setThemeMode: (mode) =>
       set(() => {
-        localStorage.setItem("ss.themeMode", mode);
+        writeSetting("ss.themeMode", mode);
         const root = document.documentElement;
         root.classList.toggle("light", mode === "light");
         root.classList.toggle("amoled", mode === "amoled");
@@ -2860,7 +2883,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     hideExplicit: localStorage.getItem("ss.hideExplicit") === "1",
     toggleHideExplicit: () =>
       set((state) => {
-        localStorage.setItem("ss.hideExplicit", state.hideExplicit ? "0" : "1");
+        writeSetting("ss.hideExplicit", state.hideExplicit ? "0" : "1");
         return { hideExplicit: !state.hideExplicit };
       }),
 
@@ -2868,13 +2891,13 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     cardTransparency: readCardTransparency(),
     setCardTransparency: (value) => {
       const next = applyCardTransparency(value);
-      localStorage.setItem(CARD_TRANSPARENCY_KEY, String(next));
+      writeSetting(CARD_TRANSPARENCY_KEY, String(next));
       set({ cardTransparency: next });
     },
     toggleLiquidGlass: () =>
       set((state) => {
         const next = !state.liquidGlass;
-        localStorage.setItem("ss.liquidGlass", next ? "1" : "0");
+        writeSetting("ss.liquidGlass", next ? "1" : "0");
         document.documentElement.classList.toggle("no-glass", !next);
         return { liquidGlass: next };
       }),
@@ -2883,14 +2906,14 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     toggleSidebarCollapsed: () =>
       set((state) => {
         const next = !state.sidebarCollapsed;
-        localStorage.setItem("ss.sidebarCollapsed", next ? "1" : "0");
+        writeSetting("ss.sidebarCollapsed", next ? "1" : "0");
         return { sidebarCollapsed: next };
       }),
     sidebarCollapsed: localStorage.getItem("ss.sidebarCollapsed") === "1",
     toggleHideSidebarEmail: () =>
       set((state) => {
         const next = !state.hideSidebarEmail;
-        localStorage.setItem("ss.hideSidebarEmail", next ? "1" : "0");
+        writeSetting("ss.hideSidebarEmail", next ? "1" : "0");
         return { hideSidebarEmail: next };
       }),
 
@@ -2898,15 +2921,15 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     wallpaperType: initialWallpaperType,
     setWallpaperType: (type) =>
       set(() => {
-        localStorage.setItem("ss.wallpaperType", type);
+        writeSetting("ss.wallpaperType", type);
         return { wallpaperType: type };
       }),
     setWallpaper: (value, type = "image") =>
       set(() => {
         try {
-          if (value) localStorage.setItem("ss.wallpaper", value);
-          else localStorage.removeItem("ss.wallpaper");
-          localStorage.setItem("ss.wallpaperType", type);
+          if (value) writeSetting("ss.wallpaper", value);
+          else removeSetting("ss.wallpaper");
+          writeSetting("ss.wallpaperType", type);
         } catch {
           // Keep the current session usable even when browser storage is full.
         }

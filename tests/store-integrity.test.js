@@ -32,7 +32,9 @@ describe("stored preferences cannot put the UI and playback in disagreement", ()
       storeSource.indexOf("const cycleRepeat = () => {"),
       storeSource.indexOf("const setRate = (rate: number) => {"),
     );
-    expect(cycle).toMatch(/localStorage\.setItem\("ss\.repeat", next\)/);
+    // Persisted through the guarded writer, so a blocked/full localStorage
+    // cannot leave the repeat button lit while playback behaves as "off".
+    expect(cycle).toMatch(/writeSetting\("ss\.repeat", next\)/);
     expect(cycle).toMatch(/set\(\{ repeat: next \}\)/);
   });
 });
