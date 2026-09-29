@@ -298,19 +298,13 @@ describe("routes", () => {
     expect(mainSrc).toMatch(/path=\s*"\/album\/:artist\/:album"/);
   });
 
-  test("both pages are lazy loaded and suspense wrapped", () => {
-    // They go through `lazyRoute`, not bare `lazy()`: a route chunk whose deps
-    // 404 after a dev-server restart used to leave the listener on
-    // "Loading..." forever, and only a manual refresh recovered it.
-    expect(mainSrc).toMatch(
-      /lazyRoute\(\(\)\s*=>\s*import\("\.\/pages\/Artist\.tsx"\),\s*"Artist"\)/,
-    );
-    expect(mainSrc).toMatch(
-      /lazyRoute\(\(\)\s*=>\s*import\("\.\/pages\/Album\.tsx"\),\s*"Album"\)/,
-    );
-    expect(mainSrc).not.toMatch(
-      /lazy\(\(\)\s*=>\s*import\("\.\/pages\/Artist\.tsx"\)\)/,
-    );
+  test("both pages are eagerly imported and suspense wrapped", () => {
+    // Static, not React.lazy(): a route chunk whose deps 404 after a
+    // dev-server restart left the listener on "Loading..." forever, and only a
+    // manual refresh recovered it.
+    expect(mainSrc).toMatch(/import Artist from "\.\/pages\/Artist\.tsx";/);
+    expect(mainSrc).toMatch(/import Album from "\.\/pages\/Album\.tsx";/);
+    expect(mainSrc).not.toMatch(/import\("\.\/pages\/(Artist|Album)\.tsx"\)/);
   });
 
   test("both routes sit inside the authenticated group", () => {

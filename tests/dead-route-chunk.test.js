@@ -3,97 +3,101 @@ import { readSource } from "./helpers/tailwind-css.js";
 
 const main = readSource("src/main.tsx");
 
-const between = (start, end) => {
-  const a = main.indexOf(start);
-  const b = main.indexOf(end, a);
-  expect(a).toBeGreaterThan(-1);
-  return main.slice(a, b);
-};
+const PAGES = [
+  "Landing",
+  "Auth",
+  "TrackLink",
+  "Home",
+  "Search",
+  "Artist",
+  "Album",
+  "Liked",
+  "Playlists",
+  "PlaylistDetail",
+  "Admin",
+  "Stats",
+  "Recent",
+  "Social",
+  "Profile",
+  "Settings",
+  "NotFound",
+  "Support",
+  "Privacy",
+  "Terms",
+];
 
-describe("a route chunk that never arrives cannot strand the listener", () => {
-  test("every route uses the recovering lazy loader, not bare lazy()", () => {
-    // THE bug: the URL changed to /artist/... and the page sat on "Loading..."
-    // forever, while a hard refresh of that same URL rendered it perfectly.
-    // Vite stamps pre-bundled deps with ?v=<hash>; a dev-server restart
-    // re-optimises and issues a new hash, so a tab open across the restart
-    // requests route chunks against deps the server no longer serves. Bare
-    // `lazy()` has no timeout and no recovery, so React stays in Suspense
-    // indefinitely.
-    const bare = main.match(/= lazy\(\(\) => import\(/g) ?? [];
-    expect(bare).toHaveLength(0);
-    const routes = main.match(/= lazyRoute\(\(\) => import\(/g) ?? [];
-    expect(routes.length).toBeGreaterThanOrEqual(19);
+describe("no route can hang waiting for a chunk that never arrives", () => {
+  test("every page is imported eagerly, with no dynamic import anywhere", () => {
+    // THE bug, and the reason this file exists. Routes used to be React.lazy()
+    // chunks. Vite stamps pre-bundled deps with ?v=<hash>; when the dev server
+    // restarts it re-optimises and issues a NEW hash, and a tab open across
+    // that restart kept a graph built with the old one. The first dynamic
+    // import after it — a route chunk, fetched only on navigation — asked for
+    // deps the server no longer served. The request never settled, so React
+    // stayed in the Suspense fallback forever: the URL changed and the page sat
+    // on "Loading..." indefinitely. A hard refresh worked because a full page
+    // load re-reads the entry document and gets a current graph.
+    //
+    // Retrying could not fix a mechanism that kept failing. Removing the
+    // dynamic imports removes the failure mode: there is no chunk to fetch at
+    // navigation time, so nothing can fail to arrive and nothing can hang.
+    // Assert against CODE, not prose: the doc comment above the imports
+    // explains this bug and necessarily names React.lazy().
+    const code = main
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/^\s*\/\/.*$/gm, "");
+    expect(code).not.toMatch(/import\("\.\/pages\//);
+    expect(code).not.toContain("React.lazy");
+    expect(code).not.toMatch(/\blazy\(/);
+    expect(code).not.toContain("lazy,");
   });
 
-  test("the loader races a timeout, because a dead chunk never settles", () => {
-    // A rejection alone is not enough: the request that never arrives is the
-    // common case, and only a timer can end it.
-    const block = between(
-      "function lazyRoute",
-      "// Lazy load route components",
-    );
-    expect(block).toContain("Promise.race");
-    expect(block).toContain("ROUTE_CHUNK_TIMEOUT_MS");
-    expect(block).toMatch(
-      /reject\(new Error\(`Route "\$\{name\}" never loaded`\)\)/,
-    );
+  test("all twenty pages are statically imported", () => {
+    for (const page of PAGES) {
+      expect(main).toMatch(
+        new RegExp(`import \\w+ from "\\./pages/${page}\\.tsx";`),
+      );
+    }
   });
 
-  test("recovery reloads once, cache-busted, keeping the current URL", () => {
-    const block = between(
-      "function recoverFromDeadChunk",
-      "function lazyRoute",
+  test("AppShell is static too, so the player never tears down on navigation", () => {
+    expect(main).toContain(
+      'import AppShell from "./components/layout/AppShell.tsx";',
     );
-    expect(block).toContain("window.location.replace(url.toString())");
-    expect(block).toContain('url.searchParams.set("_cb"');
-    // `assign` would drop the artist the listener was trying to open.
-    expect(block).not.toContain("window.location.assign(");
+    // Exactly one import — a duplicate would be a silent no-op shadowed by
+    // whichever came last.
+    expect((main.match(/import AppShell/g) ?? []).length).toBe(1);
   });
 
-  test("recovery is rate-limited so a broken chunk cannot loop forever", () => {
-    // This is the only thing standing between a fix and an infinite reload.
-    const block = between(
-      "function recoverFromDeadChunk",
-      "function lazyRoute",
-    );
-    expect(block).toContain("CHUNK_RELOAD_COOLDOWN_MS");
-    expect(block).toMatch(
-      /now - last < CHUNK_RELOAD_COOLDOWN_MS\) return false/,
-    );
-    // The guard is recorded BEFORE the reload is issued.
-    expect(block.indexOf("sessionStorage.setItem")).toBeLessThan(
-      block.indexOf("location.replace"),
-    );
+  test("the app shell is imported once, before the routes it wraps", () => {
+    const shell = main.indexOf("import AppShell");
+    const home = main.indexOf('import Home from "./pages/Home.tsx"');
+    expect(shell).toBeGreaterThan(-1);
+    expect(home).toBeGreaterThan(-1);
   });
 
-  test("blocked storage disables recovery instead of risking a loop", () => {
-    const block = between(
-      "function recoverFromDeadChunk",
-      "function lazyRoute",
-    );
-    expect(block).toMatch(/catch \{\s*return false;/);
+  test("the retry machinery is gone rather than left as dead code", () => {
+    // Half-removed recovery code is how this bug came back three times. There
+    // is no timeout race, no reload cooldown and no pending-forever promise.
+    expect(main).not.toContain("recoverFromDeadChunk");
+    expect(main).not.toContain("ROUTE_CHUNK_TIMEOUT_MS");
+    expect(main).not.toContain("CHUNK_RELOAD_COOLDOWN_MS");
+    expect(main).not.toContain("lazyRoute");
   });
 
-  test("a recovered chunk stays pending so no error card flashes on the way out", () => {
-    // Resolving would swap the loading state for an error card for a frame
-    // before the reload lands, which reads as a second, separate failure.
-    const block = between(
-      "function lazyRoute",
-      "// Lazy load route components",
-    );
-    expect(block).toContain("return new Promise<never>(() => {})");
+  test("navigation can no longer show a loading state at all", () => {
+    // RouteLoading survives only as the Suspense fallback for genuinely
+    // suspending content. With no lazy chunks, a route change paints the page
+    // on the first frame instead of a spinner that may never resolve.
+    expect(main).toContain("function RouteLoading()");
+    expect(main).toContain("<PageSuspense>");
   });
 
-  test("the error boundary still catches a chunk that cannot be recovered", () => {
-    // If the reload is refused, the listener gets the recovery card rather
-    // than an infinite spinner — the two paths must both be covered.
-    const block = between(
-      "function lazyRoute",
-      "// Lazy load route components",
-    );
-    expect(block).toMatch(
-      /if \(recoverFromDeadChunk\(\)\)[^\n]*\n\s*throw error/,
-    );
+  test("a crash in any page is still contained to that page", () => {
+    // Removing the chunks must not remove the safety net: one bad page still
+    // degrades to a recoverable card instead of unmounting the player.
     expect(main).toContain("This page didn&apos;t load");
+    expect(main).toContain("onRetry");
+    expect(main).toContain("class RouteErrorBoundary");
   });
 });

@@ -5,13 +5,7 @@ import { ScrollToTop } from "@/components/ScrollToTop";
 import { VlyToolbar } from "../vly-toolbar-readonly.tsx";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import { ConvexReactClient } from "convex/react";
-import React, {
-  StrictMode,
-  useEffect,
-  lazy,
-  Suspense,
-  type ComponentType,
-} from "react";
+import React, { StrictMode, useEffect, Suspense } from "react";
 import { MotionConfig } from "framer-motion";
 import { createRoot } from "react-dom/client";
 import {
@@ -55,111 +49,59 @@ if (savedTheme === "light") {
 }
 
 /**
- * Recover from a route chunk that will not arrive.
+ * Route components are imported EAGERLY, not with React.lazy().
  *
- * The symptom this exists for: you click a link, the URL changes, and the page
- * sits on "Loading..." forever — while a hard refresh of that same URL renders
- * it perfectly. That is a dead module graph, not a broken page. Vite stamps
- * every pre-bundled dep with a `?v=<hash>`, and when the dev server restarts it
- * re-optimises and issues a NEW hash. A tab that was open across the restart
- * still holds the graph built with the old one, so the first DYNAMIC import
- * after it — a route chunk, because those are only fetched on navigation —
- * requests deps under a hash the server no longer serves. The request never
- * settles, so React stays in the Suspense fallback indefinitely.
+ * Every one of these used to be a dynamic import, and that is what made the
+ * app intermittently unusable: clicking a link changed the URL and then sat on
+ * "Loading..." forever, while a hard refresh of that exact URL rendered the
+ * page perfectly.
  *
- * A full page load does not hit this: it re-reads the entry document and gets
- * a current graph. That is the whole reason a refresh "fixed" it.
+ * The cause is the dev server. Vite stamps every pre-bundled dependency with a
+ * `?v=<hash>`, and when the server restarts it re-optimises and issues a NEW
+ * hash. A tab open across a restart keeps the module graph it already has, so
+ * the first DYNAMIC import after it — a route chunk, because those were only
+ * ever fetched on navigation — asks for deps under a hash the server no longer
+ * serves. That request never settles, so React stays in the Suspense fallback
+ * indefinitely. Every later click repeated it. A full page load does not hit
+ * this, because it re-reads the entry document and gets a current graph, which
+ * is the only reason a refresh ever appeared to fix it.
  *
- * The fix is to do automatically what the user was doing by hand: reload once,
- * cache-busted, and keep the current URL. The cooldown is what makes this safe —
- * without it, a genuinely broken chunk would reload the app forever.
+ * Detecting and retrying that was not enough — it kept coming back, and every
+ * retry cost the listener a spinner and a reload. Removing the dynamic imports
+ * removes the failure mode: there is no chunk to fetch at navigation time, so
+ * there is nothing that can fail to arrive and nothing to wait for. Navigation
+ * is instant and cannot hang.
+ *
+ * The cost is a larger initial bundle, which is a deliberate trade: a slightly
+ * heavier first paint beats a page that will not open. Reliability first.
+ *
+ * AppShell is imported here too, so the player, queue and nav are never torn
+ * down during a navigation either.
  */
-const ROUTE_CHUNK_TIMEOUT_MS = 8_000;
-const CHUNK_RELOAD_COOLDOWN_MS = 15_000;
-
-function recoverFromDeadChunk(): boolean {
-  const now = Date.now();
-  try {
-    const last = Number(sessionStorage.getItem("synq:chunk-reload") ?? "0");
-    if (now - last < CHUNK_RELOAD_COOLDOWN_MS) return false;
-    sessionStorage.setItem("synq:chunk-reload", String(now));
-  } catch {
-    return false; // storage blocked — never risk a reload loop
-  }
-  try {
-    const url = new URL(window.location.href);
-    url.searchParams.set("_cb", String(now));
-    window.location.replace(url.toString());
-  } catch {
-    /* ignore — the error boundary takes over if the reload is refused */
-  }
-  return true;
-}
-
-/**
- * `lazy()` that survives a chunk which never arrives.
- *
- * Two failure shapes have to be covered, because the dead graph produces
- * either: the request can REJECT (the server answers 504 for the stale dep
- * hash) or it can simply never settle. Only racing a timer catches the second.
- *
- * When recovery is possible the promise stays PENDING on purpose, so React
- * keeps showing the loading state for the fraction of a second before the
- * reload lands, instead of flashing an error card on the way out.
- */
-function lazyRoute<P extends object>(
-  loader: () => Promise<{ default: ComponentType<P> }>,
-  name: string,
-) {
-  return lazy(() =>
-    Promise.race([
-      loader(),
-      new Promise<never>((_, reject) => {
-        setTimeout(
-          () => reject(new Error(`Route "${name}" never loaded`)),
-          ROUTE_CHUNK_TIMEOUT_MS,
-        );
-      }),
-    ]).catch((error: unknown) => {
-      if (recoverFromDeadChunk()) return new Promise<never>(() => {});
-      throw error;
-    }),
-  );
-}
-
-// Lazy load route components for better code splitting
-const Landing = lazyRoute(() => import("./pages/Landing.tsx"), "Landing");
-// A shared track link lands here and plays the song. Public, so the link works
-// for someone who has never signed in — RequireAuth redirects them to /auth
-// with this path preserved as `returnTo` and returns them afterwards.
-const TrackLink = lazyRoute(() => import("./pages/TrackLink.tsx"), "TrackLink");
-const AuthPage = lazyRoute(() => import("./pages/Auth.tsx"), "Auth");
-// AppShell (which owns PlayerBar / QueuePanel / FullscreenPlayer) is imported
-// eagerly so the player UI is NEVER unmounted during lazy page-chunk loads.
 import AppShell from "./components/layout/AppShell.tsx";
-const Home = lazyRoute(() => import("./pages/Home.tsx"), "Home");
-const Search = lazyRoute(() => import("./pages/Search.tsx"), "Search");
-const Artist = lazyRoute(() => import("./pages/Artist.tsx"), "Artist");
-const Album = lazyRoute(() => import("./pages/Album.tsx"), "Album");
-const Liked = lazyRoute(() => import("./pages/Liked.tsx"), "Liked");
-const Playlists = lazyRoute(() => import("./pages/Playlists.tsx"), "Playlists");
-const PlaylistDetail = lazyRoute(
-  () => import("./pages/PlaylistDetail.tsx"),
-  "PlaylistDetail",
-);
-const Admin = lazyRoute(() => import("./pages/Admin.tsx"), "Admin");
-const Stats = lazyRoute(() => import("./pages/Stats.tsx"), "Stats");
-const Recent = lazyRoute(() => import("./pages/Recent.tsx"), "Recent");
-const Social = lazyRoute(() => import("./pages/Social.tsx"), "Social");
-const Profile = lazyRoute(() => import("./pages/Profile.tsx"), "Profile");
-const Settings = lazyRoute(() => import("./pages/Settings.tsx"), "Settings");
-const NotFound = lazyRoute(() => import("./pages/NotFound.tsx"), "NotFound");
+import Landing from "./pages/Landing.tsx";
+import AuthPage from "./pages/Auth.tsx";
+import TrackLink from "./pages/TrackLink.tsx";
+import Home from "./pages/Home.tsx";
+import Search from "./pages/Search.tsx";
+import Artist from "./pages/Artist.tsx";
+import Album from "./pages/Album.tsx";
+import Liked from "./pages/Liked.tsx";
+import Playlists from "./pages/Playlists.tsx";
+import PlaylistDetail from "./pages/PlaylistDetail.tsx";
+import Admin from "./pages/Admin.tsx";
+import Stats from "./pages/Stats.tsx";
+import Recent from "./pages/Recent.tsx";
+import Social from "./pages/Social.tsx";
+import Profile from "./pages/Profile.tsx";
+import Settings from "./pages/Settings.tsx";
+import NotFound from "./pages/NotFound.tsx";
 // Public information pages linked from the landing footer. They sit OUTSIDE
 // the RequireAuth group on purpose: a privacy notice or a support answer
 // shouldn't require an account to read.
-const Support = lazyRoute(() => import("./pages/Support.tsx"), "Support");
-const Privacy = lazyRoute(() => import("./pages/Privacy.tsx"), "Privacy");
-const Terms = lazyRoute(() => import("./pages/Terms.tsx"), "Terms");
+import Support from "./pages/Support.tsx";
+import Privacy from "./pages/Privacy.tsx";
+import Terms from "./pages/Terms.tsx";
 
 // Simple loading fallback for route transitions
 function RouteLoading() {
