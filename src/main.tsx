@@ -59,6 +59,8 @@ const AuthPage = lazy(() => import("./pages/Auth.tsx"));
 import AppShell from "./components/layout/AppShell.tsx";
 const Home = lazy(() => import("./pages/Home.tsx"));
 const Search = lazy(() => import("./pages/Search.tsx"));
+const Artist = lazy(() => import("./pages/Artist.tsx"));
+const Album = lazy(() => import("./pages/Album.tsx"));
 const Liked = lazy(() => import("./pages/Liked.tsx"));
 const Playlists = lazy(() => import("./pages/Playlists.tsx"));
 const PlaylistDetail = lazy(() => import("./pages/PlaylistDetail.tsx"));
@@ -249,6 +251,22 @@ createRoot(document.getElementById("root")!).render(
                     element={
                       <PageSuspense>
                         <Search />
+                      </PageSuspense>
+                    }
+                  />
+                  <Route
+                    path="/artist/:artist"
+                    element={
+                      <PageSuspense>
+                        <Artist />
+                      </PageSuspense>
+                    }
+                  />
+                  <Route
+                    path="/album/:artist/:album"
+                    element={
+                      <PageSuspense>
+                        <Album />
                       </PageSuspense>
                     }
                   />

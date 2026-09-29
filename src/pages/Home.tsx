@@ -1,4 +1,5 @@
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
+import { artistPath } from "@/lib/artistLinks";
 import { PlaylistCard } from "@/components/playlists/PlaylistCard";
 import { MediaCard } from "@/components/tracks/MediaCard";
 import { Shelf } from "@/components/core/shelf";
@@ -122,6 +123,7 @@ function markDiscoveryRefreshed() {
 }
 
 export default function Home() {
+  const navigate = useNavigate();
   const playTrack = usePlayerStore((s) => s.playTrack);
   const playListOrdered = usePlayerStore((s) => s.playListOrdered);
   const setQueueOpen = usePlayerStore((s) => s.setQueueOpen);
@@ -901,10 +903,9 @@ export default function Home() {
                   thumbnail: "",
                 }
               }
-              onOpen={() => {
-                const first = items[0];
-                if (first) playShelf(first);
-              }}
+              // An artist card opens the artist. Playing the top track is
+              // still one tap away, from the page it lands on.
+              onOpen={() => navigate(artistPath(artist) ?? "/search")}
               meta={`${items.length} ${items.length === 1 ? "play" : "plays"}`}
             />
           ))}

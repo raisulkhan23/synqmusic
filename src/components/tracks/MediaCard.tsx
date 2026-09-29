@@ -1,8 +1,10 @@
 import { TrackActionsMenu } from "@/components/tracks/useTrackActions";
+import { albumPath, artistPath } from "@/lib/artistLinks";
 import { cn } from "@/lib/utils";
 import { cleanArtistName, cleanTrackTitle, type YtItem } from "@/lib/youtube";
 import { usePlayerStore } from "@/store/player";
 import { ListMusic, Loader2, Pause, Play } from "lucide-react";
+import { Link, useNavigate } from "react-router";
 import type { ReactNode } from "react";
 
 /**
@@ -46,9 +48,19 @@ export function MediaCard({
   resolving?: boolean;
   menuItems?: ReactNode;
 }) {
+  const navigate = useNavigate();
   const currentId = usePlayerStore((s) => s.current?.id);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const isCurrent = currentId === item.id && onPlay !== undefined;
+
+  // A track's artist and album have real pages now. Navigating beats dropping
+  // the listener on a search box, and it costs nothing for the rows that have
+  // no album to link to — the helper returns null and the line is a plain span.
+  const artistHref = variant === "artist" ? null : artistPath(item.artist);
+  const albumHref =
+    variant === "song" && item.album
+      ? albumPath(item.artist, item.album)
+      : null;
 
   const title =
     variant === "artist"
@@ -164,8 +176,29 @@ export function MediaCard({
               {title}
             </p>
             <p className="mt-0.5 truncate text-xs text-muted-foreground">
-              {subtitle}
+              {artistHref && variant !== "artist" ? (
+                <ArtistLink
+                  href={artistHref}
+                  stop={onOpen}
+                  onNavigate={() => onOpen()}
+                >
+                  {subtitle}
+                </ArtistLink>
+              ) : (
+                subtitle
+              )}
             </p>
+            {albumHref ? (
+              <p className="mt-0.5 truncate text-[11px] text-muted-foreground/80">
+                <ArtistLink
+                  href={albumHref}
+                  stop={onOpen}
+                  onNavigate={() => onOpen()}
+                >
+                  {item.album}
+                </ArtistLink>
+              </p>
+            ) : null}
             {meta ? (
               <p className="mt-0.5 truncate text-[11px] text-muted-foreground/80">
                 {meta}
@@ -193,6 +226,49 @@ export function MediaCard({
         </div>
       ) : null}
     </article>
+  );
+}
+
+/**
+ * A quiet inline link inside a card.
+ *
+ * The card itself is a button that plays, so the link has to stop the click
+ * from also starting playback. The fallback handler exists for the rare case
+ * where navigation does not take the browser out of the page (a modified
+ * click, an in-app router edge): the card's own action still runs, so the tap
+ * is never swallowed.
+ */
+function ArtistLink({
+  href,
+  children,
+  stop,
+  onNavigate,
+}: {
+  href: string;
+  children: ReactNode;
+  stop: () => void;
+  onNavigate: () => void;
+}) {
+  return (
+    <Link
+      to={href}
+      onClick={(event) => {
+        event.stopPropagation();
+        stop();
+        // Let the router navigate; if it does not, fall back to the card.
+        setTimeout(onNavigate, 0);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.stopPropagation();
+          stop();
+          setTimeout(onNavigate, 0);
+        }
+      }}
+      className="underline-offset-2 transition-colors hover:text-foreground hover:underline focus-visible:underline focus-visible:outline-none"
+    >
+      {children}
+    </Link>
   );
 }
 
