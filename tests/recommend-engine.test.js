@@ -522,6 +522,7 @@ describe("every score is explainable", () => {
     }).score;
     const sum =
       s.artistAffinity * WEIGHTS.artistAffinity +
+      s.familiarityAdjustment * WEIGHTS.artistAffinity +
       s.likeScore * WEIGHTS.likeScore +
       s.historyScore * WEIGHTS.historyScore +
       s.recencyScore * WEIGHTS.recencyScore +

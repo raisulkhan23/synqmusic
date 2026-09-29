@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { CardTransparencySection } from "@/components/settings/CardTransparencySection";
+import { ExplorationSection } from "@/components/settings/ExplorationSection";
 import { ImportSection } from "@/components/settings/ImportSection";
 import {
   Dialog,
@@ -1937,6 +1938,11 @@ export function SettingsDialog({
           </div>
 
           <CardTransparencySection />
+
+          {/* Recommendations. Sits with the other listening controls rather
+              than buried under playback, because it changes what the app
+              PROPOSES, not how it sounds. */}
+          <ExplorationSection />
 
           <ToggleRow
             label="Low-memory wallpaper previews"

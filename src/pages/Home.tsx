@@ -144,10 +144,14 @@ export default function Home() {
   // because a broken recommendation must never look like a broken app.
   const forYou = useAction(api.recommend.forYou);
   const recordFeedback = useMutation(api.recommend.recordFeedback);
+  const exploration = usePlayerStore((s) => s.exploration);
   const [recoSections, setRecoSections] = useState<RecoSection[] | null>(null);
   useEffect(() => {
     let cancelled = false;
-    withTimeout(forYou({}), DISCOVERY_REQUEST_TIMEOUT_MS)
+    // The exploration preference is part of the request, so moving the slider
+    // re-ranks immediately — but only for a listener who actually has shelves
+    // to re-rank.
+    withTimeout(forYou({ exploration }), DISCOVERY_REQUEST_TIMEOUT_MS)
       .then(({ sections }) => {
         if (!cancelled) setRecoSections(sections);
       })
@@ -157,7 +161,7 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [forYou, remoteRefreshToken]);
+  }, [forYou, exploration, remoteRefreshToken]);
 
   /**
    * Play a recommended track, tagging it so the engine learns from the outcome.

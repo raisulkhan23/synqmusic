@@ -27,6 +27,7 @@ import {
 } from "@/lib/cardTransparency";
 import { toPlayableYoutube, type Playable } from "@/lib/playable";
 import type { RecoCandidate } from "@/lib/recommend";
+import { DEFAULT_EXPLORATION } from "@/lib/recommend";
 import * as ytEngine from "@/lib/youtubePlayer";
 import {
   cacheStream,
@@ -584,6 +585,12 @@ interface PlayerStore {
   /** Turn shuffle on without cycling, for the page-level shuffle actions. */
   startShuffle: () => void;
   toggleSmartShuffle: () => void;
+  /**
+   * How adventurous recommendations should be, 0..100. 0 stays inside what
+   * the listener already plays; 100 pushes unfamiliar music harder.
+   */
+  exploration: number;
+  setExploration: (value: number) => void;
   cycleRepeat: () => void;
   setRate: (rate: number) => void;
   setAudioFilter: (id: AudioFilterId) => void;
@@ -776,6 +783,27 @@ const initialVolume = Math.min(1, Math.max(0, readNum("ss.volume", 0.8)));
 const initialMuted = readBool("ss.muted", false);
 const initialShuffle = readBool("ss.shuffle", false);
 const initialSmartShuffle = readBool("ss.smartShuffle", false);
+
+/**
+ * Discovery-vs-familiarity preference for recommendations, 0..100.
+ *
+ * Stored on the device rather than in the database: it is a listening
+ * preference, not listening history, and there is no reason to copy it to a
+ * server. `DEFAULT_EXPLORATION` is the balanced position, which is also what a
+ * listener who never touches the slider gets.
+ */
+const EXPLORATION_KEY = "ss.exploration";
+const initialExploration = readExploration();
+
+function readExploration(): number {
+  try {
+    const raw = Number(window.localStorage.getItem(EXPLORATION_KEY));
+    if (!Number.isFinite(raw)) return DEFAULT_EXPLORATION;
+    return Math.min(100, Math.max(0, Math.round(raw)));
+  } catch {
+    return DEFAULT_EXPLORATION;
+  }
+}
 const initialIntroTrim = readBool("ss.introTrim", false);
 // Validated rather than cast: the repeat button shows itself as ACTIVE for
 // any value other than "off", while `handleEnded` only ever acts on the exact
@@ -1191,6 +1219,10 @@ async function fetchPersonalNext(
       },
       autoplay: true,
       limit: 1,
+      // Autoplay honours the same discovery-vs-familiarity preference as the
+      // Home shelves, so "what plays next" can never quietly disagree with what
+      // the listener was just shown.
+      exploration: usePlayerStore.getState().exploration,
     }) as Promise<{ track: RecoCandidate | null }>;
 
     const result = await Promise.race([
@@ -3181,6 +3213,14 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     muted: initialMuted,
     shuffle: initialShuffle,
     smartShuffle: initialSmartShuffle,
+    exploration: initialExploration,
+    setExploration: (value) => {
+      const next = Number.isFinite(value)
+        ? Math.min(100, Math.max(0, Math.round(value)))
+        : DEFAULT_EXPLORATION;
+      writeSetting(EXPLORATION_KEY, String(next));
+      set({ exploration: next });
+    },
     introTrim: initialIntroTrim,
     introTrimSkipped: null,
     unshuffledQueue: null,

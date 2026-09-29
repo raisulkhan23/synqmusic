@@ -23,6 +23,7 @@ import { api } from "./_generated/api";
 import {
   buildSeeds,
   buildSignals,
+  buildTuning,
   explainCandidate,
   pickNextTrack,
   rankCandidates,
@@ -33,6 +34,8 @@ import {
   type RecoCandidate,
   type RecoReason,
   type Signals,
+  type Tuning,
+  DEFAULT_EXPLORATION,
   type UserSignals,
 } from "../lib/recommend";
 import type { YtItem } from "./youtube";
@@ -43,8 +46,22 @@ import type { YtItem } from "./youtube";
 
 /** How long a Home payload may be reused before it is recomputed. */
 const CACHE_TTL_MS = 10 * 60 * 1000;
-/** Bumped whenever scoring or candidate generation changes shape. */
-const CACHE_KEY = "home:v1";
+/**
+ * Cache identity for a Home payload.
+ *
+ * The discovery-vs-familiarity preference is PART of the key, bucketed rather
+ * than exact. Without this, moving the slider would keep serving the payload
+ * that was cached for the old setting — the control would look broken for ten
+ * minutes. Bucketing to 20 keeps the cache small (six entries at most) while
+ * still feeling immediate.
+ */
+function cacheKeyFor(exploration: number | undefined): string {
+  const value =
+    typeof exploration === "number" && Number.isFinite(exploration)
+      ? Math.min(100, Math.max(0, exploration))
+      : DEFAULT_EXPLORATION;
+  return `home:v1:${Math.round(value / 20)}`;
+}
 /** Hard ceilings on read volume, so a heavy listener cannot blow the budget. */
 const MAX_SIGNAL_ROWS = 200;
 const MAX_LIKES = 100;
@@ -444,6 +461,7 @@ function buildSections(
   now: number,
   recentPlays: Array<{ trackId: string; at: number }>,
   excludeIds: Set<string>,
+  tuning: Tuning,
 ): SectionPayload[] {
   const sections: SectionPayload[] = [];
   // Tracks already shown in an earlier row are excluded from later rows, so a
@@ -473,6 +491,7 @@ function buildSections(
             seedByTrackId: pool.seedByTrackId,
             maxPerArtist: 2,
             maxPerAlbum: 3,
+            tuning,
           });
 
     for (const entry of ranked) usedIds.add(entry.track.id);
@@ -506,16 +525,26 @@ function buildSections(
  * must keep working when an upstream search or the cache is down.
  */
 export const forYou = action({
-  args: { force: v.optional(v.boolean()) },
+  args: {
+    force: v.optional(v.boolean()),
+    /**
+     * The listener's discovery-vs-familiarity preference, 0..100. It is a
+     * device-local setting, so it travels with the request rather than living
+     * in the database — nothing about a private preference is stored server
+     * side.
+     */
+    exploration: v.optional(v.number()),
+  },
   handler: async (ctx, args): Promise<ForYouPayload> => {
     const userId = await getAuthUserId(ctx);
     const now = Date.now();
+    const cacheKey = cacheKeyFor(args.exploration);
 
     // ---- cache ------------------------------------------------------
     if (userId && !args.force) {
       try {
         const hit = await ctx.runQuery(api.recommend.cacheGet, {
-          key: CACHE_KEY,
+          key: cacheKey,
         });
         if (hit) return hit as ForYouPayload;
       } catch {
@@ -532,11 +561,15 @@ export const forYou = action({
       userSignals = EMPTY_SIGNALS;
     }
 
+    const tuning = buildTuning(args.exploration);
     const built = buildSignals(userSignals, now);
     const eligible = sectionEligibility(built, userSignals);
 
     // ---- candidates -------------------------------------------------
-    const seeds = buildSeeds(built, userSignals, { maxSeeds: MAX_SEEDS });
+    const seeds = buildSeeds(built, userSignals, {
+      maxSeeds: MAX_SEEDS,
+      tuning,
+    });
     const recentPlays: Array<{ trackId: string; at: number }> = [];
     try {
       const times = await ctx.runQuery(api.recommend.recentPlayTimes, {});
@@ -594,13 +627,14 @@ export const forYou = action({
         now,
         recentPlays,
         excludeIds,
+        tuning,
       ),
     };
 
     if (userId) {
       try {
         await ctx.runMutation(api.recommend.cachePut, {
-          key: CACHE_KEY,
+          key: cacheKey,
           payload,
         });
       } catch {
@@ -706,6 +740,8 @@ export const nextTrack = action({
     autoplay: v.optional(v.boolean()),
     /** > 1 returns a ranked list for the smart future queue. */
     limit: v.optional(v.number()),
+    /** The listener's discovery-vs-familiarity preference, 0..100. */
+    exploration: v.optional(v.number()),
   },
   handler: async (ctx, args): Promise<NextTrackPayload> => {
     const now = Date.now();
@@ -713,11 +749,15 @@ export const nextTrack = action({
       const excludeIds = new Set<string>(args.queueIds);
       const userSignals =
         (await ctx.runQuery(api.recommend.signals, {})) ?? EMPTY_SIGNALS;
+      // The SAME tuning the Home shelves use: "what plays next" must not
+      // quietly disagree with what the listener was just shown.
+      const tuning = buildTuning(args.exploration);
       const built = buildSignals(userSignals, now);
       const current = args.currentTrack ?? null;
       const seeds = buildSeeds(built, userSignals, {
         maxSeeds: MAX_SEEDS,
         currentTrack: current,
+        tuning,
       });
       const pool = await resolvePool(ctx, seeds, excludeIds);
       if (pool.items.length === 0) return NOTHING;
@@ -743,6 +783,7 @@ export const nextTrack = action({
               seedByTrackId: pool.seedByTrackId,
               maxPerArtist: 2,
               maxPerAlbum: 3,
+              tuning,
             })[0] ?? null)
           : pickNextTrack(pool.items, built, pool.seeds, {
               now,
@@ -754,6 +795,7 @@ export const nextTrack = action({
               seedByTrackId: pool.seedByTrackId,
               maxPerArtist: 2,
               maxPerAlbum: 3,
+              tuning,
             });
 
       if (!best) return NOTHING;
@@ -892,15 +934,20 @@ export const recordRemoval = mutation({
  * that caused it. Not surfaced in the product UI.
  */
 export const explain = action({
-  args: { candidate: candidateValidator },
+  args: {
+    candidate: candidateValidator,
+    exploration: v.optional(v.number()),
+  },
   handler: async (ctx, args) => {
     const now = Date.now();
     const userSignals =
       (await ctx.runQuery(api.recommend.signals, {})) ?? EMPTY_SIGNALS;
+    const tuning = buildTuning(args.exploration);
     const built = buildSignals(userSignals, now);
     const seeds = buildSeeds(built, userSignals, {
       maxSeeds: MAX_SEEDS,
       currentTrack: args.candidate,
+      tuning,
     });
 
     let recentPlays: Array<{ trackId: string; at: number }> = [];
@@ -923,6 +970,7 @@ export const explain = action({
       now,
       recentPlays: new Map(recentPlays.map((e) => [e.trackId, e.at])),
       duplicate: false,
+      tuning,
     });
 
     return {
@@ -933,6 +981,7 @@ export const explain = action({
       explanation: explainCandidate(scored),
       personalised: built.personalised,
       artistCount: built.artistCount,
+      tuning,
       seeds: seeds.map((s) => ({
         query: s.query,
         source: s.source,

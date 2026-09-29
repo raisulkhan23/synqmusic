@@ -107,6 +107,13 @@ export interface ScoreBreakdown {
   completionScore: number;
   playlistScore: number;
   discoveryScore: number;
+  /**
+   * The shift the listener's exploration preference applied to artist
+   * affinity: negative when they asked to explore, positive when they asked to
+   * stay close. Kept separate from `artistAffinity` so the raw affinity stays
+   * visible and the slider's effect is auditable on its own.
+   */
+  familiarityAdjustment: number;
   skipPenalty: number;
   recentPlayPenalty: number;
   duplicatePenalty: number;
@@ -144,6 +151,8 @@ export interface RankOptions {
   artistRepeatLimit?: number;
   /** Cap on how many candidates the pipeline will consider. */
   candidateCap?: number;
+  /** Exploration preference. Omit for the balanced default. */
+  tuning?: Tuning;
   /**
    * Seed that actually produced each candidate, when the caller already knows
    * (the Convex action fetched "<artist> songs" and can therefore say exactly
@@ -182,6 +191,67 @@ export const EARLY_SKIP_SECONDS = 12;
 export const COMPLETION_COMPLETE = 0.7;
 /** Below this a track is unheard, above it is a full listen. */
 export const DISCOVERY_FLOOR = 0.02;
+
+// ---------------------------------------------------------------------------
+// Exploration tuning
+// ---------------------------------------------------------------------------
+
+/**
+ * How adventurous the listener wants their recommendations to be.
+ *
+ * 0 = stay inside what they already play; 100 = push unfamiliar music at them
+ * as hard as the rest of their taste allows. The midpoint is the un-tuned
+ * default, and the whole default profile below is expressed as a function of
+ * it — so "no preference expressed" and "balanced" are the same code path, not
+ * two behaviours that can drift apart.
+ */
+export const DEFAULT_EXPLORATION = 50;
+
+/** What the engine does differently at each end of the slider. */
+export interface Tuning {
+  /** The listener's stated setting, 0..100. */
+  exploration: number;
+  /** 0..1 multiplier for a candidate from an artist they already know. */
+  familiarityBonus: number;
+  /** 0..1 multiplier for a candidate from an artist they have never played. */
+  discoveryBonus: number;
+  /** How many of the candidate seeds are spent on discovery. */
+  discoverySeeds: number;
+  /** Penalty per repeat of the same artist; higher when exploring. */
+  diversityPerRepeat: number;
+}
+
+/**
+ * Derive the tuning profile from a 0..100 setting.
+ *
+ * Bounds matter here: the discovery bonus is only worth anything while there
+ * is still taste to be near, and the familiarity bonus has to keep a floor so
+ * that turning the slider all the way up cannot reduce the app to pure noise.
+ * A listener who asks for discovery still gets music related to them, and one
+ * who asks for comfort still gets some.
+ */
+export function buildTuning(exploration: number | undefined | null): Tuning {
+  const raw =
+    typeof exploration === "number" && Number.isFinite(exploration)
+      ? exploration
+      : DEFAULT_EXPLORATION;
+  const value = Math.min(100, Math.max(0, raw));
+  // 0 at pure familiarity, 1 at pure discovery.
+  const lean = value / 100;
+  return {
+    exploration: value,
+    // Neither end is ever fully switched off: a listener asking for
+    // discovery still wants it to be reachable FROM their taste, and one
+    // asking for comfort should still be offered something occasionally new.
+    familiarityBonus: 1 - 0.65 * lean,
+    discoveryBonus: 0.55 + 1.55 * lean,
+    discoverySeeds: Math.round(1 + 2 * lean),
+    diversityPerRepeat: -0.1 - 0.12 * lean,
+  };
+}
+
+/** The tuning used when a caller expresses no preference. */
+export const DEFAULT_TUNING: Tuning = buildTuning(DEFAULT_EXPLORATION);
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -460,10 +530,27 @@ export interface CandidateSeed {
 export function buildSeeds(
   signals: Signals,
   userSignals: UserSignals,
-  options: { maxSeeds?: number; currentTrack?: RecoCandidate | null } = {},
+  options: {
+    maxSeeds?: number;
+    currentTrack?: RecoCandidate | null;
+    /** Exploration preference. Omit for the balanced default. */
+    tuning?: Tuning;
+  } = {},
 ): CandidateSeed[] {
   const maxSeeds = options.maxSeeds ?? 6;
+  const tuning = options.tuning ?? DEFAULT_TUNING;
   const seeds: CandidateSeed[] = [];
+
+  // How many slots discovery is entitled to, decided up front.
+  //
+  // These used to be appended after every other seed with a
+  // `seeds.length >= maxSeeds` guard, which meant that whenever the earlier
+  // loops filled the budget — i.e. any listener with more than a handful of
+  // artists — the discovery seed was NEVER reached. The engine advertised a
+  // discovery source that could not fire.
+  const wanted = Math.max(1, Math.min(tuning.discoverySeeds, maxSeeds));
+  // Seeds available for everything else, so discovery always has room.
+  const familiarBudget = Math.max(1, maxSeeds - wanted);
 
   if (!signals.personalised) {
     // Cold start: there is nothing to personalise from, so ask for broadly
@@ -486,7 +573,7 @@ export function buildSeeds(
 
   // Liked artists lead: a like is the most deliberate signal available.
   for (const profile of ranked) {
-    if (seeds.length >= maxSeeds) break;
+    if (seeds.length >= familiarBudget) break;
     if (profile.likes > 0) {
       seeds.push({
         query: `${profile.display} songs`,
@@ -521,7 +608,7 @@ export function buildSeeds(
 
   // Frequently played artists.
   for (const profile of ranked) {
-    if (seeds.length >= maxSeeds) break;
+    if (seeds.length >= familiarBudget) break;
     if (profile.plays > 0) {
       seeds.push({
         query: `${profile.display} songs`,
@@ -535,7 +622,7 @@ export function buildSeeds(
 
   // Playlist-derived artists, which carry a different kind of intent.
   for (const playlist of userSignals.playlists) {
-    if (seeds.length >= maxSeeds) break;
+    if (seeds.length >= familiarBudget) break;
     const artist = playlist.tracks[0]?.artistName;
     if (artist) {
       seeds.push({
@@ -548,16 +635,23 @@ export function buildSeeds(
     }
   }
 
-  // Always keep one discovery seed, so the listener keeps meeting new music
-  // instead of collapsing into an ever-narrower loop.
-  if (seeds.length < maxSeeds && ranked.length > 0) {
+  // Always keep discovery in the mix, so the listener keeps meeting new music
+  // instead of collapsing into an ever-narrower loop. How MANY discovery seeds
+  // get spent is the listener's stated preference — but never zero, because a
+  // pure-familiarity setting that never proposes anything new is exactly the
+  // feedback loop this engine exists to avoid.
+  let discoveryAdded = 0;
+  for (const profile of ranked) {
+    if (seeds.length >= maxSeeds) break;
+    if (discoveryAdded >= wanted) break;
     seeds.push({
-      query: `new songs like ${ranked[0].display}`,
+      query: `new songs like ${profile.display}`,
       source: "discovery",
       weight: 0.5,
-      seed: `discovery:${ranked[0].key}`,
+      seed: `discovery:${profile.key}`,
       reason: "discovery",
     });
+    discoveryAdded += 1;
   }
 
   return seeds;
@@ -588,8 +682,11 @@ export function scoreCandidate(
     recentPlays: Map<string, number>;
     duplicate: boolean;
     currentTrackId?: string | null;
+    /** Exploration preference. Omit for the balanced default. */
+    tuning?: Tuning;
   },
 ): ScoredCandidate {
+  const tuning = context.tuning ?? DEFAULT_TUNING;
   const key = artistKey(candidate.artist);
   const profile = key ? signals.artists.get(key) : undefined;
 
@@ -630,10 +727,17 @@ export function scoreCandidate(
   // Playlist term: the artist appears in one of the listener's own playlists.
   const playlistScore = source.source === "playlist" ? 0.8 : 0;
 
-  // Discovery: unknown artists get a small bonus so the list is not entirely
-  // made of things already in the listener's history.
+  // Discovery: unknown artists get a bonus so the list is not entirely made of
+  // things already in the listener's history. Its size is the listener's stated
+  // exploration preference, scaled by the tuning profile.
   const isKnown = signals.knownTracks.has(candidate.id) || Boolean(profile);
-  const discoveryScore = isKnown ? 0 : 0.6;
+  const discoveryScore = isKnown ? 0 : 0.6 * tuning.discoveryBonus;
+
+  // Familiarity: a listener who asked to stay close to their taste gets a
+  // nudge toward artists they already play. This is a MULTIPLIER on the real
+  // affinity signal above, never a substitute for it — an unknown artist earns
+  // nothing here, so the slider cannot invent a connection that does not exist.
+  const familiarityAdjustment = artistAffinity * (tuning.familiarityBonus - 1);
 
   // Skip penalty scales with how many times this exact track was skipped and
   // with artist-level skips, so one skip is small and a pattern is not.
@@ -653,6 +757,7 @@ export function scoreCandidate(
 
   const finalScore =
     artistAffinity * WEIGHTS.artistAffinity +
+    familiarityAdjustment * WEIGHTS.artistAffinity +
     likeScore * WEIGHTS.likeScore +
     historyScore * WEIGHTS.historyScore +
     recencyScore * WEIGHTS.recencyScore +
@@ -671,6 +776,7 @@ export function scoreCandidate(
     completionScore,
     playlistScore,
     discoveryScore,
+    familiarityAdjustment,
     skipPenalty,
     recentPlayPenalty,
     duplicatePenalty,
@@ -795,10 +901,16 @@ export function wasPlayedRecently(
  */
 export function applyDiversity(
   scored: ScoredCandidate[],
-  options: { maxPerArtist?: number; maxPerAlbum?: number } = {},
+  options: {
+    maxPerArtist?: number;
+    maxPerAlbum?: number;
+    /** Exploration preference; a higher value pushes harder against repeats. */
+    tuning?: Tuning;
+  } = {},
 ): ScoredCandidate[] {
   const maxPerArtist = options.maxPerArtist ?? 2;
   const maxPerAlbum = options.maxPerAlbum ?? 3;
+  const tuning = options.tuning ?? DEFAULT_TUNING;
 
   const remaining = [...scored];
   const accepted: ScoredCandidate[] = [];
@@ -821,7 +933,7 @@ export function applyDiversity(
       if (artist && seen >= maxPerArtist) continue;
       if (album >= maxPerAlbum) continue;
 
-      const penalty = seen * WEIGHTS.diversityPerRepeat + album * 0.04;
+      const penalty = seen * tuning.diversityPerRepeat + album * 0.04;
       const adjusted = candidate.score.finalScore + penalty;
       if (adjusted > bestScore) {
         bestScore = adjusted;
@@ -918,6 +1030,7 @@ export function rankCandidates(
       recentPlays,
       duplicate: false,
       currentTrackId: options.currentTrackId,
+      tuning: options.tuning,
     });
     result.reason = reasonFor(result);
     scored.push(result);
@@ -929,6 +1042,7 @@ export function rankCandidates(
   return applyDiversity(scored, {
     maxPerArtist: options.maxPerArtist ?? 2,
     maxPerAlbum: options.maxPerAlbum ?? 3,
+    tuning: options.tuning,
   }).slice(0, limit);
 }
 
@@ -1005,6 +1119,11 @@ export function explainCandidate(scored: ScoredCandidate): string {
   add("Completion", s.completionScore * WEIGHTS.completionScore);
   add("Playlist", s.playlistScore * WEIGHTS.playlistScore);
   add("Discovery", s.discoveryScore * WEIGHTS.discoveryScore);
+  if (s.familiarityAdjustment)
+    add(
+      s.familiarityAdjustment >= 0 ? "Familiarity" : "Exploration",
+      s.familiarityAdjustment * WEIGHTS.artistAffinity,
+    );
   if (s.skipPenalty) add("Skip penalty", s.skipPenalty * WEIGHTS.skipPenalty);
   if (s.recentPlayPenalty)
     add("Recently played", s.recentPlayPenalty * WEIGHTS.recentPlayPenalty);
