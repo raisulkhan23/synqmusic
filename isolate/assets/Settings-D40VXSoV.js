@@ -1,0 +1,1 @@
+import{j as t}from"./framer-motion-8jxnAVD_.js";import{a9 as o}from"./index-CIjPcIPr.js";import"./react-vendor-Rf0X09uA.js";import"./radix-ui-DW5YICig.js";import"./charts-Dr-VVDTw.js";function a(){return t.jsx(o,{open:!0,pageMode:!0,onOpenChange:()=>{}})}export{a as default};
