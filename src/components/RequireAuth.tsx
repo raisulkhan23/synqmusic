@@ -18,7 +18,10 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   if (!isAuthenticated) {
     const returnTo = `${location.pathname}${location.search}`;
     return (
-      <Navigate to={`/auth?returnTo=${encodeURIComponent(returnTo)}`} replace />
+      <Navigate
+        to={`/auth?returnTo=${encodeURIComponent(returnTo)}`}
+        replace
+      />
     );
   }
 

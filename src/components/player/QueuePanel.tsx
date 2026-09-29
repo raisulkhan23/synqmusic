@@ -146,7 +146,7 @@ function QueueReorderRow({
             },
           });
         }}
-        className="shrink-0 rounded-[4px] p-1.5 text-muted-foreground/60 transition-colors hover:bg-white/10 hover:text-foreground"
+        className="shrink-0 rounded-full p-1.5 text-muted-foreground/60 transition-colors hover:bg-white/10 hover:text-foreground"
       >
         <X className="size-3.5" />
       </button>
@@ -319,7 +319,7 @@ export function QueuePanel() {
                 );
               }}
               className={cn(
-                "flex items-center gap-1 rounded-[4px] px-2 py-1 text-xs transition-colors",
+                "flex items-center gap-1 rounded-full px-2 py-1 text-xs transition-colors",
                 smartShuffle
                   ? "bg-[rgb(var(--tint)_/_0.15)] text-[rgb(var(--tint))]"
                   : "text-muted-foreground hover:bg-white/5 hover:text-foreground",
@@ -338,7 +338,7 @@ export function QueuePanel() {
                 toast(shuffle ? "Shuffle off" : "Shuffle on");
               }}
               className={cn(
-                "flex items-center gap-1 rounded-[4px] px-2 py-1 text-xs transition-colors",
+                "flex items-center gap-1 rounded-full px-2 py-1 text-xs transition-colors",
                 shuffle
                   ? "bg-[rgb(var(--tint)_/_0.15)] text-[rgb(var(--tint))]"
                   : "text-muted-foreground hover:bg-white/5 hover:text-foreground",
@@ -364,7 +364,7 @@ export function QueuePanel() {
                 );
               }}
               className={cn(
-                "flex items-center gap-1 rounded-[4px] px-2 py-1 text-xs transition-colors",
+                "flex items-center gap-1 rounded-full px-2 py-1 text-xs transition-colors",
                 autoplay
                   ? "bg-[rgb(var(--tint)_/_0.15)] text-[rgb(var(--tint))]"
                   : "text-muted-foreground hover:bg-white/5 hover:text-foreground",
@@ -380,7 +380,7 @@ export function QueuePanel() {
                 aria-label="Save queue as playlist"
                 title="Save queue as playlist"
                 onClick={() => void saveQueueAsPlaylist()}
-                className="flex items-center gap-1 rounded-[4px] px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+                className="flex items-center gap-1 rounded-full px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
               >
                 <Save className="size-3.5" />
                 Save
@@ -398,7 +398,7 @@ export function QueuePanel() {
                   shuffleUpcoming();
                   toast.success("Shuffled what's next");
                 }}
-                className="flex items-center gap-1 rounded-[4px] px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+                className="flex items-center gap-1 rounded-full px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
               >
                 <Shuffle className="size-3.5" />
               </button>
@@ -416,7 +416,7 @@ export function QueuePanel() {
                       : "No duplicates in the queue",
                   );
                 }}
-                className="flex items-center gap-1 rounded-[4px] px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+                className="flex items-center gap-1 rounded-full px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
               >
                 <CopyMinus className="size-3.5" />
               </button>
@@ -434,7 +434,7 @@ export function QueuePanel() {
                       : "Nothing played yet",
                   );
                 }}
-                className="flex items-center gap-1 rounded-[4px] px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+                className="flex items-center gap-1 rounded-full px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
               >
                 <Eraser className="size-3.5" />
               </button>
@@ -446,7 +446,7 @@ export function QueuePanel() {
                   clearQueue();
                   toast.success("Queue cleared");
                 }}
-                className="flex items-center gap-1 rounded-[4px] px-2 py-1 text-xs text-red-400/80 transition-colors hover:bg-red-500/10 hover:text-red-400"
+                className="flex items-center gap-1 rounded-full px-2 py-1 text-xs text-red-400/80 transition-colors hover:bg-red-500/10 hover:text-red-400"
               >
                 <Trash2 className="size-3.5" />
                 Clear
@@ -496,7 +496,7 @@ export function QueuePanel() {
                         else toast.error("Couldn't copy the link");
                       });
                     }}
-                    className="flex size-8 shrink-0 items-center justify-center rounded-[4px] border border-white/10 text-muted-foreground transition-colors hover:border-white/25 hover:text-foreground"
+                    className="flex size-8 shrink-0 items-center justify-center rounded-full border border-white/10 text-muted-foreground transition-colors hover:border-white/25 hover:text-foreground"
                   >
                     <Link2 className="size-3.5" />
                   </button>
@@ -583,7 +583,7 @@ export function QueuePanel() {
                         );
                         toast.success(`Added "${track.title}" to queue`);
                       }}
-                      className="shrink-0 rounded-[4px] p-1.5 text-muted-foreground/60 transition-colors hover:bg-white/10 hover:text-foreground"
+                      className="shrink-0 rounded-full p-1.5 text-muted-foreground/60 transition-colors hover:bg-white/10 hover:text-foreground"
                     >
                       <Plus className="size-4" />
                     </button>

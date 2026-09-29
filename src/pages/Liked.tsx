@@ -156,8 +156,8 @@ export default function Liked() {
         <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent opacity-70" />
         <div className="relative flex items-end gap-5">
           <div className="relative flex size-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-[#111b1b] shadow-2xl sm:size-32">
-            <span className="absolute -left-8 -top-8 size-24 rounded-[4px] bg-[rgb(var(--tint)/0.5)] blur-2xl" />
-            <span className="absolute -bottom-10 -right-6 size-28 rounded-[4px] bg-emerald-400/20 blur-2xl" />
+            <span className="absolute -left-8 -top-8 size-24 rounded-full bg-[rgb(var(--tint)/0.5)] blur-2xl" />
+            <span className="absolute -bottom-10 -right-6 size-28 rounded-full bg-emerald-400/20 blur-2xl" />
             <Heart className="relative z-10 size-12 text-[rgb(var(--tint))] sm:size-16" />
           </div>
           <div className="min-w-0">
@@ -185,7 +185,7 @@ export default function Liked() {
               type="button"
               onClick={playAll}
               disabled={resolvingRemoteId !== null}
-              className="flex shrink-0 items-center gap-2 rounded-[4px] bg-[rgb(var(--tint))] px-5 py-2.5 text-sm font-semibold text-black shadow-[0_8px_30px_rgb(var(--tint)/0.35)] transition-all hover:scale-[1.03] active:scale-95 disabled:opacity-60"
+              className="flex shrink-0 items-center gap-2 rounded-full bg-[rgb(var(--tint))] px-5 py-2.5 text-sm font-semibold text-black shadow-[0_8px_30px_rgb(var(--tint)/0.35)] transition-all hover:scale-[1.03] active:scale-95 disabled:opacity-60"
             >
               <Play className="size-4 fill-current" />
               Play all
@@ -194,7 +194,7 @@ export default function Liked() {
               type="button"
               onClick={shuffleAll}
               disabled={resolvingRemoteId !== null}
-              className="flex shrink-0 items-center gap-2 rounded-[4px] border border-white/15 bg-white/[0.05] px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-white/[0.1] disabled:opacity-60"
+              className="flex shrink-0 items-center gap-2 rounded-full border border-white/15 bg-white/[0.05] px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-white/[0.1] disabled:opacity-60"
             >
               {resolvingRemoteId !== null ? (
                 <Loader2 className="size-4 animate-spin" />
@@ -237,7 +237,7 @@ export default function Liked() {
           <button
             type="button"
             onClick={() => navigate("/search")}
-            className="mt-1 rounded-[4px] bg-[rgb(var(--tint))] px-5 py-2.5 text-sm font-semibold text-black shadow-[0_8px_30px_rgb(var(--tint)/0.35)] transition-transform hover:scale-[1.03]"
+            className="mt-1 rounded-full bg-[rgb(var(--tint))] px-5 py-2.5 text-sm font-semibold text-black shadow-[0_8px_30px_rgb(var(--tint)/0.35)] transition-transform hover:scale-[1.03]"
           >
             Find music
           </button>

@@ -34,10 +34,10 @@ export default function Support() {
             <>
               <p>
                 <strong>Nothing plays, or it stalls.</strong> SYNQ streams
-                through the official YouTube player. Very occasionally a video
-                is region-locked or the embed is disabled — the app detects that
-                and tries a direct stream instead. If a track never starts, skip
-                it; it will not block the rest of the queue.
+                through the official YouTube player. Very occasionally a
+                video is region-locked or the embed is disabled — the app
+                detects that and tries a direct stream instead. If a track
+                never starts, skip it; it will not block the rest of the queue.
               </p>
               <p>
                 <strong>The wrong song is playing.</strong> YouTube can
@@ -47,8 +47,8 @@ export default function Support() {
               </p>
               <p>
                 <strong>Repeat one loops but Next does nothing.</strong> Turn
-                repeat off first — with repeat one active, Next moves you out of
-                the loop into the next track.
+                repeat off first — with repeat one active, Next moves you out
+                of the loop into the next track.
               </p>
             </>
           ),
@@ -61,14 +61,14 @@ export default function Support() {
               <p>
                 The EQ, balance and sound presets in{" "}
                 <strong>Settings → Audio</strong> are real-time. They route
-                through a Web Audio graph, and because the YouTube player can't
-                be tapped by Web Audio, enabling any of them switches playback
-                to a resolved stream automatically.
+                through a Web Audio graph, and because the YouTube player
+                can't be tapped by Web Audio, enabling any of them switches
+                playback to a resolved stream automatically.
               </p>
               <p>
                 Sound effects are intentionally <strong>session-only</strong> —
-                they're never restored from storage, so you never get a surprise
-                Bass Boost on a song you didn't set it up for.
+                they're never restored from storage, so you never get a
+                surprise Bass Boost on a song you didn't set it up for.
               </p>
             </>
           ),
@@ -80,8 +80,8 @@ export default function Support() {
             <>
               <p>
                 Add to playlist from any row's <strong>···</strong> menu. The
-                picker warns you if the track is already in that playlist rather
-                than silently duplicating it.
+                picker warns you if the track is already in that playlist
+                rather than silently duplicating it.
               </p>
               <p>
                 Reordering the queue only moves the <em>upcoming</em> tracks —
@@ -120,8 +120,8 @@ export default function Support() {
           heading: "Still stuck?",
           body: (
             <p>
-              Try a hard refresh first — a stale tab is the most common cause of
-              a stuck player. If the problem survives that, open{" "}
+              Try a hard refresh first — a stale tab is the most common cause
+              of a stuck player. If the problem survives that, open{" "}
               <strong>Profile</strong> and use the in-app sign-out, then sign
               back in. Still stuck after that? It's worth reporting with the
               track name, since a single unavailable upload is usually the

@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@100;300;400;500;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
 @custom-variant dark (&:is(.dark *));
@@ -8,22 +8,22 @@
 @property --primary {
   syntax: "<color>";
   inherits: true;
-  initial-value: #699fff;
+  initial-value: oklch(0.872 0.21 127);
 }
 @property --ring {
   syntax: "<color>";
   inherits: true;
-  initial-value: rgb(105 159 255 / 60%);
+  initial-value: oklch(0.872 0.21 127 / 60%);
 }
 @property --brand {
   syntax: "<color>";
   inherits: true;
-  initial-value: #699fff;
+  initial-value: oklch(0.872 0.21 127);
 }
 @property --sidebar-primary {
   syntax: "<color>";
   inherits: true;
-  initial-value: #699fff;
+  initial-value: oklch(0.872 0.21 127);
 }
 
 /* DO NOT CHANGE */
@@ -65,208 +65,99 @@
   --color-sidebar-ring: var(--sidebar-ring);
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
-  --font-sans:
-    "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, sans-serif;
-  --font-display:
-    "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-    "Segoe UI", Roboto, sans-serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;  --font-display: "Space Grotesk", "Inter", ui-sans-serif, system-ui, sans-serif;
   /* Give shared UI controls a softer, more deliberate response than the
      Tailwind default while explicit duration utilities still win. */
   --default-transition-duration: 240ms;
   --default-transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* ===================================================================
-   SYNQ theme — "concert darkroom with neon blue signal".
-
-   A near-black gallery where album art and one cool accent do all the work,
-   and the chrome around them stays invisible. Definition comes from gray
-   scale shifts and inset hairlines, never from elevation: there is no shadow
-   stack, and no gradients on surfaces, buttons or cards.
-   =================================================================== */
-
+/* CHANGE VALUES FOR THEME */
 :root {
-  /* --- the stage ------------------------------------------------------- */
-  --color-obsidian: #121212; /* page background, hero stage */
-  --color-graphite: #303030; /* inputs, nested dark panels */
-  --color-mid-gray: #666666; /* hover tier, dividers */
-  --color-fog: #999999; /* muted labels, secondary UI */
-  --color-silver: #cccccc; /* hairline borders on dark */
-  --color-bone: #f2f2f2; /* the one inverted band */
-  --color-white: #ffffff; /* primary text + primary action */
-  --color-signal-blue: #699fff; /* the single chromatic signal */
+  --radius: 0.75rem;
+  --background: oklch(0.135 0.012 262);
+  --foreground: oklch(0.965 0.004 262);
+  --card: oklch(0.175 0.013 262);
+  --card-foreground: oklch(0.965 0.004 262);
+  --popover: oklch(0.19 0.014 262);
+  --popover-foreground: oklch(0.965 0.004 262);
+  --primary: oklch(0.872 0.21 127);
+  --primary-foreground: oklch(0.16 0.02 262);
+  --secondary: oklch(0.24 0.014 262);
+  --secondary-foreground: oklch(0.96 0.004 262);
+  --muted: oklch(0.22 0.012 262);
+  --muted-foreground: oklch(0.68 0.01 262);
+  --accent: oklch(0.25 0.014 262);
+  --accent-foreground: oklch(0.96 0.004 262);
+  --destructive: oklch(0.7 0.19 22);
+  --border: oklch(1 0 0 / 9%);
+  --input: oklch(1 0 0 / 12%);
+  --ring: oklch(0.872 0.21 127 / 60%);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.155 0.012 262);
+  --sidebar-foreground: oklch(0.9 0.005 262);
+  --sidebar-primary: oklch(0.872 0.21 127);
+  --sidebar-primary-foreground: oklch(0.16 0.02 262);
+  --sidebar-accent: oklch(0.24 0.014 262);
+  --sidebar-accent-foreground: oklch(0.96 0.004 262);
+  --sidebar-border: oklch(1 0 0 / 8%);
+  --sidebar-ring: oklch(0.872 0.21 127 / 50%);
 
-  /* --- typography scale ------------------------------------------------ */
-  --text-caption: 12px;
-  --leading-caption: 1.41;
-  --text-body-sm: 14px;
-  --leading-body-sm: 1.43;
-  --text-body: 17px;
-  --leading-body: 1.41;
-  --text-subheading: 22px;
-  --leading-subheading: 1.27;
-  --text-heading-sm: 28px;
-  --leading-heading-sm: 1.29;
-  --text-heading: 36px;
-  --leading-heading: 1.33;
-  --text-display: 60px;
-  --leading-display: 1;
+  /* SYNQ brand accent (the "signal lime") */
+  --brand: oklch(0.872 0.21 127);
+  --brand-foreground: oklch(0.16 0.02 262);
 
-  /* --- layout ---------------------------------------------------------- */
-  --page-max-width: 1200px;
-  --section-gap: 64px;
-  --card-padding: 16px;
-  --element-gap: 8px;
+  /* dynamic album-art tint (overridden by the player); default = brand lime */
+  --tint: 203 244 143;
 
-  /* --- the only shadow in the system ----------------------------------- */
-  --shadow-subtle: rgb(18 18 18 / 0.1) 0 0 0 1px inset;
-
-  /* ---------------------------------------------------------------------
-     Semantic aliases. These are the names the components already use, so
-     the rest of the app re-skins from this one block.
-     --------------------------------------------------------------------- */
-  --background: var(--color-obsidian);
-  --foreground: var(--color-white);
-  --card: var(--color-graphite);
-  --card-foreground: var(--color-white);
-  --popover: var(--color-graphite);
-  --popover-foreground: var(--color-white);
-
-  /* The action colour is WHITE. The signal blue is for inline links and
-     accent strokes only — never a button fill. */
-  --primary: var(--color-white);
-  --primary-foreground: var(--color-obsidian);
-  --secondary: var(--color-mid-gray);
-  --secondary-foreground: var(--color-white);
-  --muted: #242424;
-  --muted-foreground: var(--color-fog);
-  --accent: #2a2a2a;
-  --accent-foreground: var(--color-white);
-  --destructive: #ff5c5c;
-
-  /* Definition comes from hairlines, not elevation. */
-  --border: rgb(204 204 204 / 0.14);
-  --input: rgb(204 204 204 / 0.1);
-  --ring: rgb(105 159 255 / 0.6);
-
-  --chart-1: #699fff;
-  --chart-2: #cccccc;
-  --chart-3: #999999;
-  --chart-4: #666666;
-  --chart-5: #303030;
-
-  --sidebar: #171717;
-  --sidebar-foreground: #e6e6e6;
-  --sidebar-primary: var(--color-white);
-  --sidebar-primary-foreground: var(--color-obsidian);
-  --sidebar-accent: #242424;
-  --sidebar-accent-foreground: var(--color-white);
-  --sidebar-border: rgb(204 204 204 / 0.1);
-  --sidebar-ring: rgb(105 159 255 / 0.5);
-
-  --brand: var(--color-white);
-  --brand-foreground: var(--color-obsidian);
-
-  /**
-   * The one accent the interface is allowed to spend, as an "R G B" triple
-   * because components write `rgb(var(--tint) / <alpha>)`. The player used
-   * to overwrite this per track with the album art's dominant colour; the
-   * stage stays achromatic now, so it is pinned to the signal blue.
-   */
-  --tint: 105 159 255;
-
-  /**
-   * Squared corners are part of the identity: 4px on buttons, inputs, badges
-   * and images, 0 on bare cards. Nothing is a pill.
-   */
-  --radius: 4px;
-
-  /* Panel opacities. The surfaces are flat now, so these read as solid
-     graphite rather than as frosted glass. */
-  --ui-card-alpha: 100%;
-  --ui-panel-alpha: 100%;
-  --ui-settings-alpha: 100%;
+  /* Glass opacities, driven by the card transparency slider in
+     Settings → Appearance (see src/lib/cardTransparency.ts). Higher = more
+     see-through. */
+  --ui-card-alpha: 68%;
+  --ui-panel-alpha: 52%;
+  --ui-settings-alpha: 58%;
 }
-/* AMOLED mode: the same stage pushed to true black (set alongside .dark) */
+
+/* AMOLED mode: true-black variant of dark (set alongside .dark) */
 html.amoled.dark {
-  --background: #000000;
-  --foreground: var(--color-white);
-  --card: #141414;
-  --card-foreground: var(--color-white);
-  --popover: #1a1a1a;
-  --popover-foreground: var(--color-white);
-  --sidebar: #0a0a0a;
-  --muted: #141414;
-  --accent: #1f1f1f;
-  --border: rgb(204 204 204 / 0.11);
-  --ui-card-alpha: 100%;
-  --ui-panel-alpha: 100%;
-  --ui-settings-alpha: 100%;
-}
-
-/* The dark theme IS the stage, so the .dark class simply restates the base
-   tokens. Kept explicit because the light class opts out of them below. */
-.dark {
-  --background: var(--color-obsidian);
-  --foreground: var(--color-white);
-  --card: var(--color-graphite);
-  --card-foreground: var(--color-white);
-  --popover: var(--color-graphite);
-  --popover-foreground: var(--color-white);
-  --primary: var(--color-white);
-  --primary-foreground: var(--color-obsidian);
-  --secondary: var(--color-mid-gray);
-  --secondary-foreground: var(--color-white);
-  --muted: #242424;
-  --muted-foreground: var(--color-fog);
-  --accent: #2a2a2a;
-  --accent-foreground: var(--color-white);
-  --destructive: #ff5c5c;
-  --border: rgb(204 204 204 / 0.14);
-  --input: rgb(204 204 204 / 0.1);
-  --ring: rgb(105 159 255 / 0.6);
-  --chart-1: #699fff;
-  --chart-2: #cccccc;
-  --chart-3: #999999;
-  --chart-4: #666666;
-  --chart-5: #303030;
-  --sidebar: #171717;
-  --sidebar-foreground: #e6e6e6;
-  --sidebar-primary: var(--color-white);
-  --sidebar-primary-foreground: var(--color-obsidian);
-  --sidebar-accent: #242424;
-  --sidebar-accent-foreground: var(--color-white);
-  --sidebar-border: rgb(204 204 204 / 0.1);
-  --sidebar-ring: rgb(105 159 255 / 0.5);
-  --brand: var(--color-white);
-  --brand-foreground: var(--color-obsidian);
-  --tint: 105 159 255;
+  --background: oklch(0 0 0);
+  --card: oklch(0.09 0.005 262);
+  --popover: oklch(0.1 0.005 262);
+  --sidebar: oklch(0.06 0.004 262);
+  --secondary: oklch(0.17 0.01 262);
+  --accent: oklch(0.18 0.01 262);
+  --muted: oklch(0.15 0.008 262);
+  --border: oklch(1 0 0 / 7%);
 }
 
 /* Light mode (opts out of the default dark class tokens) */
 html.light {
-  --background: var(--color-bone);
-  --foreground: var(--color-obsidian);
-  --card: #ffffff;
-  --card-foreground: var(--color-obsidian);
-  --popover: #ffffff;
-  --popover-foreground: var(--color-obsidian);
-  --primary: var(--color-obsidian);
-  --primary-foreground: var(--color-bone);
-  --secondary: #e4e4e4;
-  --secondary-foreground: var(--color-obsidian);
-  --muted: #e9e9e9;
-  --muted-foreground: #6b6b6b;
-  --accent: #dedede;
-  --accent-foreground: var(--color-obsidian);
-  --border: var(--color-silver);
-  --input: rgb(18 18 18 / 0.12);
-  --ring: rgb(105 159 255 / 0.6);
-  --sidebar: #ebebeb;
-  --sidebar-foreground: var(--color-obsidian);
-  --sidebar-border: var(--color-silver);
-  --tint: 105 159 255;
+  --background: oklch(0.975 0.004 106);
+  --foreground: oklch(0.18 0.02 262);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0.02 262);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0.02 262);
+  --primary: oklch(0.55 0.2 130);
+  --primary-foreground: oklch(0.98 0.01 106);
+  --secondary: oklch(0.93 0.008 106);
+  --secondary-foreground: oklch(0.25 0.02 262);
+  --muted: oklch(0.94 0.006 106);
+  --muted-foreground: oklch(0.45 0.015 262);
+  --accent: oklch(0.92 0.01 106);
+  --accent-foreground: oklch(0.25 0.02 262);
+  --border: oklch(0.2 0.02 262 / 12%);
+  --input: oklch(0.2 0.02 262 / 15%);
+  --ring: oklch(0.55 0.2 130 / 50%);
+  --sidebar: oklch(0.965 0.005 106);
+  --sidebar-foreground: oklch(0.2 0.02 262);
+  --sidebar-border: oklch(0.2 0.02 262 / 8%);
+  --tint: 76 143 43;
 }
 
 /* In light mode, panels built with white-on-dark assumptions flip. */
@@ -277,36 +168,79 @@ html.light img {
   filter: none;
 }
 
+.dark {
+  --background: oklch(0.135 0.012 262);
+  --foreground: oklch(0.965 0.004 262);
+  --card: oklch(0.175 0.013 262);
+  --card-foreground: oklch(0.965 0.004 262);
+  --popover: oklch(0.19 0.014 262);
+  --popover-foreground: oklch(0.965 0.004 262);
+  --primary: oklch(0.872 0.21 127);
+  --primary-foreground: oklch(0.16 0.02 262);
+  --secondary: oklch(0.24 0.014 262);
+  --secondary-foreground: oklch(0.96 0.004 262);
+  --muted: oklch(0.22 0.012 262);
+  --muted-foreground: oklch(0.68 0.01 262);
+  --accent: oklch(0.25 0.014 262);
+  --accent-foreground: oklch(0.96 0.004 262);
+  --destructive: oklch(0.7 0.19 22);
+  --border: oklch(1 0 0 / 9%);
+  --input: oklch(1 0 0 / 12%);
+  --ring: oklch(0.872 0.21 127 / 60%);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.155 0.012 262);
+  --sidebar-foreground: oklch(0.9 0.005 262);
+  --sidebar-primary: oklch(0.872 0.21 127);
+  --sidebar-primary-foreground: oklch(0.16 0.02 262);
+  --sidebar-accent: oklch(0.24 0.014 262);
+  --sidebar-accent-foreground: oklch(0.96 0.004 262);
+  --sidebar-border: oklch(1 0 0 / 8%);
+  --sidebar-ring: oklch(0.872 0.21 127 / 50%);
+  --brand: oklch(0.872 0.21 127);
+  --brand-foreground: oklch(0.16 0.02 262);
+  --tint: 203 244 143;
+}
+
 /* Signature scenes coordinate the full accent system without overriding the
    listener's Dark, Light, or AMOLED preference. */
 html[data-scene="aurora"] {
-  --background: #16161a;
-  --card: #34343a;
-  --popover: #34343a;
-  --sidebar: #1b1b20;
-  --muted: #28282e;
-  --accent: #2e2e35;
-  --secondary: #6b6b74;
+  --primary: oklch(0.76 0.17 294);
+  --primary-foreground: oklch(0.16 0.03 294);
+  --ring: oklch(0.76 0.17 294 / 58%);
+  --chart-1: oklch(0.7 0.18 294);
+  --sidebar-primary: oklch(0.76 0.17 294);
+  --sidebar-ring: oklch(0.76 0.17 294 / 48%);
+  --brand: oklch(0.76 0.17 294);
+  --brand-foreground: oklch(0.16 0.03 294);
+  --tint: 167 139 250;
 }
 
 html[data-scene="ember"] {
-  --background: #17140f;
-  --card: #36302a;
-  --popover: #36302a;
-  --sidebar: #1c1813;
-  --muted: #2a251f;
-  --accent: #302a24;
-  --secondary: #6f675e;
+  --primary: oklch(0.79 0.17 54);
+  --primary-foreground: oklch(0.18 0.04 38);
+  --ring: oklch(0.79 0.17 54 / 58%);
+  --chart-1: oklch(0.76 0.18 52);
+  --sidebar-primary: oklch(0.79 0.17 54);
+  --sidebar-ring: oklch(0.79 0.17 54 / 48%);
+  --brand: oklch(0.79 0.17 54);
+  --brand-foreground: oklch(0.18 0.04 38);
+  --tint: 251 146 60;
 }
 
 html[data-scene="tide"] {
-  --background: #0f1518;
-  --card: #29353b;
-  --popover: #29353b;
-  --sidebar: #131a1e;
-  --muted: #1f292e;
-  --accent: #243036;
-  --secondary: #63737b;
+  --primary: oklch(0.78 0.13 189);
+  --primary-foreground: oklch(0.15 0.03 210);
+  --ring: oklch(0.78 0.13 189 / 58%);
+  --chart-1: oklch(0.73 0.12 192);
+  --sidebar-primary: oklch(0.78 0.13 189);
+  --sidebar-ring: oklch(0.78 0.13 189 / 48%);
+  --brand: oklch(0.78 0.13 189);
+  --brand-foreground: oklch(0.15 0.03 210);
+  --tint: 45 212 191;
 }
 
 html,
@@ -327,11 +261,16 @@ html,
 }
 
 .focus-session-bar {
-  box-shadow: var(--shadow-subtle);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.08),
+    0 8px 28px rgb(0 0 0 / 0.12),
+    0 0 24px rgb(var(--tint) / 0.045);
 }
 
 .focus-study {
-  background: var(--background);
+  background:
+    radial-gradient(70% 50% at 50% 0%, rgb(var(--tint) / 0.045), transparent 72%),
+    var(--background);
 }
 .focus-study main {
   scroll-behavior: smooth;
@@ -339,12 +278,7 @@ html,
 
 .focus-work {
   background:
-    linear-gradient(
-      90deg,
-      transparent calc(50% - 1px),
-      rgb(var(--tint) / 0.018) 50%,
-      transparent calc(50% + 1px)
-    ),
+    linear-gradient(90deg, transparent calc(50% - 1px), rgb(var(--tint) / 0.018) 50%, transparent calc(50% + 1px)),
     var(--background);
 }
 /* Compact mode reduces the canvas and player chrome without hiding controls. */
@@ -390,7 +324,9 @@ html,
   --popover: oklch(0.15 0.016 275);
   --sidebar: oklch(0.12 0.014 275);
   --muted-foreground: oklch(0.58 0.014 275);
-  background: var(--background);
+  background:
+    radial-gradient(80% 65% at 50% 0%, rgb(var(--tint) / 0.055), transparent 76%),
+    var(--background);
 }
 .focus-sleep main > div {
   filter: saturate(0.72) brightness(0.82);
@@ -401,23 +337,23 @@ html,
   filter: saturate(0.75) brightness(0.9);
 }
 
-html.reduce-motion {
-  scroll-behavior: auto;
-}
-html.reduce-motion *,
-html.reduce-motion *::before,
-html.reduce-motion *::after {
-  animation-duration: 0.01ms !important;
-  animation-iteration-count: 1 !important;
-  scroll-behavior: auto !important;
-  transition-duration: 0.01ms !important;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  html {
+  html.reduce-motion {
     scroll-behavior: auto;
   }
-  html,
+  html.reduce-motion *,
+  html.reduce-motion *::before,
+  html.reduce-motion *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    html,
   .theme-surface,
   .bg-background,
   .bg-card,
@@ -479,8 +415,8 @@ html.reduce-motion *::after {
   /* frosted glass surface used by the sidebar, player bar and overlays */
   .glass {
     background: color-mix(in oklab, var(--card) 66%, transparent);
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
+    backdrop-filter: blur(24px) saturate(1.4);
+    -webkit-backdrop-filter: blur(24px) saturate(1.4);
   }
   /*
    * Liquid glass — a fluid, refractive glass surface. Adds a moving
@@ -489,21 +425,19 @@ html.reduce-motion *::after {
    */
   .liquid-glass {
     position: relative;
-    background: color-mix(
-      in oklab,
-      var(--card) var(--ui-panel-alpha),
-      var(--background)
-    );
+    background: color-mix(in oklab, var(--card) var(--ui-panel-alpha), transparent);
     /* Blur radius and the extra `brightness()` pass were both trimmed: a
        backdrop-filter has to read back and blur everything behind the panel on
        every frame it changes, and this class is on the sidebar, both bars, the
        player and every settings surface at once. 20px still reads as frosted
        glass over a wallpaper. */
-    /* No backdrop-filter. There is no shadow stack either: the one
-       permitted effect is a 1px inset hairline, which is what separates a
-       Graphite panel from the Obsidian stage without lifting it off the
-       page. */
-    box-shadow: var(--shadow-subtle);
+    backdrop-filter: blur(20px) saturate(1.5);
+    -webkit-backdrop-filter: blur(20px) saturate(1.5);
+    box-shadow:
+      inset 0 1px 0 0 rgb(255 255 255 / 0.08),
+      inset 0 -1px 0 0 rgb(255 255 255 / 0.04),
+      inset 1px 0 0 0 rgb(255 255 255 / 0.03),
+      0 8px 32px rgb(0 0 0 / 0.25);
   }
   /* Specular sheen that drifts across the surface.
 
@@ -514,7 +448,7 @@ html.reduce-motion *::after {
      band exists and it is wider than the surface, so what you see is always
      the middle of the ramp entering and leaving rather than a hard cut. */
   .liquid-glass::before {
-    content: none;
+    content: "";
     position: absolute;
     inset: 0;
     border-radius: inherit;
@@ -549,7 +483,7 @@ html.reduce-motion *::after {
   }
   /* tinted refraction blob that reacts to the current accent color */
   .liquid-glass::after {
-    content: none;
+    content: "";
     position: absolute;
     inset: 0;
     border-radius: inherit;
@@ -565,15 +499,17 @@ html.reduce-motion *::after {
   .settings-liquid-glass {
     position: relative;
     isolation: isolate;
-    background: color-mix(
-      in oklab,
-      var(--card) var(--ui-settings-alpha),
-      transparent
-    ) !important;
-    box-shadow: var(--shadow-subtle) !important;
+    background: color-mix(in oklab, var(--card) var(--ui-settings-alpha), transparent) !important;
+    backdrop-filter: blur(22px) saturate(1.6) !important;
+    -webkit-backdrop-filter: blur(22px) saturate(1.6) !important;
+    box-shadow:
+      inset 0 1px 0 0 rgb(255 255 255 / 0.1),
+      inset 0 -1px 0 0 rgb(255 255 255 / 0.045),
+      0 18px 48px rgb(0 0 0 / 0.24),
+      0 0 34px rgb(var(--tint) / 0.06) !important;
   }
   .settings-liquid-glass::before {
-    content: none;
+    content: "";
     z-index: 0;
     position: absolute;
     inset: 0;
@@ -598,7 +534,7 @@ html.reduce-motion *::after {
     inset: 0;
     border-radius: inherit;
     pointer-events: none;
-    background: none;
+    background: radial-gradient(120% 90% at 12% 0%, rgb(var(--tint) / 0.09), transparent 58%);
   }
   /* Lift content above the glass background WITHOUT clobbering children that
      already opt into their own positioning. The :not(.absolute) guard is
@@ -662,13 +598,18 @@ html.reduce-motion *::after {
     background:
       linear-gradient(135deg, rgb(255 255 255 / 0.055), transparent 48%),
       color-mix(in oklab, var(--card) 82%, transparent) !important;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-    box-shadow: var(--shadow-subtle);
+    backdrop-filter: blur(22px) saturate(1.45);
+    -webkit-backdrop-filter: blur(22px) saturate(1.45);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.08),
+      0 12px 30px rgb(0 0 0 / 0.18);
   }
   .settings-jump-bar:hover {
     border-color: rgb(var(--tint) / 0.28);
-    box-shadow: var(--shadow-subtle);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.1),
+      0 16px 38px rgb(0 0 0 / 0.22),
+      0 0 28px rgb(var(--tint) / 0.06);
   }
   /* Settings page: category tabs down the left, like the Freebuff desktop
      settings. Implemented as grid placement rather than by wrapping the
@@ -709,18 +650,12 @@ html.reduce-motion *::after {
       background: transparent !important;
       backdrop-filter: none !important;
       -webkit-backdrop-filter: none !important;
-
+      box-shadow: none !important;
       border-color: transparent;
       padding-inline: 0;
-      /* The rail is a quiet list inside the panel, not a card on it, so it
-         paints no surface effect at all — not even the hairline. (The bulk
-         shadow flatten pass removed this declaration as a redundant `none`,
-         which silently gave the rail the panel hairline and made it read as a
-         card again.) */
-      box-shadow: none !important;
       /* Keep the radius explicit even with no chrome left, so the one thing
-         that can still paint here (the item list) inherits a 4px box. */
-      border-radius: 4px;
+         that can still paint here (the item list) inherits a rounded box. */
+      border-radius: 1rem;
     }
     /* The sheen and the accent blob belong to the card chrome. With the
        element's own background, blur and shadow gone they were the only thing
@@ -748,9 +683,7 @@ html.reduce-motion *::after {
        guard the header would be dragged into column 2 and the rail would sit
        under the page title. */
     .settings-page-grid
-      > *:not(.settings-jump-bar):not(.settings-pointer-glow):not(
-        .settings-header
-      ) {
+      > *:not(.settings-jump-bar):not(.settings-pointer-glow):not(.settings-header) {
       grid-column: 2;
       /* The panel sets `gap: 0 !important` — a shorthand, which would swallow
          both `column-gap` and `row-gap` — so all the breathing room here is
@@ -784,70 +717,40 @@ html.reduce-motion *::after {
       border-color: transparent;
       background: rgb(255 255 255 / 0.07);
       color: var(--foreground);
-      box-shadow: var(--shadow-subtle);
+      box-shadow: inset 2px 0 0 rgb(var(--tint));
     }
   }
 
   /* Put the controls people reach for most first: playback, sound, and
      appearance stay above profile and maintenance tasks. The page remains
      a single scroll surface, so the jump bar and anchors keep working. */
-  .settings-liquid-glass > .settings-header {
-    order: 0;
-  }
-  .settings-liquid-glass > .settings-jump-bar {
-    order: 1;
-  }
-  .settings-liquid-glass > #settings-playback {
-    order: 2;
-  }
-  .settings-liquid-glass > #settings-playback + [data-slot="separator"] {
-    order: 3;
-  }
-  .settings-liquid-glass > #settings-audio {
-    order: 4;
-  }
-  .settings-liquid-glass > #settings-audio + [data-slot="separator"] {
-    order: 5;
-  }
-  .settings-liquid-glass > #settings-appearance {
-    order: 6;
-  }
-  .settings-liquid-glass > #settings-appearance + [data-slot="separator"] {
-    order: 7;
-  }
-  .settings-liquid-glass > #settings-profile {
-    order: 8;
-  }
-  .settings-liquid-glass > #settings-profile + [data-slot="separator"] {
-    order: 9;
-  }
-  .settings-liquid-glass > #settings-personalization {
-    order: 10;
-  }
-  .settings-liquid-glass > #settings-personalization + [data-slot="separator"] {
-    order: 11;
-  }
-  .settings-liquid-glass > section:nth-of-type(6) {
-    order: 12;
-  }
-  .settings-liquid-glass > section:nth-of-type(6) + [data-slot="separator"] {
-    order: 13;
-  }
-  .settings-liquid-glass > .settings-import {
-    order: 14;
-  }
-  .settings-liquid-glass > .settings-import + [data-slot="separator"] {
-    order: 15;
-  }
-  .settings-liquid-glass > section:nth-of-type(8) {
-    order: 16;
-  }
+  .settings-liquid-glass > .settings-header { order: 0; }
+  .settings-liquid-glass > .settings-jump-bar { order: 1; }
+  .settings-liquid-glass > #settings-playback { order: 2; }
+  .settings-liquid-glass > #settings-playback + [data-slot="separator"] { order: 3; }
+  .settings-liquid-glass > #settings-audio { order: 4; }
+  .settings-liquid-glass > #settings-audio + [data-slot="separator"] { order: 5; }
+  .settings-liquid-glass > #settings-appearance { order: 6; }
+  .settings-liquid-glass > #settings-appearance + [data-slot="separator"] { order: 7; }
+  .settings-liquid-glass > #settings-profile { order: 8; }
+  .settings-liquid-glass > #settings-profile + [data-slot="separator"] { order: 9; }
+  .settings-liquid-glass > #settings-personalization { order: 10; }
+  .settings-liquid-glass > #settings-personalization + [data-slot="separator"] { order: 11; }
+  .settings-liquid-glass > section:nth-of-type(6) { order: 12; }
+  .settings-liquid-glass > section:nth-of-type(6) + [data-slot="separator"] { order: 13; }
+  .settings-liquid-glass > .settings-import { order: 14; }
+  .settings-liquid-glass > .settings-import + [data-slot="separator"] { order: 15; }
+  .settings-liquid-glass > section:nth-of-type(8) { order: 16; }
   .settings-liquid-glass.settings-glass-still::before {
     animation: none;
     opacity: 0.28;
   }
   .settings-liquid-glass.settings-glass-depth {
-    box-shadow: var(--shadow-subtle) !important;
+    box-shadow:
+      inset 0 1px 0 0 rgb(255 255 255 / 0.12),
+      inset 0 -1px 0 0 rgb(255 255 255 / 0.05),
+      0 26px 64px rgb(0 0 0 / 0.34),
+      0 0 44px rgb(var(--tint) / 0.1) !important;
   }
   /* Jump To has its own surface so its glass never depends on the large page
      panel's stacking or background context. */
@@ -857,9 +760,13 @@ html.reduce-motion *::after {
     background:
       linear-gradient(110deg, rgb(255 255 255 / 0.08), transparent 42%),
       color-mix(in oklab, var(--card) 62%, transparent) !important;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-    box-shadow: var(--shadow-subtle) !important;
+    backdrop-filter: blur(18px) saturate(1.5) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(1.5) !important;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.1),
+      inset 0 -1px 0 rgb(255 255 255 / 0.045),
+      0 10px 30px rgb(0 0 0 / 0.2),
+      0 0 24px rgb(var(--tint) / 0.08) !important;
   }
   .settings-jump-glass::before {
     content: "";
@@ -885,7 +792,7 @@ html.reduce-motion *::after {
     z-index: 0;
     inset: 0;
     pointer-events: none;
-    background: none;
+    background: radial-gradient(110% 150% at 8% 0%, rgb(var(--tint) / 0.12), transparent 62%);
   }
   .settings-jump-glass > * {
     position: relative;
@@ -898,10 +805,32 @@ html.reduce-motion *::after {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
     background: var(--card) !important;
+    box-shadow: none !important;
   }
   html.no-glass .liquid-glass::before,
   html.no-glass .liquid-glass::after {
     content: none !important;
+  }
+  .aurora-orb {
+    background: radial-gradient(circle, rgb(var(--tint) / 0.13), transparent 68%);
+    filter: blur(58px);
+    opacity: 0.55;
+    will-change: transform;
+  }
+  .aurora-orb-one {
+    animation: aurora-drift-one 18s ease-in-out infinite alternate;
+  }
+  .aurora-orb-two {
+    background: radial-gradient(circle, rgb(120 160 255 / 0.1), transparent 68%);
+    animation: aurora-drift-two 22s ease-in-out infinite alternate;
+  }
+  @keyframes aurora-drift-one {
+    from { transform: translate3d(-2%, -2%, 0) scale(0.92); }
+    to { transform: translate3d(14%, 10%, 0) scale(1.08); }
+  }
+  @keyframes aurora-drift-two {
+    from { transform: translate3d(4%, 8%, 0) scale(1.05); }
+    to { transform: translate3d(-12%, -6%, 0) scale(0.9); }
   }
 
   /* Smaller glass surfaces used for cards, navigation and profile surfaces. */
@@ -912,9 +841,11 @@ html.reduce-motion *::after {
     background:
       linear-gradient(135deg, rgb(255 255 255 / 0.055), transparent 46%),
       color-mix(in oklab, var(--card) var(--ui-card-alpha), transparent);
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-    box-shadow: var(--shadow-subtle);
+    backdrop-filter: blur(22px) saturate(1.45);
+    -webkit-backdrop-filter: blur(22px) saturate(1.45);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.07),
+      0 12px 30px rgb(0 0 0 / 0.14);
     transition:
       transform 220ms ease,
       border-color 220ms ease,
@@ -928,12 +859,17 @@ html.reduce-motion *::after {
     inset: 0;
     pointer-events: none;
     border-radius: inherit;
-    opacity: 0;
+    background: radial-gradient(100% 80% at 12% 0%, rgb(var(--tint) / 0.1), transparent 62%);
+    opacity: 0.75;
+    transition: opacity 220ms ease;
   }
   .glass-card:hover {
     transform: translateY(-2px);
     border-color: rgb(var(--tint) / 0.28);
-    box-shadow: var(--shadow-subtle);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.1),
+      0 16px 38px rgb(0 0 0 / 0.2),
+      0 0 28px rgb(var(--tint) / 0.06);
   }
   .glass-card:hover::before {
     opacity: 1;
@@ -943,10 +879,9 @@ html.reduce-motion *::after {
   .ambient-grid {
     background-image:
       linear-gradient(rgb(255 255 255 / 0.025) 1px, transparent 1px),
-      linear-gradient(90deg, rgb(255 255 255 / 0.025) 1px, transparent 1px);
-    background-size:
-      56px 56px,
-      56px 56px;
+      linear-gradient(90deg, rgb(255 255 255 / 0.025) 1px, transparent 1px),
+      radial-gradient(60% 45% at 50% 0%, rgb(var(--tint) / 0.08), transparent 72%);
+    background-size: 56px 56px, 56px 56px, 100% 100%;
     mask-image: linear-gradient(to bottom, black, transparent 78%);
     -webkit-mask-image: linear-gradient(to bottom, black, transparent 78%);
   }
@@ -954,18 +889,28 @@ html.reduce-motion *::after {
   /* The player uses the same rim light and floating depth as the island. */
   .dynamic-island {
     border-color: rgb(255 255 255 / 0.12);
-    box-shadow: var(--shadow-subtle);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.12),
+      inset 0 -1px 0 rgb(255 255 255 / 0.05),
+      0 18px 60px rgb(0 0 0 / 0.38),
+      0 0 32px rgb(var(--tint) / 0.06);
   }
   .dynamic-island:hover {
     border-color: rgb(var(--tint) / 0.28);
-    box-shadow: var(--shadow-subtle);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.14),
+      0 22px 70px rgb(0 0 0 / 0.44),
+      0 0 38px rgb(var(--tint) / 0.1);
   }
 
   /* Touch adaptations: keep the same depth and tint language, but replace
      hover/cursor treatment with persistent, touch-friendly surfaces. */
   .mobile-topbar,
   .mobile-bottom-nav {
-    box-shadow: var(--shadow-subtle);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.08),
+      0 10px 32px rgb(0 0 0 / 0.18),
+      0 0 28px rgb(var(--tint) / 0.045);
   }
   .mobile-bottom-nav {
     background: linear-gradient(
@@ -975,14 +920,22 @@ html.reduce-motion *::after {
     );
   }
   .mobile-player {
-    box-shadow: var(--shadow-subtle);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.1),
+      inset 0 -1px 0 rgb(255 255 255 / 0.04),
+      0 0 28px rgb(var(--tint) / 0.06);
   }
   .mobile-player-art {
-    box-shadow: var(--shadow-subtle);
+    box-shadow:
+      0 5px 16px rgb(0 0 0 / 0.3),
+      0 0 18px rgb(var(--tint) / 0.22);
+    animation: mobile-art-breathe 3.8s ease-in-out infinite;
   }
-  /* The artwork used to "breathe" by pulsing its drop shadow. With no shadow
-     stack left there is nothing to pulse, so the keyframes and the animation
-     binding are gone rather than left as an empty 50% frame. */
+  @keyframes mobile-art-breathe {
+    0%,
+    100% { box-shadow: 0 5px 16px rgb(0 0 0 / 0.3), 0 0 14px rgb(var(--tint) / 0.16); }
+    50% { box-shadow: 0 7px 20px rgb(0 0 0 / 0.34), 0 0 26px rgb(var(--tint) / 0.3); }
+  }
 
   /* Phone-only island details. The player remains in normal document flow,
      so these effects can never cover the bottom navigation. */
@@ -993,25 +946,27 @@ html.reduce-motion *::after {
   }
   @media (max-width: 639px) {
     .mobile-player {
-      /* Flat Graphite, no gradient and no tint bloom. The island is the
-         player's chrome, and the chrome stays achromatic. */
-      background: color-mix(in oklab, var(--card) 100%, var(--background));
-      box-shadow: var(--shadow-subtle);
+      background:
+        radial-gradient(90% 130% at 8% 0%, rgb(var(--tint) / 0.13), transparent 54%),
+        linear-gradient(145deg, rgb(255 255 255 / 0.075), transparent 42%),
+        color-mix(in oklab, var(--card) 76%, transparent);
+      box-shadow:
+        inset 0 1px 0 rgb(255 255 255 / 0.16),
+        inset 0 -1px 0 rgb(255 255 255 / 0.055),
+        0 14px 34px rgb(0 0 0 / 0.42),
+        0 5px 18px rgb(var(--tint) / 0.1);
       animation: mobile-island-arrive 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
-      backdrop-filter: none;
-      -webkit-backdrop-filter: none;
+      -webkit-backdrop-filter: blur(22px) saturate(1.6);
+      backdrop-filter: blur(22px) saturate(1.6);
     }
     .mobile-player:active {
       transform: scale(0.988);
     }
     .mobile-island-aura {
       display: block;
-      background: linear-gradient(
-        105deg,
-        transparent 20%,
-        rgb(255 255 255 / 0.075) 48%,
-        transparent 72%
-      );
+      background:
+        linear-gradient(105deg, transparent 20%, rgb(255 255 255 / 0.075) 48%, transparent 72%),
+        radial-gradient(65% 100% at 100% 100%, rgb(var(--tint) / 0.1), transparent 64%);
       transform: translateX(-28%);
       animation: mobile-island-sheen 5.8s ease-in-out infinite;
     }
@@ -1024,6 +979,7 @@ html.reduce-motion *::after {
       justify-content: center;
       gap: 1.5px;
       color: rgb(var(--tint));
+      filter: drop-shadow(0 0 4px rgb(var(--tint) / 0.48));
     }
     .mobile-live-cue i {
       display: block;
@@ -1065,18 +1021,14 @@ html.reduce-motion *::after {
       width: 100%;
       height: 100%;
       border-radius: inherit;
-      background: linear-gradient(
-        90deg,
-        rgb(var(--tint) / 0.72),
-        rgb(var(--tint))
-      );
-
+      background: linear-gradient(90deg, rgb(var(--tint) / 0.72), rgb(var(--tint)));
+      box-shadow: 0 0 8px rgb(var(--tint) / 0.72);
       transform-origin: left center;
       transition: transform 220ms linear;
     }
     .mobile-expand-button {
       background: rgb(255 255 255 / 0.055);
-      box-shadow: var(--shadow-subtle);
+      box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08);
     }
   }
   @keyframes mobile-island-arrive {
@@ -1091,23 +1043,13 @@ html.reduce-motion *::after {
   }
   @keyframes mobile-island-sheen {
     0%,
-    18% {
-      transform: translateX(-28%);
-      opacity: 0.45;
-    }
+    18% { transform: translateX(-28%); opacity: 0.45; }
     58%,
-    100% {
-      transform: translateX(28%);
-      opacity: 0.9;
-    }
+    100% { transform: translateX(28%); opacity: 0.9; }
   }
   @keyframes mobile-island-eq {
-    from {
-      transform: scaleY(0.24);
-    }
-    to {
-      transform: scaleY(1);
-    }
+    from { transform: scaleY(0.24); }
+    to { transform: scaleY(1); }
   }
   @media (max-width: 359px) {
     .mobile-live-cue {
@@ -1166,16 +1108,24 @@ html.reduce-motion *::after {
     pointer-events: none;
     inset: 1px 5px 0;
     border: 1px solid rgb(var(--tint) / 0.18);
-    border-radius: 4px;
+    border-radius: 0.9rem;
+    background: linear-gradient(
+      145deg,
+      rgb(var(--tint) / 0.18),
+      rgb(255 255 255 / 0.045) 62%,
+      transparent
+    );
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.1), 0 0 18px rgb(var(--tint) / 0.08);
     opacity: 0;
     transform: scale(0.76) translateY(3px);
-    transition:
-      opacity 220ms ease,
-      transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+    transition: opacity 220ms ease, transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
   }
   .mobile-nav-item-active::before {
     opacity: 1;
     transform: scale(1) translateY(0);
+  }
+  .mobile-nav-item-active svg {
+    filter: drop-shadow(0 0 7px rgb(var(--tint) / 0.48));
   }
 
   /* Cursor light is painted behind the UI and follows CSS custom properties,
@@ -1238,6 +1188,9 @@ html.reduce-motion *::after {
       rgb(var(--tint) / 0.42) 68%,
       transparent 72%
     );
+    box-shadow:
+      0 0 0 1px rgb(var(--tint) / 0.24),
+      0 0 10px 2px rgb(var(--tint) / 0.6);
     opacity: 0.98;
     will-change: transform;
     transform: translate3d(-50%, -50%, 0);
@@ -1283,12 +1236,8 @@ html.reduce-motion *::after {
     height: 24px;
     border: 1px solid rgb(var(--tint) / 0.55);
     border-radius: 9999px;
-    background: radial-gradient(
-      circle,
-      rgb(var(--tint) / 0.2),
-      transparent 68%
-    );
-
+    background: radial-gradient(circle, rgb(var(--tint) / 0.2), transparent 68%);
+    box-shadow: 0 0 22px rgb(var(--tint) / 0.16);
     pointer-events: none;
     transform: translate(-50%, -50%) scale(0.35);
     animation: click-ripple-expand 700ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
@@ -1308,6 +1257,7 @@ html.reduce-motion *::after {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
     background: var(--card) !important;
+    box-shadow: none !important;
   }
   html.no-glass .glass-card::before {
     content: none !important;
@@ -1323,12 +1273,13 @@ html.reduce-motion *::after {
       z-index: 80;
     }
     .mobile-nav-item::before {
-      backdrop-filter: none;
-      -webkit-backdrop-filter: none;
+      backdrop-filter: blur(14px) saturate(1.5);
+      -webkit-backdrop-filter: blur(14px) saturate(1.5);
     }
   }
 
   @media (prefers-reduced-motion: reduce) {
+    .aurora-orb,
     .liquid-glass::before,
     .mobile-player,
     .mobile-island-aura,
@@ -1399,6 +1350,7 @@ html.reduce-motion *::after {
   html.perf-lite .mobile-island-aura::before {
     content: none !important;
   }
+  html.perf-lite .aurora-orb,
   html.perf-lite .ambient-grid,
   html.perf-lite .pointer-glow,
   html.perf-lite .cursor-trail-layer,
@@ -1409,15 +1361,7 @@ html.reduce-motion *::after {
   /* Big blur filters: the Tailwind `blur-*` utilities used for decoration
      (every one of them is an aurora blob or a glowing backdrop) plus the
      wallpaper, which carries a full-screen filter. */
-  html.perf-lite
-    :is(
-      [class*="blur-sm"],
-      [class*="blur-md"],
-      [class*="blur-lg"],
-      [class*="blur-xl"],
-      [class*="blur-2xl"],
-      [class*="blur-3xl"]
-    ),
+  html.perf-lite :is([class*="blur-sm"], [class*="blur-md"], [class*="blur-lg"], [class*="blur-xl"], [class*="blur-2xl"], [class*="blur-3xl"]),
   html.perf-lite .perf-wallpaper-blur {
     filter: none !important;
   }
@@ -1451,18 +1395,20 @@ html.reduce-motion *::after {
     background-repeat: repeat-x;
     background-size: 30px 14px;
   }
+  /* Tint the bumps with the theme accent when glass is enabled. */
+  html:not(.no-glass) .footer-scallop::before {
+    background-image: radial-gradient(
+      circle 15px at 50% 100%,
+      rgb(var(--tint) / 0.1) 15px,
+      transparent 15.5px
+    );
+  }
 
   /* One-shot like pulse (heart pop when a song is liked). */
   @keyframes ping-once {
-    0% {
-      transform: scale(0.7);
-    }
-    55% {
-      transform: scale(1.45);
-    }
-    100% {
-      transform: scale(1);
-    }
+    0% { transform: scale(0.7); }
+    55% { transform: scale(1.45); }
+    100% { transform: scale(1); }
   }
   .animate-ping-once {
     animation: ping-once 0.4s ease-out;
@@ -1542,28 +1488,13 @@ html.reduce-motion *::after {
   .stagger > * {
     animation: fade-rise 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
   }
-  .stagger > *:nth-child(1) {
-    animation-delay: 0.03s;
-  }
-  .stagger > *:nth-child(2) {
-    animation-delay: 0.06s;
-  }
-  .stagger > *:nth-child(3) {
-    animation-delay: 0.09s;
-  }
-  .stagger > *:nth-child(4) {
-    animation-delay: 0.12s;
-  }
-  .stagger > *:nth-child(5) {
-    animation-delay: 0.15s;
-  }
-  .stagger > *:nth-child(6) {
-    animation-delay: 0.18s;
-  }
-  .stagger > *:nth-child(7) {
-    animation-delay: 0.21s;
-  }
-  .stagger > *:nth-child(8) {
+  .stagger > *:nth-child(1) { animation-delay: 0.03s; }
+  .stagger > *:nth-child(2) { animation-delay: 0.06s; }
+  .stagger > *:nth-child(3) { animation-delay: 0.09s; }
+  .stagger > *:nth-child(4) { animation-delay: 0.12s; }
+  .stagger > *:nth-child(5) { animation-delay: 0.15s; }
+  .stagger > *:nth-child(6) { animation-delay: 0.18s; }
+  .stagger > *:nth-child(7) { animation-delay: 0.21s; }  .stagger > *:nth-child(8) {
     animation-delay: 0.24s;
   }
   /* shimmer for loading skeletons */

@@ -58,11 +58,7 @@ export function track(event: string, properties: Props = {}): void {
   if (disabled) return;
   try {
     void getClient()
-      .action(api.amplitude.track, {
-        event,
-        properties,
-        deviceId: getDeviceId(),
-      })
+      .action(api.amplitude.track, { event, properties, deviceId: getDeviceId() })
       .then((res) => {
         // `skipped` means the key isn't configured yet — stay quiet but keep
         // the integration ready for when it is added.
@@ -80,9 +76,7 @@ export function track(event: string, properties: Props = {}): void {
 }
 
 /** Send a batch (used sparingly, e.g. session start). */
-export function trackBatch(
-  events: { event: string; properties?: Props }[],
-): void {
+export function trackBatch(events: { event: string; properties?: Props }[]): void {
   if (disabled || events.length === 0) return;
   try {
     void getClient()

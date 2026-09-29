@@ -45,8 +45,7 @@ function fakeMotes(count) {
   return Array.from({ length: count }, () => ({ style: {} }));
 }
 
-const moteX = (mote) =>
-  Number(/translate3d\((-?[\d.]+)px/.exec(mote.style.transform)?.[1] ?? NaN);
+const moteX = (mote) => Number(/translate3d\((-?[\d.]+)px/.exec(mote.style.transform)?.[1] ?? NaN);
 const pendingFrames = () => queue.filter(Boolean).length;
 
 beforeEach(installClock);
@@ -62,10 +61,7 @@ afterEach(() => {
 describe("cursor trail easing", () => {
   test("snaps to the pointer on the first push instead of streaking in", () => {
     const motes = fakeMotes(5);
-    const trail = createCursorTrail({
-      motes: () => motes,
-      taus: SHELL_TRAIL_TAUS,
-    });
+    const trail = createCursorTrail({ motes: () => motes, taus: SHELL_TRAIL_TAUS });
     trail.push(400, 300);
     // A parked trail used to glide in from wherever it last stopped, drawing a
     // streak across the screen.
@@ -75,10 +71,7 @@ describe("cursor trail easing", () => {
 
   test("motes lag progressively behind each other", () => {
     const motes = fakeMotes(5);
-    const trail = createCursorTrail({
-      motes: () => motes,
-      taus: SHELL_TRAIL_TAUS,
-    });
+    const trail = createCursorTrail({ motes: () => motes, taus: SHELL_TRAIL_TAUS });
     trail.push(0, 0);
     trail.push(600, 0);
     frame();
@@ -93,10 +86,7 @@ describe("cursor trail easing", () => {
 
   test("converges on the pointer and then stops scheduling frames", () => {
     const motes = fakeMotes(5);
-    const trail = createCursorTrail({
-      motes: () => motes,
-      taus: SHELL_TRAIL_TAUS,
-    });
+    const trail = createCursorTrail({ motes: () => motes, taus: SHELL_TRAIL_TAUS });
     trail.push(0, 0);
     trail.push(500, 250);
     for (let i = 0; i < 600; i += 1) frame();
@@ -117,10 +107,7 @@ describe("cursor trail easing", () => {
     const at = (stepMs, steps) => {
       installClock();
       const motes = fakeMotes(1);
-      const trail = createCursorTrail({
-        motes: () => motes,
-        taus: SHELL_TRAIL_TAUS,
-      });
+      const trail = createCursorTrail({ motes: () => motes, taus: SHELL_TRAIL_TAUS });
       trail.push(0, 0);
       trail.push(1000, 0);
       for (let i = 0; i < steps; i += 1) frame(stepMs);
@@ -133,10 +120,7 @@ describe("cursor trail easing", () => {
 
   test("a long frame (backgrounded tab) cannot teleport a mote", () => {
     const motes = fakeMotes(1);
-    const trail = createCursorTrail({
-      motes: () => motes,
-      taus: SHELL_TRAIL_TAUS,
-    });
+    const trail = createCursorTrail({ motes: () => motes, taus: SHELL_TRAIL_TAUS });
     trail.push(0, 0);
     trail.push(1000, 0);
     frame(5000); // the tab was hidden for five seconds
@@ -146,10 +130,7 @@ describe("cursor trail easing", () => {
 
   test("only writes transform, never layout properties", () => {
     const motes = fakeMotes(5);
-    const trail = createCursorTrail({
-      motes: () => motes,
-      taus: SHELL_TRAIL_TAUS,
-    });
+    const trail = createCursorTrail({ motes: () => motes, taus: SHELL_TRAIL_TAUS });
     trail.push(0, 0);
     trail.push(300, 300);
     frame();
@@ -162,10 +143,7 @@ describe("cursor trail easing", () => {
 
   test("tolerates missing motes while the effects are toggled off", () => {
     const motes = [null, ...fakeMotes(4)];
-    const trail = createCursorTrail({
-      motes: () => motes,
-      taus: SHELL_TRAIL_TAUS,
-    });
+    const trail = createCursorTrail({ motes: () => motes, taus: SHELL_TRAIL_TAUS });
     expect(() => {
       trail.push(0, 0);
       trail.push(200, 0);
@@ -175,10 +153,7 @@ describe("cursor trail easing", () => {
 
   test("stop cancels the in-flight frame", () => {
     const motes = fakeMotes(2);
-    const trail = createCursorTrail({
-      motes: () => motes,
-      taus: SHELL_TRAIL_TAUS,
-    });
+    const trail = createCursorTrail({ motes: () => motes, taus: SHELL_TRAIL_TAUS });
     trail.push(0, 0);
     trail.push(400, 0);
     frame();

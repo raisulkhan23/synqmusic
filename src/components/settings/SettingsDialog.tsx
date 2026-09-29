@@ -973,7 +973,7 @@ export function SettingsDialog({
                   }}
                   aria-current={activeSection === id ? "true" : undefined}
                   className={cn(
-                    "inline-flex shrink-0 items-center gap-1.5 rounded-[4px] border border-transparent px-2.5 py-1.5 text-[11px] font-semibold text-foreground/70 transition-colors hover:border-white/15 hover:bg-white/[0.07] hover:text-foreground",
+                    "inline-flex shrink-0 items-center gap-1.5 rounded-full border border-transparent px-2.5 py-1.5 text-[11px] font-semibold text-foreground/70 transition-colors hover:border-white/15 hover:bg-white/[0.07] hover:text-foreground",
                     activeSection === id &&
                       "settings-tab-active border-white/15 bg-white/[0.09] text-foreground",
                     // Keyboard shortcuts are a pointer-and-keyboard feature:
@@ -1013,7 +1013,7 @@ export function SettingsDialog({
                 <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-[rgb(var(--tint))]">
                   <span
                     className={cn(
-                      "size-1.5 rounded-[4px]",
+                      "size-1.5 rounded-full",
                       isPlaying
                         ? "animate-pulse bg-[rgb(var(--tint))]"
                         : "bg-white/30",
@@ -1046,7 +1046,7 @@ export function SettingsDialog({
                   aria-label={
                     isPlaying ? "Pause current track" : "Play current track"
                   }
-                  className="flex size-9 shrink-0 items-center justify-center rounded-[4px] bg-[rgb(var(--tint))] text-black transition-transform hover:scale-105 active:scale-95"
+                  className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[rgb(var(--tint))] text-black transition-transform hover:scale-105 active:scale-95"
                 >
                   {isPlaying ? (
                     <Pause className="size-4 fill-current" />
@@ -1058,7 +1058,7 @@ export function SettingsDialog({
                   type="button"
                   onClick={next}
                   aria-label="Skip to next track"
-                  className="flex size-9 shrink-0 items-center justify-center rounded-[4px] border border-white/10 text-muted-foreground transition-colors hover:border-white/25 hover:text-foreground"
+                  className="flex size-9 shrink-0 items-center justify-center rounded-full border border-white/10 text-muted-foreground transition-colors hover:border-white/25 hover:text-foreground"
                 >
                   <SkipForward className="size-4" />
                 </button>
@@ -1173,7 +1173,7 @@ export function SettingsDialog({
                   type="button"
                   onClick={() => setRate(r)}
                   className={cn(
-                    "rounded-[4px] px-2 py-1 text-[11px] font-semibold tabular-nums transition-colors",
+                    "rounded-full px-2 py-1 text-[11px] font-semibold tabular-nums transition-colors",
                     rate === r
                       ? "bg-[rgb(var(--tint)_/_0.2)] text-[rgb(var(--tint))]"
                       : "text-muted-foreground hover:bg-white/[0.06] hover:text-foreground",
@@ -1219,7 +1219,7 @@ export function SettingsDialog({
                   toast(`EQ preset: ${p.label}`);
                 }}
                 className={cn(
-                  "rounded-[4px] border px-3 py-1 text-xs font-semibold transition-colors",
+                  "rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
                   eq.bass === p.bass && eq.treble === p.treble
                     ? "border-transparent bg-[rgb(var(--tint)_/_0.2)] text-[rgb(var(--tint))]"
                     : "border-white/10 text-muted-foreground hover:border-white/30 hover:text-foreground",
@@ -1301,7 +1301,7 @@ export function SettingsDialog({
                     } else toast.error("Effects need a browser with Web Audio");
                   }}
                   className={cn(
-                    "flex items-center gap-1 rounded-[4px] border px-2.5 py-1 text-[11px] font-semibold transition-colors",
+                    "flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors",
                     (eq.filter ?? "off") === f.id
                       ? "border-transparent bg-[rgb(var(--tint)_/_0.2)] text-[rgb(var(--tint))]"
                       : "border-white/10 text-muted-foreground hover:border-white/30 hover:text-foreground",
@@ -1447,14 +1447,14 @@ export function SettingsDialog({
                     );
                   }}
                   className={cn(
-                    "flex h-8 items-center gap-1.5 rounded-[4px] border px-2.5 text-[11px] font-semibold transition-all",
+                    "flex h-8 items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-semibold transition-all",
                     accentTheme === id
                       ? "border-white/60 bg-white/[0.1] text-foreground"
                       : "border-white/10 text-muted-foreground hover:border-white/30",
                   )}
                 >
                   <span
-                    className="size-4 rounded-[4px] ring-1 ring-white/20"
+                    className="size-4 rounded-full ring-1 ring-white/20"
                     style={{ background: swatch }}
                   />
                   {label}
@@ -1682,7 +1682,7 @@ export function SettingsDialog({
                   <button
                     type="button"
                     onClick={() => wallpaperInputRef.current?.click()}
-                    className="inline-flex items-center gap-1.5 rounded-[4px] border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-white/25 hover:bg-white/[0.1]"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-white/25 hover:bg-white/[0.1]"
                   >
                     <ImagePlus className="size-3.5" />
                     {wallpaper ? "Add another image" : "Choose image"}
@@ -1731,7 +1731,7 @@ export function SettingsDialog({
                   <button
                     type="button"
                     onClick={() => liveWallpaperInputRef.current?.click()}
-                    className="inline-flex items-center gap-1.5 rounded-[4px] border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-white/25 hover:bg-white/[0.1]"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-white/25 hover:bg-white/[0.1]"
                   >
                     <Film className="size-3.5" />
                     Add video file
@@ -1808,7 +1808,7 @@ export function SettingsDialog({
                             />
                           )}
                           {selected && (
-                            <span className="absolute right-1.5 top-1.5 flex size-5 items-center justify-center rounded-[4px] bg-[rgb(var(--tint))] text-black shadow-lg">
+                            <span className="absolute right-1.5 top-1.5 flex size-5 items-center justify-center rounded-full bg-[rgb(var(--tint))] text-black shadow-lg">
                               <Check className="size-3" />
                             </span>
                           )}
@@ -1822,7 +1822,7 @@ export function SettingsDialog({
                         <button
                           type="button"
                           onClick={() => void removeWallpaperEntry(entry)}
-                          className="absolute right-1 top-1 hidden size-6 items-center justify-center rounded-[4px] bg-black/70 text-red-300 backdrop-blur transition hover:bg-red-500/80 hover:text-white group-hover:flex"
+                          className="absolute right-1 top-1 hidden size-6 items-center justify-center rounded-full bg-black/70 text-red-300 backdrop-blur transition hover:bg-red-500/80 hover:text-white group-hover:flex"
                           aria-label={`Remove ${entry.name}`}
                         >
                           <Trash2 className="size-3" />
@@ -1846,7 +1846,7 @@ export function SettingsDialog({
                 <button
                   type="button"
                   onClick={revertWallpaper}
-                  className="inline-flex items-center gap-1.5 rounded-[4px] border border-white/10 px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-[rgb(var(--tint))]/40 hover:bg-[rgb(var(--tint))]/10 hover:text-[rgb(var(--tint))]"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-[rgb(var(--tint))]/40 hover:bg-[rgb(var(--tint))]/10 hover:text-[rgb(var(--tint))]"
                 >
                   <RotateCcw className="size-3.5" />
                   Revert to default
@@ -1854,7 +1854,7 @@ export function SettingsDialog({
                 <button
                   type="button"
                   onClick={clearWallpaper}
-                  className="inline-flex items-center gap-1.5 rounded-[4px] border border-white/10 px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-red-400/30 hover:bg-red-400/[0.08] hover:text-red-300"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-red-400/30 hover:bg-red-400/[0.08] hover:text-red-300"
                 >
                   <ImageOff className="size-3.5" />
                   Remove wallpaper library
@@ -2123,7 +2123,7 @@ export function SettingsDialog({
             <button
               type="button"
               onClick={() => avatarInputRef.current?.click()}
-              className="group relative flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-[4px] bg-[rgb(var(--tint))] text-lg font-bold text-black ring-2 ring-white/10 transition-transform hover:scale-105"
+              className="group relative flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[rgb(var(--tint))] text-lg font-bold text-black ring-2 ring-white/10 transition-transform hover:scale-105"
               aria-label="Change profile picture"
             >
               {user?.image ? (
@@ -2151,7 +2151,7 @@ export function SettingsDialog({
                   type="button"
                   onClick={() => avatarInputRef.current?.click()}
                   disabled={savingAvatar}
-                  className="rounded-[4px] border border-white/10 bg-white/[0.05] px-2.5 py-1 text-[11px] font-semibold transition-colors hover:border-white/25 hover:bg-white/[0.1] disabled:opacity-50"
+                  className="rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1 text-[11px] font-semibold transition-colors hover:border-white/25 hover:bg-white/[0.1] disabled:opacity-50"
                 >
                   Change photo
                 </button>
@@ -2160,7 +2160,7 @@ export function SettingsDialog({
                     type="button"
                     onClick={() => void clearAvatar()}
                     disabled={savingAvatar}
-                    className="rounded-[4px] border border-white/10 px-2.5 py-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:border-red-400/30 hover:text-red-300 disabled:opacity-50"
+                    className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:border-red-400/30 hover:text-red-300 disabled:opacity-50"
                   >
                     Remove
                   </button>
@@ -2212,7 +2212,7 @@ export function SettingsDialog({
               type="button"
               onClick={() => void handleSignOut()}
               disabled={signingOut}
-              className="flex items-center gap-2 self-start rounded-[4px] border border-white/10 px-3.5 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-red-500/40 hover:bg-red-500/[0.08] hover:text-red-400 disabled:opacity-50"
+              className="flex items-center gap-2 self-start rounded-full border border-white/10 px-3.5 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-red-500/40 hover:bg-red-500/[0.08] hover:text-red-400 disabled:opacity-50"
             >
               {signingOut ? (
                 <Loader2 className="size-3.5 animate-spin" />
@@ -2432,13 +2432,13 @@ function ToggleRow({
       </span>
       <span
         className={cn(
-          "relative h-5 w-9 shrink-0 rounded-[4px] transition-colors",
+          "relative h-5 w-9 shrink-0 rounded-full transition-colors",
           on ? "bg-[rgb(var(--tint))]" : "bg-white/15",
         )}
       >
         <span
           className={cn(
-            "absolute top-0.5 size-4 rounded-[4px] bg-white shadow transition-all",
+            "absolute top-0.5 size-4 rounded-full bg-white shadow transition-all",
             on ? "left-[18px]" : "left-0.5",
           )}
         />

@@ -15,42 +15,26 @@ const CHART_PLAYLIST = "37i9dQZF1DXcBWIGoYBM5M";
 /** How many chart entries to return (and fetch artwork for). */
 const MAX_ITEMS = 10;
 
-const INVALID_ARTIST_NAMES =
-  /^(?:unknown artist|artist|song|video|single|album|ep|music|official|unknown|topic|records?|music video|official video|official audio|lyrics?)$/i;
+const INVALID_ARTIST_NAMES = /^(?:unknown artist|artist|song|video|single|album|ep|music|official|unknown|topic|records?|music video|official video|official audio|lyrics?)$/i;
 
 function cleanArtistName(value: unknown, title?: string): string {
   if (typeof value !== "string") return "Unknown artist";
   const name = value
     .replace(/\s+/g, " ")
-    .replace(
-      /(?:\(|\[)(?:official|topic|audio|video|lyrics?|visualizer|hd|hq)[^\])]*(?:\)|\])/gi,
-      "",
-    )
+    .replace(/(?:\(|\[)(?:official|topic|audio|video|lyrics?|visualizer|hd|hq)[^\])]*(?:\)|\])/gi, "")
     .replace(/\s+(?:topic|vevo)$/i, "")
     .trim();
   if (!name || INVALID_ARTIST_NAMES.test(name) || !/[\p{L}\p{N}]/u.test(name)) {
     return "Unknown artist";
   }
-  const titleKey = (title ?? "")
-    .toLocaleLowerCase()
-    .normalize("NFKC")
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
-    .trim();
+  const titleKey = (title ?? "").toLocaleLowerCase().normalize("NFKC").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
   const candidates = name
     .split(/\s*(?:[•·|]|\s+[-–—]\s+)\s*/i)
     .map((part) => part.replace(/^[\s\-–—|·]+|[\s\-–—|·]+$/g, "").trim())
     .filter(Boolean);
   for (const candidate of candidates) {
-    if (
-      INVALID_ARTIST_NAMES.test(candidate) ||
-      !/[\p{L}\p{N}]/u.test(candidate)
-    )
-      continue;
-    const candidateKey = candidate
-      .toLocaleLowerCase()
-      .normalize("NFKC")
-      .replace(/[^\p{L}\p{N}]+/gu, " ")
-      .trim();
+    if (INVALID_ARTIST_NAMES.test(candidate) || !/[\p{L}\p{N}]/u.test(candidate)) continue;
+    const candidateKey = candidate.toLocaleLowerCase().normalize("NFKC").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
     if (titleKey && candidateKey === titleKey) continue;
     return candidate;
   }
@@ -97,11 +81,7 @@ async function fetchText(url: string): Promise<string> {
 /** Loose traversal helper for the deeply nested parsed JSON. */
 const get = (obj: unknown, path: string[]): unknown =>
   path.reduce<unknown>((acc, key) => {
-    if (
-      acc &&
-      typeof acc === "object" &&
-      key in (acc as Record<string, unknown>)
-    ) {
+    if (acc && typeof acc === "object" && key in (acc as Record<string, unknown>)) {
       return (acc as Record<string, unknown>)[key];
     }
     return undefined;

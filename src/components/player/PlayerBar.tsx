@@ -63,7 +63,7 @@ function SleepTimerChip() {
   if (sleepEndsAt === null && !sleepAtSongEnd) return null;
 
   return (
-    <div className="hidden shrink-0 items-center gap-1 rounded-[4px] bg-white/[0.07] py-1 pr-0.5 pl-2 text-[10px] font-semibold text-muted-foreground sm:flex">
+    <div className="hidden shrink-0 items-center gap-1 rounded-full bg-white/[0.07] py-1 pr-0.5 pl-2 text-[10px] font-semibold text-muted-foreground sm:flex">
       <Moon className="size-3 text-[rgb(var(--tint))]" aria-hidden="true" />
       <span className="tabular-nums">
         {sleepEndsAt !== null
@@ -78,7 +78,7 @@ function SleepTimerChip() {
           setSleepTimer(null);
           toast.success("Sleep timer cancelled");
         }}
-        className="rounded-[4px] p-0.5 transition-colors hover:bg-white/10 hover:text-foreground"
+        className="rounded-full p-0.5 transition-colors hover:bg-white/10 hover:text-foreground"
       >
         <X className="size-3" />
       </button>
@@ -108,7 +108,7 @@ function IntroTrimChip() {
   const inIntro = hasTrack && currentTime <= 60;
   if (skipped !== null) {
     return (
-      <div className="hidden shrink-0 items-center gap-1 rounded-[4px] bg-white/[0.07] py-1 pr-0.5 pl-2 text-[10px] font-semibold text-muted-foreground sm:flex">
+      <div className="hidden shrink-0 items-center gap-1 rounded-full bg-white/[0.07] py-1 pr-0.5 pl-2 text-[10px] font-semibold text-muted-foreground sm:flex">
         <Scissors
           className="size-3 text-[rgb(var(--tint))]"
           aria-hidden="true"
@@ -122,7 +122,7 @@ function IntroTrimChip() {
             undoIntroTrim();
             toast("Intro restored");
           }}
-          className="rounded-[4px] p-0.5 transition-colors hover:bg-white/10 hover:text-foreground"
+          className="rounded-full p-0.5 transition-colors hover:bg-white/10 hover:text-foreground"
         >
           <Undo2 className="size-3" />
         </button>
@@ -142,7 +142,7 @@ function IntroTrimChip() {
           });
       }}
       title="Skip ahead past a slow intro"
-      className="hidden shrink-0 items-center gap-1 rounded-[4px] bg-white/[0.07] px-2 py-1 text-[10px] font-semibold text-muted-foreground transition-colors hover:bg-white/[0.12] hover:text-foreground sm:flex"
+      className="hidden shrink-0 items-center gap-1 rounded-full bg-white/[0.07] px-2 py-1 text-[10px] font-semibold text-muted-foreground transition-colors hover:bg-white/[0.12] hover:text-foreground sm:flex"
     >
       <Scissors className="size-3" aria-hidden="true" />
       Skip intro
@@ -651,7 +651,7 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
               setTimeout(() => setLikePulse(false), 400);
             }}
             className={cn(
-              "hidden shrink-0 rounded-[4px] p-1.5 transition-all hover:scale-110 lg:block",
+              "hidden shrink-0 rounded-full p-1.5 transition-all hover:scale-110 lg:block",
               isLiked
                 ? "text-[rgb(var(--tint))]"
                 : "text-muted-foreground hover:text-foreground",
@@ -698,7 +698,7 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
             aria-label="Open queue"
             onClick={() => setQueueOpen(!queueOpen)}
             className={cn(
-              "hidden rounded-[4px] p-2 transition-colors hover:bg-white/[0.06] sm:block lg:p-1.5",
+              "hidden rounded-full p-2 transition-colors hover:bg-white/[0.06] sm:block lg:p-1.5",
               queueOpen
                 ? "text-[rgb(var(--tint))]"
                 : "text-muted-foreground hover:text-foreground",
@@ -711,7 +711,7 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
             type="button"
             aria-label="Open full-screen player"
             onClick={() => setFullscreen(true)}
-            className="mobile-expand-button touch-manipulation rounded-[4px] p-2 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground active:scale-90"
+            className="mobile-expand-button touch-manipulation rounded-full p-2 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground active:scale-90"
           >
             <Maximize2 className="size-4" />
           </button>

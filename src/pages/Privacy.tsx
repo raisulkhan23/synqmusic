@@ -34,8 +34,8 @@ export default function Privacy() {
               <p>Your account and everything you deliberately save:</p>
               <ul className="list-disc space-y-1 pl-5">
                 <li>
-                  <strong>Liked songs</strong> and liked albums, so your library
-                  follows you between devices.
+                  <strong>Liked songs</strong> and liked albums, so your
+                  library follows you between devices.
                 </li>
                 <li>
                   <strong>Playlists</strong> you create, including the track
@@ -64,8 +64,8 @@ export default function Privacy() {
           body: (
             <>
               <p>
-                A lot of SYNQ is deliberately local. None of this is sent to our
-                servers, and clearing your browser data resets it:
+                A lot of SYNQ is deliberately local. None of this is sent to
+                our servers, and clearing your browser data resets it:
               </p>
               <ul className="list-disc space-y-1 pl-5">
                 <li>
@@ -95,10 +95,11 @@ export default function Privacy() {
           body: (
             <>
               <p>
-                <strong>YouTube.</strong> Audio and video are played through the
-                official YouTube embedded player, so Google receives the same
-                playback data it would if you visited youtube.com directly. We
-                do not use third-party ad or analytics trackers on this site.
+                <strong>YouTube.</strong> Audio and video are played through
+                the official YouTube embedded player, so Google receives the
+                same playback data it would if you visited youtube.com
+                directly. We do not use third-party ad or analytics trackers
+                on this site.
               </p>
               <p>
                 <strong>Convex</strong> hosts the app's backend and database.
@@ -132,9 +133,10 @@ export default function Privacy() {
             <p>
               You can <strong>clear your listening history</strong> at any time
               from <strong>Settings → Your data</strong> — likes and playlists
-              are kept. Signing out clears the session from this device. To have
-              your account and everything attached to it deleted, use the
-              sign-out control in <strong>Settings</strong> and then contact us.
+              are kept. Signing out clears the session from this device. To
+              have your account and everything attached to it deleted, use
+              the sign-out control in{" "}
+              <strong>Settings</strong> and then contact us.
             </p>
           ),
         },

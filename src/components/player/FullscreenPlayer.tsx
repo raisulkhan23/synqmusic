@@ -86,7 +86,7 @@ function SleepTimerButton() {
           aria-label="Sleep timer"
           title="Sleep timer"
           className={cn(
-            "relative hidden rounded-[4px] p-2 transition-colors hover:bg-white/[0.06] sm:block",
+            "relative hidden rounded-full p-2 transition-colors hover:bg-white/[0.06] sm:block",
             active
               ? "text-[rgb(var(--tint))]"
               : "text-muted-foreground hover:text-foreground",
@@ -94,7 +94,7 @@ function SleepTimerButton() {
         >
           <Moon className="size-4" />
           {active && (
-            <span className="absolute top-1.5 right-1.5 size-1.5 rounded-[4px] bg-[rgb(var(--tint))]" />
+            <span className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-[rgb(var(--tint))]" />
           )}
         </button>
       </DropdownMenuTrigger>
@@ -270,7 +270,7 @@ function LyricsPanel({ onClose }: { onClose: () => void }) {
           Lyrics
         </p>
         {!synced && (
-          <span className="rounded-[4px] border border-white/10 bg-white/[0.05] px-2 py-0.5 text-[10px] text-muted-foreground">
+          <span className="rounded-full border border-white/10 bg-white/[0.05] px-2 py-0.5 text-[10px] text-muted-foreground">
             No timings — plain lyrics
           </span>
         )}
@@ -278,7 +278,7 @@ function LyricsPanel({ onClose }: { onClose: () => void }) {
           type="button"
           aria-label="Close lyrics"
           onClick={onClose}
-          className="rounded-[4px] p-1.5 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
+          className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
         >
           <X className="size-4" />
         </button>
@@ -344,7 +344,7 @@ function IntroTrimControl() {
 
   if (skipped !== null) {
     return (
-      <div className="flex items-center gap-1.5 rounded-[4px] border border-[rgb(var(--tint)_/_0.5)] bg-[rgb(var(--tint)_/_0.1)] py-1 pr-1 pl-2.5 text-[11px] font-semibold text-[rgb(var(--tint))]">
+      <div className="flex items-center gap-1.5 rounded-full border border-[rgb(var(--tint)_/_0.5)] bg-[rgb(var(--tint)_/_0.1)] py-1 pr-1 pl-2.5 text-[11px] font-semibold text-[rgb(var(--tint))]">
         <Scissors className="size-3.5" />
         Trimmed {formatSkipped(skipped)}
         <button
@@ -353,7 +353,7 @@ function IntroTrimControl() {
             undoIntroTrim();
             toast("Intro restored");
           }}
-          className="rounded-[4px] p-1 transition-colors hover:bg-white/15"
+          className="rounded-full p-1 transition-colors hover:bg-white/15"
           title="Undo intro trim"
           aria-label="Undo intro trim"
         >
@@ -383,7 +383,7 @@ function IntroTrimControl() {
           : "Turn on smart intro trimming"
       }
       className={cn(
-        "flex items-center gap-1.5 rounded-[4px] border py-1 pr-2.5 pl-2.5 text-[11px] font-semibold transition-colors",
+        "flex items-center gap-1.5 rounded-full border py-1 pr-2.5 pl-2.5 text-[11px] font-semibold transition-colors",
         enabled
           ? "border-white/10 bg-white/[0.05] text-foreground hover:bg-white/[0.1]"
           : "border-white/10 bg-white/[0.05] text-muted-foreground hover:bg-white/[0.1] hover:text-foreground",
@@ -405,7 +405,7 @@ function AbRepeatControls() {
   return (
     <div
       className={cn(
-        "flex items-center gap-1.5 rounded-[4px] border border-white/10 bg-white/[0.04] px-2 py-1",
+        "flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2 py-1",
         (abA !== null || abB !== null) && "border-[rgb(var(--tint)_/_0.5)]",
       )}
     >
@@ -421,7 +421,7 @@ function AbRepeatControls() {
           toast.success(`A set at ${formatTime(currentTime)}`);
         }}
         className={cn(
-          "rounded-[4px] px-2 py-0.5 text-[11px] font-medium tabular-nums transition-colors",
+          "rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums transition-colors",
           abA !== null
             ? "bg-[rgb(var(--tint)_/_0.2)] text-[rgb(var(--tint))]"
             : "text-muted-foreground hover:bg-white/[0.08] hover:text-foreground",
@@ -437,7 +437,7 @@ function AbRepeatControls() {
           toast.success(`B set at ${formatTime(currentTime)}`);
         }}
         className={cn(
-          "rounded-[4px] px-2 py-0.5 text-[11px] font-medium tabular-nums transition-colors",
+          "rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums transition-colors",
           abB !== null
             ? "bg-[rgb(var(--tint)_/_0.2)] text-[rgb(var(--tint))]"
             : "text-muted-foreground hover:bg-white/[0.08] hover:text-foreground",
@@ -453,7 +453,7 @@ function AbRepeatControls() {
             clearAb();
             toast("A-B loop cleared");
           }}
-          className="rounded-[4px] p-1 text-muted-foreground transition-colors hover:bg-white/[0.08] hover:text-foreground"
+          className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-white/[0.08] hover:text-foreground"
         >
           <X className="size-3" />
         </button>
@@ -831,13 +831,13 @@ export function FullscreenPlayer() {
 
         {/* ambient accent glows */}
         <div
-          className="glow-pulse pointer-events-none absolute -top-48 left-1/2 z-[1] h-[520px] w-[780px] -translate-x-1/2 rounded-[4px] blur-3xl"
+          className="glow-pulse pointer-events-none absolute -top-48 left-1/2 z-[1] h-[520px] w-[780px] -translate-x-1/2 rounded-full blur-3xl"
           style={{
             background: `radial-gradient(closest-side, rgb(${a.r} ${a.g} ${a.b} / 0.2), transparent)`,
           }}
         />
         <div
-          className="pointer-events-none absolute -bottom-56 -left-32 z-[1] size-[560px] rounded-[4px] blur-3xl"
+          className="pointer-events-none absolute -bottom-56 -left-32 z-[1] size-[560px] rounded-full blur-3xl"
           style={{
             background: `radial-gradient(closest-side, rgb(${a.r} ${a.g} ${a.b} / 0.12), transparent)`,
           }}
@@ -855,7 +855,7 @@ export function FullscreenPlayer() {
               type="button"
               aria-label="Exit full-screen player"
               onClick={() => setFullscreen(false)}
-              className="flex items-center gap-1.5 rounded-[4px] px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
+              className="flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
             >
               <ChevronDown className="size-5" />
               <span className="hidden sm:inline">Minimize</span>
@@ -878,7 +878,7 @@ export function FullscreenPlayer() {
                     : "Add to liked songs"
                 }
                 onClick={() => toggleLike(current.id)}
-                className="rounded-[4px] p-2 transition-all hover:scale-110 sm:hidden"
+                className="rounded-full p-2 transition-all hover:scale-110 sm:hidden"
               >
                 <Heart
                   className={cn(
@@ -899,7 +899,7 @@ export function FullscreenPlayer() {
                 }
                 onClick={() => toggleLike(current.id)}
                 className={cn(
-                  "hidden rounded-[4px] p-2.5 transition-all hover:scale-110 sm:block",
+                  "hidden rounded-full p-2.5 transition-all hover:scale-110 sm:block",
                   liked[current.id]
                     ? "text-[rgb(var(--tint))]"
                     : "text-muted-foreground hover:text-foreground",
@@ -915,7 +915,7 @@ export function FullscreenPlayer() {
                 onClick={() => {
                   setQueueOpen(true);
                 }}
-                className="rounded-[4px] p-2 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground sm:p-2.5"
+                className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground sm:p-2.5"
               >
                 <ListMusic className="size-5" />
               </button>
@@ -948,7 +948,7 @@ export function FullscreenPlayer() {
                     else toast.error("Couldn't copy the link");
                   });
                 }}
-                className="rounded-[4px] p-2 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground sm:p-2.5"
+                className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground sm:p-2.5"
               >
                 <Share2 className="size-5" />
               </button>
@@ -1006,7 +1006,7 @@ export function FullscreenPlayer() {
                 {/* Effect-active badge: in slave mode the iframe is parked, so
                     make it obvious the video is still "on" with sound processed. */}
                 {audioFilter !== "off" && (
-                  <span className="absolute top-3 left-3 z-[2] flex items-center gap-1.5 rounded-[4px] bg-black/70 px-2.5 py-1 text-[11px] font-semibold text-[rgb(var(--tint))] backdrop-blur">
+                  <span className="absolute top-3 left-3 z-[2] flex items-center gap-1.5 rounded-full bg-black/70 px-2.5 py-1 text-[11px] font-semibold text-[rgb(var(--tint))] backdrop-blur">
                     <Waves className="size-3.5" />
                     {FILTER_DEFS.find((f) => f.id === audioFilter)?.label}
                   </span>
@@ -1131,7 +1131,7 @@ export function FullscreenPlayer() {
                 title={liked[current.id] ? "Unlike" : "Like"}
                 onClick={() => toggleLike(current.id)}
                 className={cn(
-                  "hidden rounded-[4px] p-2 transition-all hover:scale-110 sm:block",
+                  "hidden rounded-full p-2 transition-all hover:scale-110 sm:block",
                   liked[current.id]
                     ? "text-[rgb(var(--tint))]"
                     : "text-muted-foreground hover:text-foreground",
@@ -1148,7 +1148,7 @@ export function FullscreenPlayer() {
                 onClick={() => {
                   setQueueOpen(true);
                 }}
-                className="rounded-[4px] p-2 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
+                className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
               >
                 <ListMusic className="size-5" />
               </button>
@@ -1168,7 +1168,7 @@ export function FullscreenPlayer() {
                       rate !== 1 ? `Playback speed ${rate}×` : "Playback speed"
                     }
                     className={cn(
-                      "flex items-center gap-1.5 rounded-[4px] border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[11px] font-semibold tabular-nums transition-colors hover:bg-white/[0.08]",
+                      "flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[11px] font-semibold tabular-nums transition-colors hover:bg-white/[0.08]",
                       rate !== 1
                         ? "border-[rgb(var(--tint)_/_0.5)] text-[rgb(var(--tint))]"
                         : "text-muted-foreground",
@@ -1209,7 +1209,7 @@ export function FullscreenPlayer() {
                         : "Audio effects"
                     }
                     className={cn(
-                      "flex items-center gap-1.5 rounded-[4px] border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[11px] font-semibold transition-colors hover:bg-white/[0.08]",
+                      "flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[11px] font-semibold transition-colors hover:bg-white/[0.08]",
                       audioFilter !== "off"
                         ? "border-[rgb(var(--tint)_/_0.5)] text-[rgb(var(--tint))]"
                         : "text-muted-foreground",
@@ -1259,7 +1259,7 @@ export function FullscreenPlayer() {
                 title="Lyrics"
                 onClick={() => setLyricsOpen((v) => !v)}
                 className={cn(
-                  "flex items-center gap-1.5 rounded-[4px] border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[11px] font-semibold transition-colors hover:bg-white/[0.08] sm:px-3 sm:py-1 sm:tracking-wide sm:uppercase",
+                  "flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[11px] font-semibold transition-colors hover:bg-white/[0.08] sm:px-3 sm:py-1 sm:tracking-wide sm:uppercase",
                   lyricsOpen
                     ? "border-[rgb(var(--tint)_/_0.5)] text-[rgb(var(--tint))]"
                     : "text-muted-foreground",

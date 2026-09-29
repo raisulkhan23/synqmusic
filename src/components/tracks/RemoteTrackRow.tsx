@@ -206,7 +206,7 @@ export function RemoteTrackRow({
                 youtubeId: item.id,
               });
             }}
-            className="hidden rounded-[4px] p-1.5 text-muted-foreground/70 transition-colors hover:bg-white/10 hover:text-foreground sm:inline-flex"
+            className="hidden rounded-full p-1.5 text-muted-foreground/70 transition-colors hover:bg-white/10 hover:text-foreground sm:inline-flex"
           >
             <Radio className="size-4" />
           </button>
@@ -216,7 +216,7 @@ export function RemoteTrackRow({
                 type="button"
                 aria-label={`More options for ${displayTitle}`}
                 onClick={(e) => e.stopPropagation()}
-                className="rounded-[4px] p-2 text-muted-foreground/70 transition-colors hover:bg-white/10 hover:text-foreground sm:p-1.5"
+                className="rounded-full p-2 text-muted-foreground/70 transition-colors hover:bg-white/10 hover:text-foreground sm:p-1.5"
               >
                 <MoreVertical className="size-4" />
               </button>
@@ -299,7 +299,7 @@ export function RemoteTrackRow({
               likeThis();
             }}
             className={cn(
-              "hidden rounded-[4px] p-1.5 transition-colors sm:inline-flex",
+              "hidden rounded-full p-1.5 transition-colors sm:inline-flex",
               isLiked
                 ? "text-[rgb(var(--tint))]"
                 : "text-muted-foreground/70 hover:bg-white/10 hover:text-foreground",

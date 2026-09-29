@@ -9,7 +9,7 @@ export function Equalizer({ className }: { className?: string }) {
       {[0, 1, 2].map((i) => (
         <span
           key={i}
-          className="eq-bar w-[3px] rounded-[4px] bg-[rgb(var(--tint))]"
+          className="eq-bar w-[3px] rounded-full bg-[rgb(var(--tint))]"
           style={{
             height: `${[70, 100, 55][i]}%`,
             animationDelay: `${i * 0.18}s`,

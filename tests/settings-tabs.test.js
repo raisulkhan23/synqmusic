@@ -152,11 +152,9 @@ describe("settings page category tabs", () => {
     expect(css).toMatch(
       /\.settings-page-grid>\.settings-jump-bar:before,\.settings-page-grid>\.settings-jump-bar:after\{content:none\}/,
     );
-    // The radius stays explicit even with no chrome left, and it is the
-    // system 4px — the retheme retired the 1rem exception along with every
-    // other large radius.
+    // The radius stays explicit even with no chrome left.
     expect(css).toMatch(
-      /\.settings-page-grid>\.settings-jump-bar\{[^}]*border-radius:4px/,
+      /\.settings-page-grid>\.settings-jump-bar\{[^}]*border-radius:1rem/,
     );
     expect(css).toMatch(
       /\.settings-page-grid>\.settings-jump-bar:hover\{[^}]*box-shadow:none/,

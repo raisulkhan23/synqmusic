@@ -30,9 +30,7 @@ export const toggleLike = mutation({
 
     const existing = await ctx.db
       .query("likedSongs")
-      .withIndex("by_user_track", (q) =>
-        q.eq("userId", userId).eq("trackId", trackId),
-      )
+      .withIndex("by_user_track", (q) => q.eq("userId", userId).eq("trackId", trackId))
       .first();
 
     if (existing !== null) {
@@ -40,9 +38,7 @@ export const toggleLike = mutation({
       // Clean up any remote snapshot for this id as well.
       const remoteRow = await ctx.db
         .query("likedRemote")
-        .withIndex("by_user_track", (q) =>
-          q.eq("userId", userId).eq("trackId", trackId),
-        )
+        .withIndex("by_user_track", (q) => q.eq("userId", userId).eq("trackId", trackId))
         .first();
       if (remoteRow !== null) await ctx.db.delete(remoteRow._id);
       return false;
@@ -58,9 +54,7 @@ export const toggleLike = mutation({
       // Upsert the snapshot so re-liking refreshes metadata.
       const prev = await ctx.db
         .query("likedRemote")
-        .withIndex("by_user_track", (q) =>
-          q.eq("userId", userId).eq("trackId", trackId),
-        )
+        .withIndex("by_user_track", (q) => q.eq("userId", userId).eq("trackId", trackId))
         .first();
       const doc = {
         userId,
@@ -98,10 +92,7 @@ export const myLikedTrackIds = query({
       .order("desc")
       .collect();
 
-    return likes.map((like) => ({
-      trackId: like.trackId,
-      createdAt: like.createdAt,
-    }));
+    return likes.map((like) => ({ trackId: like.trackId, createdAt: like.createdAt }));
   },
 });
 

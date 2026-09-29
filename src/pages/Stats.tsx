@@ -18,6 +18,7 @@ import { BarChart3, Flame, Hourglass, Music2, Trophy } from "lucide-react";
 // Recharts lives behind this page's lazy() route — it never loads until the
 // user opens Stats, keeping the initial bundle small.
 
+
 function StatCard({
   icon: Icon,
   label,
@@ -31,13 +32,9 @@ function StatCard({
     <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-4">
       <div className="flex items-center gap-2 text-muted-foreground">
         <Icon className="size-4 text-[rgb(var(--tint))]" />
-        <p className="text-xs font-semibold tracking-widest uppercase">
-          {label}
-        </p>
+        <p className="text-xs font-semibold tracking-widest uppercase">{label}</p>
       </div>
-      <p className="mt-2 font-display text-2xl font-bold tracking-tight">
-        {value}
-      </p>
+      <p className="mt-2 font-display text-2xl font-bold tracking-tight">{value}</p>
     </div>
   );
 }
@@ -51,10 +48,7 @@ export default function Stats() {
         <div className="h-8 w-52 animate-pulse rounded bg-white/[0.05]" />
         <div className="grid gap-3 sm:grid-cols-4">
           {[0, 1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="h-24 animate-pulse rounded-2xl bg-white/[0.05]"
-            />
+            <div key={i} className="h-24 animate-pulse rounded-2xl bg-white/[0.05]" />
           ))}
         </div>
         <div className="h-48 animate-pulse rounded-2xl bg-white/[0.05]" />
@@ -84,7 +78,7 @@ export default function Stats() {
           </p>
           <Link
             to="/home"
-            className="mt-1 rounded-[4px] bg-[rgb(var(--tint))] px-5 py-2.5 text-sm font-semibold text-black"
+            className="mt-1 rounded-full bg-[rgb(var(--tint))] px-5 py-2.5 text-sm font-semibold text-black"
           >
             Start listening
           </Link>
@@ -93,16 +87,8 @@ export default function Stats() {
         <>
           {/* headline numbers */}
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard
-              icon={Music2}
-              label="Unique songs"
-              value={stats.uniqueSongs}
-            />
-            <StatCard
-              icon={Trophy}
-              label="Total plays"
-              value={stats.totalPlays}
-            />
+            <StatCard icon={Music2} label="Unique songs" value={stats.uniqueSongs} />
+            <StatCard icon={Trophy} label="Total plays" value={stats.totalPlays} />
             <StatCard icon={Flame} label="Day streak" value={stats.streak} />
             <StatCard
               icon={Hourglass}
@@ -117,44 +103,28 @@ export default function Stats() {
               Last 30 days
             </h2>
             <ResponsiveContainer width="100%" height={200}>
-              <LineChart
-                data={stats.dailyActivity}
-                margin={{ top: 12, right: 8, bottom: 0, left: -20 }}
-              >
-                <XAxis
-                  dataKey="label"
-                  tick={{
-                    fill: "rgb(var(--tint))",
-                    fontSize: 10,
-                    opacity: 0.6,
-                  }}
-                  interval={4}
-                  stroke="rgba(255,255,255,0.1)"
-                />
-                <YAxis
-                  tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 10 }}
-                  stroke="rgba(255,255,255,0.1)"
-                  allowDecimals={false}
-                />
-                <Tooltip
-                  contentStyle={{
-                    background: "#12141c",
-                    border: "1px solid rgba(255,255,255,0.1)",
-                    borderRadius: 12,
-                    fontSize: 12,
-                  }}
-                  labelStyle={{ color: "rgba(255,255,255,0.6)" }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="plays"
-                  stroke="rgb(var(--tint))"
-                  strokeWidth={2.5}
-                  dot={false}
-                  activeDot={{ r: 4 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+                <LineChart data={stats.dailyActivity} margin={{ top: 12, right: 8, bottom: 0, left: -20 }}>
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fill: "rgb(var(--tint))", fontSize: 10, opacity: 0.6 }}
+                    interval={4}
+                    stroke="rgba(255,255,255,0.1)"
+                  />
+                  <YAxis tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 10 }} stroke="rgba(255,255,255,0.1)" allowDecimals={false} />
+                  <Tooltip
+                    contentStyle={{ background: "#12141c", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, fontSize: 12 }}
+                    labelStyle={{ color: "rgba(255,255,255,0.6)" }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="plays"
+                    stroke="rgb(var(--tint))"
+                    strokeWidth={2.5}
+                    dot={false}
+                    activeDot={{ r: 4 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
           </section>
 
           {/* monthly history */}
@@ -163,37 +133,20 @@ export default function Stats() {
               Monthly history
             </h2>
             <ResponsiveContainer width="100%" height={200}>
-              <BarChart
-                data={stats.monthlyActivity}
-                margin={{ top: 12, right: 8, bottom: 0, left: -20 }}
-              >
-                <XAxis
-                  dataKey="month"
-                  tick={{ fill: "rgba(255,255,255,0.45)", fontSize: 10 }}
-                  stroke="rgba(255,255,255,0.1)"
-                />
-                <YAxis
-                  tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 10 }}
-                  stroke="rgba(255,255,255,0.1)"
-                  allowDecimals={false}
-                />
-                <Tooltip
-                  cursor={{ fill: "rgba(255,255,255,0.04)" }}
-                  contentStyle={{
-                    background: "#12141c",
-                    border: "1px solid rgba(255,255,255,0.1)",
-                    borderRadius: 12,
-                    fontSize: 12,
-                  }}
-                />
-                <Bar
-                  dataKey="plays"
-                  fill="rgb(var(--tint))"
-                  radius={[6, 6, 0, 0]}
-                  maxBarSize={36}
-                />
-              </BarChart>
-            </ResponsiveContainer>
+                <BarChart data={stats.monthlyActivity} margin={{ top: 12, right: 8, bottom: 0, left: -20 }}>
+                  <XAxis
+                    dataKey="month"
+                    tick={{ fill: "rgba(255,255,255,0.45)", fontSize: 10 }}
+                    stroke="rgba(255,255,255,0.1)"
+                  />
+                  <YAxis tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 10 }} stroke="rgba(255,255,255,0.1)" allowDecimals={false} />
+                  <Tooltip
+                    cursor={{ fill: "rgba(255,255,255,0.04)" }}
+                    contentStyle={{ background: "#12141c", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, fontSize: 12 }}
+                  />
+                  <Bar dataKey="plays" fill="rgb(var(--tint))" radius={[6, 6, 0, 0]} maxBarSize={36} />
+                </BarChart>
+              </ResponsiveContainer>
           </section>
 
           <div className="grid gap-6 lg:grid-cols-2">
@@ -208,16 +161,9 @@ export default function Stats() {
                     key={t.trackId}
                     className="flex items-center gap-3 rounded-xl px-2 py-1.5 transition-colors hover:bg-white/[0.05]"
                   >
-                    <span className="w-5 text-center text-sm tabular-nums text-muted-foreground">
-                      {i + 1}
-                    </span>
+                    <span className="w-5 text-center text-sm tabular-nums text-muted-foreground">{i + 1}</span>
                     {t.coverUrl ? (
-                      <img
-                        src={t.coverUrl}
-                        alt=""
-                        className="size-10 rounded-md object-cover ring-1 ring-white/10"
-                        loading="lazy"
-                      />
+                      <img src={t.coverUrl} alt="" className="size-10 rounded-md object-cover ring-1 ring-white/10" loading="lazy" />
                     ) : (
                       <span className="flex size-10 items-center justify-center rounded-md bg-white/[0.06] ring-1 ring-white/10">
                         <Music2 className="size-4 text-muted-foreground" />
@@ -225,13 +171,9 @@ export default function Stats() {
                     )}
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">{t.title}</p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {t.artistName}
-                      </p>
+                      <p className="truncate text-xs text-muted-foreground">{t.artistName}</p>
                     </div>
-                    <span className="text-sm tabular-nums text-[rgb(var(--tint))]">
-                      {t.playCount}×
-                    </span>
+                    <span className="text-sm tabular-nums text-[rgb(var(--tint))]">{t.playCount}×</span>
                   </div>
                 ))}
               </div>
@@ -242,48 +184,29 @@ export default function Stats() {
               <h2 className="font-display text-lg font-bold tracking-tight">
                 When you listen
               </h2>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Plays by hour of day
-              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">Plays by hour of day</p>
               <ResponsiveContainer width="100%" height={180}>
-                <BarChart
-                  data={stats.activeHours.map((plays, hour) => ({
-                    hour: `${hour}`,
-                    plays,
-                  }))}
-                  margin={{ top: 12, right: 8, bottom: 0, left: -20 }}
-                >
-                  <XAxis
-                    dataKey="hour"
-                    tick={{ fill: "rgba(255,255,255,0.45)", fontSize: 9 }}
-                    interval={2}
-                    stroke="rgba(255,255,255,0.1)"
-                  />
-                  <YAxis
-                    tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 10 }}
-                    stroke="rgba(255,255,255,0.1)"
-                    allowDecimals={false}
-                  />
-                  <Tooltip
-                    cursor={{ fill: "rgba(255,255,255,0.04)" }}
-                    contentStyle={{
-                      background: "#12141c",
-                      border: "1px solid rgba(255,255,255,0.1)",
-                      borderRadius: 12,
-                      fontSize: 12,
-                    }}
-                    formatter={(v: number) => [`${v} plays`]}
-                  />
-                  <Bar
-                    dataKey="plays"
-                    fill="rgb(var(--tint))"
-                    radius={[4, 4, 0, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
+                  <BarChart
+                    data={stats.activeHours.map((plays, hour) => ({ hour: `${hour}`, plays }))}
+                    margin={{ top: 12, right: 8, bottom: 0, left: -20 }}
+                  >
+                    <XAxis
+                      dataKey="hour"
+                      tick={{ fill: "rgba(255,255,255,0.45)", fontSize: 9 }}
+                      interval={2}
+                      stroke="rgba(255,255,255,0.1)"
+                    />
+                    <YAxis tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 10 }} stroke="rgba(255,255,255,0.1)" allowDecimals={false} />
+                    <Tooltip
+                      cursor={{ fill: "rgba(255,255,255,0.04)" }}
+                      contentStyle={{ background: "#12141c", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, fontSize: 12 }}
+                      formatter={(v: number) => [`${v} plays`]}
+                    />
+                    <Bar dataKey="plays" fill="rgb(var(--tint))" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
               <p className="mt-2 text-xs text-muted-foreground">
-                Total listening logged: {formatTime(stats.totalSeconds)} across
-                all songs
+                Total listening logged: {formatTime(stats.totalSeconds)} across all songs
               </p>
             </section>
           </div>

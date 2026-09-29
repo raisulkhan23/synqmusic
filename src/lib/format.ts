@@ -18,10 +18,6 @@ export function greeting(): string {
   return "Good evening";
 }
 
-export function pluralize(
-  count: number,
-  singular: string,
-  plural?: string,
-): string {
+export function pluralize(count: number, singular: string, plural?: string): string {
   return `${count} ${count === 1 ? singular : (plural ?? `${singular}s`)}`;
 }

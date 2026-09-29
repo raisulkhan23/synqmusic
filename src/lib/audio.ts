@@ -38,37 +38,12 @@ export type AudioFilterId = "off" | "8d" | "bass" | "vocal" | "night";
 export const AUDIO_EFFECT_DELAY_MESSAGE =
   "Turning on sound effects may add a small delay before music starts.";
 
-export const AUDIO_FILTERS: {
-  id: AudioFilterId;
-  label: string;
-  icon: string;
-  description: string;
-}[] = [
+export const AUDIO_FILTERS: { id: AudioFilterId; label: string; icon: string; description: string }[] = [
   { id: "off", label: "None", icon: "🎵", description: "Original mix" },
-  {
-    id: "8d",
-    label: "8D Audio",
-    icon: "🌀",
-    description: "Surround-style rotating effect",
-  },
-  {
-    id: "bass",
-    label: "Bass Boost",
-    icon: "🔊",
-    description: "Extra low-end punch",
-  },
-  {
-    id: "vocal",
-    label: "Vocal Boost",
-    icon: "🎤",
-    description: "Emphasizes voices",
-  },
-  {
-    id: "night",
-    label: "Night Mode",
-    icon: "🌙",
-    description: "Soft, quiet-friendly EQ",
-  },
+  { id: "8d", label: "8D Audio", icon: "🌀", description: "Surround-style rotating effect" },
+  { id: "bass", label: "Bass Boost", icon: "🔊", description: "Extra low-end punch" },
+  { id: "vocal", label: "Vocal Boost", icon: "🎤", description: "Emphasizes voices" },
+  { id: "night", label: "Night Mode", icon: "🌙", description: "Soft, quiet-friendly EQ" },
 ];
 
 let audioCtx: AudioContext | null = null;
@@ -147,8 +122,7 @@ export function ensureGraph(): boolean {
     }
     const AudioCtx =
       window.AudioContext ??
-      (window as unknown as { webkitAudioContext?: typeof AudioContext })
-        .webkitAudioContext;
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!AudioCtx) return false;
     audioCtx = audioCtx ?? new AudioCtx();
 
@@ -349,9 +323,7 @@ function startRotation(): void {
   const tick = () => {
     if (!ctx || !panner) return;
     // Full -1 → +1 sweep every 3.2s — clearly audible "8D" orbit.
-    panner.pan.value = Math.sin(
-      (ctx.currentTime - start) * ((2 * Math.PI) / 3.2),
-    );
+    panner.pan.value = Math.sin((ctx.currentTime - start) * ((2 * Math.PI) / 3.2));
     rotateRaf = requestAnimationFrame(tick);
   };
   rotateRaf = requestAnimationFrame(tick);

@@ -47,11 +47,7 @@ export const requestAds = action({
   handler: async (
     ctx,
     { context, placement = "search_results", messages = [], visitorId },
-  ): Promise<{
-    ads: GravityAdPayload[];
-    skipped?: boolean;
-    error?: string;
-  }> => {
+  ): Promise<{ ads: GravityAdPayload[]; skipped?: boolean; error?: string }> => {
     const apiKey = process.env.GRAVITY_API_KEY;
     if (!apiKey) return { ads: [], skipped: true };
 
@@ -68,7 +64,10 @@ export const requestAds = action({
         body: JSON.stringify({
           // Test mode by default; flip to true to serve real campaigns.
           production: process.env.GRAVITY_PRODUCTION === "1",
-          messages: [{ role: "user", content: trimmed }, ...messages.slice(-2)],
+          messages: [
+            { role: "user", content: trimmed },
+            ...messages.slice(-2),
+          ],
           placements: [
             {
               placement,

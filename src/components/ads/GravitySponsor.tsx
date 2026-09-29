@@ -104,7 +104,7 @@ export function GravitySponsor({
           type="button"
           onClick={dismiss}
           aria-label="Hide sponsored content"
-          className="rounded-[4px] px-2 py-0.5 text-[10px] text-muted-foreground/70 transition-colors hover:bg-white/[0.06] hover:text-foreground"
+          className="rounded-full px-2 py-0.5 text-[10px] text-muted-foreground/70 transition-colors hover:bg-white/[0.06] hover:text-foreground"
         >
           Hide ads
         </button>

@@ -132,8 +132,8 @@ function ConfirmButton({
       }}
       className={
         armed
-          ? "rounded-[4px] bg-red-500/90 px-3 py-1.5 text-xs font-semibold text-white transition-colors"
-          : `rounded-[4px] border border-white/10 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-red-500/40 hover:text-red-400 ${className ?? ""}`
+          ? "rounded-full bg-red-500/90 px-3 py-1.5 text-xs font-semibold text-white transition-colors"
+          : `rounded-full border border-white/10 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-red-500/40 hover:text-red-400 ${className ?? ""}`
       }
     >
       {armed ? confirmLabel : label}
@@ -379,7 +379,7 @@ export default function Admin() {
         </div>
         <Link
           to="/home"
-          className="mt-2 rounded-[4px] border border-white/10 bg-white/[0.04] px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-white/[0.08]"
+          className="mt-2 rounded-full border border-white/10 bg-white/[0.04] px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-white/[0.08]"
         >
           Back to your dashboard
         </Link>
@@ -532,7 +532,7 @@ export default function Admin() {
             onChange={(e) => setGlobalQuery(e.target.value)}
             placeholder="Search accounts, playlists, liked songs, rooms and imports…"
             aria-label="Search everything"
-            className="h-11 w-full rounded-[4px] border border-white/10 bg-white/[0.04] px-4 text-sm outline-none placeholder:text-muted-foreground/70 focus:border-[rgb(var(--tint)_/_0.5)]"
+            className="h-11 w-full rounded-full border border-white/10 bg-white/[0.04] px-4 text-sm outline-none placeholder:text-muted-foreground/70 focus:border-[rgb(var(--tint)_/_0.5)]"
           />
           {!globalResults ? (
             <p className="py-10 text-center text-sm text-muted-foreground">
@@ -633,7 +633,7 @@ export default function Admin() {
               onChange={(e) => setUserQuery(e.target.value)}
               placeholder="Search name, email or GitHub id…"
               aria-label="Search accounts"
-              className="h-10 w-full rounded-[4px] border border-white/10 bg-white/[0.04] px-4 text-sm outline-none placeholder:text-muted-foreground/70 focus:border-[rgb(var(--tint)_/_0.5)] sm:max-w-xs"
+              className="h-10 w-full rounded-full border border-white/10 bg-white/[0.04] px-4 text-sm outline-none placeholder:text-muted-foreground/70 focus:border-[rgb(var(--tint)_/_0.5)] sm:max-w-xs"
             />
             <div className="flex flex-wrap items-center gap-1.5">
               {(["all", "admin", "user"] as const).map((role) => (
@@ -642,7 +642,7 @@ export default function Admin() {
                   type="button"
                   onClick={() => setUserRole(role)}
                   className={cn(
-                    "rounded-[4px] border px-3 py-1.5 text-xs font-semibold capitalize transition-colors",
+                    "rounded-full border px-3 py-1.5 text-xs font-semibold capitalize transition-colors",
                     userRole === role
                       ? "border-[rgb(var(--tint))] bg-[rgb(var(--tint)_/_0.14)] text-[rgb(var(--tint))]"
                       : "border-white/10 text-muted-foreground hover:border-white/25 hover:text-foreground",
@@ -657,7 +657,7 @@ export default function Admin() {
                   setUserMethod(e.target.value as typeof userMethod)
                 }
                 aria-label="Filter by sign-in method"
-                className="rounded-[4px] border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-muted-foreground outline-none"
+                className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-muted-foreground outline-none"
               >
                 <option value="all">
                   Any sign-in ({methodCounts.all ?? 0})
@@ -677,7 +677,7 @@ export default function Admin() {
                 value={userSort}
                 onChange={(e) => setUserSort(e.target.value as typeof userSort)}
                 aria-label="Sort accounts"
-                className="rounded-[4px] border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-muted-foreground outline-none"
+                className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-muted-foreground outline-none"
               >
                 <option value="newest">Newest</option>
                 <option value="oldest">Oldest</option>
@@ -722,7 +722,7 @@ export default function Admin() {
                     `Exported ${filteredUsers.length} account${filteredUsers.length === 1 ? "" : "s"}`,
                   );
                 }}
-                className="flex items-center gap-1 rounded-[4px] border border-white/10 px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-white/25 hover:text-foreground"
+                className="flex items-center gap-1 rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-white/25 hover:text-foreground"
               >
                 <ArrowDownToLine className="size-3.5" />
                 CSV
@@ -769,11 +769,11 @@ export default function Admin() {
                             <img
                               src={user.image}
                               alt=""
-                              className="size-9 shrink-0 rounded-[4px] object-cover ring-1 ring-white/10"
+                              className="size-9 shrink-0 rounded-full object-cover ring-1 ring-white/10"
                               loading="lazy"
                             />
                           ) : (
-                            <span className="flex size-9 shrink-0 items-center justify-center rounded-[4px] bg-[rgb(var(--tint)_/_0.14)] text-xs font-bold text-[rgb(var(--tint))]">
+                            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[rgb(var(--tint)_/_0.14)] text-xs font-bold text-[rgb(var(--tint))]">
                               {name
                                 .split(/\s+/)
                                 .map((w) => w[0])
@@ -858,7 +858,7 @@ export default function Admin() {
                                   onClick={() =>
                                     handleSetRole(user._id, name, "user")
                                   }
-                                  className="flex items-center gap-1.5 rounded-[4px] border border-white/10 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
+                                  className="flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
                                 >
                                   <ArrowDownToLine className="size-3.5" />
                                   Demote
@@ -869,7 +869,7 @@ export default function Admin() {
                                   onClick={() =>
                                     handleSetRole(user._id, name, "admin")
                                   }
-                                  className="flex items-center gap-1.5 rounded-[4px] border border-white/10 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
+                                  className="flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
                                 >
                                   <ArrowUpFromLine className="size-3.5" />
                                   Make admin
@@ -1060,7 +1060,7 @@ export default function Admin() {
               onChange={(e) => setPlaylistQuery(e.target.value)}
               placeholder="Search playlist, owner or id…"
               aria-label="Search playlists"
-              className="h-10 w-full rounded-[4px] border border-white/10 bg-white/[0.04] px-4 text-sm outline-none placeholder:text-muted-foreground/70 focus:border-[rgb(var(--tint)_/_0.5)] sm:max-w-xs"
+              className="h-10 w-full rounded-full border border-white/10 bg-white/[0.04] px-4 text-sm outline-none placeholder:text-muted-foreground/70 focus:border-[rgb(var(--tint)_/_0.5)] sm:max-w-xs"
             />
             <div className="flex flex-wrap items-center gap-1.5">
               <select
@@ -1069,7 +1069,7 @@ export default function Admin() {
                   setPlaylistSort(e.target.value as typeof playlistSort)
                 }
                 aria-label="Sort playlists"
-                className="rounded-[4px] border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-muted-foreground outline-none"
+                className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-muted-foreground outline-none"
               >
                 <option value="newest">Newest</option>
                 <option value="largest">Most tracks</option>
@@ -1144,18 +1144,18 @@ export default function Admin() {
                                   name: e.target.value,
                                 })
                               }
-                              className="w-40 rounded-[4px] border border-white/15 bg-white/[0.05] px-3 py-1.5 text-xs outline-none focus:border-[rgb(var(--tint))]"
+                              className="w-40 rounded-full border border-white/15 bg-white/[0.05] px-3 py-1.5 text-xs outline-none focus:border-[rgb(var(--tint))]"
                             />
                             <button
                               type="submit"
-                              className="rounded-[4px] bg-[rgb(var(--tint))] px-3 py-1.5 text-xs font-semibold text-black"
+                              className="rounded-full bg-[rgb(var(--tint))] px-3 py-1.5 text-xs font-semibold text-black"
                             >
                               Save
                             </button>
                             <button
                               type="button"
                               onClick={() => setRenaming(null)}
-                              className="rounded-[4px] border border-white/10 px-3 py-1.5 text-xs text-muted-foreground"
+                              className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-muted-foreground"
                             >
                               Cancel
                             </button>
@@ -1172,7 +1172,7 @@ export default function Admin() {
                                   name: playlist.name,
                                 })
                               }
-                              className="flex items-center gap-1.5 rounded-[4px] border border-white/10 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
+                              className="flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
                             >
                               <Pencil className="size-3.5" />
                               Rename
@@ -1449,7 +1449,7 @@ export default function Admin() {
                   <img
                     src={gh.data.avatarUrl}
                     alt=""
-                    className="size-14 rounded-[4px] ring-1 ring-white/10"
+                    className="size-14 rounded-full ring-1 ring-white/10"
                     loading="lazy"
                   />
                 )}
@@ -1485,7 +1485,7 @@ export default function Admin() {
             <button
               type="button"
               onClick={() => setGh(null)}
-              className="mt-5 w-full rounded-[4px] border border-white/10 py-2 text-sm font-medium transition-colors hover:bg-white/[0.06]"
+              className="mt-5 w-full rounded-full border border-white/10 py-2 text-sm font-medium transition-colors hover:bg-white/[0.06]"
             >
               Close
             </button>

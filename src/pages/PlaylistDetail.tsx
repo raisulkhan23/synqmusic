@@ -78,7 +78,7 @@ export default function PlaylistDetail() {
         </div>
         <Link
           to="/playlists"
-          className="mt-1 rounded-[4px] bg-[rgb(var(--tint))] px-5 py-2.5 text-sm font-semibold text-black"
+          className="mt-1 rounded-full bg-[rgb(var(--tint))] px-5 py-2.5 text-sm font-semibold text-black"
         >
           Back to playlists
         </Link>
@@ -341,7 +341,7 @@ export default function PlaylistDetail() {
               type="button"
               onClick={() => void playAll()}
               disabled={resolvingId !== null}
-              className="flex items-center gap-2 rounded-[4px] bg-[rgb(var(--tint))] px-5 py-2.5 text-sm font-semibold text-black shadow-[0_8px_30px_rgb(var(--tint)/0.35)] transition-all hover:scale-[1.03] active:scale-95 disabled:opacity-60"
+              className="flex items-center gap-2 rounded-full bg-[rgb(var(--tint))] px-5 py-2.5 text-sm font-semibold text-black shadow-[0_8px_30px_rgb(var(--tint)/0.35)] transition-all hover:scale-[1.03] active:scale-95 disabled:opacity-60"
             >
               <Play className="size-4 fill-current" />
               {resolvingId === "__all__" ? "Loading…" : "Play all"}
@@ -350,7 +350,7 @@ export default function PlaylistDetail() {
               <button
                 type="button"
                 onClick={shuffleAll}
-                className="flex items-center gap-2 rounded-[4px] border border-white/15 bg-white/[0.05] px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-white/[0.1]"
+                className="flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.05] px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-white/[0.1]"
               >
                 <Shuffle className="size-4" />
                 Shuffle
@@ -370,7 +370,7 @@ export default function PlaylistDetail() {
                 disabled={resolvingId !== null}
                 aria-pressed={radioSource === playlist.name}
                 className={cn(
-                  "flex items-center gap-2 rounded-[4px] border px-5 py-2.5 text-sm font-semibold transition-colors disabled:opacity-60",
+                  "flex items-center gap-2 rounded-full border px-5 py-2.5 text-sm font-semibold transition-colors disabled:opacity-60",
                   radioSource === playlist.name
                     ? "border-[rgb(var(--tint))] bg-[rgb(var(--tint)_/_0.14)] text-[rgb(var(--tint))]"
                     : "border-white/15 bg-white/[0.05] hover:bg-white/[0.1]",
@@ -388,7 +388,7 @@ export default function PlaylistDetail() {
               onClick={() => void handleDelete()}
               onBlur={() => setConfirmDelete(false)}
               className={cn(
-                "flex items-center gap-1.5 rounded-[4px] border px-3.5 py-2 text-sm transition-colors disabled:opacity-60",
+                "flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-sm transition-colors disabled:opacity-60",
                 confirmDelete
                   ? "border-red-500 bg-red-500/20 text-red-300"
                   : "border-white/10 text-muted-foreground hover:border-red-500/40 hover:text-red-400",
@@ -411,7 +411,7 @@ export default function PlaylistDetail() {
                 onChange={(event) => setFilter(event.target.value)}
                 placeholder="Search in playlist…"
                 aria-label="Search in playlist"
-                className="h-10 w-full rounded-[4px] border border-white/10 bg-white/[0.05] pr-4 pl-9 text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-[rgb(var(--tint)_/_0.6)] focus:outline-none"
+                className="h-10 w-full rounded-full border border-white/10 bg-white/[0.05] pr-4 pl-9 text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-[rgb(var(--tint)_/_0.6)] focus:outline-none"
               />
             </div>
           )}
@@ -452,7 +452,7 @@ export default function PlaylistDetail() {
           </p>
           <Link
             to="/search"
-            className="mt-1 rounded-[4px] bg-[rgb(var(--tint))] px-5 py-2.5 text-sm font-semibold text-black"
+            className="mt-1 rounded-full bg-[rgb(var(--tint))] px-5 py-2.5 text-sm font-semibold text-black"
           >
             Find music
           </Link>

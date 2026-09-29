@@ -15,10 +15,7 @@ export function LikedSongsCard() {
   const liked = useQuery(api.likes.myLikedRemote);
 
   const count = liked?.length ?? 0;
-  const totalSeconds = (liked ?? []).reduce(
-    (sum, row) => sum + row.duration,
-    0,
-  );
+  const totalSeconds = (liked ?? []).reduce((sum, row) => sum + row.duration, 0);
   const subtitle =
     liked === undefined
       ? "Loading…"

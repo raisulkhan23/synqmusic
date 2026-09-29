@@ -21,20 +21,14 @@ export function wallpaperMarker(key: string) {
   return `${WALLPAPER_MARKER_PREFIX}${key}`;
 }
 
-export function getWallpaperKey(
-  marker: string | null | undefined,
-): string | null {
+export function getWallpaperKey(marker: string | null | undefined): string | null {
   if (!marker) return null;
   if (marker === LIVE_WALLPAPER_MARKER) return LIVE_WALLPAPER_KEY;
   if (marker === IMAGE_WALLPAPER_MARKER) return IMAGE_WALLPAPER_KEY;
-  return marker.startsWith(WALLPAPER_MARKER_PREFIX)
-    ? marker.slice(WALLPAPER_MARKER_PREFIX.length)
-    : null;
+  return marker.startsWith(WALLPAPER_MARKER_PREFIX) ? marker.slice(WALLPAPER_MARKER_PREFIX.length) : null;
 }
 
-export function wallpaperKind(
-  record: Pick<StoredWallpaper, "type">,
-): WallpaperKind {
+export function wallpaperKind(record: Pick<StoredWallpaper, "type">): WallpaperKind {
   return record.type.startsWith("video/") ? "video" : "image";
 }
 
@@ -47,14 +41,10 @@ const openDatabase = (): Promise<IDBDatabase> =>
       }
     };
     request.onsuccess = () => resolve(request.result);
-    request.onerror = () =>
-      reject(request.error ?? new Error("Could not open wallpaper storage"));
+    request.onerror = () => reject(request.error ?? new Error("Could not open wallpaper storage"));
   });
 
-async function saveWallpaperFile(
-  key: string,
-  file: File,
-): Promise<StoredWallpaper> {
+async function saveWallpaperFile(key: string, file: File): Promise<StoredWallpaper> {
   const record: StoredWallpaper = {
     key,
     blob: file,
@@ -68,8 +58,7 @@ async function saveWallpaperFile(
       const transaction = database.transaction(STORE_NAME, "readwrite");
       transaction.objectStore(STORE_NAME).put(record);
       transaction.oncomplete = () => resolve();
-      transaction.onerror = () =>
-        reject(transaction.error ?? new Error("Could not save wallpaper file"));
+      transaction.onerror = () => reject(transaction.error ?? new Error("Could not save wallpaper file"));
     });
   } finally {
     database.close();
@@ -77,21 +66,14 @@ async function saveWallpaperFile(
   return record;
 }
 
-async function getWallpaperRecord(
-  key: string,
-): Promise<StoredWallpaper | undefined> {
+async function getWallpaperRecord(key: string): Promise<StoredWallpaper | undefined> {
   if (typeof indexedDB === "undefined") return undefined;
   const database = await openDatabase();
   try {
     return await new Promise<StoredWallpaper | undefined>((resolve, reject) => {
-      const request = database
-        .transaction(STORE_NAME, "readonly")
-        .objectStore(STORE_NAME)
-        .get(key);
-      request.onsuccess = () =>
-        resolve(request.result as StoredWallpaper | undefined);
-      request.onerror = () =>
-        reject(request.error ?? new Error("Could not read wallpaper file"));
+      const request = database.transaction(STORE_NAME, "readonly").objectStore(STORE_NAME).get(key);
+      request.onsuccess = () => resolve(request.result as StoredWallpaper | undefined);
+      request.onerror = () => reject(request.error ?? new Error("Could not read wallpaper file"));
     });
   } finally {
     database.close();
@@ -111,10 +93,7 @@ async function deleteWallpaperFile(key: string): Promise<void> {
       const transaction = database.transaction(STORE_NAME, "readwrite");
       transaction.objectStore(STORE_NAME).delete(key);
       transaction.oncomplete = () => resolve();
-      transaction.onerror = () =>
-        reject(
-          transaction.error ?? new Error("Could not remove wallpaper file"),
-        );
+      transaction.onerror = () => reject(transaction.error ?? new Error("Could not remove wallpaper file"));
     });
   } finally {
     database.close();
@@ -126,44 +105,28 @@ export async function listWallpaperFiles(): Promise<StoredWallpaper[]> {
   const database = await openDatabase();
   try {
     return await new Promise<StoredWallpaper[]>((resolve, reject) => {
-      const request = database
-        .transaction(STORE_NAME, "readonly")
-        .objectStore(STORE_NAME)
-        .getAll();
-      request.onsuccess = () =>
-        resolve(
-          (request.result as StoredWallpaper[]).sort(
-            (a, b) => b.createdAt - a.createdAt,
-          ),
-        );
-      request.onerror = () =>
-        reject(request.error ?? new Error("Could not list wallpaper files"));
+      const request = database.transaction(STORE_NAME, "readonly").objectStore(STORE_NAME).getAll();
+      request.onsuccess = () => resolve((request.result as StoredWallpaper[]).sort((a, b) => b.createdAt - a.createdAt));
+      request.onerror = () => reject(request.error ?? new Error("Could not list wallpaper files"));
     });
   } finally {
     database.close();
   }
 }
 
-export async function saveWallpaperLibraryFile(
-  file: File,
-): Promise<StoredWallpaper> {
-  const suffix =
-    typeof crypto !== "undefined" && "randomUUID" in crypto
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+export async function saveWallpaperLibraryFile(file: File): Promise<StoredWallpaper> {
+  const suffix = typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   return saveWallpaperFile(`library-${suffix}`, file);
 }
 
-export const saveLiveWallpaperFile = (file: File) =>
-  saveWallpaperFile(LIVE_WALLPAPER_KEY, file);
-export const saveImageWallpaperFile = (file: File) =>
-  saveWallpaperFile(IMAGE_WALLPAPER_KEY, file);
+export const saveLiveWallpaperFile = (file: File) => saveWallpaperFile(LIVE_WALLPAPER_KEY, file);
+export const saveImageWallpaperFile = (file: File) => saveWallpaperFile(IMAGE_WALLPAPER_KEY, file);
 export const getLiveWallpaperUrl = () => getWallpaperUrl(LIVE_WALLPAPER_KEY);
 export const getImageWallpaperUrl = () => getWallpaperUrl(IMAGE_WALLPAPER_KEY);
-export const deleteLiveWallpaperFile = () =>
-  deleteWallpaperFile(LIVE_WALLPAPER_KEY);
-export const deleteImageWallpaperFile = () =>
-  deleteWallpaperFile(IMAGE_WALLPAPER_KEY);
+export const deleteLiveWallpaperFile = () => deleteWallpaperFile(LIVE_WALLPAPER_KEY);
+export const deleteImageWallpaperFile = () => deleteWallpaperFile(IMAGE_WALLPAPER_KEY);
 export { deleteWallpaperFile };
 
 export async function deleteAllWallpaperFiles(): Promise<void> {
