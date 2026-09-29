@@ -147,7 +147,9 @@ export const importerFor = (service: PlaylistService): ImporterCapabilities =>
   IMPORTERS[service] ?? IMPORTERS.unknown;
 
 /** Services that import from a link with no account linking at all. */
-export const DIRECT_IMPORT_SERVICES: PlaylistService[] = Object.values(IMPORTERS)
+export const DIRECT_IMPORT_SERVICES: PlaylistService[] = Object.values(
+  IMPORTERS,
+)
   .filter((entry) => entry.direct && !entry.needsAuth)
   .map((entry) => entry.service);
 

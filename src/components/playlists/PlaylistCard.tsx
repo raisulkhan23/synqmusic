@@ -46,7 +46,7 @@ export function PlaylistCard({ playlist }: { playlist: Doc<"playlists"> }) {
   return (
     // `snap-start` lets the card align to the same scroll stops as the track
     // cards in a Home shelf, so a mixed shelf still snaps cleanly.
-    <div className="group relative w-36 shrink-0 snap-start cursor-pointer sm:w-40 lg:w-44">
+    <div className="group relative w-32 shrink-0 snap-start cursor-pointer sm:w-36 lg:w-40">
       <div
         role="button"
         tabIndex={0}

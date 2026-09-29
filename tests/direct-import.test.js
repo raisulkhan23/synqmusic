@@ -224,7 +224,7 @@ describe("YouTube playlist import action", () => {
 describe("import UI", () => {
   test("offers a link box and keeps the file picker", () => {
     expect(importSection).toContain("Paste a playlist link");
-    expect(importSection).toContain("planImport");
+    expect(importSection).toContain("detectServiceUrl");
     expect(importSection).toContain("handleFile");
   });
 
@@ -235,6 +235,11 @@ describe("import UI", () => {
   });
 
   test("a non-linkable service explains itself instead of failing", () => {
-    expect(flat(importSection)).toContain("toast.error(plan.message");
+    // The wording moved out of a toast and into the panel's own error state,
+    // but the promise it made is unchanged: say what to do, don't just fail.
+    expect(flat(importSection)).toContain("can't be imported from a link yet");
+    expect(flat(importSection)).toContain(
+      "Export the playlist as CSV or a plain text list and drop it below",
+    );
   });
 });

@@ -78,7 +78,7 @@ export function MediaCard({
   return (
     <article
       className={cn(
-        "group relative w-36 shrink-0 snap-start sm:w-40 lg:w-44",
+        "group relative w-32 shrink-0 snap-start sm:w-36 lg:w-40",
         className,
       )}
     >

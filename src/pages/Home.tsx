@@ -1055,7 +1055,7 @@ export default function Home() {
             key={label}
             to={`/search?q=${encodeURIComponent(query)}`}
             className={cn(
-              "group flex aspect-square w-36 shrink-0 snap-start flex-col justify-end overflow-hidden rounded-xl border border-white/[0.08] bg-gradient-to-br p-3 transition-all hover:-translate-y-0.5 hover:border-[rgb(var(--tint)_/_0.35)] sm:w-44 lg:w-48",
+              "group flex aspect-square w-32 shrink-0 snap-start flex-col justify-end overflow-hidden rounded-xl border border-white/[0.08] bg-gradient-to-br p-3 transition-all hover:-translate-y-0.5 hover:border-[rgb(var(--tint)_/_0.35)] sm:w-40 lg:w-44",
               tone,
             )}
           >

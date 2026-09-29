@@ -191,8 +191,10 @@ export class ImportError extends Error {
   }
 }
 
-export const importFailure = (code: ImportErrorCode, message?: string): ImportFailure =>
-  new ImportError(code, message);
+export const importFailure = (
+  code: ImportErrorCode,
+  message?: string,
+): ImportFailure => new ImportError(code, message);
 
 /** Trim, collapse inner whitespace, and drop anything with no title or artist. */
 export function cleanField(value: unknown): string {
@@ -232,7 +234,8 @@ export function normalizeTrack(input: {
   const seconds = Number(input.durationSeconds);
   let duration: number | undefined;
   if (Number.isFinite(ms) && ms > 0) duration = Math.round(ms / 1000);
-  else if (Number.isFinite(seconds) && seconds > 0) duration = Math.round(seconds);
+  else if (Number.isFinite(seconds) && seconds > 0)
+    duration = Math.round(seconds);
 
   const track: NormalizedTrack = { title, artist, source: input.source };
   if (album) track.album = album;
@@ -245,7 +248,13 @@ export function normalizeTrack(input: {
 
 /** "Artist - Title", lowercased. The identity used for de-duplication. */
 function identityOf(track: NormalizedTrack): string {
-  return `${track.artist} ${track.title}`.toLowerCase();
+  // Case and inner spacing are folded, because the same song arrives spelled
+  // two ways from two services ("Marconi Union" and "  marconi   union  ")
+  // and both would otherwise sit in the queue.
+  return `${track.artist} ${track.title}`
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 /**
@@ -302,9 +311,14 @@ export function toStoredTracks(tracks: NormalizedTrack[]): StoredTrack[] {
  */
 export function describeOutcome(
   outcome: ImportOutcome,
-): { ok: true; outcome: ImportOutcome } | { ok: false; failure: ImportFailure } {
+):
+  | { ok: true; outcome: ImportOutcome }
+  | { ok: false; failure: ImportFailure } {
   if (outcome.tracks.length === 0) {
-    return { ok: false, failure: IMPORT_ERRORS[outcome.skipped > 0 ? "not-found" : "empty"] };
+    return {
+      ok: false,
+      failure: IMPORT_ERRORS[outcome.skipped > 0 ? "not-found" : "empty"],
+    };
   }
   return { ok: true, outcome };
 }

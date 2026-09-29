@@ -168,10 +168,7 @@ export const importPlaylist = action({
     /** "us", "gb", … — taken from the pasted URL. */
     storefront: v.string(),
   },
-  handler: async (
-    _ctx,
-    { playlistId, storefront },
-  ): Promise<ImportOutcome> => {
+  handler: async (_ctx, { playlistId, storefront }): Promise<ImportOutcome> => {
     const id = playlistId.trim();
     if (!/^pl\.[A-Za-z0-9-]+$/.test(id)) throw new ImportError("invalid-url");
     const store = storefront.trim().toLowerCase();

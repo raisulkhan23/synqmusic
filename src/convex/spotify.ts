@@ -143,9 +143,7 @@ export const importPlaylist = action({
     let skipped = 0;
 
     do {
-      const query = next
-        ? `?limit=100&offset=${next}`
-        : "?limit=100&offset=0";
+      const query = next ? `?limit=100&offset=${next}` : "?limit=100&offset=0";
       const page = await spotifyGet(
         `/playlists/${id}/tracks${query}`,
         accessToken,
@@ -159,9 +157,7 @@ export const importPlaylist = action({
       }
       pages++;
       next =
-        (page.next as string | undefined)
-          ?.split("offset=")
-          .pop() ?? undefined;
+        (page.next as string | undefined)?.split("offset=").pop() ?? undefined;
       if (raw.length + skipped >= MAX_TRACKS) break;
     } while (next && pages < MAX_PAGES);
 
@@ -176,9 +172,7 @@ export const importPlaylist = action({
       );
     }
     if (!isPublic) {
-      warnings.push(
-        "This playlist is private, so some tracks may be missing.",
-      );
+      warnings.push("This playlist is private, so some tracks may be missing.");
     }
 
     const deduped = dedupeTracks(raw);
@@ -245,5 +239,117 @@ export const exchangeCode = action({
       accessToken: body.access_token,
       expiresIn: body.expires_in ?? 3600,
     };
+  },
+});
+
+/**
+ * "Songs of the week" — the global chart Home renders as a live shelf.
+ *
+ * Shape is fixed by the caller: `useAction(api.spotify.spotifyChart)` with an
+ * empty argument, and the result is destructured as `{ items }`, where each
+ * item is a `YtItem` (id / title / artist / duration / thumbnail / album?).
+ * Home resolves every row against YouTube before playing it, so this returns
+ * METADATA ONLY — exactly like the playlist importer above. Nothing here
+ * claims Spotify can hand SYNQ playable audio, because it cannot.
+ *
+ * The chart itself is Spotify's "Today's Top Hits" editorial playlist, which
+ * is the supported way to read a global chart now that the dedicated charts
+ * endpoints are gone.
+ *
+ * Client credentials are read from the environment on the server and never
+ * leave it. With no credentials configured this returns an empty list, and
+ * Home hides the shelf rather than showing an empty one — so an unconfigured
+ * deployment degrades to "no Songs of the week", not to an error or to
+ * invented rows.
+ */
+const CHART_PLAYLIST_ID = "37i9dQZFUXcY3W2f1A0Ns0"; // Today's Top Hits
+const CHART_PAGE_SIZE = 50;
+
+interface ChartRow {
+  id: string;
+  title: string;
+  artist: string;
+  duration: number;
+  thumbnail: string;
+  album?: string;
+}
+
+async function chartAccessToken(): Promise<string | null> {
+  const id = process.env.SPOTIFY_CLIENT_ID;
+  const secret = process.env.SPOTIFY_CLIENT_SECRET;
+  if (!id || !secret) return null;
+  const basic = btoa(`${id}:${secret}`);
+  try {
+    const response = await fetch(SPOTIFY_TOKEN_URL, {
+      method: "POST",
+      headers: {
+        // Client credentials are the documented "Basic" form for this grant.
+        Authorization: `Basic ${basic}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({ grant_type: "client_credentials" }),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    if (!response.ok) return null;
+    const body = (await response.json()) as { access_token?: string };
+    return body.access_token ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export const spotifyChart = action({
+  args: {},
+  handler: async (): Promise<{ items: ChartRow[] }> => {
+    const token = await chartAccessToken();
+    // No credentials, or Spotify refused: an honest empty chart. Home treats
+    // this as "nothing to show" and hides the shelf.
+    if (!token) return { items: [] };
+
+    try {
+      const response = await fetch(
+        `${API}/playlists/${CHART_PLAYLIST_ID}/tracks?limit=${CHART_PAGE_SIZE}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        },
+      );
+      if (!response.ok) return { items: [] };
+      const body = (await response.json()) as {
+        items?: SpotifyTrack[];
+      };
+      const items: ChartRow[] = [];
+      for (const item of body.items ?? []) {
+        const inner = item.track ?? item;
+        const artists = (inner.artists ?? [])
+          .map((a) => a.name ?? "")
+          .filter(Boolean)
+          .join(", ");
+        const track = normalizeTrack({
+          title: inner.name,
+          artist: artists,
+          album: inner.album?.name,
+          artwork: inner.album?.images?.[0]?.url,
+          durationMs: inner.duration_ms,
+          source: "spotify",
+          sourceId: inner.id ?? item.id,
+        });
+        // Unavailable/relinked rows are dropped rather than charted blank.
+        if (!track) continue;
+        items.push({
+          // The id is an identity key for the queue, not a YouTube id: Home
+          // re-resolves the row against YouTube before it can be played.
+          id: track.sourceId ?? `spotify-${items.length}`,
+          title: track.title,
+          artist: track.artist,
+          duration: track.duration ?? 0,
+          thumbnail: track.artwork ?? "",
+          ...(track.album ? { album: track.album } : {}),
+        });
+      }
+      return { items };
+    } catch {
+      return { items: [] };
+    }
   },
 });

@@ -116,7 +116,9 @@ describe("the page is built from horizontal shelves", () => {
 
   test("the rail scrolls natively, so a swipe never re-renders the page", () => {
     expect(shelf).toContain("overflow-x-auto");
-    expect(shelf).toMatch(/addEventListener\("scroll", onScroll, \{ passive: true \}\)/);
+    expect(shelf).toMatch(
+      /addEventListener\("scroll", onScroll, \{ passive: true \}\)/,
+    );
     expect(shelf).toContain("passive: true");
   });
 
@@ -260,7 +262,7 @@ describe("loading and failure never block the page", () => {
 
   test("a skeleton matches the real card footprint", () => {
     expect(shelf).toContain("aspect-square w-full animate-pulse");
-    expect(shelf).toContain("sm:w-44");
+    expect(shelf).toContain("sm:w-40");
   });
 
   test("a failed recommendation leaves the rest of Home working", () => {
@@ -275,7 +277,7 @@ describe("loading and failure never block the page", () => {
 describe("mobile is designed, not shrunk", () => {
   test("cards are sized for a thumb and grow with the viewport", () => {
     expect(card).toMatch(
-      /"group relative w-36 shrink-0 snap-start sm:w-40 lg:w-44"/,
+      /"group relative w-32 shrink-0 snap-start sm:w-36 lg:w-40"/,
     );
   });
 

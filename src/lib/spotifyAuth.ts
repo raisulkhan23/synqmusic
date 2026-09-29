@@ -23,7 +23,10 @@ export const SPOTIFY_AUTHORIZE_URL = "https://accounts.spotify.com/authorize";
 export const SPOTIFY_TOKEN_URL = "https://accounts.spotify.com/api/token";
 
 /** Only what SYNQ actually needs, and nothing that can write. */
-export const SPOTIFY_SCOPES = ["playlist-read-private", "playlist-read-collaborative"];
+export const SPOTIFY_SCOPES = [
+  "playlist-read-private",
+  "playlist-read-collaborative",
+];
 
 /** Spotify ids are 22 base62 characters. */
 const SPOTIFY_ID_RE = /^[A-Za-z0-9]{22}$/;
