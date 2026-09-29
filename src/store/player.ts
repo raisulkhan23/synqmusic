@@ -427,6 +427,17 @@ interface PlayerStore {
 
   // actions
   playTrack: (track: Playable, list?: Playable[]) => void;
+  /**
+   * Play an explicit list in exactly the order given, ignoring the global
+   * shuffle preference AND leaving it untouched.
+   *
+   * The page-level "Shuffle all" buttons used to reach for the global shuffle
+   * switch instead of ordering their own list. That turned a one-off action
+   * into a sticky app-wide preference: one press of "Shuffle all" left shuffle
+   * on forever, so the plain "Play all" button next to it played in random
+   * order, and the transport's shuffle button lit up to prove it.
+   */
+  playListOrdered: (track: Playable, list: Playable[]) => void;
   /** Start an endless related-mix radio from any track (any source). */
   startRadio: (track: Playable, contextQuery?: string) => void;
   /**
@@ -1904,7 +1915,20 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     maybeAutofillQueue();
   };
 
-  const playTrack = (track: Playable, list?: Playable[]) => {
+  /**
+   * Build a queue around `track` and start playing it.
+   *
+   * `respectShuffle` is the whole point of the split. When true this is the
+   * normal in-app behaviour: if the user has shuffle on, the rest of the list
+   * is reordered around the track they picked. When false the list is played
+   * exactly as handed over, which is what a page's "Play all" means and what
+   * a page's "Shuffle all" builds by shuffling the array itself.
+   */
+  const playResolved = (
+    track: Playable,
+    list: Playable[] | undefined,
+    respectShuffle: boolean,
+  ) => {
     // Explicit list playback (playlist / liked / home rows) is not a search
     // context — drop any genre left over from a previous search.
     activeMixContext = null;
@@ -1940,7 +1964,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     // When shuffle is already on, physically shuffle the REST of the queue
     // (clicked track first) — otherwise "next" would just walk the unshuffled
     // list and shuffle would appear broken until the toggle was touched.
-    if (get().shuffle && queue.length > 1) {
+    if (respectShuffle && get().shuffle && queue.length > 1) {
       const current = queue[index];
       const rest = queue.filter((_, i) => i !== index);
       for (let i = rest.length - 1; i > 0; i--) {
@@ -1957,6 +1981,14 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       unshuffledIndex: -1,
     });
     loadTrack(queue[index]);
+  };
+
+  const playTrack = (track: Playable, list?: Playable[]) => {
+    playResolved(track, list, true);
+  };
+
+  const playListOrdered = (track: Playable, list: Playable[]) => {
+    playResolved(track, list, false);
   };
 
   const startRadio = (track: Playable, contextQuery?: string) => {
@@ -3044,6 +3076,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       }),
 
     playTrack,
+    playListOrdered,
     startPlaylistRadio,
     stopRadio,
     startRadio,

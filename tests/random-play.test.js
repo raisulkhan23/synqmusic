@@ -48,20 +48,20 @@ describe("Play something random actually starts a queue of music", () => {
 });
 
 describe("I'm feeling lucky builds the mix it promises", () => {
-  test("shuffle is on BEFORE the queue is built", () => {
-    // The comment claimed "shuffle-on so the whole queue becomes a lucky mix",
-    // but nothing ever turned it on. Order matters: `playTrack` physically
-    // reorders the rest of the queue around the picked track, and only while
-    // `shuffle` is already true.
-    const shuffleIdx = feelingLucky.indexOf("startShuffle()");
-    const playIdx = feelingLucky.indexOf("playTrack(");
+  test("the mix is shuffled as a list, not by latching global shuffle", () => {
+    // This used to reach for the app's persisted shuffle preference, which
+    // left shuffle switched on for the rest of the session. The queue is now
+    // shuffled here and played in fixed order.
+    const shuffleIdx = feelingLucky.indexOf("shuffleList(");
+    const playIdx = feelingLucky.indexOf("playListOrdered(selected, queue)");
     expect(shuffleIdx).toBeGreaterThan(-1);
     expect(playIdx).toBeGreaterThan(shuffleIdx);
+    expect(feelingLucky).not.toContain("startShuffle()");
   });
 
   test("it queues a mix rather than a single track", () => {
-    expect(feelingLucky).toMatch(/playTrack\(selected, queue\)/);
-    expect(feelingLucky).toMatch(/const queue = pool/);
+    expect(feelingLucky).toMatch(/playListOrdered\(selected, queue\)/);
+    expect(feelingLucky).toMatch(/const queue = shuffleList\(/);
     expect(feelingLucky).not.toMatch(/playTrack\(toPlayableYoutube\(/);
   });
 });

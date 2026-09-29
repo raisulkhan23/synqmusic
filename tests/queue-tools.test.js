@@ -116,13 +116,22 @@ describe("shared links go to the song, not to a search box", () => {
 describe("the whole history can be handed to the player", () => {
   test("play all and shuffle all act on the filtered list", () => {
     expect(recent).toMatch(/const playAll = \(shuffled: boolean\) => \{/);
-    expect(recent).toMatch(/play\(items\[0\], rest\);/);
-    expect(recent).toMatch(/usePlayerStore\.getState\(\)\.startShuffle\(\);/);
+    // Ordered playback, NOT the app's global shuffle switch: a page button
+    // that flips a persisted preference leaves it on for every other list.
+    expect(recent).toMatch(/play\(head, ordered\.slice\(1\), true\);/);
+    expect(recent).toMatch(
+      /const ordered = shuffled \? shuffleList\(items\) : items;/,
+    );
+    expect(recent).not.toMatch(/startShuffle\(\)/);
   });
 
   test("the shuffle keeps the caller's list intact", () => {
-    expect(recent).toMatch(
-      /function shuffleItems<T>\(list: T\[\]\): T\[\] \{\s*\n\s*const out = \[\.\.\.list\];/,
+    // Now a shared helper rather than a per-page copy, so all four pages
+    // shuffle the same (non-mutating) way.
+    expect(recent).toContain('import { shuffleList } from "@/lib/queueOrder"');
+    const queueOrder = readSource("src/lib/queueOrder.ts");
+    expect(queueOrder).toMatch(
+      /export function shuffleList<T>\(list: readonly T\[\]\): T\[\] \{\s*\n\s*const out = \[\.\.\.list\];/,
     );
   });
 

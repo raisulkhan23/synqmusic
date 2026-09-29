@@ -79,10 +79,12 @@ describe("the shuffle button is a three-state cycle, like Spotify's", () => {
     expect(shellSource).not.toMatch(/s\.toggleShuffleSmart\(\);/);
   });
 
-  test("page-level shuffle buttons turn shuffle on instead of cycling", () => {
+  test("page-level shuffle buttons shuffle the list, not the app setting", () => {
     // "Shuffle" on the Liked Songs or a playlist page is an ACTION: it starts
-    // shuffled playback. Cycling there would mean a second press silently
-    // turned shuffle back off, which reads as the button being broken.
+    // a shuffled session. It used to reach for the app's global preference,
+    // which is a sticky, persisted mode — one press left shuffle on and every
+    // other list played in random order afterwards. Each page now orders its
+    // own queue and leaves the preference exactly as the listener set it.
     expect(storeSource).toMatch(/const startShuffle = \(\) => \{/);
     expect(storeSource).toMatch(
       /const startShuffle = \(\) => \{\s*\n\s*if \(get\(\)\.shuffle\) return;\s*\n\s*toggleShuffle\(\);/,
@@ -98,9 +100,13 @@ describe("the shuffle button is a three-state cycle, like Spotify's", () => {
       ["liked", likedSource],
       ["playlist", playlistSource],
     ]) {
-      expect(source).toMatch(/startShuffle\(\)/);
+      expect(source).not.toMatch(/startShuffle\(\)/);
       expect(source).not.toMatch(/cycleShuffle\(\)/);
       expect(source).not.toMatch(/toggleShuffleSmart/);
+      // …and the shuffle is real: the queue is reordered before it is handed
+      // over, then played through the ordered entry point.
+      expect(source).toMatch(/shuffleList\(/);
+      expect(source).toMatch(/playListOrdered/);
       expect(name).toBeTruthy();
     }
   });

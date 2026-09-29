@@ -4,6 +4,7 @@ import { RemoteTrackRow } from "@/components/tracks/RemoteTrackRow";
 import { api } from "@/convex/_generated/api";
 import { greeting } from "@/lib/format";
 import { toPlayableYoutube, type Playable } from "@/lib/playable";
+import { shuffleList } from "@/lib/queueOrder";
 
 import { cleanArtistName, type YtItem } from "@/lib/youtube";
 import { usePlayerStore, peekResumePosition } from "@/store/player";
@@ -109,6 +110,7 @@ function markDiscoveryRefreshed() {
 
 export default function Home() {
   const playTrack = usePlayerStore((s) => s.playTrack);
+  const playListOrdered = usePlayerStore((s) => s.playListOrdered);
   const setQueueOpen = usePlayerStore((s) => s.setQueueOpen);
   const likedCount = usePlayerStore((s) => Object.keys(s.liked).length);
   const likedLoaded = usePlayerStore((s) => s.likedLoaded);
@@ -429,17 +431,20 @@ export default function Home() {
           return;
         }
         // Same fix as "Play something random": the picked track was passed on
-        // its own, so the "lucky mix" was one song long. Shuffle has to be on
-        // BEFORE playTrack runs, because that is when the store physically
-        // orders the rest of the queue around the picked track.
-        usePlayerStore.getState().startShuffle();
-        const queue = pool
-          .slice(0, 15)
-          .map((item) =>
-            toPlayableYoutube(item, `https://youtu.be/${item.id}`),
-          );
+        // its own, so the "lucky mix" was one song long. The queue is now
+        // shuffled HERE and played with `playListOrdered`, rather than
+        // switching the app's global shuffle preference on — a one-off button
+        // press should not leave shuffle latched for the rest of the session.
+        const queue = shuffleList(
+          pool
+            .slice(0, 15)
+            .map((item) =>
+              toPlayableYoutube(item, `https://youtu.be/${item.id}`),
+            ),
+        );
         const selected = queue.find((t) => t.id === song.id) ?? queue[0];
-        playTrack(selected, queue);
+        if (!selected) return;
+        playListOrdered(selected, queue);
       })
       .catch(() => toast.error("Couldn't reach our music sources — try again"))
       .finally(() => setLuckyBusy(false));

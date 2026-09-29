@@ -10,6 +10,23 @@
  */
 
 /**
+ * Fisher–Yates on a copy, so the caller's list keeps its order.
+ *
+ * Shared because four pages each grew their own copy while their "Shuffle"
+ * buttons were switching the app's GLOBAL shuffle preference on as a
+ * side effect. Ordering the list yourself is the whole job, and it leaves
+ * the user's actual shuffle setting alone.
+ */
+export function shuffleList<T>(list: readonly T[]): T[] {
+  const out = [...list];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+/**
  * Unique, reorder-stable keys for a list of rows.
  *
  * The occurrence suffix counts how many times each id has already been seen,

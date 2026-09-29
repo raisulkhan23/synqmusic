@@ -22,7 +22,10 @@ function factoryFn(name) {
 
 const startPlaylistRadio = factoryFn("startPlaylistRadio");
 const stopRadio = factoryFn("stopRadio");
-const playTrack = factoryFn("playTrack");
+// The queue-building body lives in `playResolved`; `playTrack` and
+// `playListOrdered` are thin wrappers over it. Reading the wrapper would miss
+// everything the shared body does, so assert against the body itself.
+const playTrack = factoryFn("playResolved");
 const playIndex = factoryFn("playIndex");
 const maybeAutofillQueue = factoryFn("maybeAutofillQueue");
 const playlistMixContext = fn("playlistMixContext");
@@ -141,6 +144,13 @@ describe("radio ends when the user explicitly picks something else", () => {
     expect(playTrack).toMatch(
       /if \(get\(\)\.radioActive\) set\(\{ radioActive: false, radioSource: null \}\);/,
     );
+  });
+
+  test("every list entry point shares that body", () => {
+    // playListOrdered exists so a page can play a list in a fixed order; if it
+    // ever grew its own copy of the queue logic it would stop ending radio.
+    expect(storeSource).toContain("playResolved(track, list, true)");
+    expect(storeSource).toContain("playResolved(track, list, false)");
   });
 
   test("jumping within the queue does NOT leave radio", () => {

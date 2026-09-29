@@ -75,10 +75,12 @@ describe("the page-level shuffle buttons are safe on empty input", () => {
     );
     expect(shuffle).toContain("remoteLikes[Math.floor(");
     expect(shuffle).toMatch(/if \(!row\) return;/);
-    // `startShuffle` turns shuffle on without cycling, so pressing the button
-    // twice can't switch shuffle back off.
-    expect(likedSource).toMatch(/startShuffle\(\)/);
+    // The button orders its own queue. It must not touch the app's shuffle
+    // preference: that is a sticky, persisted mode, so a page button flipping
+    // it left every other list playing in random order afterwards.
+    expect(likedSource).not.toMatch(/startShuffle\(\)/);
     expect(likedSource).not.toMatch(/\.toggleShuffle\(\)/);
+    expect(likedSource).toContain("playListOrdered");
   });
 
   test("playlists guard the fallback branch too", () => {
@@ -91,7 +93,9 @@ describe("the page-level shuffle buttons are safe on empty input", () => {
     );
     expect(shuffle).toMatch(/if \(rows\.length === 0\) return;/);
     expect(shuffle).toMatch(/if \(!candidate\) return;/);
-    expect(shuffle).toMatch(/startShuffle\(\)/);
+    // Same rule as the Liked page: shuffle this queue, not the app setting.
+    expect(shuffle).not.toMatch(/startShuffle\(\)/);
     expect(shuffle).not.toMatch(/\.toggleShuffle\(\)/);
+    expect(shuffle).toContain("playListOrdered");
   });
 });

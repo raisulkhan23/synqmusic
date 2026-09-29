@@ -18,6 +18,7 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { formatTime } from "@/lib/format";
 import { toPlayableYoutube, type Playable } from "@/lib/playable";
+import { shuffleList } from "@/lib/queueOrder";
 import { cleanArtistName, type YtItem } from "@/lib/youtube";
 import { cn } from "@/lib/utils";
 import { usePlayerStore } from "@/store/player";
@@ -43,6 +44,7 @@ export default function PlaylistDetail() {
   const addTrack = useMutation(api.playlists.addTrack);
   const searchYt = useAction(api.youtube.searchYoutube);
   const playTrack = usePlayerStore((s) => s.playTrack);
+  const playListOrdered = usePlayerStore((s) => s.playListOrdered);
   const startPlaylistRadio = usePlayerStore((s) => s.startPlaylistRadio);
   const stopRadio = usePlayerStore((s) => s.stopRadio);
   const radioSource = usePlayerStore((s) => s.radioSource);
@@ -155,7 +157,7 @@ export default function PlaylistDetail() {
       : null;
   };
 
-  const playRow = async (row: PlaylistRow) => {
+  const playRow = async (row: PlaylistRow, options?: { shuffle?: boolean }) => {
     if (resolvingId) return;
     setResolvingId(row.id);
     try {
@@ -164,8 +166,10 @@ export default function PlaylistDetail() {
         toast.error(`Couldn't find a playable version of "${row.title}"`);
         return;
       }
-      const queue = directQueue.length > 0 ? directQueue : [playable];
-      playTrack(playable, queue);
+      const base = directQueue.length > 0 ? directQueue : [playable];
+      const queue = options?.shuffle ? shuffleList(base) : base;
+      const start = options?.shuffle ? playListOrdered : playTrack;
+      start(playable, queue);
     } catch {
       toast.error("Playback failed — try again in a moment");
     } finally {
@@ -232,23 +236,25 @@ export default function PlaylistDetail() {
   const shuffleAll = () => {
     // Both branches have to be guarded: reading past the end of an empty array
     // throws inside the click handler, which the user sees as a dead button.
+    //
+    // The list is shuffled HERE and played with `playListOrdered`, rather than
+    // flipping the app's global shuffle preference. That switch is a sticky,
+    // persisted mode: leaving it on meant this page's own "Play all" — and
+    // every other list's — played in random order from then on, with the
+    // transport's shuffle button lit to show why.
     if (directQueue.length > 0) {
-      // eslint-disable-next-line react-hooks/purity -- user-triggered shuffle
-      const i = Math.floor(Math.random() * directQueue.length);
-      const candidate = directQueue[i];
+      const queue = shuffleList(directQueue);
+      const candidate = queue[0];
       if (!candidate) return;
-      playTrack(candidate, directQueue);
+      playListOrdered(candidate, queue);
     } else {
       if (rows.length === 0) return;
       // eslint-disable-next-line react-hooks/purity -- user-triggered shuffle
       const i = Math.floor(Math.random() * rows.length);
       const candidate = rows[i];
       if (!candidate) return;
-      void playRow(candidate);
+      void playRow(candidate, { shuffle: true });
     }
-    // Turn shuffle on, don't cycle it: this is an action button, so a second
-    // press must start the music again rather than switching shuffle back off.
-    usePlayerStore.getState().startShuffle();
     toast.success("Shuffling the playlist");
   };
 

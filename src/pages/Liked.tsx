@@ -9,12 +9,14 @@ import { toast } from "sonner";
 import { usePlayerStore } from "@/store/player";
 import { useAction, useQuery } from "convex/react";
 import { Heart, Loader2, Play, Shuffle } from "lucide-react";
+import { shuffleList } from "@/lib/queueOrder";
 import { useState } from "react";
 
 export default function Liked() {
   const navigate = useNavigate();
   const likedLoaded = usePlayerStore((s) => s.likedLoaded);
   const playTrack = usePlayerStore((s) => s.playTrack);
+  const playListOrdered = usePlayerStore((s) => s.playListOrdered);
   const searchYt = useAction(api.youtube.searchYoutube);
 
   const [resolvingRemoteId, setResolvingRemoteId] = useState<string | null>(
@@ -26,8 +28,21 @@ export default function Liked() {
   const totalCount = remoteLikes.length;
   const totalSeconds = remoteLikes.reduce((sum, r) => sum + r.duration, 0);
 
-  const playRemoteLike = (row: (typeof remoteLikes)[number]) => {
+  const playRemoteLike = (
+    row: (typeof remoteLikes)[number],
+    options?: { shuffle?: boolean },
+  ) => {
     if (resolvingRemoteId) return;
+    // `shuffle` orders this one call's queue. It is deliberately NOT the
+    // app's global shuffle preference: reaching for that switch made a
+    // one-off button press sticky, so the plain "Play all" beside it played
+    // in random order from then on and the transport's shuffle light stayed
+    // on. Pass `shuffle` to get a shuffled session, nothing else to change it.
+    const start = options?.shuffle ? playListOrdered : playTrack;
+    const queueFor = (first: Playable, firstIsRemote?: string) => {
+      const list = buildLikedQueue(first, firstIsRemote);
+      return options?.shuffle ? shuffleList(list) : list;
+    };
 
     // Liked remote rows already carry the resolved YouTube id. Use it
     // directly instead of making the user wait for a second search request.
@@ -45,7 +60,7 @@ export default function Liked() {
         ...toPlayableYoutube(item, `https://youtu.be/${knownYoutubeId}`),
         youtubeId: knownYoutubeId,
       };
-      playTrack(playable, buildLikedQueue(playable, row.trackId));
+      start(playable, queueFor(playable, row.trackId));
       return;
     }
 
@@ -74,7 +89,7 @@ export default function Liked() {
           ),
           youtubeId: best.id,
         };
-        playTrack(playable, buildLikedQueue(playable));
+        start(playable, queueFor(playable));
       })
       .catch(() => toast.error("Playback failed — try again in a moment"))
       .finally(() => setResolvingRemoteId(null));
@@ -127,10 +142,7 @@ export default function Liked() {
     // `undefined`, and every field read off it below throws inside the click
     // handler, which reads to the user as the button doing nothing at all.
     if (!row) return;
-    playRemoteLike(row);
-    // Turn shuffle on, don't cycle it: this is an action button, so a second
-    // press must start the music again rather than switching shuffle back off.
-    usePlayerStore.getState().startShuffle();
+    playRemoteLike(row, { shuffle: true });
     toast.success("Shuffling your liked songs");
   };
 

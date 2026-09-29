@@ -13,20 +13,11 @@ import {
 import { Dices, History, Loader2, Play, Shuffle, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { shuffleList } from "@/lib/queueOrder";
 import { useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 
 const FILTERS = ["All", "Today", "This week"] as const;
-
-/** Fisher–Yates on a copy, so the caller's list keeps its order. */
-function shuffleItems<T>(list: T[]): T[] {
-  const out = [...list];
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [out[i], out[j]] = [out[j], out[i]];
-  }
-  return out;
-}
 
 function timeAgo(ts?: number): string {
   if (!ts) return "";
@@ -60,6 +51,7 @@ export default function Recent() {
     readPlayHistory,
   );
   const playTrack = usePlayerStore((s) => s.playTrack);
+  const playListOrdered = usePlayerStore((s) => s.playListOrdered);
   const searchYt = useAction(api.youtube.searchYoutube);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("All");
@@ -87,13 +79,25 @@ export default function Recent() {
 
   const items = filtered.map(entryToItem);
 
-  const play = (item: YtItem, rest: YtItem[]) => {
+  const play = (item: YtItem, rest: YtItem[], ordered = false) => {
     const entry = history.find((h) => (h.youtubeId ?? h.id) === item.id);
+    // `ordered` plays the list exactly as handed over. The page's Play all /
+    // Shuffle all use it so they never inherit (or set) the app's global
+    // shuffle preference — otherwise pressing "Shuffle all" once left shuffle
+    // on, and the "Play all" button beside it played in random order forever
+    // after.
+    const start = ordered ? playListOrdered : playTrack;
+    // The rest of the list is the QUEUE.
+    //
+    // It used to be passed as the track's `alternatives` instead, and that
+    // third argument is NOT the queue: the store only reaches for alternatives
+    // when playback FAILS, to swap in another upload of the same song. So the
+    // search path built a one-track queue, and the other history rows came out
+    // as random error-recovery swaps — the exact "play all just plays random
+    // shit from my history" symptom.
+    const queue = rest.filter((r) => r.id !== item.id).map(toPlayableFromItem);
     if (entry?.audioUrl) {
-      playTrack(
-        snapshotToPlayable(entry),
-        rest.filter((r) => r.id !== item.id).map(toPlayableFromItem),
-      );
+      start(snapshotToPlayable(entry), queue);
       return;
     }
     setResolvingId(item.id);
@@ -105,12 +109,12 @@ export default function Recent() {
           toast.error(`Couldn't play "${item.title}"`);
           return;
         }
-        playTrack(
-          toPlayableYoutube(
-            best,
-            `https://youtu.be/${best.id}`,
-            rest.filter((r) => r.id !== best.id),
-          ),
+        // Alternatives are other uploads of THIS song, which is what the
+        // recovery path needs — not the other rows of the history list.
+        const alternatives = found.filter((f) => f.id !== best.id);
+        start(
+          toPlayableYoutube(best, `https://youtu.be/${best.id}`, alternatives),
+          queue,
         );
       })
       .catch(() => toast.error("Playback failed — try again"))
@@ -161,9 +165,14 @@ export default function Recent() {
       toast.error("No plays match this filter");
       return;
     }
-    const rest = shuffled ? shuffleItems(items.slice(1)) : items.slice(1);
-    if (shuffled) usePlayerStore.getState().startShuffle();
-    play(items[0], rest);
+    // Shuffle the WHOLE list, head included. Shuffling only the tail left the
+    // most recent song always playing first, which is not what "Shuffle all"
+    // means to anyone pressing it.
+    const ordered = shuffled ? shuffleList(items) : items;
+    const head = ordered[0];
+    if (!head) return;
+    play(head, ordered.slice(1), true);
+    if (shuffled) toast.success("Shuffling your recently played");
   };
 
   return (
