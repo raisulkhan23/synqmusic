@@ -34,67 +34,73 @@ export default function Artist() {
   const playTrack = usePlayerStore((s) => s.playTrack);
   const startRadio = usePlayerStore((s) => s.startRadio);
 
-  const [tracks, setTracks] = useState<YtItem[] | null>(null);
-  const [related, setRelated] = useState<YtItem[] | null>(null);
+  // Results are tagged with the request they belong to, so "still
+  // loading" is DERIVED from a mismatch rather than reset inside the effect.
+  // Calling setState synchronously in an effect cascades an extra render on
+  // every navigation between two artists.
+  const [result, setResult] = useState<{
+    key: string;
+    tracks: YtItem[];
+    related: YtItem[];
+  } | null>(null);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!query) {
-      setTracks([]);
-      setRelated([]);
-      return;
-    }
+    if (!query) return;
     let cancelled = false;
-    setTracks(null);
-    setRelated(null);
+    const owned = cleanArtistName(query, "").toLowerCase();
 
-    void searchYt({ query })
-      .then(({ items }) => {
-        if (cancelled) return;
-        // Only keep what actually belongs to this artist. A search for an
-        // artist name returns plenty of songs by other people, and silently
-        // filing them under this artist would be the same fabrication the
-        // recommendation engine refuses to make.
-        const owned = uniqueTracks(
-          (items ?? []).filter(
+    void (async () => {
+      const [mine, similar] = await Promise.all([
+        searchYt({ query }).catch(() => ({ items: [] as YtItem[] })),
+        searchYt({ query: `artists similar to ${query}` }).catch(() => ({
+          items: [] as YtItem[],
+        })),
+      ]);
+      if (cancelled) return;
+      setResult({
+        key: query,
+        // Only what actually belongs to this artist. A search for an artist
+        // name returns plenty of songs by other people, and filing them under
+        // this artist would be the same fabrication the recommendation engine
+        // refuses to make.
+        tracks: uniqueTracks(
+          (mine.items ?? []).filter(
             (item) =>
               !!item &&
               item.duration > 0 &&
-              cleanArtistName(item.artist, item.title).toLowerCase() ===
-                cleanArtistName(query, "").toLowerCase(),
+              cleanArtistName(item.artist, item.title).toLowerCase() === owned,
           ),
-        );
-        setTracks(owned);
-      })
-      .catch(() => {
-        if (!cancelled) setTracks([]);
-      });
-
-    void searchYt({ query: `artists similar to ${query}` })
-      .then(({ items }) => {
-        if (cancelled) return;
+        ),
         // Everything that is NOT this artist is, by construction, somewhere to
         // go next.
-        setRelated(
-          uniqueTracks(
-            (items ?? []).filter(
-              (item) =>
-                !!item &&
-                item.duration > 0 &&
-                cleanArtistName(item.artist, item.title).toLowerCase() !==
-                  cleanArtistName(query, "").toLowerCase(),
-            ),
+        related: uniqueTracks(
+          (similar.items ?? []).filter(
+            (item) =>
+              !!item &&
+              item.duration > 0 &&
+              cleanArtistName(item.artist, item.title).toLowerCase() !== owned,
           ),
-        );
-      })
-      .catch(() => {
-        if (!cancelled) setRelated([]);
+        ),
       });
+    })();
 
     return () => {
       cancelled = true;
     };
   }, [query, searchYt]);
+
+  // `null` means "not resolved for the artist we are currently showing" and
+  // drives the skeletons; the result is kept in a memo keyed on the query so a
+  // stale payload from a previous artist is never rendered under a new name.
+  const tracks = useMemo(
+    () => (!query ? [] : result?.key === query ? result.tracks : null),
+    [query, result],
+  );
+  const related = useMemo(
+    () => (!query ? [] : result?.key === query ? result.related : null),
+    [query, result],
+  );
 
   const albums = useMemo(() => groupByAlbum(tracks ?? []), [tracks]);
 

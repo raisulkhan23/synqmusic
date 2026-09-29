@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import { cleanArtistName, cleanTrackTitle, type YtItem } from "@/lib/youtube";
 import { usePlayerStore } from "@/store/player";
 import { ListMusic, Loader2, Pause, Play } from "lucide-react";
-import { Link, useNavigate } from "react-router";
+import { Link } from "react-router";
 import type { ReactNode } from "react";
 
 /**
@@ -48,7 +48,6 @@ export function MediaCard({
   resolving?: boolean;
   menuItems?: ReactNode;
 }) {
-  const navigate = useNavigate();
   const currentId = usePlayerStore((s) => s.current?.id);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const isCurrent = currentId === item.id && onPlay !== undefined;

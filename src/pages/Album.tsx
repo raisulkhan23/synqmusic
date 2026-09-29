@@ -6,7 +6,12 @@ import { toast } from "sonner";
 
 import { RemoteTrackRow } from "@/components/tracks/RemoteTrackRow";
 import { api } from "@/convex/_generated/api";
-import { matchesAlbum, parseAlbumRoute, uniqueTracks } from "@/lib/artistLinks";
+import {
+  matchesAlbum,
+  normaliseAlbumName,
+  parseAlbumRoute,
+  uniqueTracks,
+} from "@/lib/artistLinks";
 import { toPlayableYoutube } from "@/lib/playable";
 import { type YtItem } from "@/lib/youtube";
 import { readPlayHistory, usePlayerStore } from "@/store/player";
@@ -33,8 +38,16 @@ export default function Album() {
   const searchYt = useAction(api.youtube.searchYoutube);
   const playTrack = usePlayerStore((s) => s.playTrack);
 
-  const [resolved, setResolved] = useState<YtItem[] | null>(null);
+  // Tagged with the request it belongs to, so "loading" is derived from a
+  // mismatch instead of being reset synchronously inside the effect — which
+  // would cascade an extra render on every navigation between two albums.
+  const [result, setResult] = useState<{ key: string; items: YtItem[] } | null>(
+    null,
+  );
   const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const requestKey = route
+    ? `${route.artist}|normaliseAlbumName(route.album)`
+    : "";
 
   // Tracks the listener already has, carrying this album, are real data too —
   // and they cost nothing to find.
@@ -55,32 +68,38 @@ export default function Album() {
   }, [route]);
 
   useEffect(() => {
-    if (!route) {
-      setResolved(null);
-      return;
-    }
+    if (!route) return;
     let cancelled = false;
-    setResolved(null);
-    void searchYt({ query: `${route.artist} ${route.album}` })
-      .then(({ items }) => {
-        if (cancelled) return;
-        // Strictly the requested album. Anything else in the search result is
-        // a different record and is dropped.
-        const matching = uniqueTracks(
-          (items ?? []).filter(
-            (item) =>
-              !!item && item.duration > 0 && matchesAlbum(item, route.album),
-          ),
-        );
-        setResolved(uniqueTracks([...knownTracks, ...matching]));
-      })
-      .catch(() => {
-        if (!cancelled) setResolved(knownTracks);
+    const wanted = normaliseAlbumName(route.album);
+
+    void (async () => {
+      const found = await searchYt({
+        query: `${route.artist} ${route.album}`,
+      }).catch(() => ({ items: [] as YtItem[] }));
+      if (cancelled) return;
+      // Strictly the requested album: anything else in the search result is a
+      // different record and is dropped rather than padded in.
+      const matching = uniqueTracks(
+        (found.items ?? []).filter(
+          (item) => !!item && item.duration > 0 && matchesAlbum(item, wanted),
+        ),
+      );
+      setResult({
+        key: requestKey,
+        items: uniqueTracks([...knownTracks, ...matching]),
       });
+    })();
+
     return () => {
       cancelled = true;
     };
-  }, [route, searchYt, knownTracks]);
+  }, [route, requestKey, searchYt, knownTracks]);
+
+  const resolved = !route
+    ? null
+    : result?.key === requestKey
+      ? result.items
+      : null;
 
   if (!route) {
     return (
