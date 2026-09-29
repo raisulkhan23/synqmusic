@@ -97,10 +97,17 @@ describe("shared links go to the song, not to a search box", () => {
   test("the row menu copies an in-app deep link", () => {
     // It used to copy `/search?q=<title> <artist>`, which dumped the recipient
     // on a pre-filled search box they still had to submit.
-    expect(row).toMatch(
-      /buildTrackShareUrl\(window\.location\.origin, playlistTrack\)/,
+    //
+    // The menu itself now lives in the shared track-actions module, used by
+    // both the row and the Home media cards — so that is where the link is
+    // built. `row` must still reach it, or the row would have grown a second,
+    // private menu.
+    const actions = readSource("src/components/tracks/useTrackActions.tsx");
+    expect(actions).toMatch(
+      /buildTrackShareUrl\(window\.location\.origin, actions\.track\)/,
     );
-    expect(row).not.toMatch(/search\?q=\$\{encodeURIComponent/);
+    expect(actions).not.toMatch(/search\?q=\$\{encodeURIComponent/);
+    expect(row).toMatch(/<TrackActionsMenu/);
   });
 
   test("the queue's current-track button shares in-app too", () => {

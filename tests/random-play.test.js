@@ -67,28 +67,30 @@ describe("I'm feeling lucky builds the mix it promises", () => {
 });
 
 describe("the random buttons are reachable", () => {
-  test("the row is not hidden behind the Continue-listening condition", () => {
+  test("the buttons are not hidden behind the Continue-listening condition", () => {
     // Both buttons used to live inside a `continueTrack || likedLoaded`
     // guard meant only for the resume card, so a brand-new account with an
     // empty history and no liked songs saw neither button at all.
-    expect(homeSource).toMatch(/Play something random/);
-    expect(homeSource).toMatch(/I'm feeling lucky/);
-    const sectionStart = homeSource.indexOf(
-      '<section className="flex flex-col items-stretch gap-3 sm:flex-row',
-    );
-    expect(sectionStart).toBeGreaterThan(-1);
-    const row = homeSource.slice(
-      sectionStart,
-      homeSource.indexOf("</section>", sectionStart),
-    );
-    // Only the resume card is conditional inside the row.
-    expect(row).toMatch(/\{continueTrack && \(/);
-    expect(row).not.toMatch(/continueTrack \|\| likedLoaded/);
+    //
+    // They now live in the quick-access grid, below the hero. What matters is
+    // that they are not inside the conditional resume-card block.
+    const resumeStart = homeSource.indexOf("{continueTrack ? (");
+    const quickAccess = homeSource.indexOf('aria-label="Quick access"');
+    expect(resumeStart).toBeGreaterThan(-1);
+    expect(quickAccess).toBeGreaterThan(resumeStart);
+
+    const resumeBlock = homeSource.slice(resumeStart, quickAccess);
+    expect(resumeBlock).not.toMatch(/surpriseMe/);
+    expect(resumeBlock).not.toMatch(/feelingLucky/);
+    // …and they ARE in the quick-access grid, not merely present somewhere.
+    const grid = homeSource.slice(quickAccess);
+    expect(grid).toMatch(/onClick=\{surpriseMe\}/);
+    expect(grid).toMatch(/onClick=\{feelingLucky\}/);
   });
 
   test("the resume card itself is still conditional", () => {
     // Dropping the guard must not start rendering a card with no track in it.
-    expect(homeSource).toMatch(/\{continueTrack && \(\s*\n\s*<button/);
+    expect(homeSource).toMatch(/\{continueTrack \? \(/);
   });
 
   test("both buttons are wired to their handlers", () => {

@@ -1,6 +1,7 @@
-import { motion } from "framer-motion";
 import { Link } from "react-router";
-import { RemoteTrackRow } from "@/components/tracks/RemoteTrackRow";
+import { PlaylistCard } from "@/components/playlists/PlaylistCard";
+import { MediaCard } from "@/components/tracks/MediaCard";
+import { Shelf } from "@/components/core/shelf";
 import { api } from "@/convex/_generated/api";
 import type { RecoCandidate } from "@/lib/recommend";
 import { greeting } from "@/lib/format";
@@ -25,8 +26,10 @@ import {
   Disc3,
   Flame,
   Heart,
+  History,
   ListMusic,
   Play,
+  PlayCircle,
   Repeat2,
   Search,
   Sparkles,
@@ -275,7 +278,6 @@ export default function Home() {
       }),
     [historyItems, history],
   );
-  const jumpBackItems = useMemo(() => historyItems.slice(1, 6), [historyItems]);
 
   // --- live remote fills for every section -----------------------------------
   const timeLabel = timeOfDayLabel();
@@ -288,39 +290,28 @@ export default function Home() {
     return () => window.clearInterval(timer);
   }, []);
   const season = seasonLabel();
-  const continueArtistName = lastPlayed
-    ? cleanArtistName(lastPlayed.artistName, lastPlayed.title)
-    : "";
-  const favArtist = mostPlayedItems[0]
-    ? cleanArtistName(mostPlayedItems[0].artist, mostPlayedItems[0].title)
-    : undefined;
 
   const remoteQueries = useMemo(() => {
+    // Only the shelves the redesigned page actually renders are fetched.
+    // "topTracks", "because" and "artists" used to be queried here and then
+    // either never rendered or duplicated a recommendation shelf — paid for
+    // on every Home visit and thrown away.
     const q: Array<{ key: string; query: string; fallback?: string }> = [
       {
         key: "discover",
         query: "new music friday",
         fallback: "fresh music this week",
       },
-      { key: "topTracks", query: "top hits right now", fallback: "top hits" },
       {
         key: "newReleases",
         query: "new songs just released",
         fallback: "latest hits",
       },
+      { key: "timeOfDay", query: `${timeLabel} music hits` },
+      { key: "seasonal", query: `${season} hits` },
     ];
-    if (continueTrack) {
-      q.push({
-        key: "because",
-        query:
-          `songs similar to ${continueTrack.title} ${continueArtistName}`.trim(),
-      });
-    }
-    if (favArtist) q.push({ key: "artists", query: `${favArtist} songs` });
-    q.push({ key: "timeOfDay", query: `${timeLabel} music hits` });
-    q.push({ key: "seasonal", query: `${season} hits` });
     return q;
-  }, [continueTrack?.title, continueArtistName, timeLabel, season, favArtist]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [timeLabel, season]);
 
   // Remote shelves are live data, so refresh them once per day. The first
   // render always fetches current data; this timestamp makes the cadence
@@ -586,98 +577,495 @@ export default function Home() {
     };
   }, [history, listeningStats]);
 
+  // Shelves are filtered once, here, rather than inside every shelf: a shelf
+  // that renders an unplayable row is worse than a shelf that renders fewer
+  // rows, and the same filter has to apply to history, recommendations and
+  // live search results alike.
+  const usable = (items: YtItem[] | undefined | null): YtItem[] =>
+    Array.isArray(items) ? items.filter(isUsableRemoteItem) : [];
+
+  // Recently played, minus whatever is already shown above it, so the top of
+  // the page never repeats the same cover three times.
+  const seenAtTop = useMemo(() => {
+    const ids = new Set<string>();
+    if (continueTrack) ids.add(continueTrack.youtubeId ?? continueTrack.id);
+    for (const item of historyItems.slice(0, 1)) ids.add(item.id);
+    return ids;
+  }, [continueTrack, historyItems]);
+
+  const recentItems = useMemo(
+    () => usable(historyItems).filter((item) => !seenAtTop.has(item.id)),
+    [historyItems, seenAtTop],
+  );
+
+  // Continue listening: only tracks the app has a REAL saved position for.
+  // Nothing is invented here — if there is no resume map entry, the track is
+  // not shown as unfinished.
+  const resumableItems = useMemo(
+    () =>
+      usable(historyItems)
+        .map((item) => ({
+          item,
+          at: peekResumePosition(item.id, item.duration),
+        }))
+        .filter(({ item, at }) => at > 0 && item.duration > 0),
+    [historyItems],
+  );
+
+  const playShelf = (item: YtItem) => {
+    setResolvingId(item.id);
+    withTimeout(searchYt({ query: `${item.title} ${item.artist}` }))
+      .then(({ items: found }) => {
+        const match =
+          found.find(
+            (entry) =>
+              cleanArtistName(entry.artist, entry.title) ===
+              cleanArtistName(item.artist, item.title),
+          ) ?? found[0];
+        if (!match) {
+          toast.error(`Couldn't load "${item.title}" — try another song`);
+          return;
+        }
+        const queue = [match, ...found.filter((entry) => entry.id !== match.id)]
+          .slice(0, 12)
+          .map((entry) =>
+            toPlayableYoutube(entry, `https://youtu.be/${entry.id}`),
+          );
+        const head = queue[0];
+        if (head)
+          playTrack(
+            {
+              ...head,
+              id: item.id,
+              title: item.title,
+              artistName: item.artist,
+            },
+            queue,
+          );
+      })
+      .catch(() => toast.error("Playback failed — try again in a moment"))
+      .finally(() => setResolvingId(null));
+  };
+
   return (
-    <div className="flex flex-col gap-10">
-      <header>
-        <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
-          {greeting()}
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Everything the world is listening to — streamed live from our global
-          music sources.
-        </p>
-        <p className="mt-2 inline-flex rounded-full border border-[rgb(var(--tint)_/_0.2)] bg-[rgb(var(--tint)_/_0.08)] px-2.5 py-1 text-[10px] font-semibold tracking-wide text-[rgb(var(--tint))]">
-          Live shelves refresh daily
-        </p>
-      </header>
-      {/* continue listening + surprise me — stacks on mobile so the buttons
-            never truncate against the continue card */}
-      {/* The random buttons are not tied to "Continue listening" — they used to
-          sit inside its conditional, so a brand-new account with nothing in
-          its history and no liked songs yet saw neither of them at all. Only
-          the resume card is conditional; the row itself always renders. */}
-      <section className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-        {continueTrack && (
+    <div className="flex flex-col gap-9 sm:gap-12">
+      {/* ── Hero. Greeting plus the one thing worth acting on immediately:
+          the track that was interrupted. Compact on purpose — this is a
+          listening surface, not a marketing banner. */}
+      <header className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
+          <div className="min-w-0">
+            <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
+              {greeting()}
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {historyItems.length > 0
+                ? "Pick up where you left off, or start something new."
+                : "Start listening — everything below updates as you play."}
+            </p>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {capitalize(season)} · {listeningPulse.totalPlays} plays
+          </p>
+        </div>
+
+        {continueTrack ? (
           <button
             type="button"
             onClick={() => playTrack(continueTrack)}
-            className="glass-card group flex min-w-0 flex-1 items-center gap-3 rounded-2xl p-3 text-left"
+            className="group flex w-full items-center gap-4 rounded-2xl border border-white/[0.07] bg-white/[0.03] p-3 text-left transition-colors hover:border-[rgb(var(--tint)_/_0.3)] hover:bg-white/[0.06] sm:gap-5 sm:p-4"
           >
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[rgb(var(--tint)_/_0.14)] text-[rgb(var(--tint))] transition-transform group-hover:scale-105">
-              <Play className="size-4 fill-current" />
-            </span>
-            <span className="min-w-0">
-              <span className="block text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
+            {continueTrack.coverUrl ? (
+              <img
+                src={continueTrack.coverUrl}
+                alt=""
+                className="size-16 shrink-0 rounded-xl object-cover ring-1 ring-white/10 sm:size-20"
+              />
+            ) : (
+              <span className="flex size-16 shrink-0 items-center justify-center rounded-xl bg-[rgb(var(--tint)_/_0.14)] text-[rgb(var(--tint))] sm:size-20">
+                <Play className="size-5 fill-current" />
+              </span>
+            )}
+            <span className="min-w-0 flex-1">
+              <span className="block text-[10px] font-semibold tracking-[0.18em] text-[rgb(var(--tint))] uppercase">
                 Continue listening
               </span>
-              <span className="block truncate font-display text-[15px] font-semibold">
+              <span className="mt-0.5 block truncate font-display text-base font-bold sm:text-lg">
                 {continueTrack.title}
               </span>
-              {continueResume > 0 && (
-                <span className="block text-xs text-muted-foreground">
-                  Resume from {Math.floor(continueResume / 60)}:
-                  {String(Math.floor(continueResume % 60)).padStart(2, "0")}
+              <span className="block truncate text-sm text-muted-foreground">
+                {continueTrack.artistName}
+              </span>
+              {continueTrack.duration > 0 ? (
+                <span className="mt-2 flex items-center gap-2">
+                  <span className="h-1 flex-1 overflow-hidden rounded-full bg-white/10">
+                    <span
+                      className="block h-full rounded-full bg-[rgb(var(--tint))]"
+                      style={{
+                        width: `${Math.min(
+                          100,
+                          Math.round(
+                            (continueResume / continueTrack.duration) * 100,
+                          ),
+                        )}%`,
+                      }}
+                    />
+                  </span>
+                  <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+                    {formatClock(continueResume)} left
+                  </span>
                 </span>
-              )}
+              ) : null}
+            </span>
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[rgb(var(--tint))] text-black shadow-lg transition-transform group-hover:scale-105">
+              <Play className="size-4 fill-current" />
             </span>
           </button>
-        )}
-        <button
-          type="button"
-          onClick={surpriseMe}
-          className="glass-card flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold"
-        >
-          <Dices
-            className={cn(
-              "size-4 text-[rgb(var(--tint))]",
-              surprising && "animate-pulse",
-            )}
-          />
-          Play something random
-        </button>
-        <button
-          type="button"
-          onClick={feelingLucky}
-          className="glass-card flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold"
-        >
-          <Sparkles
-            className={cn(
-              "size-4 text-[rgb(var(--tint))]",
-              luckyBusy && "animate-pulse",
-            )}
-          />
-          I'm feeling lucky
-        </button>
-      </section>
-      {/* personal quick links — 3 columns squeeze the labels on phones, so
-            stack 2-wide on mobile and spread out from sm up */}
-      <section className="stagger grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {quickLinks.map(({ to, label, detail, icon: Icon }) => (
-          <Link key={to} to={to} className="glass-card group rounded-2xl p-4">
-            <span className="flex size-9 items-center justify-center rounded-xl bg-[rgb(var(--tint)_/_0.14)] text-[rgb(var(--tint))] transition-transform group-hover:scale-105">
-              <Icon className="size-[18px]" />
+        ) : null}
+      </header>
+
+      {/* ── Quick access. One tap to start listening or to jump somewhere. */}
+      <section aria-label="Quick access">
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
+          {quickLinks.map(({ to, label, icon: Icon }) => (
+            <Link
+              key={to}
+              to={to}
+              className="flex items-center gap-2.5 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-3 transition-colors hover:border-[rgb(var(--tint)_/_0.3)] hover:bg-white/[0.06]"
+            >
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[rgb(var(--tint)_/_0.13)] text-[rgb(var(--tint))]">
+                <Icon className="size-4" />
+              </span>
+              <span className="truncate text-sm font-semibold">{label}</span>
+            </Link>
+          ))}
+          <button
+            type="button"
+            onClick={() => setQueueOpen(true)}
+            className="flex items-center gap-2.5 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-3 text-left transition-colors hover:border-[rgb(var(--tint)_/_0.3)] hover:bg-white/[0.06]"
+          >
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-violet-400/10 text-violet-300">
+              <ListMusic className="size-4" />
             </span>
-            <p className="mt-3 font-display text-[15px] font-semibold">
+            <span className="truncate text-sm font-semibold">Queue</span>
+          </button>
+          <button
+            type="button"
+            onClick={surpriseMe}
+            className="flex items-center gap-2.5 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-3 text-left transition-colors hover:border-[rgb(var(--tint)_/_0.3)] hover:bg-white/[0.06]"
+          >
+            <span
+              className={cn(
+                "flex size-8 shrink-0 items-center justify-center rounded-lg bg-[rgb(var(--tint)_/_0.13)] text-[rgb(var(--tint))]",
+                surprising && "animate-pulse",
+              )}
+            >
+              <Dices className="size-4" />
+            </span>
+            <span className="truncate text-sm font-semibold">Surprise me</span>
+          </button>
+          <button
+            type="button"
+            onClick={feelingLucky}
+            className="flex items-center gap-2.5 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-3 text-left transition-colors hover:border-[rgb(var(--tint)_/_0.3)] hover:bg-white/[0.06]"
+          >
+            <span
+              className={cn(
+                "flex size-8 shrink-0 items-center justify-center rounded-lg bg-[rgb(var(--tint)_/_0.13)] text-[rgb(var(--tint))]",
+                luckyBusy && "animate-pulse",
+              )}
+            >
+              <Sparkles className="size-4" />
+            </span>
+            <span className="truncate text-sm font-semibold">
+              Feeling lucky
+            </span>
+          </button>
+        </div>
+      </section>
+
+      {/* ── Recently played. Real listening history, newest first. */}
+      {recentItems.length > 0 ? (
+        <Shelf
+          id="shelf-recent"
+          title="Recently played"
+          action={{ to: "/recent", label: "See all" }}
+          icon={<History className="size-4 text-[rgb(var(--tint))]" />}
+        >
+          {recentItems.slice(0, 14).map((item) => (
+            <MediaCard
+              key={item.id}
+              item={item}
+              onOpen={() => playShelf(item)}
+              onPlay={() => playShelf(item)}
+              resolving={resolvingId === item.id}
+            />
+          ))}
+        </Shelf>
+      ) : null}
+
+      {/* ── Continue listening, as a shelf of genuinely unfinished tracks. */}
+      {resumableItems.length > 0 ? (
+        <Shelf
+          id="shelf-continue"
+          title="Continue listening"
+          icon={<PlayCircle className="size-4 text-[rgb(var(--tint))]" />}
+        >
+          {resumableItems.slice(0, 12).map(({ item, at }) => (
+            <MediaCard
+              key={item.id}
+              item={item}
+              onOpen={() => playShelf(item)}
+              onPlay={() => playShelf(item)}
+              meta={`${Math.round((at / Math.max(1, item.duration)) * 100)}% played`}
+            />
+          ))}
+        </Shelf>
+      ) : null}
+
+      {/* ── The recommendation shelves. The engine already decided what is
+          honest to show; this only decides how it looks. Skeleton while the
+          action is in flight, nothing at all if it failed. */}
+      {recoSections === null ? (
+        <Shelf
+          id="shelf-for-you"
+          title="Recommended for you"
+          icon={<Sparkles className="size-4 text-[rgb(var(--tint))]" />}
+          skeleton
+        >
+          {null}
+        </Shelf>
+      ) : (
+        recoSections.map((section) => (
+          <Shelf
+            key={section.id}
+            id={`shelf-${section.id}`}
+            title={section.title}
+            icon={
+              section.id === "for_you" ? (
+                <Sparkles className="size-4 text-[rgb(var(--tint))]" />
+              ) : undefined
+            }
+            subtitle={
+              section.personalised ? undefined : "Popular picks while we learn"
+            }
+          >
+            {section.items.slice(0, 14).map((item) => (
+              <MediaCard
+                key={item.id}
+                item={toYtItem(item)}
+                onOpen={() => playRecommendation(section, item)}
+                onPlay={() => playRecommendation(section, item)}
+              />
+            ))}
+          </Shelf>
+        ))
+      )}
+
+      {/* ── Your playlists, using the card the Playlists page already uses. */}
+      {playlists && playlists.length > 0 ? (
+        <Shelf
+          id="shelf-playlists"
+          title="Your playlists"
+          action={{ to: "/playlists", label: "See all" }}
+          icon={<ListMusic className="size-4 text-[rgb(var(--tint))]" />}
+        >
+          {playlists.slice(0, 14).map((playlist) => (
+            <PlaylistCard key={playlist._id} playlist={playlist} />
+          ))}
+        </Shelf>
+      ) : null}
+
+      {/* ── Artists, from real play counts. */}
+      {artistTrendList.length >= 2 ? (
+        <Shelf
+          id="shelf-artists"
+          title="Artists you listen to"
+          icon={<Disc3 className="size-4 text-[rgb(var(--tint))]" />}
+        >
+          {artistTrendList.slice(0, 14).map(({ artist, items }) => (
+            <MediaCard
+              key={artist}
+              variant="artist"
+              round
+              item={
+                items[0] ?? {
+                  id: artist,
+                  title: artist,
+                  artist,
+                  duration: 0,
+                  thumbnail: "",
+                }
+              }
+              onOpen={() => {
+                const first = items[0];
+                if (first) playShelf(first);
+              }}
+              meta={`${items.length} ${items.length === 1 ? "play" : "plays"}`}
+            />
+          ))}
+        </Shelf>
+      ) : null}
+
+      {/* ── Your most played — frequency, which "Recently played" cannot show. */}
+      {mostPlayedItems.length >= 2 ? (
+        <Shelf
+          id="shelf-most-played"
+          title="On repeat"
+          icon={<Repeat2 className="size-4 text-[rgb(var(--tint))]" />}
+        >
+          {mostPlayedItems.slice(0, 14).map((item) => (
+            <MediaCard
+              key={item.id}
+              item={item}
+              onOpen={() => playShelf(item)}
+              onPlay={() => playShelf(item)}
+              resolving={resolvingId === item.id}
+              meta={`${history.find((h) => (h.youtubeId ?? h.id) === item.id)?.playCount ?? 1} plays`}
+            />
+          ))}
+        </Shelf>
+      ) : null}
+
+      {/* ── Global context. Shown for everyone; it is the cold-start path. */}
+      <Shelf
+        id="shelf-chart"
+        title="Songs of the week"
+        subtitle="The most-played songs across the globe right now."
+        icon={<Flame className="size-4 text-[rgb(var(--tint))]" />}
+        skeleton={trending === null}
+        hidden={trending !== null && trending.length === 0}
+      >
+        {usable(trending)
+          .slice(0, 14)
+          .map((item) => (
+            <MediaCard
+              key={item.id}
+              item={item}
+              onOpen={() => playTrending(item)}
+              onPlay={() => playTrending(item)}
+            />
+          ))}
+      </Shelf>
+
+      <Shelf
+        id="shelf-discover"
+        title="Discover something new"
+        icon={<Compass className="size-4 text-[rgb(var(--tint))]" />}
+        skeleton={remote.discover === undefined}
+        hidden={
+          remote.discover !== undefined && usable(remote.discover).length === 0
+        }
+      >
+        {usable(remote.discover)
+          .slice(0, 14)
+          .map((item) => (
+            <MediaCard
+              key={item.id}
+              item={item}
+              onOpen={() => playRemoteItem(item, usable(remote.discover))}
+              onPlay={() => playRemoteItem(item, usable(remote.discover))}
+            />
+          ))}
+      </Shelf>
+
+      <Shelf
+        id="shelf-releases"
+        title="New releases"
+        icon={<Disc3 className="size-4 text-[rgb(var(--tint))]" />}
+        skeleton={remote.newReleases === undefined}
+        hidden={
+          remote.newReleases !== undefined &&
+          usable(remote.newReleases).length === 0
+        }
+      >
+        {usable(remote.newReleases)
+          .slice(0, 14)
+          .map((item) => (
+            <MediaCard
+              key={item.id}
+              item={item}
+              onOpen={() => playRemoteItem(item, usable(remote.newReleases))}
+              onPlay={() => playRemoteItem(item, usable(remote.newReleases))}
+            />
+          ))}
+      </Shelf>
+
+      <div className="grid gap-9 lg:grid-cols-2 lg:gap-4">
+        <Shelf
+          id="shelf-time"
+          title="Right now"
+          subtitle={localTime}
+          icon={<Sun className="size-4 text-[rgb(var(--tint))]" />}
+          skeleton={remote.timeOfDay === undefined}
+          hidden={
+            remote.timeOfDay !== undefined &&
+            usable(remote.timeOfDay).length === 0
+          }
+        >
+          {usable(remote.timeOfDay)
+            .slice(0, 10)
+            .map((item) => (
+              <MediaCard
+                key={item.id}
+                item={item}
+                onOpen={() => playRemoteItem(item, usable(remote.timeOfDay))}
+                onPlay={() => playRemoteItem(item, usable(remote.timeOfDay))}
+              />
+            ))}
+        </Shelf>
+
+        <Shelf
+          id="shelf-season"
+          title={`Sounds of ${capitalize(season)}`}
+          icon={<Disc3 className="size-4 text-[rgb(var(--tint))]" />}
+          skeleton={remote.seasonal === undefined}
+          hidden={
+            remote.seasonal !== undefined &&
+            usable(remote.seasonal).length === 0
+          }
+        >
+          {usable(remote.seasonal)
+            .slice(0, 10)
+            .map((item) => (
+              <MediaCard
+                key={item.id}
+                item={item}
+                onOpen={() => playRemoteItem(item, usable(remote.seasonal))}
+                onPlay={() => playRemoteItem(item, usable(remote.seasonal))}
+              />
+            ))}
+        </Shelf>
+      </div>
+
+      {/* ── Mood launches: a fast way in without typing a search. */}
+      <Shelf
+        id="shelf-moods"
+        title="Set the mood"
+        action={{ to: "/search", label: "Browse all" }}
+        icon={<Sparkles className="size-4 text-[rgb(var(--tint))]" />}
+      >
+        {MOOD_LAUNCHES.map(({ label, query, tone }) => (
+          <Link
+            key={label}
+            to={`/search?q=${encodeURIComponent(query)}`}
+            className={cn(
+              "group flex aspect-square w-36 shrink-0 snap-start flex-col justify-end overflow-hidden rounded-xl border border-white/[0.08] bg-gradient-to-br p-3 transition-all hover:-translate-y-0.5 hover:border-[rgb(var(--tint)_/_0.35)] sm:w-44 lg:w-48",
+              tone,
+            )}
+          >
+            <span className="absolute -top-5 -right-4 size-20 rounded-full bg-white/[0.06] blur-xl transition-transform duration-500 group-hover:scale-125" />
+            <span className="relative text-sm font-semibold text-foreground">
               {label}
-            </p>
-            <p className="mt-0.5 truncate text-xs text-muted-foreground">
-              {detail}
-            </p>
+            </span>
+            <span className="relative mt-0.5 text-[10px] text-muted-foreground">
+              Open mix →
+            </span>
           </Link>
         ))}
-      </section>
-      {/* Listening pulse — server-backed for signed-in listeners, with local
-          history as an offline/loading fallback. */}
+      </Shelf>
+
+      {/* ── Listening pulse, kept last: it is a readout, not a way in. */}
       <section aria-labelledby="listening-pulse-title">
         <div className="glass-card relative overflow-hidden rounded-2xl p-4 sm:p-5">
           <div className="pointer-events-none absolute -top-24 -right-16 size-56 rounded-full bg-[rgb(var(--tint)_/_0.1)] blur-3xl" />
@@ -693,9 +1081,6 @@ export default function Home() {
               >
                 Your week in sound
               </h2>
-              <p className="mt-0.5 text-sm text-muted-foreground">
-                A small look at the music keeping you company.
-              </p>
             </div>
             <Link
               to="/stats"
@@ -735,17 +1120,14 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Bars live in the card's own content box: no extra inset, so they
-              can never run into the rounded corners, and the row clips so a
-              narrow phone can never push a bar past the card edge. */}
           <div className="relative mt-4 flex h-14 items-end gap-1 overflow-hidden border-b border-white/[0.08] sm:h-16 sm:gap-1.5">
             {listeningPulse.bars.map((count, index) => (
               <div
                 key={`${index}-${count}`}
-                className="group flex h-full min-w-0 flex-1 items-end"
+                className="group/bar flex h-full min-w-0 flex-1 items-end"
               >
                 <div
-                  className="w-full rounded-t-md bg-gradient-to-t from-[rgb(var(--tint)_/_0.3)] to-[rgb(var(--tint))] opacity-65 transition-all duration-300 group-hover:opacity-100"
+                  className="w-full rounded-t-md bg-gradient-to-t from-[rgb(var(--tint)_/_0.3)] to-[rgb(var(--tint))] opacity-65 transition-all duration-300 group-hover/bar:opacity-100"
                   style={{
                     height: `${Math.max(12, (count / listeningPulse.maxBar) * 100)}%`,
                   }}
@@ -754,516 +1136,8 @@ export default function Home() {
               </div>
             ))}
           </div>
-          <div className="relative mt-2 flex justify-between text-[10px] text-muted-foreground">
-            <span>Recent listening</span>
-            <span>Keep the streak going</span>
-          </div>
         </div>
       </section>
-      {/* quick actions */}
-      <section className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-4 sm:p-5">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[rgb(var(--tint))]">
-              Quick actions
-            </p>
-            <h2 className="mt-1 text-lg font-semibold tracking-tight">
-              Jump straight into listening
-            </h2>
-          </div>
-          <Dices className="size-5 text-[rgb(var(--tint))]" />
-        </div>
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          <button
-            type="button"
-            onClick={() => setQueueOpen(true)}
-            className="group flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 text-left transition-colors hover:border-[rgb(var(--tint)_/_0.4)] hover:bg-white/[0.06]"
-          >
-            <span className="flex size-9 items-center justify-center rounded-lg bg-violet-400/10 text-violet-300">
-              <ListMusic className="size-4" />
-            </span>
-            <span className="min-w-0">
-              <span className="block text-sm font-semibold">Open queue</span>
-              <span className="block truncate text-xs text-muted-foreground">
-                Rearrange what plays next
-              </span>
-            </span>
-          </button>
-          <Link
-            to="/stats"
-            className="group flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 transition-colors hover:border-[rgb(var(--tint)_/_0.4)] hover:bg-white/[0.06]"
-          >
-            <span className="flex size-9 items-center justify-center rounded-lg bg-amber-400/10 text-amber-300">
-              <BarChart3 className="size-4" />
-            </span>
-            <span className="min-w-0">
-              <span className="block text-sm font-semibold">
-                Listening stats
-              </span>
-              <span className="block truncate text-xs text-muted-foreground">
-                See your listening pulse
-              </span>
-            </span>
-          </Link>
-          <Link
-            to="/playlists"
-            className="group flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 transition-colors hover:border-[rgb(var(--tint)_/_0.4)] hover:bg-white/[0.06]"
-          >
-            <span className="flex size-9 items-center justify-center rounded-lg bg-rose-400/10 text-rose-300">
-              <ListMusic className="size-4" />
-            </span>
-            <span className="min-w-0">
-              <span className="block text-sm font-semibold">Your library</span>
-              <span className="block truncate text-xs text-muted-foreground">
-                Playlists and liked songs
-              </span>
-            </span>
-          </Link>
-        </div>
-      </section>
-      {/* one-tap mood launcher */}
-      <section>
-        <div className="mb-3 flex items-end justify-between gap-4">
-          <div>
-            <h2 className="font-display text-lg font-bold tracking-tight sm:text-xl">
-              Set the mood
-            </h2>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              Start a focused listening session without typing a thing.
-            </p>
-          </div>
-          <Link
-            to="/search"
-            className="hidden items-center gap-1 text-xs font-semibold text-[rgb(var(--tint))] transition-colors hover:text-foreground sm:flex"
-          >
-            Browse all <Search className="size-3.5" />
-          </Link>
-        </div>
-        <div className="slider-rail -mx-4 flex gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 lg:grid-cols-6">
-          {MOOD_LAUNCHES.map(({ label, query, tone }) => (
-            <Link
-              key={label}
-              to={`/search?q=${encodeURIComponent(query)}`}
-              className={cn(
-                "group relative flex h-24 w-36 shrink-0 flex-col justify-end overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-br p-3 transition-all hover:-translate-y-0.5 hover:border-[rgb(var(--tint)_/_0.35)] sm:w-auto",
-                tone,
-              )}
-            >
-              <span className="absolute -top-5 -right-4 size-20 rounded-full bg-white/[0.06] blur-xl transition-transform duration-500 group-hover:scale-125" />
-              <span className="relative text-sm font-semibold text-foreground">
-                {label}
-              </span>
-              <span className="relative mt-0.5 text-[10px] text-muted-foreground">
-                Open mix →
-              </span>
-            </Link>
-          ))}
-        </div>
-      </section>
-      {/* Personalised recommendations — the rows the engine actually produced.
-          Skeleton while loading, absent when the listener has too little data
-          for a row to be honest about it, and plain rows otherwise. */}
-      {recoSections === null && (
-        <section aria-busy="true">
-          <SectionHeader
-            title="Recommended for you"
-            subtitle="Building this from what you play, like and skip."
-            icon={<Sparkles className="size-5 text-[rgb(var(--tint))]" />}
-          />
-          <div className="mt-1 flex flex-col gap-2">
-            {[0, 1, 2, 3].map((i) => (
-              <div
-                key={i}
-                className="h-12 animate-pulse rounded-lg bg-white/[0.04]"
-              />
-            ))}
-          </div>
-        </section>
-      )}
-      {recoSections?.map((section) => (
-        <section key={section.id}>
-          <SectionHeader
-            title={section.title}
-            subtitle={
-              section.personalised
-                ? section.subtitle
-                : "New listeners start here — this gets personal as you listen."
-            }
-            icon={<Sparkles className="size-5 text-[rgb(var(--tint))]" />}
-          />
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35, ease: "easeOut" }}
-            className="stagger flex flex-col gap-0.5"
-          >
-            {section.items.slice(0, 8).map((item, i) => (
-              <RemoteTrackRow
-                key={item.id}
-                item={toYtItem(item)}
-                index={i + 1}
-                onPlay={() => playRecommendation(section, item)}
-                resolving={resolvingId === item.id}
-                source="youtube"
-              />
-            ))}
-          </motion.div>
-        </section>
-      ))}
-      {/* Songs of the week — global chart */}{" "}
-      <RemoteSection
-        title="Songs of the week"
-        subtitle="The most-played songs across the globe right now."
-        icon={<Flame className="size-5 text-[rgb(var(--tint))]" />}
-        items={trending ?? undefined}
-      >
-        {(items) =>
-          items
-            .slice(0, 8)
-            .map((item, i) => (
-              <RemoteTrackRow
-                key={item.id}
-                item={item}
-                index={i + 1}
-                onPlay={playTrending}
-                resolving={resolvingId === item.id}
-                source="spotify"
-              />
-            ))
-        }
-      </RemoteSection>{" "}
-      {trending && trending.length > 1 && (
-        <div className="mb-3 flex justify-end">
-          <button
-            type="button"
-            onClick={() => playRemoteItem(trending[0], trending.slice(1))}
-            className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-[rgb(var(--tint)_/_0.4)] hover:text-foreground"
-          >
-            <Dices className="h-3.5 w-3.5 text-[rgb(var(--tint))]" />
-            Shuffle the week
-          </button>
-        </div>
-      )}
-      <RemoteSection
-        title="Today's top tracks"
-        subtitle="The biggest songs right now, streamed live."
-        items={remote.topTracks}
-      >
-        {(items) =>
-          items
-            .slice(0, 8)
-            .map((item, i) => (
-              <RemoteTrackRow
-                key={item.id}
-                item={item}
-                index={i + 1}
-                onPlay={(it) => playRemoteItem(it, items)}
-                resolving={resolvingId === item.id}
-                source="youtube"
-              />
-            ))
-        }
-      </RemoteSection>
-      <RemoteSection
-        title="New releases"
-        subtitle="Fresh songs just dropped, streamed live."
-        items={remote.newReleases}
-      >
-        {(items) => (
-          <RemoteRows
-            items={items}
-            max={6}
-            onPlay={playRemoteItem}
-            resolvingId={resolvingId}
-          />
-        )}
-      </RemoteSection>
-      {/* Jump Back In — your cross-source history */}
-      {jumpBackItems.length >= 2 && (
-        <section>
-          <div className="mb-3 flex items-end justify-between gap-4">
-            <div>
-              <h2 className="font-display text-lg font-bold tracking-tight sm:text-xl">
-                Jump back in
-              </h2>
-              <p className="mt-0.5 text-sm text-muted-foreground">
-                Pick up where you left off — from any source.
-              </p>
-            </div>
-          </div>
-          <div className="stagger grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-            {jumpBackItems.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => playRemoteItem(item, jumpBackItems)}
-                className="group flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.03] p-2.5 text-left transition-all hover:border-[rgb(var(--tint)_/_0.35)] hover:bg-white/[0.05]"
-              >
-                <img
-                  src={item.thumbnail}
-                  alt=""
-                  loading="lazy"
-                  className="size-11 shrink-0 rounded-md object-cover"
-                />
-                <span className="min-w-0">
-                  <span className="block truncate text-sm font-semibold">
-                    {item.title}
-                  </span>
-                  <span className="block truncate text-xs text-muted-foreground">
-                    {cleanArtistName(item.artist, item.title)}
-                  </span>
-                </span>
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
-      <RemoteSection
-        title="Discover Weekly"
-        subtitle="A fresh mix every week, matched just for you."
-        icon={<Compass className="size-5 text-[rgb(var(--tint))]" />}
-        items={remote.discover}
-      >
-        {(items) => (
-          <RemoteRows
-            items={items}
-            max={6}
-            onPlay={playRemoteItem}
-            resolvingId={resolvingId}
-          />
-        )}
-      </RemoteSection>
-      {/* Because you listened to... */}
-      {continueTrack && (
-        <RemoteSection
-          title={`Because you listened to ${continueTrack.title}`}
-          subtitle="More like this, matched live to what you love."
-          icon={<Sparkles className="size-5 text-[rgb(var(--tint))]" />}
-          items={remote.because}
-        >
-          {(items) => (
-            <RemoteRows
-              items={items}
-              onPlay={playRemoteItem}
-              resolvingId={resolvingId}
-            />
-          )}
-        </RemoteSection>
-      )}
-      {/* Time of day + seasonal side-by-side */}
-      {(remote.timeOfDay || remote.seasonal) && (
-        <section className="grid gap-4 lg:grid-cols-2">
-          {remote.timeOfDay && (
-            <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-4">
-              <h3 className="font-display flex items-center gap-2 text-base font-bold tracking-tight">
-                <Sun className="size-4 text-[rgb(var(--tint))]" />
-                Right now for you · {localTime}
-              </h3>
-              <RemoteRows
-                items={remote.timeOfDay}
-                max={4}
-                onPlay={playRemoteItem}
-                resolvingId={resolvingId}
-                className="mt-2"
-              />
-            </div>
-          )}
-          {remote.seasonal && (
-            <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-4">
-              <h3 className="font-display flex items-center gap-2 text-base font-bold tracking-tight">
-                <Disc3 className="size-4 text-[rgb(var(--tint))]" />
-                Sounds of {capitalize(season)}
-              </h3>
-              <RemoteRows
-                items={remote.seasonal}
-                max={4}
-                onPlay={playRemoteItem}
-                resolvingId={resolvingId}
-                className="mt-2"
-              />
-            </div>
-          )}
-        </section>
-      )}
-      {/* Trending artists — from your plays, live */}
-      {artistTrendList.length >= 2 && (
-        <section>
-          <div className="mb-3">
-            <h2 className="font-display text-lg font-bold tracking-tight sm:text-xl">
-              Trending artists
-            </h2>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              Who you&apos;ve been playing the most.
-            </p>
-          </div>
-          <div className="slider-rail -mx-4 flex gap-4 overflow-x-auto px-4 pb-2">
-            {artistTrendList.slice(0, 8).map(({ artist, items }) => (
-              <button
-                key={artist}
-                type="button"
-                onClick={() => {
-                  if (items[0]) playRemoteItem(items[0], items);
-                }}
-                className="group w-28 shrink-0 text-left"
-              >
-                <img
-                  src={items[0]?.thumbnail ?? ""}
-                  alt=""
-                  loading="lazy"
-                  className="aspect-square w-full rounded-full object-cover ring-1 ring-white/10 transition-transform duration-300 group-hover:scale-105"
-                />
-                <p className="mt-2 truncate text-sm font-semibold">{artist}</p>
-                <p className="truncate text-xs text-muted-foreground">Artist</p>
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
-      {/* most played (personal, cross-source) */}
-      {mostPlayedItems.length >= 2 && (
-        <section>
-          <div className="mb-3 flex items-end justify-between gap-4">
-            <div>
-              <h2 className="font-display text-lg font-bold tracking-tight sm:text-xl">
-                Your most played
-              </h2>
-              <p className="mt-0.5 text-sm text-muted-foreground">
-                Your real listening history — every source.
-              </p>
-            </div>
-          </div>
-          <RemoteRows
-            items={mostPlayedItems}
-            onPlay={playRemoteItem}
-            resolvingId={resolvingId}
-          />
-        </section>
-      )}
-      {/* recently played (personal, cross-source) */}
-      {historyItems.length >= 2 && (
-        <section>
-          <div className="mb-3 flex items-end justify-between gap-4">
-            <div>
-              <h2 className="font-display text-lg font-bold tracking-tight sm:text-xl">
-                Recently played
-              </h2>
-              <p className="mt-0.5 text-sm text-muted-foreground">
-                Jump back in where you left off — any source.
-              </p>
-            </div>
-          </div>
-          <RemoteRows
-            items={historyItems}
-            onPlay={playRemoteItem}
-            resolvingId={resolvingId}
-          />
-        </section>
-      )}
-    </div>
-  );
-}
-
-// --- section shell -----------------------------------------------------------
-
-/**
- * A section that renders only remote rows. Shows a skeleton
- * while loading and hides itself entirely when there's nothing to show —
- * no catalog fallback anywhere.
- */
-function RemoteSection({
-  title,
-  subtitle,
-  icon,
-  items,
-  children,
-}: {
-  title: string;
-  subtitle: string;
-  icon?: React.ReactNode;
-  items: YtItem[] | undefined;
-  children: (items: YtItem[]) => React.ReactNode;
-}) {
-  if (items === undefined) {
-    return (
-      <section>
-        <SectionHeader title={title} subtitle={subtitle} icon={icon} />
-        <div className="mt-1 flex flex-col gap-2">
-          {[0, 1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="h-12 animate-pulse rounded-lg bg-white/[0.04]"
-            />
-          ))}
-        </div>
-      </section>
-    );
-  }
-  if (!Array.isArray(items)) return null;
-  const safeItems = items.filter(isUsableRemoteItem);
-  if (safeItems.length === 0) return null;
-  return (
-    <section>
-      <SectionHeader title={title} subtitle={subtitle} icon={icon} />
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, ease: "easeOut" }}
-        className="stagger mt-1 flex flex-col gap-0.5"
-      >
-        {children(safeItems)}
-      </motion.div>
-    </section>
-  );
-}
-
-function SectionHeader({
-  title,
-  subtitle,
-  icon,
-}: {
-  title: string;
-  subtitle: string;
-  icon?: React.ReactNode;
-}) {
-  return (
-    <div className="mb-3">
-      <h2 className="font-display flex items-center gap-2 text-lg font-bold tracking-tight sm:text-xl">
-        {icon}
-        {title}
-      </h2>
-      <p className="mt-0.5 text-sm text-muted-foreground">{subtitle}</p>
-    </div>
-  );
-}
-
-function RemoteRows({
-  items,
-  onPlay,
-  resolvingId,
-  max = 5,
-  className = "flex flex-col gap-0.5",
-}: {
-  items: YtItem[];
-  onPlay: (item: YtItem, rest: YtItem[]) => void;
-  resolvingId: string | null;
-  max?: number;
-  className?: string;
-}) {
-  const safeItems = Array.isArray(items)
-    ? items.filter(isUsableRemoteItem)
-    : [];
-  return (
-    <div className={className}>
-      {safeItems.slice(0, max).map((item, i) => (
-        <RemoteTrackRow
-          key={item.id}
-          item={item}
-          index={i + 1}
-          onPlay={(it) => onPlay(it, safeItems)}
-          resolving={resolvingId === item.id}
-          source="youtube"
-        />
-      ))}
     </div>
   );
 }
@@ -1341,6 +1215,12 @@ function seasonLabel(): string {
 
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/** m:ss for a playback position. */
+function formatClock(seconds: number): string {
+  const safe = Math.max(0, Math.floor(seconds));
+  return `${Math.floor(safe / 60)}:${String(safe % 60).padStart(2, "0")}`;
 }
 
 // Group history items by artist name, sorted by entry count, for "Trending artists".

@@ -487,6 +487,7 @@ export function AppShell() {
     });
     return () => setSignalBridge(null);
   }, [
+    setSignalBridge,
     recordPlay,
     recordEngagement,
     recordRemoval,

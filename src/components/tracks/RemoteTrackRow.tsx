@@ -1,33 +1,13 @@
-import { AddToPlaylistItems } from "@/components/playlists/AddToPlaylistItems";
-import { PlaylistDialog } from "@/components/playlists/PlaylistDialog";
-import { useAddToPlaylist } from "@/components/playlists/useAddToPlaylist";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { cleanArtistName, cleanTrackTitle, type YtItem } from "@/lib/youtube";
+import type { YtItem } from "@/lib/youtube";
 import { formatTime } from "@/lib/format";
-import { toPlayableYoutube } from "@/lib/playable";
 import { cn } from "@/lib/utils";
-import { copyText } from "@/lib/clipboard";
-import { buildTrackShareUrl } from "@/lib/shareLink";
-import { usePlayerStore } from "@/store/player";
 import {
-  Heart,
-  ListEnd,
-  ListMusic,
-  ListStart,
-  Loader2,
-  MoreVertical,
-  Pause,
-  Play,
-  Radio,
-} from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
-import { toast } from "sonner";
+  TrackActionsMenu,
+  useTrackActions,
+} from "@/components/tracks/useTrackActions";
+import { usePlayerStore } from "@/store/player";
+import { Heart, Loader2, Pause, Play, Radio } from "lucide-react";
+import type { ReactNode } from "react";
 
 const isRowActionTarget = (target: EventTarget | null) =>
   target instanceof Element &&
@@ -55,46 +35,18 @@ export function RemoteTrackRow({
 }) {
   const currentId = usePlayerStore((s) => s.current?.id);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
-  const liked = usePlayerStore((s) => s.liked);
-  const toggleLike = usePlayerStore((s) => s.toggleLike);
   const startRadio = usePlayerStore((s) => s.startRadio);
   const isCurrent = currentId === item.id;
-  const isLiked = liked[item.id] !== undefined;
-  const displayTitle = cleanTrackTitle(item.title);
-  const artistName = cleanArtistName(item.artist, item.title);
 
-  // The overflow menu can create a playlist, so the dialog lives here (outside
-  // the dropdown content, which unmounts as soon as an item is selected).
-  const [playlistDialogOpen, setPlaylistDialogOpen] = useState(false);
-  const playlistTrack = useMemo(() => {
-    const playable = toPlayableYoutube(item, "");
-    return source === "youtube"
-      ? playable
-      : { ...playable, youtubeId: undefined };
-  }, [item, source]);
-  const { addTo } = useAddToPlaylist(playlistTrack);
-
-  const likeThis = () =>
-    toggleLike(item.id, {
-      title: displayTitle,
-      artistName,
-      coverUrl: item.thumbnail,
-      duration: item.duration,
-      youtubeId: item.id,
-      source,
-    });
-
-  const playNext = () => {
-    const s = usePlayerStore.getState();
-    const at = s.queueIndex >= 0 ? s.queueIndex + 1 : s.queue.length;
-    s.insertInQueue(playlistTrack, at);
-    toast.success(`Playing "${displayTitle}" next`);
-  };
-
-  const addQueued = () => {
-    usePlayerStore.getState().addToQueue(playlistTrack);
-    toast.success("Added to queue");
-  };
+  // Actions live in one shared hook so this row and the Home media cards can
+  // never disagree about what "Play next" or "Copy song link" does.
+  const {
+    title: displayTitle,
+    artistName,
+    isLiked,
+    likeThis,
+    renderPlaylistDialog,
+  } = useTrackActions(item, source);
 
   return (
     <>
@@ -210,85 +162,12 @@ export function RemoteTrackRow({
           >
             <Radio className="size-4" />
           </button>
-          <DropdownMenu modal={false}>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                aria-label={`More options for ${displayTitle}`}
-                onClick={(e) => e.stopPropagation()}
-                className="rounded-full p-2 text-muted-foreground/70 transition-colors hover:bg-white/10 hover:text-foreground sm:p-1.5"
-              >
-                <MoreVertical className="size-4" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuItem
-                className="gap-2"
-                onSelect={(event) => {
-                  event.stopPropagation();
-                  playNext();
-                }}
-              >
-                <ListStart className="size-4" />
-                Play next
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className="gap-2"
-                onSelect={(event) => {
-                  event.stopPropagation();
-                  addQueued();
-                }}
-              >
-                <ListEnd className="size-4" />
-                Add to queue
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className="gap-2"
-                onSelect={() => {
-                  // A deep link to the song itself. This used to copy
-                  // `/search?q=<title> <artist>`, which dumped the recipient on
-                  // a pre-filled search box: they still had to press search and
-                  // pick the right row, and a badly tagged track came back as a
-                  // completely different song.
-                  void copyText(
-                    buildTrackShareUrl(window.location.origin, playlistTrack),
-                  ).then((ok) => {
-                    if (ok) toast.success("Song link copied");
-                    else toast.error("Couldn't copy the link");
-                  });
-                }}
-              >
-                <ListMusic className="size-4" />
-                Copy song link
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className="gap-2"
-                onSelect={(event) => {
-                  event.stopPropagation();
-                  likeThis();
-                }}
-              >
-                <Heart
-                  className={cn(
-                    "size-4",
-                    isLiked && "fill-current text-[rgb(var(--tint))]",
-                  )}
-                />
-                {isLiked ? "Remove from liked songs" : "Add to liked songs"}
-              </DropdownMenuItem>
-              {menuItems ? (
-                <>
-                  <DropdownMenuSeparator />
-                  {menuItems}
-                </>
-              ) : null}
-              <DropdownMenuSeparator />
-              <AddToPlaylistItems
-                track={playlistTrack}
-                onNewPlaylist={() => setPlaylistDialogOpen(true)}
-              />
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <TrackActionsMenu
+            item={item}
+            source={source}
+            extraItems={menuItems}
+            triggerClassName="rounded-full p-2 text-muted-foreground/70 transition-colors hover:bg-white/10 hover:text-foreground sm:p-1.5"
+          />
           <button
             type="button"
             aria-label={
@@ -312,11 +191,7 @@ export function RemoteTrackRow({
           </span>
         </div>
       </div>
-      <PlaylistDialog
-        open={playlistDialogOpen}
-        onOpenChange={setPlaylistDialogOpen}
-        onCreate={(id, name) => void addTo(id, name)}
-      />
+      {renderPlaylistDialog}
     </>
   );
 }

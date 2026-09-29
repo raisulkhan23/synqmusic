@@ -251,8 +251,10 @@ describe("recommendation failures degrade, they never surface as an error", () =
 
 describe("Home reuses the design language it already had", () => {
   test("recommendation rows render through the existing remote components", () => {
-    expect(home).toContain("<RemoteTrackRow");
-    expect(home).toContain("<SectionHeader");
+    // Presentation-only change: the engine still decides the rows, and the
+    // cards reuse the app's own track/playable plumbing.
+    expect(home).toContain("<MediaCard");
+    expect(home).toContain("<Shelf");
     const start = home.indexOf("const playRecommendation");
     const body = home.slice(start, start + 900);
     expect(body).toContain("playRemoteItem(toYtItem(item)");
@@ -265,26 +267,35 @@ describe("Home reuses the design language it already had", () => {
   });
 
   test("recommendation rows keep every existing row affordance", () => {
+    // The actions are defined once in the shared track-actions module and
+    // reached by both the list row and the Home card, so a card can never
+    // quietly lose an affordance the row still has.
+    const actions = readSource("src/components/tracks/useTrackActions.tsx");
     for (const affordance of [
-      "Play Next",
-      "queue",
-      "playlist",
-      "like",
-      "options",
+      "Play next",
+      "Add to queue",
+      "Add to playlist",
+      "liked songs",
+      "More options",
     ]) {
-      expect(row.toLowerCase()).toContain(affordance.toLowerCase());
+      expect(actions).toContain(affordance);
     }
+    expect(row).toContain("<TrackActionsMenu");
+    expect(readSource("src/components/tracks/MediaCard.tsx")).toContain(
+      "<TrackActionsMenu",
+    );
   });
 
   test("a cold listener is told the truth about why the row is generic", () => {
-    expect(home).toContain(
-      '"New listeners start here — this gets personal as you listen."',
-    );
+    expect(home).toContain('"Popular picks while we learn"');
   });
 
   test("the loading state exists so an empty Home is never shown as final", () => {
     expect(home).toContain("recoSections === null");
-    expect(home).toContain('aria-busy="true"');
+    expect(home).toContain("skeleton");
+    // A failure resolves to an empty array, not an error surface — the rest of
+    // Home keeps working.
+    expect(home).toMatch(/setRecoSections\(\[\]\)/);
   });
 });
 
