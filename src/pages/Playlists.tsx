@@ -1,13 +1,52 @@
 import { useState } from "react";
+import { Link } from "react-router";
 import { PlaylistCard } from "@/components/playlists/PlaylistCard";
 import { PlaylistDialog } from "@/components/playlists/PlaylistDialog";
 import { LikedSongsCard } from "@/components/playlists/LikedSongsCard";
 import { api } from "@/convex/_generated/api";
 import { useQuery } from "convex/react";
-import { ListMusic, Plus } from "lucide-react";
+import { useLocation } from "react-router";
+import {
+  BarChart3,
+  ChevronRight,
+  History,
+  ListMusic,
+  Plus,
+  Radio,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+
+/**
+ * Destinations that live in the `lg:`-only sidebar and have no place in the
+ * 4-item phone bottom bar. Without them the Library tab was the one page a
+ * mobile listener could land on and still find no way to reach their history,
+ * rooms or stats. Liked Songs is deliberately absent — it already has its own
+ * pinned card below.
+ */
+const LIBRARY_SHORTCUTS = [
+  {
+    to: "/recent",
+    label: "Recently played",
+    detail: "Your listening history, newest first",
+    icon: History,
+  },
+  {
+    to: "/social",
+    label: "Listening rooms",
+    detail: "Listen in sync with friends",
+    icon: Radio,
+  },
+  {
+    to: "/stats",
+    label: "Listening stats",
+    detail: "Top songs, artists and habits",
+    icon: BarChart3,
+  },
+] as const;
 
 export default function Playlists() {
   const playlists = useQuery(api.playlists.myPlaylists);
+  const location = useLocation();
   const [dialogOpen, setDialogOpen] = useState(false);
 
   return (
@@ -31,6 +70,37 @@ export default function Playlists() {
         </button>
       </header>
 
+      <nav className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        {LIBRARY_SHORTCUTS.map(({ to, label, detail, icon: Icon }) => {
+          const isActive = location.pathname === to;
+          return (
+            <Link
+              key={to}
+              to={to}
+              className={cn(
+                "flex items-center gap-3 rounded-2xl border px-4 py-3 transition-colors",
+                isActive
+                  ? "border-[rgb(var(--tint)_/_0.3)] bg-[rgb(var(--tint)_/_0.1)]"
+                  : "border-white/[0.07] bg-white/[0.03] hover:border-[rgb(var(--tint)_/_0.35)] hover:bg-white/[0.05]",
+              )}
+            >
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[rgb(var(--tint)_/_0.14)]">
+                <Icon className="size-4 text-[rgb(var(--tint))]" />
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-semibold">
+                  {label}
+                </span>
+                <span className="block truncate text-xs text-muted-foreground">
+                  {detail}
+                </span>
+              </span>
+              <ChevronRight className="ml-auto size-4 shrink-0 text-muted-foreground" />
+            </Link>
+          );
+        })}
+      </nav>
+
       {/* Liked Songs is pinned above the user's own playlists. */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
         <LikedSongsCard />
@@ -51,7 +121,9 @@ export default function Playlists() {
         <div className="flex flex-col items-center gap-3 rounded-3xl border border-dashed border-white/10 py-20 text-center">
           <ListMusic className="size-10 text-muted-foreground/40" />
           <div>
-            <p className="font-display text-lg font-semibold">No playlists yet</p>
+            <p className="font-display text-lg font-semibold">
+              No playlists yet
+            </p>
             <p className="mt-1 max-w-sm text-sm text-muted-foreground">
               Create one and add songs from any search result or album.
             </p>

@@ -46,13 +46,15 @@ export default function Social() {
         </p>
       </header>
 
-      <div className="flex items-center gap-2">
+      {/* flex-wrap + min-w-0: the input is `w-full max-w-xs`, and next to the
+          Create button that overran a 360px phone instead of wrapping. */}
+      <div className="flex flex-wrap items-center gap-2">
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleCreate()}
           placeholder="Name a new listening room…"
-          className="w-full max-w-xs rounded-full border border-white/[0.08] bg-white/[0.04] px-4 py-2 text-sm outline-none placeholder:text-muted-foreground/60 focus:border-[rgb(var(--tint)_/_0.5)]"
+          className="min-w-0 flex-1 rounded-full border border-white/[0.08] bg-white/[0.04] px-4 py-2 text-sm outline-none placeholder:text-muted-foreground/60 focus:border-[rgb(var(--tint)_/_0.5)] sm:max-w-xs sm:flex-none"
         />
         <button
           type="button"
@@ -60,7 +62,11 @@ export default function Social() {
           disabled={busy || !name.trim()}
           className="flex items-center gap-2 rounded-full bg-[rgb(var(--tint))] px-4 py-2 text-sm font-semibold text-black transition-opacity disabled:opacity-40"
         >
-          {busy ? <Loader2 className="size-4 animate-spin" /> : <Radio className="size-4" />}
+          {busy ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Radio className="size-4" />
+          )}
           Create room
         </button>
       </div>
@@ -70,9 +76,12 @@ export default function Social() {
       ) : rooms.length === 0 ? (
         <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-10 text-center">
           <Radio className="mx-auto size-10 text-muted-foreground/50" />
-          <p className="mt-3 font-display text-lg font-semibold">No rooms open</p>
+          <p className="mt-3 font-display text-lg font-semibold">
+            No rooms open
+          </p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Create a room above — everyone who joins hears the host's queue in sync.
+            Create a room above — everyone who joins hears the host's queue in
+            sync.
           </p>
         </div>
       ) : (
@@ -98,7 +107,9 @@ export default function Social() {
                   variant="secondary"
                   className={cn(
                     "shrink-0",
-                    r.nowPlaying ? "bg-emerald-500/15 text-emerald-300" : "bg-white/[0.05] text-muted-foreground",
+                    r.nowPlaying
+                      ? "bg-emerald-500/15 text-emerald-300"
+                      : "bg-white/[0.05] text-muted-foreground",
                   )}
                 >
                   {r.nowPlaying ? "Live" : "Idle"}

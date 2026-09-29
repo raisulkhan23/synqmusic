@@ -18,6 +18,7 @@ import { PlayerBar } from "@/components/player/PlayerBar";
 import { QueuePanel } from "@/components/player/QueuePanel";
 import { useIntroTrim } from "@/components/player/useIntroTrim";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { MobileMoreMenu } from "@/components/layout/MobileMoreMenu";
 import { SettingsDialog } from "@/components/settings/SettingsDialog";
 import { Logo } from "@/components/brand/Logo";
 import { SiteFooter } from "@/components/landing/SiteFooter";
@@ -823,14 +824,21 @@ export function AppShell() {
             button were rendering underneath the status bar / notch. */}
         <div className="mobile-topbar liquid-glass sticky top-0 z-30 flex h-[calc(3.5rem+env(safe-area-inset-top))] shrink-0 items-center justify-between border-b border-white/[0.06] px-4 pt-[env(safe-area-inset-top)] lg:hidden">
           <Logo to="/home" />
-          <button
-            type="button"
-            aria-label="Settings"
-            onClick={() => void navigate("/settings")}
-            className="rounded-full p-2 text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <Settings className="size-[18px]" />
-          </button>
+          {/* The 4-item bottom bar cannot also carry Liked Songs, Recently
+              Played, Listening Rooms, Listening stats or Admin, and the real
+              sidebar is `lg:`-only — so on a phone those were unreachable.
+              This sheet is the overflow for exactly those destinations. */}
+          <div className="flex items-center gap-0.5">
+            <MobileMoreMenu />
+            <button
+              type="button"
+              aria-label="Settings"
+              onClick={() => void navigate("/settings")}
+              className="rounded-full p-2 text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <Settings className="size-[18px]" />
+            </button>
+          </div>
         </div>
 
         {focusMode && (
