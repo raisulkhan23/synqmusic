@@ -227,41 +227,6 @@ class ToolbarErrorBoundary extends React.Component<
   }
 }
 
-/**
- * Force a fresh copy of the app exactly once per session, on first load.
- *
- * The dev server here has been dropping and restarting, and a tab that was
- * open across one of those restarts keeps running the module graph it already
- * has. That graph is the thing that decides which routes exist, so a route
- * added after the tab opened is simply absent from it: the artist link looks
- * dead, and only a manual hard refresh — which pulls the current graph — makes
- * it work. Nothing in the app was wrong; the tab was.
- *
- * `no-store` on the reload bypasses the HTTP cache, and a sessionStorage flag
- * makes it happen once, so this cannot become a reload loop. `location.replace`
- * keeps the current URL, so the listener stays on whatever they were looking
- * at. If the reload is blocked it fails silently and the app loads as normal.
- */
-function FreshBundleOnBoot() {
-  useEffect(() => {
-    const KEY = "synq:fresh-boot";
-    try {
-      if (sessionStorage.getItem(KEY) === "1") return;
-      sessionStorage.setItem(KEY, "1");
-    } catch {
-      return; // storage blocked — never risk a reload loop
-    }
-    try {
-      const url = new URL(window.location.href);
-      url.searchParams.set("_cb", String(Date.now()));
-      window.location.replace(url.toString());
-    } catch {
-      /* ignore — the app still works, it is just not cache-busted */
-    }
-  }, []);
-  return null;
-}
-
 /** Hard guard so runtime errors never leave the preview as a blank page. */
 class RootErrorBoundary extends React.Component<
   { children: React.ReactNode },
@@ -375,7 +340,6 @@ createRoot(document.getElementById("root")!).render(
       </ToolbarErrorBoundary>
       <ConvexAuthProvider client={convex}>
         <BrowserRouter>
-          <FreshBundleOnBoot />
           <RouteSyncer />
           <PerformanceModeSync />
           <ScrollToTop />
