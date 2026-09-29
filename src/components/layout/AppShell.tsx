@@ -496,22 +496,49 @@ export function AppShell() {
     settleOutcome,
     invalidateCache,
   ]);
-  // Self-heal stale Radix body locks only when the user interacts. The old
-  // 300ms interval ran a large selector query forever and caused needless
-  // main-thread work even while the app was idle.
+  // Recover from a stale Radix body lock.
+  //
+  // Radix Dialog/Sheet set `document.body.style.pointerEvents = "none"` while
+  // open and clear it on close. If the tree unmounts while a layer is open —
+  // a route error boundary replacing the page, a fast unmount, a hot reload —
+  // the reset never runs and body keeps `pointer-events: none`. The result is
+  // the worst possible failure: the app still LOOKS perfect and renders, but
+  // not one control anywhere responds, so every click in the app appears dead.
+  //
+  // The old check asked whether ANY layer element existed. A layer that is
+  // present but closed (`data-state="closed"`, or unmounting) matched that
+  // query, so the lock was never released and the app stayed unclickable until
+  // a manual browser reload. Detection is now on genuinely OPEN layers, and
+  // the check also runs on navigation rather than only on pointerdown, so a
+  // route change is enough to recover even with no further clicking.
   useEffect(() => {
+    const OPEN_LAYER_SELECTOR = [
+      '[data-radix-dialog-content][data-state="open"]',
+      '[data-radix-menu-content][data-state="open"]',
+      '[data-radix-popover-content][data-state="open"]',
+      "[data-radix-popper-content-wrapper]",
+      '[role="dialog"][data-state="open"]',
+      '[role="menu"][data-state="open"]',
+      '[data-slot="sheet-content"][data-state="open"]',
+      '[data-slot="dropdown-menu-content"][data-state="open"]',
+    ].join(", ");
+
     const clearStaleBodyLock = () => {
       if (document.body.style.pointerEvents !== "none") return;
-      const hasOpenLayer =
-        document.querySelector(
-          '[data-radix-popper-content-wrapper], [data-radix-menu-content], [data-radix-dialog-content], [data-radix-popover-content], [data-radix-hover-card-content], [data-radix-tooltip-content], [data-radix-select-content], [role="dialog"]:not([hidden]), [role="menu"], [data-slot="sheet-content"], [data-slot="dropdown-menu-content"]',
-        ) !== null;
+      // Only a layer that is actually OPEN justifies the lock. Anything closed
+      // or mid-exit does not, and holding the lock for those is what made the
+      // whole app unresponsive.
+      const hasOpenLayer = document.querySelector(OPEN_LAYER_SELECTOR) !== null;
       if (!hasOpenLayer) document.body.style.pointerEvents = "";
     };
+
     window.addEventListener("pointerdown", clearStaleBodyLock, true);
-    return () =>
+    window.addEventListener("keydown", clearStaleBodyLock, true);
+    return () => {
       window.removeEventListener("pointerdown", clearStaleBodyLock, true);
-  }, []);
+      window.removeEventListener("keydown", clearStaleBodyLock, true);
+    };
+  }, [location.pathname]);
 
   // Session start (one per app load) + a page view on every route change.
   useEffect(() => {

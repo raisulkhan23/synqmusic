@@ -116,6 +116,13 @@ class RouteErrorBoundary extends React.Component<
   }
   componentDidCatch(error: Error) {
     console.error("[SYNQ] route crashed:", error);
+    // A route can die while a Radix layer (menu, sheet, dialog) is open. That
+    // layer owned `body { pointer-events: none }` and is now unmounted, so
+    // nothing will ever clear it — the app would keep rendering while every
+    // control stayed dead. Release it here, where the unmount is known.
+    if (document.body.style.pointerEvents === "none") {
+      document.body.style.pointerEvents = "";
+    }
   }
   render() {
     if (!this.state.error) return this.props.children;
