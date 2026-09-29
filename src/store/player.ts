@@ -1195,8 +1195,19 @@ const playedSessionIds = new Set<string>();
  * rows can never drift apart. The call is wrapped in a timeout and resolves to
  * null on ANY failure: a slow, empty or broken recommendation must fall through
  * to the existing related-mix path rather than stall the music.
+ *
+ * How long autoplay waits for it at the end of the queue before falling
+ * through to the related mix.
+ *
+ * This is pure SILENCE: the current song has ended and nothing is playing
+ * while this promise is outstanding, so the number is a gap in the music, not
+ * a background timeout. It used to be 2500ms, which meant a stalled or slow
+ * recommendation produced two and a half seconds of dead air between songs. The
+ * engine answers in well under a second when it is warm and healthy, so a short
+ * leash keeps the good path and only sacrifices the pathological one — and the
+ * related mix that takes over is instant.
  */
-const PERSONAL_NEXT_TIMEOUT_MS = 2500;
+const PERSONAL_NEXT_TIMEOUT_MS = 900;
 
 async function fetchPersonalNext(
   seed: Playable,
@@ -1634,31 +1645,39 @@ function prefetchTrack(track: Playable | undefined): void {
     return;
   prefetchedTrackIds.add(track.id);
 
-  // Keep next-track preparation off the critical click path. Artwork is cheap
-  // to warm, and direct audio sources can fetch metadata without playing.
-  window.setTimeout(() => {
-    if (track.coverUrl) {
-      const image = new Image();
-      image.decoding = "async";
-      image.src = track.coverUrl;
-    }
-    if (track.youtubeId) {
-      const thumbnail = new Image();
-      thumbnail.decoding = "async";
-      thumbnail.src = `https://i.ytimg.com/vi/${track.youtubeId}/hqdefault.jpg`;
-    }
-    if (!track.youtubeId && /^https?:/.test(track.audioUrl)) {
-      const audio = new Audio();
-      audio.preload = "metadata";
-      audio.src = track.audioUrl;
+  // Next-track preparation. This runs AFTER the current track has already been
+  // handed to an engine, so it is off the critical click path and no longer
+  // needs to be deferred behind a timer — the 250ms `setTimeout` it used to sit
+  // in only delayed the warm-up, and on a fast track change that was a real,
+  // audible gap before the next song had anything prepared.
+  if (track.coverUrl) {
+    const image = new Image();
+    image.decoding = "async";
+    image.src = track.coverUrl;
+  }
+  if (track.youtubeId) {
+    const thumbnail = new Image();
+    thumbnail.decoding = "async";
+    thumbnail.src = `https://i.ytimg.com/vi/${track.youtubeId}/hqdefault.jpg`;
+    // Resolve the direct audio stream NOW, while this track is still playing,
+    // rather than on the click. `ytResolve` is cached per video id, so by the
+    // time the listener reaches this song the stream URL is already known and
+    // the EQ / effect / rescue paths can start the <audio> element on their
+    // first frame instead of waiting a network round trip for the resolver.
+    // Fire-and-forget: a failure just means the next load resolves normally.
+    void ytResolve(track.youtubeId).catch(() => undefined);
+  }
+  if (!track.youtubeId && /^https?:/.test(track.audioUrl)) {
+    const audio = new Audio();
+    audio.preload = "auto";
+    audio.src = track.audioUrl;
+    audio.load();
+    window.setTimeout(() => {
+      audio.pause();
+      audio.removeAttribute("src");
       audio.load();
-      window.setTimeout(() => {
-        audio.pause();
-        audio.removeAttribute("src");
-        audio.load();
-      }, 15_000);
-    }
-  }, 250);
+    }, 15_000);
+  }
 }
 
 function onTimeUpdate(t: number, duration: number): void {

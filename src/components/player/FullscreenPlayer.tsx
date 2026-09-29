@@ -679,9 +679,13 @@ export function FullscreenPlayer() {
         timer = setTimeout(attempt, 100); // ~4s
       else setEmbedFallback(true); // overlaid live player failed — show an inline embed instead
     };
-    // Longer warm-up when an effect is active: the muted video slave has to
-    // load through the engine before the overlay can present it.
-    timer = setTimeout(attempt, hasAudioProcessing() ? 900 : 250);
+    // The first attempt used to be deferred behind this timer. The effect was
+    // only to let the overlay mount before the engine was poked, but it cost
+    // real time: up to 900ms of frozen thumbnail (or no video at all) every
+    // time fullscreen opened, and the attempt loop already tolerates a frame
+    // that is not mounted yet (it retries on a 100ms tick). `attempt` already
+    // handles "not ready" internally, so run it on the next tick instead.
+    timer = setTimeout(attempt, 0);
     return () => {
       stopped = true;
       clearTimeout(timer);

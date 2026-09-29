@@ -236,7 +236,11 @@ export function detectServiceUrl(input: string): DetectedSource | null {
         service: "tidal",
         id: m[1],
         kind: "playlist",
-        direct: false,
+        // Tidal's v2 API serves catalog reads over a server-to-server
+        // client-credentials token, so this link imports directly with no
+        // per-listener authorisation. It was `false`, which is why the Tidal
+        // importer existed but was unreachable from the link box.
+        direct: true,
         label: label("tidal"),
       };
     return null;
@@ -372,7 +376,7 @@ export function exportHint(service: PlaylistService): string {
     case "deezer":
       return "Deezer playlists need an export file — copy the track list as text and drop it below.";
     case "tidal":
-      return "Tidal playlists need an export file — copy the track list as text and drop it below.";
+      return "Tidal playlists import directly from the link above.";
     case "bandcamp":
       return "Bandcamp collections need an export file — copy the track list and drop it below.";
     default:

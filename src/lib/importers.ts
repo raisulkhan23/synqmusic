@@ -115,11 +115,16 @@ export const IMPORTERS: Record<PlaylistService, ImporterCapabilities> = {
     service: "tidal",
     label: "Tidal",
     direct: false,
-    needsAuth: true,
+    // Tidal's v2 API issues a server-to-server client-credentials token for
+    // catalog reads, so there is NO user redirect and no per-listener OAuth.
+    // The credentials live only in the server environment. It used to be
+    // `needsAuth: true` with a "not open to third-party clients" blurb, which
+    // is why the importer existed but was never reachable.
+    needsAuth: false,
     kinds: ["playlist"],
     envVars: ["TIDAL_CLIENT_ID", "TIDAL_CLIENT_SECRET"],
     notConfiguredCode: "not-configured",
-    blurb: "Tidal's API is not open to third-party clients.",
+    blurb: "Uses Tidal's developer API — add API keys to connect.",
   },
   bandcamp: {
     service: "bandcamp",

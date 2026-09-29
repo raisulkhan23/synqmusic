@@ -88,23 +88,42 @@ describe("detectServiceUrl", () => {
   });
 
   test("reads Apple Music, SoundCloud, Deezer, Tidal and Bandcamp", () => {
+    // Tidal is now a DIRECT import: its v2 API serves catalog reads over a
+    // server-to-server client-credentials token, so a pasted Tidal link is
+    // pulled by the importer instead of sending the user to a CSV export.
     const cases = [
       [
         "https://music.apple.com/us/playlist/road-trip/pl.u-abc123",
         "apple-music",
         "pl.u-abc123",
+        false,
       ],
-      ["https://soundcloud.com/artist/sets/my-mix", "soundcloud", "my-mix"],
-      ["https://www.deezer.com/en/playlist/1234567", "deezer", "1234567"],
-      ["https://tidal.com/browse/playlist/abc-123", "tidal", "abc-123"],
-      ["https://artist.bandcamp.com/playlist/42", "bandcamp", "42"],
+      [
+        "https://soundcloud.com/artist/sets/my-mix",
+        "soundcloud",
+        "my-mix",
+        false,
+      ],
+      [
+        "https://www.deezer.com/en/playlist/1234567",
+        "deezer",
+        "1234567",
+        false,
+      ],
+      ["https://tidal.com/browse/playlist/abc-123", "tidal", "abc-123", true],
+      ["https://artist.bandcamp.com/playlist/42", "bandcamp", "42", false],
     ];
-    for (const [url, service, id] of cases) {
+    for (const [url, service, id, direct] of cases) {
       const s = detectServiceUrl(url);
       expect(s?.service).toBe(service);
       expect(s?.id).toBe(id);
-      expect(s?.direct).toBe(false);
+      expect(s?.direct).toBe(direct);
     }
+  });
+
+  test("a Tidal playlist link plans a direct import, not an export", () => {
+    const plan = planImport("https://tidal.com/browse/playlist/abc-123");
+    expect(plan.mode).toBe("direct");
   });
 
   test("returns null for a link it does not support", () => {

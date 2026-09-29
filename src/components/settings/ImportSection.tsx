@@ -74,6 +74,7 @@ export function ImportSection({
   const importSpotify = useAction(api.spotify.importPlaylist);
   const exchangeSpotifyCode = useAction(api.spotify.exchangeCode);
   const importAppleMusic = useAction(api.appleMusic.importPlaylist);
+  const importTidal = useAction(api.tidal.importPlaylist);
 
   // Re-detect on every keystroke: cheap, and it means the badge never
   // describes a link the user has already edited.
@@ -240,6 +241,13 @@ export function ImportSection({
         return;
       }
 
+      if (detected.service === "tidal") {
+        setPhase({ kind: "working", label: "Reading Tidal…" });
+        const outcome = await importTidal({ playlistId: detected.id });
+        await persist(outcome, name ?? "Tidal playlist");
+        return;
+      }
+
       if (detected.service === "apple-music") {
         setPhase({ kind: "working", label: "Reading Apple Music…" });
         const outcome = await importAppleMusic({
@@ -284,6 +292,7 @@ export function ImportSection({
     detected,
     fetchYouTubePlaylist,
     importAppleMusic,
+    importTidal,
     link,
     persist,
     startSpotifyImport,
