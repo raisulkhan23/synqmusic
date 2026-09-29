@@ -2,6 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { compileClasses, readSource } from "./helpers/tailwind-css.js";
 
 const settingsSource = readSource("src/components/settings/SettingsDialog.tsx");
+const navSource = readSource(
+  "src/components/settings/useSettingsNavigation.ts",
+);
 const landingSource = readSource("src/pages/Landing.tsx");
 const footerSource = readSource("src/components/landing/SiteFooter.tsx");
 
@@ -28,42 +31,33 @@ describe("settings page category tabs", () => {
     expect(settingsSource).toContain("settings-jump-list");
     expect(settingsSource).toContain("settings-jump-label");
     expect(settingsSource).toContain("settings-tab-active");
-    // The marked tab is driven by state, not hardcoded, and stays in step with
-    // the section being read.
-    expect(settingsSource).toMatch(/setActiveSection\(id\)/);
-    // From positions, not from the observer's partial batch of changed
-    // entries: that version reported the wrong tab whenever two categories
-    // overlapped, and had no answer at all in the gap between two tall ones.
-    expect(settingsSource).not.toMatch(/new IntersectionObserver/);
-    expect(settingsSource).toMatch(/getBoundingClientRect\(\)\.top/);
-    expect(settingsSource).toMatch(/const PROBE_PX = 96;/);
+    // The marked tab is driven by the navigation hook, not by ad-hoc state,
+    // and stays in step with the section being read.
+    expect(settingsSource).toMatch(/useSettingsNavigation\(/);
+    expect(settingsSource).toMatch(/activeId: activeSection/);
+    expect(settingsSource).toMatch(/onClick=\{\(\) => goToSection\(id\)\}/);
+    // The reader's position is watched by an observer, which the old
+    // implementation deliberately avoided and which left the highlight stuck
+    // in the gap between two tall sections.
+    expect(navSource).toMatch(/new IntersectionObserver/);
+    expect(navSource).toMatch(/getBoundingClientRect\(\)\.top/);
     // Sections hidden at this width (the keyboard panel below `lg`) have a
     // zero rect, which would pin the highlight to them.
-    expect(settingsSource).toMatch(/element\.offsetParent !== null/);
-    // At the top of the page the topmost section wins, not the rail's first
-    // item: the rail is ordered by category size, the document is not.
-    expect(settingsSource).toMatch(/current\?\.id \?\? earliest!\.id/);
-    expect(settingsSource).toMatch(
-      /if \(!earliest \|\| entry\.top < earliest\.top\)/,
-    );
+    expect(navSource).toMatch(/element\.offsetParent !== null/);
   });
 
   test("the last category can be marked without reaching the probe line", () => {
-    // "Data" is the last section, so the page runs out of scroll before its
-    // header gets under the sticky rail: `scrollTo` clamps, the header stays
-    // low on the screen, and the probe rule keeps reporting the category
-    // above it. At the end of the scroll the last section is the one being
-    // read, whatever its top says.
-    expect(settingsSource).toMatch(
-      /container\.scrollHeight > container\.clientHeight \+ 4/,
+    // "Data" is the last section, so the page can run out of scroll before its
+    // header sits under the sticky rail. The destination is clamped to the
+    // container's real scroll range and the highlight is settled on the id
+    // that was clicked, so the last section is still the one reported.
+    expect(navSource).toMatch(
+      /container\.scrollHeight - container\.clientHeight/,
     );
-    // Whitespace-tolerant: prettier reflows this comparison across lines.
-    expect(settingsSource.replace(/\s+/g, " ")).toMatch(
-      /container\.scrollTop \+ container\.clientHeight >= container\.scrollHeight - 4/,
-    );
-    expect(settingsSource).toMatch(
-      /const last = tops\.reduce\(\(a, b\) => \(b\.top > a\.top \? b : a\)\)/,
-    );
+    expect(navSource).toMatch(/return clamp\(contentTop - offset, 0, max\)/);
+    // Settled on the destination, not re-derived from where the animation
+    // happened to stop.
+    expect(navSource).toMatch(/setActive\(id\)/);
   });
 
   test("every tab has a real section to jump to", () => {
@@ -101,29 +95,24 @@ describe("settings page category tabs", () => {
     // code, not the formatter's line width.
     const flattened = settingsSource.replace(/\s+/g, " ");
     for (const id of ids) {
-      expect(flattened).toContain(`<section id="${id}"`);
+      expect(flattened).toContain(`id="${id}"`);
+      // Each section registers itself with the hook, so navigation never has
+      // to search the document for an id that a second mounted copy of the
+      // dialog might also own.
+      expect(flattened).toContain(`ref={registerSection("${id}")}`);
     }
-    // No content-sniffing fallback left to fail silently.
-    const jump = settingsSource.slice(
-      settingsSource.indexOf("function jumpToSetting"),
-      settingsSource.indexOf("export function SettingsDialog"),
-    );
-    expect(jump).toContain("document.getElementById(id)");
-    expect(jump).not.toContain("querySelectorAll");
-    expect(jump).not.toContain("textContent");
   });
 
   test("a tab whose section is not laid out scrolls nowhere", () => {
     // A hidden section has a zero rect, so `0 - containerTop - 96` threw the
     // reader to the top of the shell instead of doing nothing. The keyboard
     // panel below `lg` is the case that actually happens.
-    const jump = settingsSource.slice(
-      settingsSource.indexOf("function jumpToSetting"),
-      settingsSource.indexOf("export function SettingsDialog"),
+    expect(navSource).toMatch(
+      /if \(!element \|\| element\.offsetParent === null\) return;/,
     );
-    expect(jump).toMatch(/if \(target\.offsetParent === null\) return;/);
-    const guard = jump.indexOf("offsetParent === null");
-    const scroll = jump.indexOf("scrollTo(");
+    expect(navSource).toMatch(/getBoundingClientRect\(\)\.height === 0/);
+    const guard = navSource.indexOf("offsetParent === null");
+    const scroll = navSource.indexOf("container.scrollTop =");
     expect(guard).toBeGreaterThan(-1);
     expect(guard).toBeLessThan(scroll);
   });
@@ -226,8 +215,11 @@ describe("keyboard shortcuts are desktop only", () => {
     expect(settingsSource).toContain(
       'label === "Shortcuts" && "hidden lg:inline-flex"',
     );
-    expect(settingsSource.replace(/\s+/g, " ")).toMatch(
-      /<section id="settings-shortcuts" className="hidden flex-col gap-2 lg:flex"\s*>/,
+    // Whitespace-tolerant and ref-tolerant: the section now registers itself
+    // with the navigation hook, so the element carries a `ref` too.
+    const flat = settingsSource.replace(/\s+/g, " ");
+    expect(flat).toMatch(
+      /id="settings-shortcuts" ref=\{registerSection\("settings-shortcuts"\)\} className="hidden flex-col gap-2 lg:flex"/,
     );
     expect(settingsSource).not.toMatch(
       /className="hidden flex-col gap-2 sm:flex"/,

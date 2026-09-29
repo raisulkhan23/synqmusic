@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { CardTransparencySection } from "@/components/settings/CardTransparencySection";
 import { ExplorationSection } from "@/components/settings/ExplorationSection";
 import { ImportSection } from "@/components/settings/ImportSection";
+import { useSettingsNavigation } from "@/components/settings/useSettingsNavigation";
 import {
   Dialog,
   DialogContent,
@@ -63,6 +64,7 @@ import {
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ChangeEvent,
@@ -139,35 +141,6 @@ type FocusLayout = (typeof FOCUS_LAYOUTS)[number]["id"];
 
 function isFocusLayout(value: string | null): value is FocusLayout {
   return FOCUS_LAYOUTS.some((layout) => layout.id === value);
-}
-
-function jumpToSetting(id: string) {
-  // Every tab in SETTINGS_SECTIONS must have a real element to aim at. When
-  // one did not, this used to fall back to sniffing the section text, which
-  // found nothing and left the page exactly where it was — so the click looked
-  // like it had been ignored while the marked tab stayed on the old section.
-  const target = document.getElementById(id);
-  if (!target) return;
-  // A section that is not laid out (the keyboard panel below `lg`, or anything
-  // inside a collapsed container) has a zero rect, and `0 - containerTop - 96`
-  // is a huge negative offset: clicking such a chip threw the reader to the
-  // top of the shell instead of doing nothing. The same test the highlight
-  // uses to skip unrendered sections.
-  if (target.offsetParent === null) return;
-
-  // The authenticated shell owns the scroll container. Scrolling that element
-  // directly avoids moving the whole document behind the fixed player/nav.
-  const scrollContainer = target.closest("main");
-  if (scrollContainer instanceof HTMLElement) {
-    const targetTop = target.getBoundingClientRect().top;
-    const containerTop = scrollContainer.getBoundingClientRect().top;
-    scrollContainer.scrollTo({
-      top: scrollContainer.scrollTop + targetTop - containerTop - 96,
-      behavior: "smooth",
-    });
-    return;
-  }
-  target.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 export function SettingsDialog({
@@ -762,103 +735,24 @@ export function SettingsDialog({
     toast("Back to the default background");
   };
 
-  // Which settings category is currently on screen. The rail marks it, so the
-  // section list reads as tabs instead of seven more buttons.
-  const [activeSection, setActiveSection] = useState<string>(
-    SETTINGS_SECTIONS[0][1],
-  );
-
-  // Keep the marked tab in step with the category actually being read. Only
-  // the full settings page scrolls the whole list; the compact dialog is short
-  // enough that the rail never needs to follow.
-  useEffect(() => {
-    if (!pageMode || !open) return;
-    const ids = SETTINGS_SECTIONS.map(([, id]) => id);
-    const sections = () =>
-      ids
-        .map((id) => document.getElementById(id))
-        // A section hidden at this width (the keyboard panel below `lg`) has a
-        // zero rect, which would read as "at the top" and pin the highlight to
-        // it, so unrendered sections are left out entirely.
-        .filter(
-          (element): element is HTMLElement =>
-            element !== null && element.offsetParent !== null,
-        );
-
-    // The marked tab has to agree with what is on screen, so it is computed
-    // from the sections' own positions. The IntersectionObserver version only
-    // ever saw the entries that had just crossed the line, so it reported the
-    // wrong section whenever two categories overlapped in the band — clicking
-    // "Data" and landing on "Personalize" — and it had no answer at all in the
-    // gap between two tall sections, which left the highlight stuck.
-    const PROBE_PX = 96; // matches the offset `jumpToSetting` scrolls to
-    const first = document.getElementById(ids[0]!);
-    const container = first?.closest("main") ?? null;
-    const scrollTarget: HTMLElement | Window =
-      container instanceof HTMLElement ? container : window;
-
-    const sync = () => {
-      const visible = sections();
-      if (visible.length === 0) return;
-      const tops = visible.map((section) => ({
-        id: section.id,
-        top: section.getBoundingClientRect().top,
-      }));
-
-      // The last category is the one that can never reach the probe line: the
-      // page runs out of content before it gets there, so `scrollTo` is
-      // clamped and its header stays below the sticky rail. Without this, a
-      // click on "Data" scrolled as far as it could and still reported
-      // "Personalize". At the end of the scroll the last section is the one
-      // being read, whatever its top says.
-      const atBottom =
-        container instanceof HTMLElement &&
-        container.scrollHeight > container.clientHeight + 4 &&
-        container.scrollTop + container.clientHeight >=
-          container.scrollHeight - 4;
-      if (atBottom) {
-        const last = tops.reduce((a, b) => (b.top > a.top ? b : a));
-        setActiveSection((previous) =>
-          previous === last.id ? previous : last.id,
-        );
-        return;
-      }
-
-      let current: { id: string; top: number } | null = null;
-      let earliest: { id: string; top: number } | null = null;
-      for (const entry of tops) {
-        // The topmost section on the page, which is not the rail's first item:
-        // the rail is ordered by category size, the document is not.
-        if (!earliest || entry.top < earliest.top) earliest = entry;
-        if (entry.top - PROBE_PX > 0) continue; // still below the sticky rail
-        // Several sections can be above the probe line at once; the one the
-        // reader is actually in is the last of them, whatever order the rail
-        // lists them in.
-        if (!current || entry.top > current.top) current = entry;
-      }
-      // Nothing above the line: the reader is above the first category.
-      const next = current?.id ?? earliest!.id;
-      setActiveSection((previous) => (previous === next ? previous : next));
-    };
-
-    let frame = 0;
-    const schedule = () => {
-      if (frame) return;
-      frame = requestAnimationFrame(() => {
-        frame = 0;
-        sync();
-      });
-    };
-
-    sync();
-    scrollTarget.addEventListener("scroll", schedule, { passive: true });
-    window.addEventListener("resize", schedule);
-    return () => {
-      if (frame) cancelAnimationFrame(frame);
-      scrollTarget.removeEventListener("scroll", schedule);
-      window.removeEventListener("resize", schedule);
-    };
-  }, [pageMode, open]);
+  // Section navigation. The hook owns which category is active, scrolls to
+  // the one that was asked for, and cancels any animation still in flight when
+  // a new chip is clicked. See the hook for what that fixes.
+  const navContainerRef = useRef<HTMLElement | null>(null);
+  const navStickyRef = useRef<HTMLElement | null>(null);
+  const sectionIds = useMemo(() => SETTINGS_SECTIONS.map(([, id]) => id), []);
+  const {
+    activeId: activeSection,
+    register: registerSection,
+    goTo: goToSection,
+  } = useSettingsNavigation({
+    ids: sectionIds,
+    containerRef: navContainerRef,
+    stickyRef: navStickyRef,
+    // Only the full settings page scrolls; the compact dialog is short
+    // enough that the rail never needs to follow the reader.
+    enabled: pageMode && open,
+  });
 
   return (
     <Dialog
@@ -950,6 +844,7 @@ export function SettingsDialog({
         </DialogHeader>
 
         <nav
+          ref={navStickyRef}
           className={cn(
             "settings-jump-bar settings-jump-glass relative z-30 -mx-1 rounded-2xl border border-white/[0.14] px-1 py-2",
             pageMode ? "!sticky top-3 z-50" : "sticky top-0 bg-white/[0.03]",
@@ -968,10 +863,7 @@ export function SettingsDialog({
                 <button
                   key={id}
                   type="button"
-                  onClick={() => {
-                    setActiveSection(id);
-                    jumpToSetting(id);
-                  }}
+                  onClick={() => goToSection(id)}
                   aria-current={activeSection === id ? "true" : undefined}
                   className={cn(
                     "inline-flex shrink-0 items-center gap-1.5 rounded-full border border-transparent px-2.5 py-1.5 text-[11px] font-semibold text-foreground/70 transition-colors hover:border-white/15 hover:bg-white/[0.07] hover:text-foreground",
@@ -995,6 +887,7 @@ export function SettingsDialog({
         {/* playback */}
         <section
           id="settings-playback"
+          ref={registerSection("settings-playback")}
           className="scroll-mt-20 flex flex-col gap-2.5"
         >
           <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
@@ -1192,6 +1085,7 @@ export function SettingsDialog({
         {/* audio */}
         <section
           id="settings-audio"
+          ref={registerSection("settings-audio")}
           className="scroll-mt-20 flex flex-col gap-2.5"
         >
           <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
@@ -1321,6 +1215,7 @@ export function SettingsDialog({
         {/* appearance */}
         <section
           id="settings-appearance"
+          ref={registerSection("settings-appearance")}
           className="scroll-mt-20 flex flex-col gap-2.5"
         >
           <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-3">
@@ -2092,6 +1987,7 @@ export function SettingsDialog({
         {/* personalization */}
         <section
           id="settings-personalization"
+          ref={registerSection("settings-personalization")}
           className="scroll-mt-20 flex flex-col gap-2"
         >
           <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
@@ -2119,6 +2015,7 @@ export function SettingsDialog({
         {/* profile */}
         <section
           id="settings-profile"
+          ref={registerSection("settings-profile")}
           className="settings-profile scroll-mt-20 flex flex-col gap-2.5"
         >
           <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
@@ -2257,6 +2154,7 @@ export function SettingsDialog({
             a physical keyboard. */}
         <section
           id="settings-shortcuts"
+          ref={registerSection("settings-shortcuts")}
           className="hidden flex-col gap-2 lg:flex"
         >
           <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
@@ -2286,7 +2184,11 @@ export function SettingsDialog({
         <Separator className="bg-white/[0.07]" />
 
         {/* data */}
-        <section id="settings-data" className="flex flex-col gap-2">
+        <section
+          id="settings-data"
+          ref={registerSection("settings-data")}
+          className="flex flex-col gap-2"
+        >
           <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
             <Moon className="size-3.5" />
             Your data
