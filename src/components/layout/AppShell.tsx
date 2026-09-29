@@ -53,7 +53,16 @@ const MOBILE_NAV = [
   { to: "/profile", label: "Profile", icon: UserRound },
 ];
 
-const DEFAULT_TINT = "203 244 143";
+/**
+ * The one accent the interface is allowed to spend: #699fff as an "R G B"
+ * triple, because components write `rgb(var(--tint) / <alpha>)`.
+ *
+ * This used to default to the brand lime and then be overwritten per track
+ * with the album art's dominant colour, so the chrome was a different hue for
+ * every song and "one cool accent" was not an identity but a coincidence.
+ */
+const SIGNAL_BLUE = "105 159 255";
+const DEFAULT_TINT = SIGNAL_BLUE;
 const DEFAULT_WALLPAPER_BLUR_AMOUNT = 24;
 const MAX_WALLPAPER_BLUR_AMOUNT = 48;
 const FOCUS_LAYOUT_IDS = ["off", "study", "work", "sleep"] as const;
@@ -153,8 +162,14 @@ export function AppShell() {
   const [sceneTheme, setSceneTheme] = useState(
     () => localStorage.getItem("ss.sceneTheme") ?? "studio",
   );
+  /**
+   * Off by default. It used to default ON, so the first thing anyone saw was a
+   * chrome recoloured by whichever album happened to be playing — the opposite
+   * of a stage that keeps its chrome invisible. It is still one click away in
+   * Settings → Appearance for anyone who wants the album to drive it.
+   */
   const [trackPalettes, setTrackPalettes] = useState(
-    () => localStorage.getItem("ss.trackPalettes") !== "0",
+    () => localStorage.getItem("ss.trackPalettes") === "1",
   );
   const [focusLayout, setFocusLayout] = useState<FocusLayout>(() => {
     const saved = localStorage.getItem("ss.focusLayout");
@@ -349,7 +364,6 @@ export function AppShell() {
     };
   }, []);
   const accent = usePlayerStore((s) => s.accent);
-  const accentTheme = usePlayerStore((s) => s.accentTheme);
   const compactMode = usePlayerStore((s) => s.compactMode);
   const ambientGlow = usePlayerStore((s) => s.ambientGlow);
   const wallpaper = usePlayerStore((s) => s.wallpaper);
@@ -555,40 +569,17 @@ export function AppShell() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  // Fixed accent themes override the album-art-following tint.
-  const FIXED_TINTS: Record<string, string> = {
-    lime: "203 244 143",
-    violet: "167 139 250",
-    blue: "96 165 250",
-    rose: "251 113 133",
-    amber: "251 191 36",
-    teal: "45 212 191",
-    orange: "251 146 60",
-  };
+  /**
+   * Album art drives the chrome only when the listener has explicitly asked
+   * for it. Otherwise the signal blue holds, so a fresh account already sits
+   * in the palette without anyone opening Settings.
+   */
   const targetTint =
     trackPalettes && accent
       ? `${accent.r} ${accent.g} ${accent.b}`
-      : accentTheme !== "auto" && FIXED_TINTS[accentTheme]
-        ? FIXED_TINTS[accentTheme]
-        : DEFAULT_TINT;
+      : DEFAULT_TINT;
   const tint = targetTint;
   useAnimatedCssTint(targetTint, shellRef);
-  const paletteForeground =
-    accent && accent.r * 0.299 + accent.g * 0.587 + accent.b * 0.114 > 155
-      ? "rgb(12 15 18)"
-      : "rgb(250 252 255)";
-  const dynamicPaletteStyle =
-    trackPalettes && accent
-      ? {
-          "--primary": `rgb(${accent.r} ${accent.g} ${accent.b})`,
-          "--primary-foreground": paletteForeground,
-          "--ring": `rgb(${accent.r} ${accent.g} ${accent.b} / 0.58)`,
-          "--sidebar-primary": `rgb(${accent.r} ${accent.g} ${accent.b})`,
-          "--sidebar-ring": `rgb(${accent.r} ${accent.g} ${accent.b} / 0.48)`,
-          "--brand": `rgb(${accent.r} ${accent.g} ${accent.b})`,
-          "--brand-foreground": paletteForeground,
-        }
-      : {};
 
   const handlePointerMove = (event: PointerEvent<HTMLDivElement>) => {
     if (!pointerFx || event.pointerType === "touch") return;
@@ -676,25 +667,14 @@ export function AppShell() {
           "--pointer-x": "50%",
           "--pointer-y": "50%",
           "--pointer-opacity": "0",
-          ...dynamicPaletteStyle,
         } as unknown as React.CSSProperties
       }
     >
       {!focusMode && (
-        <>
-          <div
-            className="ambient-grid pointer-events-none absolute inset-0 -z-20 opacity-70"
-            aria-hidden="true"
-          />
-          <div
-            className="aurora-orb aurora-orb-one pointer-events-none absolute -top-48 -left-32 -z-10 size-[34rem] rounded-full"
-            aria-hidden="true"
-          />
-          <div
-            className="aurora-orb aurora-orb-two pointer-events-none absolute -right-48 bottom-[-16rem] -z-10 size-[42rem] rounded-full"
-            aria-hidden="true"
-          />
-        </>
+        <div
+          className="ambient-grid pointer-events-none absolute inset-0 -z-20 opacity-70"
+          aria-hidden="true"
+        />
       )}
       {pointerFx && !focusMode && (
         <>
@@ -783,7 +763,7 @@ export function AppShell() {
             type="button"
             aria-label="Settings"
             onClick={() => void navigate("/settings")}
-            className="rounded-full p-2 text-muted-foreground transition-colors hover:text-foreground"
+            className="rounded-[4px] p-2 text-muted-foreground transition-colors hover:text-foreground"
           >
             <Settings className="size-[18px]" />
           </button>
@@ -812,7 +792,7 @@ export function AppShell() {
                 type="button"
                 onClick={() => setSleepTimer(sleepAtSongEnd ? null : "end")}
                 className={cn(
-                  "shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-semibold transition",
+                  "shrink-0 rounded-[4px] border px-3 py-1.5 text-[11px] font-semibold transition",
                   sleepAtSongEnd
                     ? "border-[rgb(var(--tint))] bg-[rgb(var(--tint)_/_0.14)] text-[rgb(var(--tint))]"
                     : "border-white/10 text-muted-foreground hover:border-white/25 hover:text-foreground",

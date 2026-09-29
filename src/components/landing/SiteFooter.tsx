@@ -58,15 +58,19 @@ const featuredOn = [
     badge: "https://easylaunch.dev/badge/easylaunch-badge-dark.svg",
     width: 188,
     height: 56,
-    radius: "rounded-full",
+    radius: "rounded-[4px]",
   },
   {
     name: "Sky Launch",
+    // Every badge is an image, and images are 4px in this system. The set
+    // previously carried four different radii (a pill, an 8px and two 12px
+    // corners) left over from matching each source SVG's own curve, which read
+    // as an accident rather than a decision.
     href: "https://skylaun.ch/media/synqmusic",
     badge: "https://skylaun.ch/badge/skylaunch-badge-dark.svg",
     width: 188,
     height: 56,
-    radius: "rounded-lg",
+    radius: "rounded-[4px]",
   },
   {
     name: "Launch Streak",
@@ -74,7 +78,7 @@ const featuredOn = [
     badge: "https://launchstreak.dev/badge/launch-streak-badge-dark.svg",
     width: 248,
     height: 68,
-    radius: "rounded-xl",
+    radius: "rounded-[4px]",
   },
   {
     name: "EasyDoFollow",
@@ -82,7 +86,7 @@ const featuredOn = [
     badge: "https://easydofollow.dev/badge/easydofollow-badge-dark.svg",
     width: 188,
     height: 56,
-    radius: "rounded-xl",
+    radius: "rounded-[4px]",
   },
 ] as const;
 
@@ -101,7 +105,10 @@ export function SiteFooter() {
       {/* Clipping lives on its own layer, NOT on the footer: the scalloped
           edge is drawn above the footer's top border, so an `overflow-hidden`
           here would cut the bumps off entirely. */}
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 overflow-hidden"
+      >
         {/* Oversized wordmark bleeding off the bottom, the way a masthead sets
             its own name behind the content. */}
         <span className="absolute inset-x-0 -bottom-4 block select-none text-center font-display text-[26vw] leading-none font-bold tracking-tighter text-white/[0.05] sm:-bottom-6">
@@ -119,7 +126,10 @@ export function SiteFooter() {
               clutter, and a queue that moves like you do.
             </p>
 
-            <span aria-hidden="true" className="mt-8 block h-px w-5 bg-[rgb(var(--tint))]/90" />
+            <span
+              aria-hidden="true"
+              className="mt-8 block h-px w-5 bg-[rgb(var(--tint))]/90"
+            />
             <p className="mt-3 font-mono text-[10px] tracking-[0.2em] text-foreground/60 uppercase">
               Featured on
             </p>
@@ -196,12 +206,14 @@ export function SiteFooter() {
             pill is hidden and a lone left-aligned child would look stranded. */}
         <div className="mt-14 flex flex-wrap items-end justify-end gap-4 sm:mt-16 sm:justify-between">
           <div className="hidden sm:block">
-            <div className="inline-flex items-center gap-2.5 rounded-full border border-white/20 bg-white/[0.07] py-2 pr-3 pl-2.5">
-              <span className="flex size-7 items-center justify-center rounded-full bg-[rgb(var(--tint))]/15 text-[rgb(var(--tint))]">
+            <div className="inline-flex items-center gap-2.5 rounded-[4px] border border-white/20 bg-white/[0.07] py-2 pr-3 pl-2.5">
+              <span className="flex size-7 items-center justify-center rounded-[4px] bg-[rgb(var(--tint))]/15 text-[rgb(var(--tint))]">
                 <ShieldCheck className="size-3.5" />
               </span>
-              <span className="text-xs font-semibold text-foreground">Zero ads</span>
-              <span className="rounded-full bg-[rgb(var(--tint))] px-2 py-0.5 text-[10px] font-bold text-black">
+              <span className="text-xs font-semibold text-foreground">
+                Zero ads
+              </span>
+              <span className="rounded-[4px] bg-[rgb(var(--tint))] px-2 py-0.5 text-[10px] font-bold text-black">
                 forever
               </span>
             </div>

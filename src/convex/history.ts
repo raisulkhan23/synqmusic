@@ -18,7 +18,10 @@ const playSnapshot = {
  */
 export const recordPlay = mutation({
   args: { trackId: v.string(), ...playSnapshot },
-  handler: async (ctx, { trackId, source, title, artistName, coverUrl, duration }) => {
+  handler: async (
+    ctx,
+    { trackId, source, title, artistName, coverUrl, duration },
+  ) => {
     const userId = await getAuthUserId(ctx);
     if (userId === null) {
       throw new ConvexError("Sign in to track listening history");
@@ -27,7 +30,9 @@ export const recordPlay = mutation({
     const now = Date.now();
     const existing = await ctx.db
       .query("playHistory")
-      .withIndex("by_user_track", (q) => q.eq("userId", userId).eq("trackId", trackId))
+      .withIndex("by_user_track", (q) =>
+        q.eq("userId", userId).eq("trackId", trackId),
+      )
       .first();
 
     if (existing !== null) {
@@ -195,7 +200,10 @@ export const listeningStats = query({
     // Without this bridge, the first event after deployment would make all
     // older plays disappear from totals and charts.
     const legacyPlayedAt = rows.flatMap((row) => {
-      const legacyCount = Math.max(0, row.playCount - (eventCounts.get(row.trackId) ?? 0));
+      const legacyCount = Math.max(
+        0,
+        row.playCount - (eventCounts.get(row.trackId) ?? 0),
+      );
       return Array.from({ length: legacyCount }, () => row.playedAt);
     });
     const playedAt = [
@@ -226,7 +234,10 @@ export const listeningStats = query({
     // Top tracks by play count, with self-contained display info.
     const uniqueArtists = new Set(
       rows
-        .map((row) => row.artistName?.trim() || row.title?.trim() || "Unknown artist")
+        .map(
+          (row) =>
+            row.artistName?.trim() || row.title?.trim() || "Unknown artist",
+        )
         .filter(Boolean),
     ).size;
 
@@ -255,7 +266,10 @@ export const listeningStats = query({
       const d = new Date(dayStart);
       daily.push({
         day: d.toISOString().slice(0, 10),
-        label: d.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+        label: d.toLocaleDateString(undefined, {
+          month: "short",
+          day: "numeric",
+        }),
         plays,
       });
     }
@@ -267,11 +281,19 @@ export const listeningStats = query({
       const start = d.getTime();
       const end = new Date(d.getFullYear(), d.getMonth() + 1, 1).getTime();
       const plays = playedAt.filter((at) => at >= start && at < end).length;
-      monthly.push({ month: d.toLocaleDateString(undefined, { month: "short", year: "2-digit" }), plays });
+      monthly.push({
+        month: d.toLocaleDateString(undefined, {
+          month: "short",
+          year: "2-digit",
+        }),
+        plays,
+      });
     }
 
     // Listening streak — consecutive days (ending today or yesterday) with plays.
-    const playedDaySet = new Set(playedAt.map((at) => new Date(at).setHours(0, 0, 0, 0)));
+    const playedDaySet = new Set(
+      playedAt.map((at) => new Date(at).setHours(0, 0, 0, 0)),
+    );
     let streak = 0;
     const todayStart = today.getTime();
     const startOffset = playedDaySet.has(todayStart) ? 0 : 1;

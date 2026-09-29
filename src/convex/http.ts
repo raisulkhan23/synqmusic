@@ -18,7 +18,12 @@ auth.addHttpRoutes(http);
 const STREAM_PROXY = httpAction(async (ctx, request) => {
   const url = new URL(request.url);
   const target = url.searchParams.get("u");
-  if (!target || !/^https:\/\/rr[0-9a-z-]*---sn-[a-z0-9-]+\.googlevideo\.com\/videoplayback\?/.test(target)) {
+  if (
+    !target ||
+    !/^https:\/\/rr[0-9a-z-]*---sn-[a-z0-9-]+\.googlevideo\.com\/videoplayback\?/.test(
+      target,
+    )
+  ) {
     return new Response("Bad or missing stream url", { status: 400 });
   }
 
@@ -31,13 +36,22 @@ const STREAM_PROXY = httpAction(async (ctx, request) => {
 
   const upstream = await fetch(target, { headers });
   const passthrough = new Headers();
-  for (const name of ["content-type", "content-length", "content-range", "accept-ranges", "cache-control"]) {
+  for (const name of [
+    "content-type",
+    "content-length",
+    "content-range",
+    "accept-ranges",
+    "cache-control",
+  ]) {
     const v = upstream.headers.get(name);
     if (v) passthrough.set(name, v);
   }
   // The headers the browser actually needs for Web Audio access:
   passthrough.set("Access-Control-Allow-Origin", "*");
-  passthrough.set("Access-Control-Expose-Headers", "Content-Range, Content-Length, Accept-Ranges");
+  passthrough.set(
+    "Access-Control-Expose-Headers",
+    "Content-Range, Content-Length, Accept-Ranges",
+  );
 
   return new Response(upstream.body, {
     status: upstream.status, // 200 or 206 (partial content)

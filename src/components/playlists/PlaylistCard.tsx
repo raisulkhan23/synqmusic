@@ -26,7 +26,10 @@ export function PlaylistCard({ playlist }: { playlist: Doc<"playlists"> }) {
       await removePlaylist({ playlistId: playlist._id });
       toast.success(`Deleted "${playlist.name}"`);
     } catch (error) {
-      const message = error instanceof Error && error.message ? error.message : "Unknown error";
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : "Unknown error";
       toast.error("Could not delete the playlist", { description: message });
     } finally {
       setDeleting(false);
@@ -63,7 +66,8 @@ export function PlaylistCard({ playlist }: { playlist: Doc<"playlists"> }) {
         <div className="mt-2.5 px-0.5">
           <p className="truncate text-sm font-semibold">{playlist.name}</p>
           <p className="truncate text-xs text-muted-foreground">
-            {playlist.trackIds.length} {playlist.trackIds.length === 1 ? "song" : "songs"}
+            {playlist.trackIds.length}{" "}
+            {playlist.trackIds.length === 1 ? "song" : "songs"}
           </p>
         </div>
       </div>
@@ -72,7 +76,11 @@ export function PlaylistCard({ playlist }: { playlist: Doc<"playlists"> }) {
           which has no detail-page action bar — can still be removed. */}
       <button
         type="button"
-        aria-label={confirming ? `Confirm delete ${playlist.name}` : `Delete ${playlist.name}`}
+        aria-label={
+          confirming
+            ? `Confirm delete ${playlist.name}`
+            : `Delete ${playlist.name}`
+        }
         title={confirming ? "Click again to confirm" : "Delete playlist"}
         disabled={deleting}
         onClick={handleDeleteClick}
@@ -84,7 +92,7 @@ export function PlaylistCard({ playlist }: { playlist: Doc<"playlists"> }) {
           }
         }}
         className={cn(
-          "absolute top-1.5 right-1.5 rounded-full p-1.5 opacity-0 shadow-lg backdrop-blur transition-all",
+          "absolute top-1.5 right-1.5 rounded-[4px] p-1.5 opacity-0 shadow-lg backdrop-blur transition-all",
           "group-hover:opacity-100 focus-visible:opacity-100",
           "disabled:opacity-60",
           confirming
@@ -93,7 +101,9 @@ export function PlaylistCard({ playlist }: { playlist: Doc<"playlists"> }) {
         )}
       >
         {confirming ? (
-          <span className="block px-1 text-[10px] font-bold tracking-wide uppercase">Sure?</span>
+          <span className="block px-1 text-[10px] font-bold tracking-wide uppercase">
+            Sure?
+          </span>
         ) : (
           <Trash2 className="size-3.5" />
         )}

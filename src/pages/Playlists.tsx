@@ -24,7 +24,7 @@ export default function Playlists() {
         <button
           type="button"
           onClick={() => setDialogOpen(true)}
-          className="flex items-center gap-1.5 rounded-full bg-[rgb(var(--tint))] px-4 py-2.5 text-sm font-semibold text-black shadow-[0_8px_30px_rgb(var(--tint)/0.35)] transition-transform hover:scale-[1.03]"
+          className="flex items-center gap-1.5 rounded-[4px] bg-[rgb(var(--tint))] px-4 py-2.5 text-sm font-semibold text-black shadow-[0_8px_30px_rgb(var(--tint)/0.35)] transition-transform hover:scale-[1.03]"
         >
           <Plus className="size-4" />
           New playlist
@@ -51,7 +51,9 @@ export default function Playlists() {
         <div className="flex flex-col items-center gap-3 rounded-3xl border border-dashed border-white/10 py-20 text-center">
           <ListMusic className="size-10 text-muted-foreground/40" />
           <div>
-            <p className="font-display text-lg font-semibold">No playlists yet</p>
+            <p className="font-display text-lg font-semibold">
+              No playlists yet
+            </p>
             <p className="mt-1 max-w-sm text-sm text-muted-foreground">
               Create one and add songs from any search result or album.
             </p>
@@ -59,7 +61,7 @@ export default function Playlists() {
           <button
             type="button"
             onClick={() => setDialogOpen(true)}
-            className="mt-2 rounded-full bg-[rgb(var(--tint))] px-5 py-2.5 text-sm font-semibold text-black shadow-[0_8px_30px_rgb(var(--tint)/0.35)] transition-transform hover:scale-[1.03]"
+            className="mt-2 rounded-[4px] bg-[rgb(var(--tint))] px-5 py-2.5 text-sm font-semibold text-black shadow-[0_8px_30px_rgb(var(--tint)/0.35)] transition-transform hover:scale-[1.03]"
           >
             Create your first playlist
           </button>

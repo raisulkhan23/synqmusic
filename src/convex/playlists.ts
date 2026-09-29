@@ -33,8 +33,13 @@ function normalizeSnapshot(track: TrackSnapshot): TrackSnapshot {
     artist: track.artist,
     ...(track.album ? { album: track.album } : {}),
     coverUrl: typeof track.coverUrl === "string" ? track.coverUrl : "",
-    duration: typeof track.duration === "number" && Number.isFinite(track.duration) ? track.duration : 0,
-    ...(typeof track.youtubeId === "string" && track.youtubeId ? { youtubeId: track.youtubeId } : {}),
+    duration:
+      typeof track.duration === "number" && Number.isFinite(track.duration)
+        ? track.duration
+        : 0,
+    ...(typeof track.youtubeId === "string" && track.youtubeId
+      ? { youtubeId: track.youtubeId }
+      : {}),
   };
 }
 
@@ -80,8 +85,10 @@ export const create = mutation({
     const snapshots = (tracks ?? []).filter((track) => track.id.trim());
     const uniqueSnapshots = [
       ...new Map(
-        snapshots
-          .map((track) => [track.id, normalizeSnapshot(track as TrackSnapshot)] as const),
+        snapshots.map(
+          (track) =>
+            [track.id, normalizeSnapshot(track as TrackSnapshot)] as const,
+        ),
       ).values(),
     ];
     const uniqueIds = uniqueSnapshots.map((track) => track.id);
@@ -90,7 +97,9 @@ export const create = mutation({
       name: playlistName,
       description,
       trackIds: uniqueIds,
-      ...(uniqueSnapshots.length > 0 ? { trackSnapshots: uniqueSnapshots } : {}),
+      ...(uniqueSnapshots.length > 0
+        ? { trackSnapshots: uniqueSnapshots }
+        : {}),
       createdAt: now,
       updatedAt: now,
     });
@@ -131,7 +140,14 @@ export const rename = mutation({
       name: name.trim() || playlist.name,
       updatedAt: Date.now(),
     });
-    await logEvent(ctx, userId, playlistId, name.trim() || playlist.name, "renamed", playlist.name);
+    await logEvent(
+      ctx,
+      userId,
+      playlistId,
+      name.trim() || playlist.name,
+      "renamed",
+      playlist.name,
+    );
   },
 });
 
@@ -154,7 +170,10 @@ export const addTrack = mutation({
     if (!playlist.trackIds.includes(trackId)) {
       const snapshots = playlist.trackSnapshots ?? [];
       const nextSnapshots = track
-        ? [...snapshots.filter((snapshot) => snapshot.id !== trackId), normalizeSnapshot(track as TrackSnapshot)]
+        ? [
+            ...snapshots.filter((snapshot) => snapshot.id !== trackId),
+            normalizeSnapshot(track as TrackSnapshot),
+          ]
         : snapshots;
       await ctx.db.patch(playlistId, {
         trackIds: [...playlist.trackIds, trackId],
@@ -182,13 +201,18 @@ export const removeTrack = mutation({
       throw new ConvexError("Playlist not found");
     }
     const removed = playlist.trackIds.includes(trackId);
-    const snapshots = playlist.trackSnapshots?.filter((track) => track.id !== trackId);
+    const snapshots = playlist.trackSnapshots?.filter(
+      (track) => track.id !== trackId,
+    );
     await ctx.db.patch(playlistId, {
       trackIds: playlist.trackIds.filter((id) => id !== trackId),
-      ...(playlist.trackSnapshots !== undefined ? { trackSnapshots: snapshots ?? [] } : {}),
+      ...(playlist.trackSnapshots !== undefined
+        ? { trackSnapshots: snapshots ?? [] }
+        : {}),
       updatedAt: Date.now(),
     });
-    if (removed) await logEvent(ctx, userId, playlistId, playlist.name, "removed", detail);
+    if (removed)
+      await logEvent(ctx, userId, playlistId, playlist.name, "removed", detail);
   },
 });
 

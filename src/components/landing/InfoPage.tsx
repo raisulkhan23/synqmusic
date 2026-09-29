@@ -26,14 +26,14 @@ export function InfoPage({
   return (
     <div className="relative min-h-dvh overflow-x-hidden bg-background pt-[env(safe-area-inset-top)] text-foreground">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[520px]">
-        <div className="absolute left-1/2 top-[-260px] h-[620px] w-[900px] -translate-x-1/2 rounded-full bg-brand/12 blur-3xl" />
+        <div className="absolute left-1/2 top-[-260px] h-[620px] w-[900px] -translate-x-1/2 rounded-[4px] bg-brand/12 blur-3xl" />
       </div>
 
       <header className="relative z-10 mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-4 py-6 sm:px-6">
         <Logo to="/" />
         <Link
           to="/"
-          className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:border-white/25 hover:text-foreground"
+          className="inline-flex items-center gap-1.5 rounded-[4px] border border-white/10 px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:border-white/25 hover:text-foreground"
         >
           <ArrowLeft className="size-3.5" />
           Back to SYNQ
@@ -50,7 +50,9 @@ export function InfoPage({
         <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground">
           {intro}
         </p>
-        <p className="mt-3 text-xs text-muted-foreground/70">Last updated {updated}</p>
+        <p className="mt-3 text-xs text-muted-foreground/70">
+          Last updated {updated}
+        </p>
 
         <div className="mt-12 grid gap-10 lg:grid-cols-[200px_1fr] lg:gap-14">
           <nav className="lg:sticky lg:top-8 lg:self-start">
@@ -93,7 +95,7 @@ export function InfoPage({
           <p className="text-sm font-medium">Ready when you are.</p>
           <Link
             to="/auth?returnTo=/home"
-            className="rounded-full bg-brand px-5 py-2.5 text-sm font-semibold text-brand-foreground transition-transform hover:scale-105"
+            className="rounded-[4px] bg-brand px-5 py-2.5 text-sm font-semibold text-brand-foreground transition-transform hover:scale-105"
           >
             Start listening
           </Link>

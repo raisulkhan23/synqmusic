@@ -130,7 +130,6 @@ describe("the compiled mode actually switches the work off", () => {
   test("the layers that exist only to be pretty are hidden outright", () => {
     const rule = perfRule("display:none");
     for (const selector of [
-      ".aurora-orb",
       ".ambient-grid",
       ".pointer-glow",
       ".cursor-trail-layer",
@@ -139,6 +138,9 @@ describe("the compiled mode actually switches the work off", () => {
       expect(rule).toContain(selector);
     }
     expect(rule).toMatch(/display:none!important/);
+    // The two drifting accent orbs used to be here. The theme pass deleted
+    // them outright, so performance mode has nothing left to opt out of.
+    expect(rule).not.toContain(".aurora-orb");
   });
 });
 

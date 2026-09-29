@@ -40,7 +40,10 @@ export function PlaylistDialog({
       onOpenChange(false);
       onCreate?.(id, trimmed);
     } catch (error) {
-      const message = error instanceof Error && error.message ? error.message : "Unknown error";
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : "Unknown error";
       toast.error("Could not create the playlist", { description: message });
     } finally {
       setSubmitting(false);

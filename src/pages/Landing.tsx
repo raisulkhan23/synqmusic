@@ -90,10 +90,10 @@ function ListeningExperience() {
       <div className="pointer-events-none absolute inset-0 opacity-40 [background-image:linear-gradient(rgba(255,255,255,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.045)_1px,transparent_1px)] [background-size:42px_42px] [mask-image:linear-gradient(to_bottom,transparent,black_28%,black_72%,transparent)]" />
       <div className="relative mx-auto max-w-5xl">
         <div className="mx-auto max-w-2xl text-center">
-          <span className="inline-flex items-center gap-2 rounded-full border border-brand/20 bg-brand/8 px-3 py-1 text-[10px] font-semibold tracking-[0.22em] text-brand uppercase">
+          <span className="inline-flex items-center gap-2 rounded-[4px] border border-brand/20 bg-brand/8 px-3 py-1 text-[10px] font-semibold tracking-[0.22em] text-brand uppercase">
             <Sparkles className="size-3.5" /> One continuous atmosphere
           </span>
-          <h2 className="mt-4 font-display text-3xl font-bold tracking-tight sm:text-5xl">
+          <h2 className="mt-4 font-display text-3xl font-semibold tracking-tight sm:text-5xl">
             Your queue, in motion.
           </h2>
           <p className="mt-3 text-sm leading-6 text-muted-foreground sm:text-base">
@@ -101,13 +101,13 @@ function ListeningExperience() {
           </p>
         </div>
 
-        <div className="mx-auto mt-8 flex w-fit max-w-full gap-1 overflow-x-auto rounded-full border border-white/10 bg-white/[0.04] p-1">
+        <div className="mx-auto mt-8 flex w-fit max-w-full gap-1 overflow-x-auto rounded-[4px] border border-white/10 bg-white/[0.04] p-1">
           {(Object.keys(modeContent) as ListeningMode[]).map((key) => (
             <button
               key={key}
               type="button"
               onClick={() => setMode(key)}
-              className={`whitespace-nowrap rounded-full px-4 py-2 text-xs font-semibold transition-all ${mode === key ? "bg-white text-black shadow-lg" : "text-muted-foreground hover:text-foreground"}`}
+              className={`whitespace-nowrap rounded-[4px] px-4 py-2 text-xs font-semibold transition-all ${mode === key ? "bg-white text-black shadow-lg" : "text-muted-foreground hover:text-foreground"}`}
             >
               {modeContent[key].label}
             </button>
@@ -118,27 +118,27 @@ function ListeningExperience() {
           <motion.div
             animate={{ rotate: 360 }}
             transition={{ duration: 28, repeat: Infinity, ease: "linear" }}
-            className="absolute left-1/2 top-1/2 size-[250px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-dashed border-brand/20 sm:size-[330px]"
+            className="absolute left-1/2 top-1/2 size-[250px] -translate-x-1/2 -translate-y-1/2 rounded-[4px] border border-dashed border-brand/20 sm:size-[330px]"
           >
-            <span className="absolute left-1/2 top-[-5px] size-2.5 -translate-x-1/2 rounded-full bg-brand shadow-[0_0_18px_5px_rgba(203,244,143,0.45)]" />
-            <span className="absolute bottom-[12%] right-[-4px] size-2 rounded-full bg-cyan-300 shadow-[0_0_16px_4px_rgba(103,232,249,0.4)]" />
+            <span className="absolute left-1/2 top-[-5px] size-2.5 -translate-x-1/2 rounded-[4px] bg-brand shadow-[0_0_18px_5px_rgba(203,244,143,0.45)]" />
+            <span className="absolute bottom-[12%] right-[-4px] size-2 rounded-[4px] bg-cyan-300 shadow-[0_0_16px_4px_rgba(103,232,249,0.4)]" />
           </motion.div>
-          <div className="absolute left-1/2 top-1/2 size-[205px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-white/[0.025] shadow-[0_0_80px_rgba(203,244,143,0.08)] sm:size-[270px]" />
-          <div className="absolute left-1/2 top-1/2 size-[150px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-brand/20 bg-brand/5 sm:size-[200px]" />
+          <div className="absolute left-1/2 top-1/2 size-[205px] -translate-x-1/2 -translate-y-1/2 rounded-[4px] border border-white/10 bg-white/[0.025] shadow-[0_0_80px_rgba(203,244,143,0.08)] sm:size-[270px]" />
+          <div className="absolute left-1/2 top-1/2 size-[150px] -translate-x-1/2 -translate-y-1/2 rounded-[4px] border border-brand/20 bg-brand/5 sm:size-[200px]" />
 
           <motion.div
             animate={{ y: [0, -8, 0], rotate: [0, 2, 0] }}
             transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
-            className="absolute left-1/2 top-1/2 z-10 size-[132px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/20 bg-[#11151a] p-2 shadow-[0_20px_50px_rgba(0,0,0,0.55),0_0_45px_rgba(203,244,143,0.16)] sm:size-[174px]"
+            className="absolute left-1/2 top-1/2 z-10 size-[132px] -translate-x-1/2 -translate-y-1/2 rounded-[4px] border border-white/20 bg-[#11151a] p-2 shadow-[0_20px_50px_rgba(0,0,0,0.55),0_0_45px_rgba(203,244,143,0.16)] sm:size-[174px]"
           >
-            <div className="relative size-full overflow-hidden rounded-full border border-white/10">
+            <div className="relative size-full overflow-hidden rounded-[4px] border border-white/10">
               <img
                 src="/show-me-love-cover.svg"
                 alt=""
                 className="size-full object-cover"
               />
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,transparent_30%,rgba(0,0,0,0.45))]" />
-              <div className="absolute left-1/2 top-1/2 size-7 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/40 bg-[#11151a] shadow-[0_0_0_5px_rgba(255,255,255,0.06)] sm:size-9" />
+              <div className="absolute left-1/2 top-1/2 size-7 -translate-x-1/2 -translate-y-1/2 rounded-[4px] border border-white/40 bg-[#11151a] shadow-[0_0_0_5px_rgba(255,255,255,0.06)] sm:size-9" />
             </div>
           </motion.div>
 
@@ -149,7 +149,7 @@ function ListeningExperience() {
             className="liquid-glass absolute left-1/2 top-2 z-20 w-[250px] -translate-x-1/2 rounded-2xl border border-white/10 p-4 shadow-[0_18px_45px_rgba(0,0,0,0.4)] sm:w-[300px]"
           >
             <div
-              className={`h-1.5 rounded-full bg-gradient-to-r ${current.tone}`}
+              className={`h-1.5 rounded-[4px] bg-gradient-to-r ${current.tone}`}
             />
             <div className="mt-3 flex items-center gap-3">
               <CoverArt className="size-10 rounded-xl" />
@@ -185,7 +185,7 @@ function ListeningExperience() {
               {Array.from({ length: 18 }).map((_, index) => (
                 <span
                   key={index}
-                  className="eq-bar w-1 rounded-full bg-cyan-300/75"
+                  className="eq-bar w-1 rounded-[4px] bg-cyan-300/75"
                   style={{
                     height: `${25 + ((index * 29) % 70)}%`,
                     animationDelay: `${(index % 6) * 0.11}s`,
@@ -213,10 +213,10 @@ function ListeningExperience() {
               {[0, 1, 2].map((item) => (
                 <span
                   key={item}
-                  className="size-7 rounded-full border-2 border-[#11131a] bg-gradient-to-br from-brand/80 to-violet-400/80"
+                  className="size-7 rounded-[4px] border-2 border-[#11131a] bg-gradient-to-br from-brand/80 to-violet-400/80"
                 />
               ))}
-              <span className="flex size-7 items-center justify-center rounded-full border-2 border-[#11131a] bg-white/10 text-[9px] text-muted-foreground">
+              <span className="flex size-7 items-center justify-center rounded-[4px] border-2 border-[#11131a] bg-white/10 text-[9px] text-muted-foreground">
                 +5
               </span>
             </div>
@@ -270,9 +270,9 @@ function PlayerPreview() {
           <span className="text-[10px] tabular-nums text-muted-foreground">
             1:24
           </span>
-          <div className="relative h-1 flex-1 rounded-full bg-white/10">
-            <div className="absolute inset-y-0 left-0 w-[38%] rounded-full bg-brand" />
-            <div className="absolute top-1/2 left-[38%] size-2.5 -translate-y-1/2 rounded-full bg-white shadow" />
+          <div className="relative h-1 flex-1 rounded-[4px] bg-white/10">
+            <div className="absolute inset-y-0 left-0 w-[38%] rounded-[4px] bg-brand" />
+            <div className="absolute top-1/2 left-[38%] size-2.5 -translate-y-1/2 rounded-[4px] bg-white shadow" />
           </div>
           <span className="text-[10px] tabular-nums text-muted-foreground">
             3:32
@@ -281,7 +281,7 @@ function PlayerPreview() {
         <div className="mt-4 flex items-center justify-center gap-4 text-muted-foreground">
           <Shuffle className="size-4 text-brand" />
           <SkipBack className="size-4 fill-current" />
-          <span className="flex size-10 items-center justify-center rounded-full bg-white text-black shadow-lg">
+          <span className="flex size-10 items-center justify-center rounded-[4px] bg-white text-black shadow-lg">
             <Pause className="size-4 fill-current" />
           </span>
           <SkipForward className="size-4 fill-current" />
@@ -292,7 +292,7 @@ function PlayerPreview() {
             {Array.from({ length: 24 }).map((_, index) => (
               <span
                 key={index}
-                className="eq-bar w-[3px] rounded-full bg-brand"
+                className="eq-bar w-[3px] rounded-[4px] bg-brand"
                 style={{
                   height: `${20 + ((index * 37) % 80)}%`,
                   animationDelay: `${(index % 7) * 0.12}s`,
@@ -318,7 +318,7 @@ function PlayerPreview() {
           {[0, 1, 2, 3, 4].map((item) => (
             <span
               key={item}
-              className="eq-bar w-[3px] rounded-full bg-violet-400"
+              className="eq-bar w-[3px] rounded-[4px] bg-violet-400"
               style={{
                 height: `${40 + item * 14}%`,
                 animationDelay: `${item * 0.16}s`,
@@ -396,9 +396,9 @@ export default function Landing() {
   return (
     <div className="relative min-h-dvh overflow-x-hidden bg-background pt-[env(safe-area-inset-top)] text-foreground">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[720px]">
-        <div className="absolute left-1/2 top-[-240px] h-[600px] w-[900px] -translate-x-1/2 rounded-full bg-brand/15 blur-3xl" />
-        <div className="absolute top-[300px] right-[-140px] h-[360px] w-[360px] rounded-full bg-violet-500/10 blur-3xl" />
-        <div className="absolute top-[400px] left-[-160px] h-[320px] w-[320px] rounded-full bg-cyan-500/10 blur-3xl" />
+        <div className="absolute left-1/2 top-[-240px] h-[600px] w-[900px] -translate-x-1/2 rounded-[4px] bg-brand/15 blur-3xl" />
+        <div className="absolute top-[300px] right-[-140px] h-[360px] w-[360px] rounded-[4px] bg-violet-500/10 blur-3xl" />
+        <div className="absolute top-[400px] left-[-160px] h-[320px] w-[320px] rounded-[4px] bg-cyan-500/10 blur-3xl" />
       </div>
 
       <header className="relative z-20 mx-auto flex h-20 w-full max-w-6xl items-center justify-between px-4 sm:px-6">
@@ -420,13 +420,13 @@ export default function Landing() {
         <div className="flex items-center gap-2">
           <Link
             to="/auth"
-            className="hidden rounded-full px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:block"
+            className="hidden rounded-[4px] px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:block"
           >
             Sign in
           </Link>
           <Link
             to="/auth?returnTo=/home"
-            className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground shadow-[0_6px_24px_rgb(203_244_143/0.35)] transition-transform hover:scale-105"
+            className="rounded-[4px] bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground shadow-[0_6px_24px_rgb(203_244_143/0.35)] transition-transform hover:scale-105"
           >
             Start listening
           </Link>
@@ -439,16 +439,16 @@ export default function Landing() {
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-1.5 text-xs font-medium text-muted-foreground"
+            className="inline-flex items-center gap-2 rounded-[4px] border border-white/10 bg-white/[0.04] px-3.5 py-1.5 text-xs font-medium text-muted-foreground"
           >
-            <span className="size-1.5 rounded-full bg-brand" /> Music-only
+            <span className="size-1.5 rounded-[4px] bg-brand" /> Music-only
             discovery · no ads · no noise
           </motion.div>
           <motion.h1
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.55, delay: 0.08 }}
-            className="mt-6 max-w-xl font-display text-5xl leading-[0.98] font-bold tracking-tight sm:text-7xl"
+            className="mt-6 max-w-xl font-display text-5xl leading-[0.98] font-thin tracking-tight sm:text-7xl"
           >
             Your music,
             <br />
@@ -472,14 +472,14 @@ export default function Landing() {
           >
             <Link
               to="/auth?returnTo=/home"
-              className="group flex items-center gap-2 rounded-full bg-brand px-6 py-3 text-sm font-semibold text-brand-foreground shadow-[0_10px_36px_rgb(203_244_143/0.4)] transition-transform hover:scale-105"
+              className="group flex items-center gap-2 rounded-[4px] bg-brand px-6 py-3 text-sm font-semibold text-brand-foreground shadow-[0_10px_36px_rgb(203_244_143/0.4)] transition-transform hover:scale-105"
             >
               Start listening free{" "}
               <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" />
             </Link>
             <a
               href="#experience"
-              className="rounded-full border border-white/10 px-5 py-3 text-sm font-semibold text-muted-foreground transition-colors hover:border-white/20 hover:text-foreground"
+              className="rounded-[4px] border border-white/10 px-5 py-3 text-sm font-semibold text-muted-foreground transition-colors hover:border-white/20 hover:text-foreground"
             >
               See how it flows
             </a>
@@ -522,7 +522,7 @@ export default function Landing() {
           <span className="text-[10px] font-bold tracking-[0.24em] text-brand uppercase">
             Made for the long listen
           </span>
-          <h2 className="mt-4 font-display text-3xl font-bold tracking-tight sm:text-5xl">
+          <h2 className="mt-4 font-display text-3xl font-semibold tracking-tight sm:text-5xl">
             A player that feels alive.
           </h2>
           <p className="mt-4 text-base leading-7 text-muted-foreground">
@@ -564,7 +564,7 @@ export default function Landing() {
             <span className="text-[10px] font-bold tracking-[0.24em] text-brand uppercase">
               The SYNQ flow
             </span>
-            <h2 className="mt-4 font-display text-3xl font-bold tracking-tight sm:text-5xl">
+            <h2 className="mt-4 font-display text-3xl font-semibold tracking-tight sm:text-5xl">
               From first note
               <br />
               to next obsession.
@@ -614,7 +614,7 @@ export default function Landing() {
           <div className="relative p-7 sm:p-12">
             <div className="absolute inset-0 bg-[radial-gradient(80%_100%_at_0%_0%,rgba(203,244,143,0.14),transparent_70%)]" />
             <div className="relative">
-              <span className="inline-flex items-center gap-2 rounded-full border border-brand/20 bg-brand/8 px-3 py-1 text-[10px] font-bold tracking-[0.2em] text-brand uppercase">
+              <span className="inline-flex items-center gap-2 rounded-[4px] border border-brand/20 bg-brand/8 px-3 py-1 text-[10px] font-bold tracking-[0.2em] text-brand uppercase">
                 <Keyboard className="size-3.5" /> Your shortcuts
               </span>
               <h2 className="mt-5 max-w-md font-display text-3xl font-bold tracking-tight sm:text-4xl">
@@ -649,8 +649,8 @@ export default function Landing() {
             </div>
           </div>
           <div className="relative flex min-h-[320px] items-center justify-center overflow-hidden border-t border-white/[0.08] bg-[radial-gradient(circle_at_50%_45%,rgba(139,232,255,0.12),transparent_42%)] p-8 lg:border-t-0 lg:border-l">
-            <div className="absolute size-64 rounded-full border border-cyan-300/15" />
-            <div className="absolute size-44 rounded-full border border-cyan-300/10" />
+            <div className="absolute size-64 rounded-[4px] border border-cyan-300/15" />
+            <div className="absolute size-44 rounded-[4px] border border-cyan-300/10" />
             <div className="relative w-full max-w-xs rounded-3xl border border-white/10 bg-[#11131a]/85 p-5 shadow-2xl backdrop-blur-xl">
               <div className="flex items-center gap-3">
                 <CoverArt className="size-12" />
@@ -662,15 +662,15 @@ export default function Landing() {
               </div>
               <div className="mt-5 flex items-center justify-center gap-5 text-muted-foreground">
                 <SkipBack className="size-4 fill-current" />
-                <span className="flex size-11 items-center justify-center rounded-full bg-white text-black">
+                <span className="flex size-11 items-center justify-center rounded-[4px] bg-white text-black">
                   <Pause className="size-4 fill-current" />
                 </span>
                 <SkipForward className="size-4 fill-current" />
               </div>
               <div className="mt-5 flex items-center gap-2 text-[10px] text-muted-foreground">
                 <span>1:24</span>
-                <div className="h-1 flex-1 rounded-full bg-white/10">
-                  <div className="h-full w-[38%] rounded-full bg-brand" />
+                <div className="h-1 flex-1 rounded-[4px] bg-white/10">
+                  <div className="h-full w-[38%] rounded-[4px] bg-brand" />
                 </div>
                 <span>3:32</span>
               </div>
@@ -690,7 +690,7 @@ export default function Landing() {
             <span className="inline-flex items-center gap-2 text-[10px] font-bold tracking-[0.22em] text-brand uppercase">
               <TimerReset className="size-3.5" /> Your next favorite is waiting
             </span>
-            <h2 className="mt-4 font-display text-3xl font-bold tracking-tight sm:text-5xl">
+            <h2 className="mt-4 font-display text-3xl font-semibold tracking-tight sm:text-5xl">
               Ready when you are.
             </h2>
             <p className="mx-auto mt-4 max-w-md text-base leading-7 text-muted-foreground">
@@ -699,14 +699,14 @@ export default function Landing() {
             <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
               <Link
                 to="/auth?returnTo=/home"
-                className="group flex items-center gap-2 rounded-full bg-brand px-7 py-3 text-sm font-semibold text-brand-foreground shadow-[0_10px_36px_rgb(203_244_143/0.4)] transition-transform hover:scale-105"
+                className="group flex items-center gap-2 rounded-[4px] bg-brand px-7 py-3 text-sm font-semibold text-brand-foreground shadow-[0_10px_36px_rgb(203_244_143/0.4)] transition-transform hover:scale-105"
               >
                 Start listening{" "}
                 <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" />
               </Link>
               <a
                 href="#features"
-                className="rounded-full border border-white/10 px-5 py-3 text-sm font-semibold text-muted-foreground transition-colors hover:border-white/20 hover:text-foreground"
+                className="rounded-[4px] border border-white/10 px-5 py-3 text-sm font-semibold text-muted-foreground transition-colors hover:border-white/20 hover:text-foreground"
               >
                 Explore features
               </a>

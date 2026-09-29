@@ -227,7 +227,7 @@ export default function Recent() {
             type="button"
             onClick={() => setFilter(f)}
             className={cn(
-              "rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors",
+              "rounded-[4px] px-3.5 py-1.5 text-xs font-semibold transition-colors",
               filter === f
                 ? "bg-[rgb(var(--tint))] text-black"
                 : "bg-white/[0.05] text-muted-foreground hover:text-foreground",
@@ -240,7 +240,7 @@ export default function Recent() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Filter this history…"
-          className="ml-auto w-48 rounded-full border border-white/[0.08] bg-white/[0.04] px-4 py-1.5 text-xs outline-none placeholder:text-muted-foreground/60 focus:border-[rgb(var(--tint)_/_0.5)]"
+          className="ml-auto w-48 rounded-[4px] border border-white/[0.08] bg-white/[0.04] px-4 py-1.5 text-xs outline-none placeholder:text-muted-foreground/60 focus:border-[rgb(var(--tint)_/_0.5)]"
         />
       </div>
 

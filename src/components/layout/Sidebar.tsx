@@ -182,7 +182,7 @@ export function Sidebar() {
             <NavLink
               to="/profile"
               title="Profile"
-              className="flex size-10 items-center justify-center overflow-hidden rounded-full bg-[rgb(var(--tint))] text-sm font-bold text-black ring-2 ring-white/10"
+              className="flex size-10 items-center justify-center overflow-hidden rounded-[4px] bg-[rgb(var(--tint))] text-sm font-bold text-black ring-2 ring-white/10"
             >
               {user?.image ? (
                 <img
@@ -199,7 +199,7 @@ export function Sidebar() {
               aria-label="Settings"
               title="Settings"
               onClick={() => void navigate("/settings")}
-              className="flex size-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+              className="flex size-9 items-center justify-center rounded-[4px] text-muted-foreground transition-colors hover:text-foreground"
             >
               <Settings className="size-4" />
             </button>
@@ -228,7 +228,7 @@ export function Sidebar() {
               aria-label="Collapse sidebar"
               title="Collapse sidebar"
               onClick={toggleCollapsed}
-              className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
+              className="rounded-[4px] p-1.5 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
             >
               <ArrowRightToLine className="size-4" />
             </button>
@@ -269,7 +269,7 @@ export function Sidebar() {
                 aria-label="New playlist"
                 title="Create playlist"
                 onClick={() => setDialogOpen(true)}
-                className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
+                className="rounded-[4px] p-1.5 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
               >
                 <Plus className="size-4" />
               </button>
@@ -318,8 +318,8 @@ export function Sidebar() {
                 }
               >
                 <span className="relative flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-md border border-white/10 bg-[#111b1b]">
-                  <span className="absolute -left-2 -top-2 size-8 rounded-full bg-[rgb(var(--tint)/0.5)] blur-md" />
-                  <span className="absolute -bottom-3 -right-2 size-9 rounded-full bg-emerald-400/20 blur-md" />
+                  <span className="absolute -left-2 -top-2 size-8 rounded-[4px] bg-[rgb(var(--tint)/0.5)] blur-md" />
+                  <span className="absolute -bottom-3 -right-2 size-9 rounded-[4px] bg-emerald-400/20 blur-md" />
                   <Heart className="relative z-10 size-4 text-[rgb(var(--tint))]" />
                 </span>
                 <span className="min-w-0">
@@ -342,8 +342,8 @@ export function Sidebar() {
                 }
               >
                 <span className="relative flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-md border border-white/10 bg-[#17151e]">
-                  <span className="absolute -right-2 -top-2 size-8 rounded-full bg-violet-400/25 blur-md" />
-                  <span className="absolute -bottom-3 -left-2 size-9 rounded-full bg-amber-300/20 blur-md" />
+                  <span className="absolute -right-2 -top-2 size-8 rounded-[4px] bg-violet-400/25 blur-md" />
+                  <span className="absolute -bottom-3 -left-2 size-9 rounded-[4px] bg-amber-300/20 blur-md" />
                   <History className="relative z-10 size-4 text-violet-200" />
                 </span>
                 <span className="min-w-0">
@@ -416,7 +416,7 @@ export function Sidebar() {
           </p>
 
           <div className="flex items-center gap-2.5 border-t border-white/[0.06] px-4 py-3">
-            <div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[rgb(var(--tint))] text-sm font-bold text-black ring-2 ring-white/10">
+            <div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-[4px] bg-[rgb(var(--tint))] text-sm font-bold text-black ring-2 ring-white/10">
               {user?.image ? (
                 <img
                   src={user.image}
@@ -442,7 +442,7 @@ export function Sidebar() {
               aria-label="Settings"
               title="Settings"
               onClick={() => void navigate("/settings")}
-              className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
+              className="rounded-[4px] p-2 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
             >
               <Settings className="size-4" />
             </button>
@@ -452,7 +452,7 @@ export function Sidebar() {
               title="Profile"
               className={({ isActive }) =>
                 cn(
-                  "rounded-full p-2 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground",
+                  "rounded-[4px] p-2 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground",
                   isActive && "text-[rgb(var(--tint))]",
                 )
               }
@@ -465,7 +465,7 @@ export function Sidebar() {
               title="Your stats"
               className={({ isActive }) =>
                 cn(
-                  "rounded-full p-2 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground",
+                  "rounded-[4px] p-2 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground",
                   isActive && "text-[rgb(var(--tint))]",
                 )
               }

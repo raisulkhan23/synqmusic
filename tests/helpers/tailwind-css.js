@@ -33,8 +33,7 @@ export async function compileClasses(candidates) {
     filename: "out.css",
     code: Buffer.from(compiler.build(candidates)),
     minify: true,
-  })
-    .code.toString();
+  }).code.toString();
 }
 
 export function readSource(relativePath) {

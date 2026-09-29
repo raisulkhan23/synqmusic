@@ -5,7 +5,11 @@ import { emailOtp } from "./auth/emailOtp";
 import Google from "@auth/core/providers/google";
 import GitHub from "@auth/core/providers/github";
 
-const SITE_URL_ENV = (process.env.CONVEX_SITE_URL ?? process.env.SITE_URL ?? "").replace(/\/$/, "");
+const SITE_URL_ENV = (
+  process.env.CONVEX_SITE_URL ??
+  process.env.SITE_URL ??
+  ""
+).replace(/\/$/, "");
 
 const TRUSTED_ORIGINS = [
   SITE_URL_ENV,
@@ -13,7 +17,9 @@ const TRUSTED_ORIGINS = [
   "https://synq-music.freebuff.app",
   "https://freebuff.com",
   "https://www.freebuff.com",
-].filter((x): x is string => !!x).map((x) => x.replace(/\/$/, ""));
+]
+  .filter((x): x is string => !!x)
+  .map((x) => x.replace(/\/$/, ""));
 
 function isTrustedOrigin(origin: string): boolean {
   const normalized = origin.replace(/\/$/, "");
@@ -39,7 +45,8 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
     // default callback. The client sends a RELATIVE path; we resolve it
     // against the trusted frontend origin here.
     redirect: async ({ redirectTo }) => {
-      const base = TRUSTED_ORIGINS.find((o) => o.includes("freebuff.app")) ?? SITE_URL_ENV;
+      const base =
+        TRUSTED_ORIGINS.find((o) => o.includes("freebuff.app")) ?? SITE_URL_ENV;
       if (redirectTo.startsWith("/") || redirectTo.startsWith("?")) {
         return `${base}${redirectTo}`;
       }

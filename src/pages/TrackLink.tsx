@@ -85,7 +85,7 @@ export default function TrackLink() {
         </p>
         <Link
           to="/search"
-          className="mt-2 rounded-full bg-[rgb(var(--tint))] px-5 py-2.5 text-sm font-semibold text-black"
+          className="mt-2 rounded-[4px] bg-[rgb(var(--tint))] px-5 py-2.5 text-sm font-semibold text-black"
         >
           Search SYNQ
         </Link>
@@ -140,7 +140,7 @@ export default function TrackLink() {
       </div>
 
       {playing ? (
-        <div className="flex items-center gap-2 rounded-full bg-[rgb(var(--tint)/0.12)] px-4 py-2 text-sm font-semibold text-[rgb(var(--tint))]">
+        <div className="flex items-center gap-2 rounded-[4px] bg-[rgb(var(--tint)/0.12)] px-4 py-2 text-sm font-semibold text-[rgb(var(--tint))]">
           <Play className="size-4 fill-current" />
           Playing now
         </div>
@@ -148,7 +148,7 @@ export default function TrackLink() {
         <button
           type="button"
           onClick={() => togglePlay()}
-          className="flex items-center gap-2 rounded-full bg-[rgb(var(--tint))] px-5 py-2.5 text-sm font-semibold text-black shadow-[0_8px_30px_rgb(var(--tint)/0.35)] transition-transform hover:scale-[1.03]"
+          className="flex items-center gap-2 rounded-[4px] bg-[rgb(var(--tint))] px-5 py-2.5 text-sm font-semibold text-black shadow-[0_8px_30px_rgb(var(--tint)/0.35)] transition-transform hover:scale-[1.03]"
         >
           <Play className="size-4 fill-current" />
           Play
@@ -163,7 +163,7 @@ export default function TrackLink() {
       <div className="flex items-center gap-2">
         <Link
           to="/home"
-          className="rounded-full bg-[rgb(var(--tint))] px-5 py-2.5 text-sm font-semibold text-black shadow-[0_8px_30px_rgb(var(--tint)/0.35)] transition-transform hover:scale-[1.03]"
+          className="rounded-[4px] bg-[rgb(var(--tint))] px-5 py-2.5 text-sm font-semibold text-black shadow-[0_8px_30px_rgb(var(--tint)/0.35)] transition-transform hover:scale-[1.03]"
         >
           Open SYNQ
         </Link>
@@ -175,7 +175,7 @@ export default function TrackLink() {
               else toast.error("Couldn't copy the link");
             });
           }}
-          className="rounded-full border border-white/15 bg-white/[0.05] px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-white/[0.1]"
+          className="rounded-[4px] border border-white/15 bg-white/[0.05] px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-white/[0.1]"
         >
           Copy link
         </button>

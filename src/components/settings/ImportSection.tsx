@@ -146,14 +146,14 @@ export function ImportSection({
               placeholder="https://music.youtube.com/playlist?list=…"
               aria-label="Playlist link"
               disabled={busy || !open}
-              className="w-full rounded-full border border-white/10 bg-black/25 py-2 pr-3 pl-8 text-sm outline-none placeholder:text-muted-foreground focus:border-[rgb(var(--tint))] disabled:opacity-50"
+              className="w-full rounded-[4px] border border-white/10 bg-black/25 py-2 pr-3 pl-8 text-sm outline-none placeholder:text-muted-foreground focus:border-[rgb(var(--tint))] disabled:opacity-50"
             />
           </div>
           <button
             type="button"
             onClick={() => void handleLink()}
             disabled={busy || !open || !link.trim()}
-            className="flex shrink-0 items-center gap-2 rounded-full bg-[rgb(var(--tint))] px-4 py-2 text-sm font-semibold text-black transition-opacity hover:opacity-90 disabled:opacity-50"
+            className="flex shrink-0 items-center gap-2 rounded-[4px] bg-[rgb(var(--tint))] px-4 py-2 text-sm font-semibold text-black transition-opacity hover:opacity-90 disabled:opacity-50"
           >
             {busy ? (
               <Loader2 className="size-4 animate-spin" />
@@ -186,7 +186,7 @@ export function ImportSection({
           type="button"
           onClick={() => fileInput.current?.click()}
           disabled={busy || !open}
-          className="mx-auto mt-3 flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.05] px-4 py-2 text-sm font-semibold transition-colors hover:bg-white/[0.1] disabled:opacity-50"
+          className="mx-auto mt-3 flex items-center gap-2 rounded-[4px] border border-white/10 bg-white/[0.05] px-4 py-2 text-sm font-semibold transition-colors hover:bg-white/[0.1] disabled:opacity-50"
         >
           {busy ? (
             <Loader2 className="size-4 animate-spin" />

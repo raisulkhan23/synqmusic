@@ -39,7 +39,10 @@ export function applyCardTransparency(transparency: number): number {
     const alpha = 100 - value;
     root.style.setProperty("--ui-card-alpha", `${alpha}%`);
     root.style.setProperty("--ui-panel-alpha", `${Math.round(alpha * 0.76)}%`);
-    root.style.setProperty("--ui-settings-alpha", `${Math.round(alpha * 0.85)}%`);
+    root.style.setProperty(
+      "--ui-settings-alpha",
+      `${Math.round(alpha * 0.85)}%`,
+    );
   }
   return value;
 }

@@ -62,12 +62,21 @@ export function Logo({
   if (iconOnly) {
     return (
       <Link to={to} className={cn("group inline-flex", className)}>
-        <img src="/logo.svg" alt="SYNQ logo" className="h-7 w-auto shrink-0" width={104} height={104} />
+        <img
+          src="/logo.svg"
+          alt="SYNQ logo"
+          className="h-7 w-auto shrink-0"
+          width={104}
+          height={104}
+        />
       </Link>
     );
   }
   return (
-    <Link to={to} className={cn("group inline-flex items-center gap-2.5", className)}>
+    <Link
+      to={to}
+      className={cn("group inline-flex items-center gap-2.5", className)}
+    >
       <img
         src="/logo.svg"
         alt="SYNQ logo"
@@ -79,10 +88,9 @@ export function Logo({
         SYNQ
       </span>
       {!iconOnly && (
-      <span
-        className="rounded-full border border-[rgb(var(--tint)/0.35)] bg-[rgb(var(--tint)/0.12)] px-1.5 py-px text-[9px] font-bold tracking-[0.08em] text-[rgb(var(--tint))] uppercase"
-      >
-        Beta        </span>
+        <span className="rounded-[4px] border border-[rgb(var(--tint)/0.35)] bg-[rgb(var(--tint)/0.12)] px-1.5 py-px text-[9px] font-bold tracking-[0.08em] text-[rgb(var(--tint))] uppercase">
+          Beta{" "}
+        </span>
       )}
     </Link>
   );
