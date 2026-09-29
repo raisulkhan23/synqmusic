@@ -1,6 +1,8 @@
 import type { YtItem } from "@/lib/youtube";
 import { formatTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { Link } from "react-router";
+import { artistPath } from "@/lib/artistLinks";
 import {
   TrackActionsMenu,
   useTrackActions,
@@ -47,6 +49,7 @@ export function RemoteTrackRow({
     likeThis,
     renderPlaylistDialog,
   } = useTrackActions(item, source);
+  const artistHref = artistPath(artistName);
 
   return (
     <>
@@ -129,7 +132,23 @@ export function RemoteTrackRow({
             {displayTitle}
           </p>
           <p className="mt-0.5 truncate text-xs text-muted-foreground">
-            {artistName}
+            {/* A row's artist has a real page, so it is a link rather than
+                dead text. This is the surface most people meet an artist on —
+                search results and the queue — and until now the artist name
+                here was the one place they could not click through from.
+                `artistPath` returns null for an unusable name, in which case
+                this stays plain text. */}
+            {artistHref ? (
+              <Link
+                to={artistHref}
+                onClick={(event) => event.stopPropagation()}
+                className="underline-offset-2 transition-colors hover:text-foreground hover:underline"
+              >
+                {artistName}
+              </Link>
+            ) : (
+              artistName
+            )}
           </p>
         </div>
 
