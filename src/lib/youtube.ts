@@ -5,6 +5,12 @@ export interface YtItem {
   artist: string;
   duration: number;
   thumbnail: string;
+  /**
+   * Album as reported by the source, when it actually reports one.
+   * Optional on purpose: it is absent for most rows, and the recommendation
+   * engine must treat "unknown album" as unknown rather than guessing.
+   */
+  album?: string;
 }
 
 const INVALID_ARTIST_NAMES =

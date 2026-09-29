@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import { Link } from "react-router";
 import { RemoteTrackRow } from "@/components/tracks/RemoteTrackRow";
 import { api } from "@/convex/_generated/api";
+import type { RecoCandidate } from "@/lib/recommend";
 import { greeting } from "@/lib/format";
 import { toPlayableYoutube, type Playable } from "@/lib/playable";
 import { shuffleList } from "@/lib/queueOrder";
@@ -15,7 +16,7 @@ import {
   type HistoryEntry,
   type LastPlayedSnapshot,
 } from "@/store/player";
-import { useAction, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { cn } from "@/lib/utils";
 import {
   BarChart3,
@@ -36,6 +37,15 @@ import { toast } from "sonner";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
 type RemoteMap = Record<string, YtItem[] | undefined>;
+
+/** One personalised Home row, as produced by the recommendation engine. */
+interface RecoSection {
+  id: string;
+  title: string;
+  subtitle: string;
+  items: RecoCandidate[];
+  personalised: boolean;
+}
 
 const DISCOVERY_REFRESH_INTERVAL = 24 * 60 * 60 * 1000;
 const DISCOVERY_REFRESH_KEY = "synq:discovery-refreshed-at";
@@ -112,6 +122,7 @@ export default function Home() {
   const playTrack = usePlayerStore((s) => s.playTrack);
   const playListOrdered = usePlayerStore((s) => s.playListOrdered);
   const setQueueOpen = usePlayerStore((s) => s.setQueueOpen);
+  const setPendingOrigin = usePlayerStore((s) => s.setPendingOrigin);
   const likedCount = usePlayerStore((s) => Object.keys(s.liked).length);
   const likedLoaded = usePlayerStore((s) => s.likedLoaded);
   const playlists = useQuery(api.playlists.myPlaylists);
@@ -122,6 +133,49 @@ export default function Home() {
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [remote, setRemote] = useState<RemoteMap>({});
   const [remoteRefreshToken, setRemoteRefreshToken] = useState(0);
+
+  // --- personalised recommendations ---------------------------------------
+  // Fetched once per Home visit, off the critical path: `null` means loading,
+  // `[]` means the engine had nothing honest to show. A failure is NOT
+  // surfaced as an error banner — Home simply renders its normal shelves,
+  // because a broken recommendation must never look like a broken app.
+  const forYou = useAction(api.recommend.forYou);
+  const recordFeedback = useMutation(api.recommend.recordFeedback);
+  const [recoSections, setRecoSections] = useState<RecoSection[] | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    withTimeout(forYou({}), DISCOVERY_REQUEST_TIMEOUT_MS)
+      .then(({ sections }) => {
+        if (!cancelled) setRecoSections(sections);
+      })
+      .catch(() => {
+        if (!cancelled) setRecoSections([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [forYou, remoteRefreshToken]);
+
+  /**
+   * Play a recommended track, tagging it so the engine learns from the outcome.
+   *
+   * The whole row becomes the queue, exactly like every other Home shelf — no
+   * separate recommendation playback path exists.
+   */
+  const playRecommendation = (section: RecoSection, item: RecoCandidate) => {
+    const rest = section.items.filter((entry) => entry.id !== item.id);
+    setPendingOrigin("recommendation");
+    void recordFeedback({
+      trackId: item.id,
+      outcome: "played",
+      section: section.id,
+      origin: "recommendation",
+      title: item.title,
+      artistName: item.artist,
+      ...(item.album ? { albumName: item.album } : {}),
+    }).catch(() => undefined);
+    playRemoteItem(toYtItem(item), rest.map(toYtItem));
+  };
 
   // Songs of the week — global chart, streamed live.
   const [trending, setTrending] = useState<YtItem[] | null>(null);
@@ -806,6 +860,56 @@ export default function Home() {
           ))}
         </div>
       </section>
+      {/* Personalised recommendations — the rows the engine actually produced.
+          Skeleton while loading, absent when the listener has too little data
+          for a row to be honest about it, and plain rows otherwise. */}
+      {recoSections === null && (
+        <section aria-busy="true">
+          <SectionHeader
+            title="Recommended for you"
+            subtitle="Building this from what you play, like and skip."
+            icon={<Sparkles className="size-5 text-[rgb(var(--tint))]" />}
+          />
+          <div className="mt-1 flex flex-col gap-2">
+            {[0, 1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="h-12 animate-pulse rounded-lg bg-white/[0.04]"
+              />
+            ))}
+          </div>
+        </section>
+      )}
+      {recoSections?.map((section) => (
+        <section key={section.id}>
+          <SectionHeader
+            title={section.title}
+            subtitle={
+              section.personalised
+                ? section.subtitle
+                : "New listeners start here — this gets personal as you listen."
+            }
+            icon={<Sparkles className="size-5 text-[rgb(var(--tint))]" />}
+          />
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, ease: "easeOut" }}
+            className="stagger flex flex-col gap-0.5"
+          >
+            {section.items.slice(0, 8).map((item, i) => (
+              <RemoteTrackRow
+                key={item.id}
+                item={toYtItem(item)}
+                index={i + 1}
+                onPlay={() => playRecommendation(section, item)}
+                resolving={resolvingId === item.id}
+                source="youtube"
+              />
+            ))}
+          </motion.div>
+        </section>
+      ))}
       {/* Songs of the week — global chart */}{" "}
       <RemoteSection
         title="Songs of the week"
@@ -1162,6 +1266,22 @@ function RemoteRows({
       ))}
     </div>
   );
+}
+
+/**
+ * Engine candidates reuse the existing remote-row components, so they are
+ * converted to the same `YtItem` shape every other Home shelf already renders.
+ * No second track component, no second visual system.
+ */
+function toYtItem(candidate: RecoCandidate): YtItem {
+  return {
+    id: candidate.id,
+    title: candidate.title,
+    artist: candidate.artist,
+    duration: candidate.duration,
+    thumbnail: candidate.thumbnail,
+    ...(candidate.album ? { album: candidate.album } : {}),
+  };
 }
 
 function isUsableRemoteItem(item: YtItem): boolean {

@@ -1,6 +1,8 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
+import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
+import type { MutationCtx } from "./_generated/server";
 
 const playSnapshot = {
   source: v.optional(v.string()),
@@ -8,7 +10,87 @@ const playSnapshot = {
   artistName: v.optional(v.string()),
   coverUrl: v.optional(v.string()),
   duration: v.optional(v.number()),
+  albumName: v.optional(v.string()),
+  /** user | autoplay | recommendation | radio */
+  origin: v.optional(v.string()),
 };
+
+/**
+ * Maintain the derived per-track engagement summary the recommendation engine
+ * reads (skip counts, completion ratio, last-played time).
+ *
+ * recordPlay counts a play optimistically with no completion, because a play
+ * is only *started* at that point. recordEngagement then corrects it once the
+ * track ends or is skipped. The pair is 1:1 — recordPlay returns the exact
+ * `playedAt` it wrote and the client passes it back — so the correction always
+ * lands on the row it belongs to, and a duplicate engagement call is a no-op.
+ */
+async function bumpTrackSignals(
+  ctx: MutationCtx,
+  userId: Id<"users">,
+  entry: {
+    trackId: string;
+    at: number;
+    title?: string | undefined;
+    artistName?: string | undefined;
+    albumName?: string | undefined;
+    /** +1 play (unknown completion yet). */
+    playDelta?: number;
+    /** Adds a real completion ratio to completionSum. */
+    completionDelta?: number;
+    /** Marks the open play as having reached a measured outcome. */
+    settledDelta?: number;
+    /** Turns the optimistic play into a skip. */
+    skipDelta?: number;
+  },
+) {
+  const existing = await ctx.db
+    .query("trackSignals")
+    .withIndex("by_user_track", (q) =>
+      q.eq("userId", userId).eq("trackId", entry.trackId),
+    )
+    .first();
+
+  const plays = Math.max(0, (existing?.plays ?? 0) + (entry.playDelta ?? 0));
+  const skips = Math.max(0, (existing?.skips ?? 0) + (entry.skipDelta ?? 0));
+  const settledPlays = Math.max(
+    0,
+    (existing?.settledPlays ?? 0) + (entry.settledDelta ?? 0),
+  );
+  const completionSum = Math.max(
+    0,
+    (existing?.completionSum ?? 0) + (entry.completionDelta ?? 0),
+  );
+
+  const patch = {
+    plays,
+    skips,
+    settledPlays,
+    completionSum,
+    lastPlayedAt: Math.max(existing?.lastPlayedAt ?? 0, entry.at),
+    ...(entry.title !== undefined ? { title: entry.title } : {}),
+    ...(entry.artistName !== undefined ? { artistName: entry.artistName } : {}),
+    ...(entry.albumName !== undefined ? { albumName: entry.albumName } : {}),
+  };
+
+  if (existing) {
+    await ctx.db.patch(existing._id, patch);
+    return;
+  }
+  await ctx.db.insert("trackSignals", {
+    userId,
+    trackId: entry.trackId,
+    title: entry.title,
+    artistName: entry.artistName,
+    albumName: entry.albumName,
+    plays,
+    skips,
+    settledPlays,
+    completionSum,
+    firstPlayedAt: entry.at,
+    lastPlayedAt: entry.at,
+  });
+}
 
 /**
  * Record a play of ANY track (catalog-era ids, YouTube video ids, etc.):
@@ -18,17 +100,31 @@ const playSnapshot = {
  */
 export const recordPlay = mutation({
   args: { trackId: v.string(), ...playSnapshot },
-  handler: async (ctx, { trackId, source, title, artistName, coverUrl, duration }) => {
+  handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (userId === null) {
       throw new ConvexError("Sign in to track listening history");
     }
 
+    const { trackId, source, title, artistName, coverUrl, duration } = args;
     const now = Date.now();
     const existing = await ctx.db
       .query("playHistory")
-      .withIndex("by_user_track", (q) => q.eq("userId", userId).eq("trackId", trackId))
+      .withIndex("by_user_track", (q) =>
+        q.eq("userId", userId).eq("trackId", trackId),
+      )
       .first();
+
+    // Count the play in the derived engagement summary. No completion yet —
+    // recordEngagement supplies it when the track ends or is skipped.
+    await bumpTrackSignals(ctx, userId, {
+      trackId,
+      at: now,
+      title,
+      artistName,
+      albumName: args.albumName,
+      playDelta: 1,
+    });
 
     if (existing !== null) {
       await ctx.db.patch(existing._id, {
@@ -49,9 +145,11 @@ export const recordPlay = mutation({
         ...(source !== undefined ? { source } : {}),
         ...(title !== undefined ? { title } : {}),
         ...(artistName !== undefined ? { artistName } : {}),
+        ...(args.albumName !== undefined ? { albumName: args.albumName } : {}),
+        ...(args.origin !== undefined ? { origin: args.origin } : {}),
       });
 
-      return existing.playCount + 1;
+      return { playCount: existing.playCount + 1, startedAt: now };
     }
 
     await ctx.db.insert("playHistory", {
@@ -76,11 +174,101 @@ export const recordPlay = mutation({
       ...(source !== undefined ? { source } : {}),
       ...(title !== undefined ? { title } : {}),
       ...(artistName !== undefined ? { artistName } : {}),
+      ...(args.albumName !== undefined ? { albumName: args.albumName } : {}),
+      ...(args.origin !== undefined ? { origin: args.origin } : {}),
     });
 
-    return 1;
+    return { playCount: 1, startedAt: now };
   },
 });
+
+/**
+ * Record what actually happened to a play once it ends or is skipped.
+ *
+ * This is the ONLY way SYNQ learns that a track was skipped, how much of it
+ * was heard, or that it was played to the end — the player fires it when the
+ * track ends or when the listener moves on. `startedAt` is the `startedAt`
+ * recordPlay returned for that exact play, which is what makes the update
+ * idempotent and stops a skipped track from being counted twice.
+ *
+ * Skips are graded, never absolute: one early skip is a small negative, a
+ * repeat pattern is a strong one, and a long listen that was still skipped is
+ * barely penalised at all.
+ */
+export const recordEngagement = mutation({
+  args: {
+    trackId: v.string(),
+    startedAt: v.number(),
+    /** 0..1 — how much of the track was actually heard. */
+    completion: v.number(),
+    listenedSeconds: v.optional(v.number()),
+    skipped: v.optional(v.boolean()),
+    duration: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) return null;
+
+    const completion = Math.min(1, Math.max(0, args.completion));
+    const isSkip = args.skipped === true && completion < 0.7;
+
+    // Claim the exact play event. `settled` guards against a duplicate call
+    // (retry, double-fired ended+skip) applying the same correction twice.
+    const row = await findPlayEvent(ctx, userId, args.trackId, args.startedAt);
+    if (!row || row.engagedAt !== undefined) return null;
+    await ctx.db.patch(row._id, {
+      completion,
+      skipped: isSkip,
+      listenedSeconds: args.listenedSeconds,
+      engagedAt: Date.now(),
+    });
+
+    await bumpTrackSignals(ctx, userId, {
+      trackId: args.trackId,
+      at: args.startedAt,
+      // A skip is not a play: the optimistic entry recordPlay added is
+      // converted, never doubled.
+      playDelta: isSkip ? -1 : 0,
+      skipDelta: isSkip ? 1 : 0,
+      settledDelta: isSkip ? 0 : 1,
+      completionDelta: isSkip ? 0 : completion,
+    });
+
+    return { completion, skipped: isSkip };
+  },
+});
+
+/** The playEvent for one user+track at (approximately) one instant. */
+async function findPlayEvent(
+  ctx: MutationCtx,
+  userId: Id<"users">,
+  trackId: string,
+  startedAt: number,
+): Promise<Doc<"playEvents"> | null> {
+  // No composite index exists for (user, track, time), so walk the user's
+  // events newest-first and stop at the first match. Bounded on purpose.
+  const rows = await ctx.db
+    .query("playEvents")
+    .withIndex("by_user_playedAt", (q) => q.eq("userId", userId))
+    .order("desc")
+    .take(50);
+  let best: Doc<"playEvents"> | null = null;
+  let bestDelta = Number.POSITIVE_INFINITY;
+  for (const row of rows) {
+    if (row.trackId !== trackId) continue;
+    if (row.engagedAt !== undefined) continue;
+    // The client echoes back the exact `startedAt` recordPlay returned, so the
+    // correct row is normally an exact timestamp match. Falling back to the
+    // closest unsettled row keeps a play recorded when the clock or the
+    // client drifts, instead of silently dropping the outcome.
+    const delta = Math.abs(row.playedAt - startedAt);
+    if (delta < bestDelta) {
+      bestDelta = delta;
+      best = row;
+    }
+  }
+  return best;
+}
 
 /**
  * The user's most recently played tracks (unique, newest first) across all
@@ -195,7 +383,10 @@ export const listeningStats = query({
     // Without this bridge, the first event after deployment would make all
     // older plays disappear from totals and charts.
     const legacyPlayedAt = rows.flatMap((row) => {
-      const legacyCount = Math.max(0, row.playCount - (eventCounts.get(row.trackId) ?? 0));
+      const legacyCount = Math.max(
+        0,
+        row.playCount - (eventCounts.get(row.trackId) ?? 0),
+      );
       return Array.from({ length: legacyCount }, () => row.playedAt);
     });
     const playedAt = [
@@ -226,7 +417,10 @@ export const listeningStats = query({
     // Top tracks by play count, with self-contained display info.
     const uniqueArtists = new Set(
       rows
-        .map((row) => row.artistName?.trim() || row.title?.trim() || "Unknown artist")
+        .map(
+          (row) =>
+            row.artistName?.trim() || row.title?.trim() || "Unknown artist",
+        )
         .filter(Boolean),
     ).size;
 
@@ -255,7 +449,10 @@ export const listeningStats = query({
       const d = new Date(dayStart);
       daily.push({
         day: d.toISOString().slice(0, 10),
-        label: d.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+        label: d.toLocaleDateString(undefined, {
+          month: "short",
+          day: "numeric",
+        }),
         plays,
       });
     }
@@ -267,11 +464,19 @@ export const listeningStats = query({
       const start = d.getTime();
       const end = new Date(d.getFullYear(), d.getMonth() + 1, 1).getTime();
       const plays = playedAt.filter((at) => at >= start && at < end).length;
-      monthly.push({ month: d.toLocaleDateString(undefined, { month: "short", year: "2-digit" }), plays });
+      monthly.push({
+        month: d.toLocaleDateString(undefined, {
+          month: "short",
+          year: "2-digit",
+        }),
+        plays,
+      });
     }
 
     // Listening streak — consecutive days (ending today or yesterday) with plays.
-    const playedDaySet = new Set(playedAt.map((at) => new Date(at).setHours(0, 0, 0, 0)));
+    const playedDaySet = new Set(
+      playedAt.map((at) => new Date(at).setHours(0, 0, 0, 0)),
+    );
     let streak = 0;
     const todayStart = today.getTime();
     const startOffset = playedDaySet.has(todayStart) ? 0 : 1;
@@ -318,7 +523,24 @@ export const clearHistory = mutation({
       .query("playEvents")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
-    for (const row of [...rows, ...events]) {
+    // The derived engagement summary and the recommendation feedback log are
+    // derived FROM this history. Leaving them behind after a "clear history"
+    // would keep personalising from behaviour the user just deleted, so they
+    // are cleared with their source.
+    const signals = await ctx.db
+      .query("trackSignals")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    const feedback = await ctx.db
+      .query("recommendationEvents")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    const cache = await ctx.db
+      .query("recommendationCache")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    const all = [...rows, ...events, ...signals, ...feedback, ...cache];
+    for (const row of all) {
       await ctx.db.delete(row._id);
     }
     return rows.length;

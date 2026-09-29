@@ -98,8 +98,14 @@ describe("end of queue advances to the track it actually appended", () => {
   });
 
   test("a fully duplicate mix does not jump to an arbitrary earlier track", () => {
-    const guard = handleEnded.indexOf("if (appended === 0) return;");
-    const advance = handleEnded.indexOf("after.playIndex(");
+    // Scope this to the related-mix fallback. handleEnded now tries the
+    // recommendation engine first, and that branch has its own playIndex, so
+    // a bare indexOf would find that one instead of the fallback's.
+    const fallback = handleEnded.indexOf("fetchRelatedMix(seed, s.queue, 5");
+    expect(fallback).toBeGreaterThan(-1);
+    const body = handleEnded.slice(fallback);
+    const guard = body.indexOf("if (appended === 0) return;");
+    const advance = body.indexOf("after.playIndex(");
     expect(guard).toBeGreaterThan(-1);
     expect(advance).toBeGreaterThan(guard);
   });

@@ -26,6 +26,7 @@ import {
   readCardTransparency,
 } from "@/lib/cardTransparency";
 import { toPlayableYoutube, type Playable } from "@/lib/playable";
+import type { RecoCandidate } from "@/lib/recommend";
 import * as ytEngine from "@/lib/youtubePlayer";
 import {
   cacheStream,
@@ -293,8 +294,128 @@ export interface LikeMutation {
   (trackId: string, remote?: RemoteLikeSnapshot): Promise<boolean>;
 }
 
-/** Fire-and-forget recorder for catalog plays (wired to Convex in AppShell). */
-let historyRecorder: ((trackId: string) => void) | null = null;
+/** How a play was started. Mirrors the engine's `PlaySignal["origin"]`. */
+export type PlayOrigin = "user" | "autoplay" | "recommendation" | "radio";
+
+/**
+ * Metadata handed to the play recorder alongside the id.
+ *
+ * The recorder used to re-read `current` from the store to build this, but
+ * `loadTrack` calls it BEFORE committing the new track — so the lookup always
+ * returned the PREVIOUS song and every remote history row was stored with no
+ * title, artist or cover. Without an artist the recommendation engine has no
+ * affinity signal at all, so the snapshot is passed in explicitly now.
+ */
+export interface HistoryMeta {
+  source?: string;
+  title?: string;
+  artistName?: string;
+  coverUrl?: string;
+  duration?: number;
+  albumName?: string;
+  origin?: PlayOrigin;
+}
+
+export type HistoryRecorder = (trackId: string, meta?: HistoryMeta) => void;
+
+/**
+ * Bridge to the recommendation backend (wired to Convex in AppShell).
+ *
+ * Every method is optional and every call site is wrapped in try/catch: signal
+ * recording is observability, and losing it must never interrupt playback.
+ */
+export interface SignalBridge {
+  /**
+   * Record that a play started. Returns (or resolves to) the server-side
+   * `startedAt` for that exact play, which is what lets the matching
+   * engagement outcome be attached to the right row.
+   */
+  playStart(args: {
+    trackId: string;
+    meta: HistoryMeta;
+  }): number | Promise<number> | void;
+  /** The play ended, or was skipped part-way. */
+  engage(args: {
+    trackId: string;
+    startedAt: number;
+    completion: number;
+    listenedSeconds: number;
+    skipped: boolean;
+  }): void;
+  /** The listener deleted an automatically generated track from the queue. */
+  removal(args: { trackId: string }): void;
+  /** Something happened to a recommendation (played / liked / queued). */
+  feedback(args: {
+    trackId: string;
+    outcome: string;
+    section?: string;
+    reason?: string;
+    origin?: PlayOrigin;
+    title?: string;
+    artistName?: string;
+    albumName?: string;
+  }): void;
+}
+
+let signalBridge: SignalBridge | null = null;
+
+/** Pending outcome for the track that is currently playing. */
+interface EngagementSession {
+  trackId: string;
+  origin: PlayOrigin;
+  /** Seconds of the track already behind us when playback began (resume). */
+  startOffset: number;
+  /** Server-side id of the play row, filled in once the start is confirmed. */
+  startedAt: number;
+}
+
+let engagement: EngagementSession | null = null;
+/** Origin applied to the NEXT loadTrack call. */
+let pendingOrigin: PlayOrigin = "user";
+
+/**
+ * Close out the current play: how much was heard, and whether it was a skip.
+ *
+ * Called when the track ends (a completion) and when another track takes over
+ * (a skip). Clearing `engagement` first means the second call is a no-op, so a
+ * track that ends and then advances cannot be recorded twice.
+ */
+function settleEngagement(reason: "ended" | "changed"): void {
+  const session = engagement;
+  if (!session) return;
+  engagement = null;
+
+  const bridge = signalBridge;
+  if (!bridge || !session.startedAt) return;
+
+  try {
+    const s = usePlayerStore.getState();
+    const duration =
+      s.current && s.current.id === session.trackId
+        ? s.current.duration
+        : s.duration;
+    const position =
+      s.current && s.current.id === session.trackId
+        ? s.currentTime
+        : s.currentTime;
+    const heard = Math.max(0, position - session.startOffset);
+    if (duration <= 0) return;
+    const completion = Math.min(1, heard / duration);
+    // "ended" is authoritative; "changed" is a skip unless the listener had
+    // already heard most of the track, in which case it is a weak signal at
+    // most. A single skip must never look like a rejection of the whole artist.
+    const skipped = reason === "changed" && completion < 0.7;
+    bridge.engage({
+      trackId: session.trackId,
+      startedAt: session.startedAt,
+      completion,
+      listenedSeconds: heard,
+      skipped,
+    });
+  } catch {
+    /* signal recording must never throw into playback */
+  }
+}
 
 interface PlayerStore {
   // playback
@@ -513,7 +634,18 @@ interface PlayerStore {
   clearPlayedTracks: () => number;
   /** Randomize only the "playing next" list; what is playing never moves. */
   shuffleUpcoming: () => void;
-  setHistoryRecorder: (fn: ((trackId: string) => void) | null) => void;
+  /**
+   * Attach the recommendation signal bridge (play starts, engagement
+   * outcomes, queue removals, feedback). Null detaches it.
+   *
+   * This is the ONLY writer of play history: the old `setHistoryRecorder`
+   * hook is kept for compatibility but SYNQ no longer installs one, because
+   * two writers would create two history rows for every play.
+   */
+  setSignalBridge: (bridge: SignalBridge | null) => void;
+  setHistoryRecorder: (fn: HistoryRecorder | null) => void;
+  /** Origin applied to the next track the store loads. */
+  setPendingOrigin: (origin: PlayOrigin) => void;
 
   setLiked: (liked: Record<string, number>) => void;
   setLikeMutation: (fn: LikeMutation | null) => void;
@@ -1029,6 +1161,68 @@ let relatedMixInFlight: {
 const playedSessionIds = new Set<string>();
 
 /**
+ * Ask the recommendation engine for the next track.
+ *
+ * This is the SAME engine that powers Home, so "what plays next" and the Home
+ * rows can never drift apart. The call is wrapped in a timeout and resolves to
+ * null on ANY failure: a slow, empty or broken recommendation must fall through
+ * to the existing related-mix path rather than stall the music.
+ */
+const PERSONAL_NEXT_TIMEOUT_MS = 2500;
+
+async function fetchPersonalNext(
+  seed: Playable,
+  queueIds: string[],
+): Promise<Playable | null> {
+  try {
+    ytSearchClient =
+      ytSearchClient ??
+      new ConvexClient(import.meta.env.VITE_CONVEX_URL as string);
+    const client = ytSearchClient as ConvexClient;
+    const call = client.action(api.recommend.nextTrack, {
+      queueIds,
+      currentTrack: {
+        id: seed.id,
+        title: seed.title,
+        artist: seed.artistName,
+        duration: seed.duration,
+        thumbnail: seed.coverUrl,
+        ...(seed.albumName ? { album: seed.albumName } : {}),
+      },
+      autoplay: true,
+      limit: 1,
+    }) as Promise<{ track: RecoCandidate | null }>;
+
+    const result = await Promise.race([
+      call,
+      new Promise<null>((resolve) =>
+        setTimeout(() => resolve(null), PERSONAL_NEXT_TIMEOUT_MS),
+      ),
+    ]);
+    const picked = result?.track;
+    if (!picked || !picked.id) return null;
+    if (queueIds.includes(picked.id)) return null;
+    if (picked.id === seed.id) return null;
+    return {
+      id: picked.id,
+      title: cleanTrackTitle(picked.title),
+      artistName: cleanArtistName(picked.artist, picked.title),
+      albumName: picked.album ?? "",
+      coverUrl: picked.thumbnail,
+      audioUrl: "",
+      duration: picked.duration,
+      source: "youtube" as const,
+      youtubeId: picked.id,
+      // Tag it: an automatically generated suggestion stays distinguishable
+      // from a track the listener queued themselves.
+      queueOrigin: "autoplay",
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Known genre list used to infer the seed's genre when YouTube doesn't tell us.
  * Checked against the artist name and track title for hints.
  */
@@ -1277,6 +1471,9 @@ function handleEnded(): void {
     restartCurrent();
     return;
   }
+  // The track reached its end, so this is a completion, not a skip. Recorded
+  // before anything else can swap `current` out from under the measurement.
+  settleEngagement("ended");
   if (s.queue.length > 0) {
     // Shuffle ON: jump to a RANDOM upcoming track, not the next in line.
     if (s.shuffle && s.queue.length > 1) {
@@ -1295,35 +1492,76 @@ function handleEnded(): void {
       return;
     }
   }
-  // End of queue, repeat off — autoplay related music when enabled.
-  // Fetches a related mix (same vibe/genre as the seed) from YouTube Music
-  // so the music never stops, for ANY source.
+  // End of queue, repeat off — autoplay. The queue is only exhausted here, so
+  // every manually queued track has already been consumed and none can be
+  // reordered or overwritten: the listener's queue always wins by
+  // construction.
   if ((s.autoplay || s.radioActive) && s.current) {
     const seed = s.current;
-    void fetchRelatedMix(seed, s.queue, 5, activeMixContext).then((related) => {
-      // Filter INSIDE the updater: maybeAutofillQueue may have appended the
-      // same related mix while this fetch was in flight — filtering against a
-      // stale queue snapshot used to double-append the same tracks.
-      let appended = 0;
-      usePlayerStore.setState((st) => {
-        const fresh = related.filter(
-          (t) => !st.queue.some((q) => q.id === t.id),
-        );
-        if (fresh.length === 0) return st;
-        appended = fresh.length;
-        return { queue: [...st.queue, ...fresh] };
+    const queueIds = s.queue.map((q) => q.id);
+
+    // PERSONALISED first, via the shared recommendation engine. Any failure
+    // (offline, empty candidate pool, a broken request) falls through to the
+    // existing genre/artist related mix, so the music never stops.
+    void fetchPersonalNext(seed, queueIds)
+      .then((picked) => {
+        const state = usePlayerStore.getState();
+        if (picked && state.current?.id === seed.id) {
+          pendingOrigin = s.radioActive ? "radio" : "autoplay";
+          signalBridge?.feedback({
+            trackId: picked.id,
+            outcome: "queued",
+            section: "autoplay",
+            origin: pendingOrigin,
+            title: picked.title,
+            artistName: picked.artistName,
+            ...(picked.albumName ? { albumName: picked.albumName } : {}),
+          });
+          usePlayerStore.setState((st) => ({
+            queue: [...st.queue, picked],
+            unshuffledQueue: st.unshuffledQueue
+              ? [...st.unshuffledQueue, picked]
+              : null,
+          }));
+          const after = usePlayerStore.getState();
+          saveQueue(after.queue, after.queueIndex, after.current?.id ?? null);
+          if (after.current?.id === seed.id) {
+            after.playIndex(after.queue.length - 1);
+          }
+          return;
+        }
+        return null;
+      })
+      .then((result) => {
+        if (result !== null) return;
+        // PERSONALISED produced nothing usable — RELATED fallback.
+        return fetchRelatedMix(seed, s.queue, 5, activeMixContext);
+      })
+      .then((related) => {
+        if (!related) return;
+        // Filter INSIDE the updater: maybeAutofillQueue may have appended the
+        // same related mix while this fetch was in flight — filtering against a
+        // stale queue snapshot used to double-append the same tracks.
+        let appended = 0;
+        usePlayerStore.setState((st) => {
+          const fresh = related.filter(
+            (t) => !st.queue.some((q) => q.id === t.id),
+          );
+          if (fresh.length === 0) return st;
+          appended = fresh.length;
+          return { queue: [...st.queue, ...fresh] };
+        });
+        // Count what was ACTUALLY appended. `related.length` overcounts whenever
+        // some of the mix was already queued, and advancing by
+        // `queue.length - related.length` then started the wrong track — or, if
+        // every track was a duplicate, jumped to a random earlier one.
+        if (appended === 0) return;
+        // Only auto-advance if nothing else started playing meanwhile.
+        const after = usePlayerStore.getState();
+        if (after.current?.id === seed.id && !after.isPlaying) {
+          after.playIndex(after.queue.length - appended);
+        }
       });
-      // Count what was ACTUALLY appended. `related.length` overcounts whenever
-      // some of the mix was already queued, and advancing by
-      // `queue.length - related.length` then started the wrong track — or, if
-      // every track was a duplicate, jumped to a random earlier one.
-      if (appended === 0) return;
-      // Only auto-advance if nothing else started playing meanwhile.
-      const after = usePlayerStore.getState();
-      if (after.current?.id === seed.id && !after.isPlaying) {
-        after.playIndex(after.queue.length - appended);
-      }
-    });
     return;
   }
   getAudio().pause();
@@ -1763,20 +2001,28 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
         ),
       }));
     }
+    // The outgoing track stopped before its end: close its engagement record
+    // as a (graded) skip. A no-op when handleEnded already settled it, and a
+    // no-op when there was nothing playing.
+    settleEngagement("changed");
     rememberTrack(track.id);
     saveLastPlayed(track);
     recordHistory(track);
 
-    // record catalog plays for history / most-played
-    // Record EVERY play (any source) for listening stats — the recorder
-    // receives the playable's id; AppShell attaches a title/artist snapshot.
-    if (historyRecorder) {
-      try {
-        historyRecorder(track.id);
-      } catch {
-        /* ignore */
-      }
-    }
+    const origin: PlayOrigin = track.queueOrigin ? "autoplay" : pendingOrigin;
+    const meta: HistoryMeta = {
+      source: track.source,
+      title: track.title,
+      artistName: track.artistName,
+      coverUrl: track.coverUrl,
+      duration: track.duration,
+      ...(track.albumName ? { albumName: track.albumName } : {}),
+      origin,
+    };
+
+    // Record EVERY play (any source) for listening stats. The snapshot travels
+    // WITH the call: reading `current` here would still return the previous
+    // song, because the new track is committed further down.
     // Product analytics: what actually gets played, from where.
     trackEvent("track_play", {
       track_id: track.id,
@@ -1788,6 +2034,40 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
 
     const resumeAt =
       startSeconds ?? getResumePosition(track.id, track.duration);
+
+    // Open a new engagement session. `startedAt` is filled in by the bridge
+    // once the server confirms the play row; until then the session simply
+    // cannot be settled, which is the correct failure mode (better to lose one
+    // outcome than to attribute it to the wrong play).
+    engagement = {
+      trackId: track.id,
+      origin,
+      startOffset: resumeAt,
+      startedAt: 0,
+    };
+    if (signalBridge) {
+      try {
+        const startedAt = signalBridge.playStart({
+          trackId: track.id,
+          meta,
+        });
+        const attach = (value: number) => {
+          // Only attach to the session that is still about THIS track: a slow
+          // round trip must never land on the next song.
+          if (engagement && engagement.trackId === track.id) {
+            engagement.startedAt = value;
+          }
+        };
+        if (typeof startedAt === "number") {
+          attach(startedAt);
+        } else if (startedAt && typeof startedAt.then === "function") {
+          void startedAt.then(attach).catch(() => undefined);
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    pendingOrigin = "user";
 
     // Commit the new track to the store BEFORE routing it to an engine.
     // This used to sit at the very end of loadTrack, but two branches return
@@ -3125,6 +3405,16 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
           index < state.queueIndex ? state.queueIndex - 1 : state.queueIndex;
         lastRemoved = { item, index };
         saveQueue(queue, queueIndex2, state.current?.id ?? null);
+        // Deleting an automatically generated track is a real rejection. A
+        // manually queued track is NOT — the listener arranged that queue
+        // themselves, so removing it says nothing about their taste.
+        if (item.queueOrigin === "autoplay") {
+          try {
+            signalBridge?.removal({ trackId: item.id });
+          } catch {
+            /* ignore */
+          }
+        }
         return { queue, queueIndex: queueIndex2 };
       }),
     undoRemoveFromQueue: () => {
@@ -3344,7 +3634,16 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
         };
       }),
     setHistoryRecorder: (fn) => {
-      historyRecorder = fn;
+      // Retained for compatibility. SYNQ installs the signal bridge instead,
+      // so nothing currently calls it; the play it used to record is recorded
+      // by SignalBridge.playStart.
+      void fn;
+    },
+    setSignalBridge: (bridge) => {
+      signalBridge = bridge;
+    },
+    setPendingOrigin: (origin) => {
+      pendingOrigin = origin;
     },
 
     setLiked: (liked) => set({ liked, likedLoaded: true }),

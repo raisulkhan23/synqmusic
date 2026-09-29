@@ -15,6 +15,8 @@ export interface YtItem {
   artist: string;
   duration: number;
   thumbnail: string;
+  /** Album when the source reports one; absent means unknown, never guessed. */
+  album?: string;
 }
 
 const API = "https://www.youtube.com/youtubei/v1/";
@@ -693,6 +695,27 @@ export function parseMusicListItem(
     .find((value) => /^\d{1,2}:\d{2}(:\d{2})?$/.test(value));
   const durationRaw = durationMatch ?? textOf(flex[2]) ?? "";
 
+  // Album, when YouTube actually reports one. The subtitle column packs
+  // [type?, artist, album, year, duration], so the album is the run right
+  // after the artist that is neither a duration, a bare year, a view count
+  // nor another metadata label. When nothing qualifies it stays undefined —
+  // the recommendation engine needs to know an album is unknown rather than
+  // assume a value it cannot verify.
+  const isNoise = (value: string) =>
+    !value ||
+    /^\d{1,2}:\d{2}(:\d{2})?$/.test(value) ||
+    /^(19|20)\d{2}$/.test(value) ||
+    typePattern.test(value) ||
+    /views?$/i.test(value) ||
+    /^\d[\d,]*$/i.test(value);
+  const albumCandidate = metaRuns.find(
+    (value, index) => index > artistIndex && !isNoise(value),
+  );
+  const album =
+    albumCandidate && albumCandidate.toLowerCase() !== artist.toLowerCase()
+      ? albumCandidate
+      : undefined;
+
   const thumbs = get(renderer, [
     "thumbnail",
     "musicThumbnailRenderer",
@@ -709,6 +732,7 @@ export function parseMusicListItem(
     artist,
     duration: parseLength(durationRaw),
     thumbnail,
+    ...(album ? { album } : {}),
     kind,
   };
 }

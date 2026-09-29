@@ -110,8 +110,101 @@ const schema = defineSchema(
       source: v.optional(v.string()),
       title: v.optional(v.string()),
       artistName: v.optional(v.string()),
+      // Engagement fields, added later than the table itself. Optional so
+      // every event written before this change stays valid and still counts
+      // as a play — they are unknown, not zero.
+      albumName: v.optional(v.string()),
+      /** 0..1 — how much of the track was actually heard. */
+      completion: v.optional(v.number()),
+      listenedSeconds: v.optional(v.number()),
+      /** True when the listener left before the track ended. */
+      skipped: v.optional(v.boolean()),
+      /** How the play was started: user | autoplay | recommendation | radio. */
+      origin: v.optional(v.string()),
+      /** Set once recordEngagement has applied this play's outcome. */
+      engagedAt: v.optional(v.number()),
     })
       .index("by_playedAt", ["playedAt"])
+      .index("by_user", ["userId"])
+      // Lets recordEngagement find the exact play it is correcting instead of
+      // guessing from a track id alone.
+      .index("by_user_playedAt", ["userId", "playedAt"]),
+
+    // Derived per-track engagement summary, one row per user+track.
+    // The recommendation engine needs skip counts and a completion ratio for
+    // scoring, and recomputing those by scanning playEvents would mean reading
+    // a listener's entire event log on every recommendation request. This is
+    // maintained incrementally by history.recordPlay, so the profile query
+    // stays inside a bounded read budget no matter how long someone listens.
+    trackSignals: defineTable({
+      userId: v.id("users"),
+      trackId: v.string(),
+      title: v.optional(v.string()),
+      artistName: v.optional(v.string()),
+      albumName: v.optional(v.string()),
+      plays: v.number(),
+      skips: v.number(),
+      /** Sum of completion ratios over non-skipped plays. */
+      completionSum: v.number(),
+      /**
+       * How many of `plays` actually reached an outcome. A play that is still
+       * open (the tab was closed mid-song) is counted in `plays` but not here,
+       * so the completion ratio stays honest instead of being dragged down by
+       * listens that were never measured.
+       */
+      settledPlays: v.number(),
+      firstPlayedAt: v.number(),
+      lastPlayedAt: v.number(),
+    })
+      .index("by_user_track", ["userId", "trackId"])
+      .index("by_user", ["userId"])
+      .index("by_user_lastPlayedAt", ["userId", "lastPlayedAt"]),
+
+    // What the engine recommended, and what actually happened to it.
+    // This is the feedback loop (phase 14): a recommendation that is then
+    // completed or liked raises artist affinity, while one that is skipped or
+    // pulled from the queue lowers it. Rows are private to their user and are
+    // read only server-side by the recommendation actions.
+    recommendationEvents: defineTable({
+      userId: v.id("users"),
+      trackId: v.string(),
+      title: v.optional(v.string()),
+      artistName: v.optional(v.string()),
+      albumName: v.optional(v.string()),
+      /** Which Home section produced it, or "autoplay" / "next_track". */
+      section: v.string(),
+      /** RecoReason — derived from the term that actually scored highest. */
+      reason: v.string(),
+      /** CandidateSource that produced the candidate. */
+      source: v.optional(v.string()),
+      /** Human-readable seed for the debug view. */
+      seed: v.optional(v.string()),
+      score: v.optional(v.number()),
+      /** Full ScoreBreakdown, kept for tuning and debug. */
+      breakdown: v.optional(v.any()),
+      createdAt: v.number(),
+      /** Set once an outcome is known; null while still undecided. */
+      settledAt: v.optional(v.number()),
+      outcome: v.optional(v.string()),
+      /** user | autoplay | recommendation | radio */
+      origin: v.optional(v.string()),
+    })
+      .index("by_user", ["userId"])
+      .index("by_user_createdAt", ["userId", "createdAt"]),
+
+    // Short-lived server-side cache for Home recommendation payloads.
+    // Recommendation generation makes upstream searches, so caching keeps the
+    // Home page from re-running it on every visit. `expiresAt` is enforced on
+    // read, and a cache miss or a failure always falls back to a fresh run —
+    // the cache can only ever make things faster, never wrong-by-omission.
+    recommendationCache: defineTable({
+      userId: v.id("users"),
+      key: v.string(), // section set fingerprint, e.g. "home:v3"
+      payload: v.any(),
+      computedAt: v.number(),
+      expiresAt: v.number(),
+    })
+      .index("by_user_key", ["userId", "key"])
       .index("by_user", ["userId"]),
 
     // playlists imported from other music services. Tracks are stored as

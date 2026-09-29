@@ -362,7 +362,7 @@ export function AppShell() {
   const pointerFx = pointerEffects && !performanceMode;
   const setLiked = usePlayerStore((s) => s.setLiked);
   const setLikeMutation = usePlayerStore((s) => s.setLikeMutation);
-  const setHistoryRecorder = usePlayerStore((s) => s.setHistoryRecorder);
+  const setSignalBridge = usePlayerStore((s) => s.setSignalBridge);
   const sleepAtSongEnd = usePlayerStore((s) => s.sleepAtSongEnd);
   const setSleepTimer = usePlayerStore((s) => s.setSleepTimer);
 
@@ -383,6 +383,11 @@ export function AppShell() {
   const likedQuery = useQuery(api.likes.myLikedTrackIds);
   const toggleLikeMutation = useMutation(api.likes.toggleLike);
   const recordPlay = useMutation(api.history.recordPlay);
+  const recordEngagement = useMutation(api.history.recordEngagement);
+  const recordFeedback = useMutation(api.recommend.recordFeedback);
+  const recordRemoval = useMutation(api.recommend.recordRemoval);
+  const settleOutcome = useMutation(api.recommend.settleOutcome);
+  const invalidateCache = useMutation(api.recommend.invalidateCache);
   const currentUser = useQuery(api.users.currentUser);
   const claimAdminIfEmpty = useMutation(api.admin.claimAdminIfEmpty);
 
@@ -431,26 +436,64 @@ export function AppShell() {
     });
   }, [toggleLikeMutation, setLikeMutation]);
 
-  // Fire-and-forget play history recording — records EVERY play (any source)
-  // with a title/artist/cover snapshot so stats cover all music, not just one
-  // provider's catalog.
+  // Recommendation signal bridge — the SINGLE writer for play recording.
+  //
+  // This used to be a separate `setHistoryRecorder` hook that re-read the
+  // store for the track's metadata. Two problems: the store still held the
+  // PREVIOUS track at that moment, so every remote play was stored with no
+  // title or artist (leaving the engine no affinity signal at all), and
+  // keeping both paths would write two history rows per play.
+  //
+  // Every call below is best-effort — losing a signal must never interrupt
+  // playback.
   useEffect(() => {
-    setHistoryRecorder((trackId: string) => {
-      const current = usePlayerStore.getState().current;
-      const snapshot =
-        current && current.id === trackId
-          ? {
-              source: current.source,
-              title: current.title,
-              artistName: current.artistName,
-              coverUrl: current.coverUrl,
-              duration: current.duration,
-            }
-          : undefined;
-      void recordPlay({ trackId, ...snapshot }).catch(() => undefined);
+    setSignalBridge({
+      playStart: ({ trackId, meta }) =>
+        recordPlay({ trackId, ...meta })
+          .then((result) => result?.startedAt ?? 0)
+          .catch(() => 0),
+      engage: (args) => {
+        void recordEngagement({
+          trackId: args.trackId,
+          startedAt: args.startedAt,
+          completion: args.completion,
+          listenedSeconds: args.listenedSeconds,
+          skipped: args.skipped,
+        }).catch(() => undefined);
+        // Close the open recommendation row (if this track was one) with the
+        // real verdict, so the next ranking learns from it.
+        void settleOutcome({
+          trackId: args.trackId,
+          outcome: args.skipped ? "skipped" : "completed",
+        }).catch(() => undefined);
+      },
+      removal: ({ trackId }) => {
+        void recordRemoval({ trackId }).catch(() => undefined);
+        // The cached Home rows were computed without knowing this rejection.
+        void invalidateCache().catch(() => undefined);
+      },
+      feedback: (args) => {
+        void recordFeedback({
+          trackId: args.trackId,
+          outcome: args.outcome,
+          ...(args.section ? { section: args.section } : {}),
+          ...(args.reason ? { reason: args.reason } : {}),
+          ...(args.origin ? { origin: args.origin } : {}),
+          ...(args.title ? { title: args.title } : {}),
+          ...(args.artistName ? { artistName: args.artistName } : {}),
+          ...(args.albumName ? { albumName: args.albumName } : {}),
+        }).catch(() => undefined);
+      },
     });
-  }, [recordPlay, setHistoryRecorder]);
-
+    return () => setSignalBridge(null);
+  }, [
+    recordPlay,
+    recordEngagement,
+    recordRemoval,
+    recordFeedback,
+    settleOutcome,
+    invalidateCache,
+  ]);
   // Self-heal stale Radix body locks only when the user interacts. The old
   // 300ms interval ran a large selector query forever and caused needless
   // main-thread work even while the app was idle.

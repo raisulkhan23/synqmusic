@@ -18,6 +18,14 @@ export interface Playable {
   youtubeId?: string;
   /** Present for YouTube tracks, used for manual source switching. */
   alternatives?: YtItem[];
+  /**
+   * How this track entered the queue. `undefined` means the listener put it
+   * there on purpose — the recommendation engine only ever appends tracks
+   * tagged `autoplay`, so an automatically generated suggestion stays
+   * distinguishable from a manual pick and can be reported back as a
+   * rejection when it is removed.
+   */
+  queueOrigin?: "autoplay";
 }
 
 export function toPlayableYoutube(
@@ -30,7 +38,11 @@ export function toPlayableYoutube(
     id: item.id,
     title: cleanTrackTitle(item.title),
     artistName,
-    albumName: "Single",
+    // The real album when the source supplied one, empty when it did not.
+    // This used to be a hardcoded "Single", which is a fabricated value: it
+    // made every track look like it belonged to its own album and gave the
+    // recommendation engine a fake album axis to diversify on.
+    albumName: item.album ?? "",
     coverUrl: item.thumbnail,
     audioUrl,
     duration: item.duration,
@@ -39,4 +51,3 @@ export function toPlayableYoutube(
     alternatives,
   };
 }
-
