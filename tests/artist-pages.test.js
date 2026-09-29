@@ -299,11 +299,17 @@ describe("routes", () => {
   });
 
   test("both pages are lazy loaded and suspense wrapped", () => {
+    // They go through `lazyRoute`, not bare `lazy()`: a route chunk whose deps
+    // 404 after a dev-server restart used to leave the listener on
+    // "Loading..." forever, and only a manual refresh recovered it.
     expect(mainSrc).toMatch(
-      /lazy\(\(\)\s*=>\s*import\("\.\/pages\/Artist\.tsx"\)\)/,
+      /lazyRoute\(\(\)\s*=>\s*import\("\.\/pages\/Artist\.tsx"\),\s*"Artist"\)/,
     );
     expect(mainSrc).toMatch(
-      /lazy\(\(\)\s*=>\s*import\("\.\/pages\/Album\.tsx"\)\)/,
+      /lazyRoute\(\(\)\s*=>\s*import\("\.\/pages\/Album\.tsx"\),\s*"Album"\)/,
+    );
+    expect(mainSrc).not.toMatch(
+      /lazy\(\(\)\s*=>\s*import\("\.\/pages\/Artist\.tsx"\)\)/,
     );
   });
 
