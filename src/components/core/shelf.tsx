@@ -63,10 +63,20 @@ export function Shelf({
     // A 1px tolerance: fractional layout widths make an exactly-at-the-end
     // scroller report a sub-pixel remainder, which would leave a permanently
     // enabled "next" arrow that does nothing when clicked.
-    setEdges({
-      start: rail.scrollLeft > 1,
-      end: maxScroll > 1 && rail.scrollLeft < maxScroll - 1,
-    });
+    const start = rail.scrollLeft > 1;
+    const end = maxScroll > 1 && rail.scrollLeft < maxScroll - 1;
+    // Bail out when neither edge moved, by returning the PREVIOUS object.
+    //
+    // This is load-bearing, not an optimisation. `setEdges` used to be handed a
+    // fresh object literal on every call, and React compares state with
+    // `Object.is` — a new object is never equal, so every call re-rendered.
+    // Combined with the dependency-free effect below that meant render → effect
+    // → setState → render, forever. React stopped at 50 nested updates with
+    // "Maximum update depth exceeded" and unwound the commit, leaving the last
+    // painted frame on screen: the URL would change and the page would not.
+    setEdges((prev) =>
+      prev.start === start && prev.end === end ? prev : { start, end },
+    );
   }, []);
 
   useEffect(() => {
@@ -74,8 +84,9 @@ export function Shelf({
     if (!rail) return;
     // Re-measure after every render: cards arriving change `scrollWidth`
     // without changing the rail's own box, which ResizeObserver would miss.
-    // `measure` only calls setState when the answer actually changed, so React
-    // bails out and this costs two layout reads on a quiet render.
+    // Safe to run on every render precisely because `measure` returns the
+    // previous state unchanged when the answer is the same, so React bails out
+    // and this costs two layout reads on a quiet render.
     measure();
   });
 

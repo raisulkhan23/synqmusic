@@ -270,4 +270,64 @@ describe("clicking through to an artist in a real DOM", () => {
     expect(container.textContent).not.toContain("YOUR SHELF");
     expect(container.textContent).toContain("Charlie Puth");
   }, 30000);
+
+  test("a click still lands while a Shelf is on screen", async () => {
+    // The exact reported failure: a Shelf re-measured itself after every
+    // render and set state with a fresh object each time, so React looped
+    // until it hit "Maximum update depth exceeded" and unwound the commit.
+    // With a Shelf mounted, clicking a link changed the URL and left the
+    // previous page on screen, untouched.
+    const { Shelf } = await import("@/components/core/shelf");
+    const { RemoteTrackRow } =
+      await import("@/components/tracks/RemoteTrackRow");
+    const Artist = (await import("@/pages/Artist")).default;
+
+    globalThis.ResizeObserver = class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    };
+
+    function Library() {
+      return React.createElement(
+        Shelf,
+        { title: "Recently played", id: "shelf-recent" },
+        React.createElement(RemoteTrackRow, {
+          item: TRACK,
+          index: 1,
+          onPlay: () => {},
+        }),
+      );
+    }
+
+    const logged = [];
+    const realError = console.error;
+    console.error = (...args) => {
+      logged.push(args.map(String).join(" "));
+    };
+    try {
+      const { container } = renderApp([
+        React.createElement(Route, {
+          path: "/home",
+          element: React.createElement(Library),
+        }),
+        React.createElement(Route, {
+          path: "/artist/:artist",
+          element: React.createElement(Artist),
+        }),
+      ]);
+      await settle();
+
+      expect(container.textContent).toContain("Recently played");
+
+      await click(container, `a[href="${ARTIST_HREF}"]`);
+
+      expect(win.location.pathname).toBe(ARTIST_HREF);
+      expect(container.textContent).not.toContain("Recently played");
+      expect(container.textContent).toContain("Charlie Puth");
+      expect(logged.join(" ")).not.toContain("Maximum update depth exceeded");
+    } finally {
+      console.error = realError;
+    }
+  }, 30000);
 });
