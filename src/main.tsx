@@ -10,6 +10,7 @@ import { MotionConfig } from "framer-motion";
 import { createRoot } from "react-dom/client";
 import {
   BrowserRouter,
+  Link,
   Navigate,
   Route,
   Routes,
@@ -93,6 +94,90 @@ function PageSuspense({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<RouteLoading />}>{children}</Suspense>;
 }
 
+/**
+ * Per-ROUTE error boundary.
+ *
+ * Without this, a throw inside any page unwinds the whole tree: AppShell, the
+ * player, the queue and the nav all unmount, and because the dev server runs
+ * with the error overlay disabled the listener just gets a dead screen with no
+ * message and no way out except a manual browser reload. That is why a single
+ * bad artist link could make the entire app look broken.
+ *
+ * Scoping the boundary to the route means a failing page degrades to a card
+ * with a way back, and playback, the queue and navigation keep working.
+ */
+class RouteErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { error: Error | null }
+> {
+  state = { error: null as Error | null };
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+  componentDidCatch(error: Error) {
+    console.error("[SYNQ] route crashed:", error);
+  }
+  render() {
+    if (!this.state.error) return this.props.children;
+    // Remounting the subtree with a new key clears the error, so "Try again"
+    // re-renders the page from scratch instead of only resetting state.
+    return (
+      <RouteErrorCard
+        message={this.state.error.message}
+        onRetry={() => this.setState({ error: null })}
+      />
+    );
+  }
+}
+
+function RouteErrorCard({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry: () => void;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-4 rounded-3xl border border-dashed border-white/10 px-6 py-20 text-center">
+      <p className="font-display text-lg font-semibold">
+        This page didn&apos;t load
+      </p>
+      <p className="max-w-md text-sm text-muted-foreground">
+        The rest of SYNQ is still working — your queue and playback are fine.
+      </p>
+      {/* The message is developer-facing and can be a long stack-ish string,
+          so it is clamped rather than allowed to blow out the card. */}
+      {message ? (
+        <p className="max-w-md text-xs break-words text-muted-foreground/70">
+          {message.length > 200 ? `${message.slice(0, 200)}…` : message}
+        </p>
+      ) : null}
+      <button
+        type="button"
+        onClick={onRetry}
+        className="rounded-full bg-[rgb(var(--tint))] px-5 py-2.5 text-sm font-semibold text-black"
+      >
+        Try again
+      </button>
+      <Link
+        to="/home"
+        className="text-xs text-muted-foreground underline-offset-4 hover:underline"
+      >
+        Back to Home
+      </Link>
+    </div>
+  );
+}
+
+/** Suspense + error boundary for one route, as a single wrapper. */
+function PageBoundary({ children }: { children: React.ReactNode }) {
+  return (
+    <RouteErrorBoundary>
+      <PageSuspense>{children}</PageSuspense>
+    </RouteErrorBoundary>
+  );
+}
+
 /** Silent error boundary — if VlyToolbar crashes it renders nothing instead of
  *  crashing the whole app (e.g. hook errors in WebContainer environment). */
 class ToolbarErrorBoundary extends React.Component<
@@ -136,6 +221,19 @@ class RootErrorBoundary extends React.Component<
             <p className="mt-2 text-xs text-muted-foreground break-words">
               {this.state.message}
             </p>
+            {/* A boundary that only renders the error is a dead end: the app
+                unmounted, so every in-app control is gone and the only escape
+                was a manual browser reload. Offering the reload here, and
+                re-mounting the tree when it is pressed, means one click gets
+                the listener back instead of a keyboard shortcut they have to
+                know about. */}
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="mt-5 rounded-full bg-[rgb(var(--tint))] px-5 py-2.5 text-sm font-semibold text-black"
+            >
+              Reload SYNQ
+            </button>
             {this.state.stack && (
               <pre className="mt-3 text-left text-[10px] leading-4 text-muted-foreground/80 max-h-40 overflow-auto rounded border border-border/60 p-2">
                 {this.state.stack}
@@ -241,105 +339,105 @@ createRoot(document.getElementById("root")!).render(
                   <Route
                     path="/home"
                     element={
-                      <PageSuspense>
+                      <PageBoundary>
                         <Home />
-                      </PageSuspense>
+                      </PageBoundary>
                     }
                   />
                   <Route
                     path="/search"
                     element={
-                      <PageSuspense>
+                      <PageBoundary>
                         <Search />
-                      </PageSuspense>
+                      </PageBoundary>
                     }
                   />
                   <Route
                     path="/artist/:artist"
                     element={
-                      <PageSuspense>
+                      <PageBoundary>
                         <Artist />
-                      </PageSuspense>
+                      </PageBoundary>
                     }
                   />
                   <Route
                     path="/album/:artist/:album"
                     element={
-                      <PageSuspense>
+                      <PageBoundary>
                         <Album />
-                      </PageSuspense>
+                      </PageBoundary>
                     }
                   />
                   <Route
                     path="/liked"
                     element={
-                      <PageSuspense>
+                      <PageBoundary>
                         <Liked />
-                      </PageSuspense>
+                      </PageBoundary>
                     }
                   />
                   <Route
                     path="/playlists"
                     element={
-                      <PageSuspense>
+                      <PageBoundary>
                         <Playlists />
-                      </PageSuspense>
+                      </PageBoundary>
                     }
                   />
                   <Route
                     path="/playlist/:id"
                     element={
-                      <PageSuspense>
+                      <PageBoundary>
                         <PlaylistDetail />
-                      </PageSuspense>
+                      </PageBoundary>
                     }
                   />
                   <Route
                     path="/stats"
                     element={
-                      <PageSuspense>
+                      <PageBoundary>
                         <Stats />
-                      </PageSuspense>
+                      </PageBoundary>
                     }
                   />
                   <Route
                     path="/recent"
                     element={
-                      <PageSuspense>
+                      <PageBoundary>
                         <Recent />
-                      </PageSuspense>
+                      </PageBoundary>
                     }
                   />
                   <Route
                     path="/social"
                     element={
-                      <PageSuspense>
+                      <PageBoundary>
                         <Social />
-                      </PageSuspense>
+                      </PageBoundary>
                     }
                   />
                   <Route
                     path="/profile"
                     element={
-                      <PageSuspense>
+                      <PageBoundary>
                         <Profile />
-                      </PageSuspense>
+                      </PageBoundary>
                     }
                   />
                   <Route
                     path="/settings"
                     element={
-                      <PageSuspense>
+                      <PageBoundary>
                         <Settings />
-                      </PageSuspense>
+                      </PageBoundary>
                     }
                   />
                   <Route
                     path="/admin"
                     element={
-                      <PageSuspense>
+                      <PageBoundary>
                         <Admin />
-                      </PageSuspense>
+                      </PageBoundary>
                     }
                   />
                 </Route>

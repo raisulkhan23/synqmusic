@@ -42,6 +42,22 @@ export function albumPath(
 }
 
 /**
+ * Read a route param that react-router has ALREADY decoded.
+ *
+ * react-router v7 percent-decodes every path segment while matching, so
+ * `params.artist` is the display name, not an encoded string. Decoding it a
+ * second time is not just redundant, it is a crash: a real artist name
+ * containing a percent sign ("50% Hits", "100% Pure Love") decodes to a
+ * truncated escape and `decodeURIComponent` throws a URIError, which took the
+ * whole page down and left the error boundary on screen.
+ *
+ * The value is returned as-is. `decodeURIComponent` must NOT be applied here.
+ */
+export function routeParam(raw: string | undefined | null): string {
+  return (raw ?? "").trim();
+}
+
+/**
  * Split an album route back into its two names.
  *
  * Returns null for anything that is not a usable pair, so a hand-typed or
@@ -52,8 +68,11 @@ export function parseAlbumRoute(
   artistParam: string | undefined,
   albumParam: string | undefined,
 ): { artist: string; album: string } | null {
-  const artist = decodeURIComponent(artistParam ?? "").trim();
-  const album = decodeURIComponent(albumParam ?? "").trim();
+  // Already decoded by react-router — see `routeParam`. A second
+  // `decodeURIComponent` threw a URIError on any album or artist with a "%"
+  // in the name.
+  const artist = routeParam(artistParam);
+  const album = routeParam(albumParam);
   if (!artist || !album) return null;
   if (artist === "Unknown artist" || album === "Single") return null;
   return { artist, album };

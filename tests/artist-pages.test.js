@@ -133,10 +133,17 @@ describe("parseAlbumRoute", () => {
     });
   });
 
-  test("decodes percent-encoded names", () => {
-    expect(parseAlbumRoute("Simon%20%26%20Garfunkel", "Bookends")).toEqual({
+  test("takes names as react-router already decoded them", () => {
+    // react-router v7 percent-decodes each path segment while matching, so
+    // the params handed to the page are already the display names. Decoding
+    // them a second time crashed the app on any name containing "%".
+    expect(parseAlbumRoute("Simon & Garfunkel", "Bookends")).toEqual({
       artist: "Simon & Garfunkel",
       album: "Bookends",
+    });
+    expect(parseAlbumRoute("50% Hits", "100% Pure Love")).toEqual({
+      artist: "50% Hits",
+      album: "100% Pure Love",
     });
   });
 
@@ -309,7 +316,9 @@ describe("routes", () => {
     const group = mainSrc.slice(groupStart, groupEnd);
     expect(group).toMatch(/path=\s*"\/artist\/:artist"/);
     expect(group).toMatch(/path=\s*"\/album\/:artist\/:album"/);
-    expect(group).toMatch(/<PageSuspense>/);
+    // PageBoundary composes the error boundary around the existing Suspense
+    // boundary, so a failing page no longer unwinds the whole app.
+    expect(group).toMatch(/<PageBoundary>/);
   });
 
   test("both pages read their route params", () => {

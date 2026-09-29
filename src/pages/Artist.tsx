@@ -8,7 +8,7 @@ import { Shelf } from "@/components/core/shelf";
 import { MediaCard } from "@/components/tracks/MediaCard";
 import { RemoteTrackRow } from "@/components/tracks/RemoteTrackRow";
 import { api } from "@/convex/_generated/api";
-import { groupByAlbum, uniqueTracks } from "@/lib/artistLinks";
+import { groupByAlbum, routeParam, uniqueTracks } from "@/lib/artistLinks";
 import { toPlayableYoutube } from "@/lib/playable";
 import { artistSearchQuery, cleanArtistName, type YtItem } from "@/lib/youtube";
 import { usePlayerStore } from "@/store/player";
@@ -25,9 +25,10 @@ import { usePlayerStore } from "@/store/player";
  */
 export default function Artist() {
   const params = useParams();
-  const artistName = params.artist
-    ? decodeURIComponent(params.artist).trim()
-    : "";
+  // react-router has already decoded this. Decoding again threw a URIError on
+  // any artist with a "%" in the name ("50% Hits"), which crashed the page into
+  // the root error boundary instead of showing a track list.
+  const artistName = routeParam(params.artist);
   const query = artistSearchQuery(artistName);
 
   const searchYt = useAction(api.youtube.searchYoutube);
