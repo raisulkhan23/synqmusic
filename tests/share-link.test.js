@@ -133,7 +133,15 @@ describe("the share button copies the link straight away", () => {
     expect(fullscreenSource).toMatch(
       /buildTrackShareUrl\(\s*window\.location\.origin,\s*current,?\s*\)/,
     );
-    expect(fullscreenSource).not.toContain("/search?q=");
+    // The share button must never build a search link. Scoped to the share
+    // handler itself: the artist name elsewhere in the file legitimately
+    // links to /search?q=…, and a whole-file assertion cannot tell the two
+    // apart.
+    const shareHandler = fullscreenSource.slice(
+      fullscreenSource.indexOf("buildTrackShareUrl"),
+      fullscreenSource.indexOf("buildTrackShareUrl") + 400,
+    );
+    expect(shareHandler).not.toContain("/search?q=");
   });
 
   test("it copies instead of opening the share sheet", () => {

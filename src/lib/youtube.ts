@@ -60,6 +60,27 @@ export function cleanArtistName(value: unknown, title?: string): string {
 }
 
 /** Remove upload metadata while preserving the actual song title. */
+/**
+ * The search query to run when someone taps an artist name.
+ *
+ * Returns null when the track has no usable artist at all, so callers can
+ * render plain text instead of a link. Without this the tap navigated to
+ * `/search?q=Unknown+artist` — a dead end that looked like the button was
+ * broken rather than like missing metadata.
+ */
+export function artistSearchQuery(
+  artistName: string | undefined | null,
+  title?: string,
+): string | null {
+  const cleaned = cleanArtistName(artistName, title);
+  if (cleaned && cleaned !== "Unknown artist") return cleaned;
+  // The stored name can be dirtier than the cleaned one (e.g. it still carries
+  // the "Official Video" suffix), so fall back to it before giving up.
+  const raw = (artistName ?? "").replace(/\s+/g, " ").trim();
+  if (raw && raw !== "Unknown artist" && /[\p{L}\p{N}]/u.test(raw)) return raw;
+  return null;
+}
+
 export function cleanTrackTitle(value: string): string {
   let title = value.replace(/\s+/g, " ").trim();
   const suffixPatterns = [

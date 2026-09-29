@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAction } from "convex/react";
+import { useNavigate } from "react-router";
 import { SeekBar } from "@/components/player/SeekBar";
 import { TransportControls } from "@/components/player/TransportControls";
 import { VisualizerCanvas } from "@/components/player/VisualizerCanvas";
@@ -28,6 +29,7 @@ import {
   trackFrame,
 } from "@/lib/youtubePlayer";
 import { hasAudioProcessing } from "@/lib/audio";
+import { artistSearchQuery } from "@/lib/youtube";
 import {
   AUDIO_EFFECT_DELAY_MESSAGE,
   AUDIO_FILTERS as FILTER_DEFS,
@@ -392,12 +394,19 @@ function AbRepeatControls() {
 // ---------------------------------------------------------------------------
 
 export function FullscreenPlayer() {
+  const navigate = useNavigate();
   const fullscreen = usePlayerStore((s) => s.fullscreen);
   const current = usePlayerStore((s) => s.current);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const currentTime = usePlayerStore((s) => s.currentTime);
   const duration = usePlayerStore((s) => s.duration);
   const liked = usePlayerStore((s) => s.liked);
+  // null ⇒ no usable artist, so the name stays plain text instead of linking
+  // to a search that would come back empty.
+  const artistQuery = useMemo(
+    () => artistSearchQuery(current?.artistName, current?.title),
+    [current?.artistName, current?.title],
+  );
   const toggleLike = usePlayerStore((s) => s.toggleLike);
   const accent = usePlayerStore((s) => s.accent);
   const setFullscreen = usePlayerStore((s) => s.setFullscreen);
@@ -1006,9 +1015,22 @@ export function FullscreenPlayer() {
                     : "line-clamp-1 group-hover/meta:line-clamp-2",
                 )}
               >
-                {current.albumName
-                  ? `${current.artistName} · ${current.albumName}`
-                  : current.artistName}
+                {artistQuery ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void navigate(
+                        `/search?q=${encodeURIComponent(artistQuery)}`,
+                      )
+                    }
+                    className="text-left transition-colors hover:text-foreground hover:underline"
+                  >
+                    {current.artistName}
+                  </button>
+                ) : (
+                  current.artistName
+                )}
+                {current.albumName ? ` · ${current.albumName}` : ""}
               </p>
             </div>
 

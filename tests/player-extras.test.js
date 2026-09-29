@@ -60,8 +60,11 @@ describe("the sleep timer is visible and cancellable from the bar", () => {
 describe("the artist in the bar is a way into more of the same", () => {
   test("tapping it searches that artist", () => {
     expect(bar).toMatch(/\/search\?q=\$\{encodeURIComponent\(/);
+    // `artistSearchQuery` wraps `cleanArtistName` with a fallback: the raw
+    // cleaner returns "Unknown artist" for placeholder names, which used to
+    // send the tap to an empty search that read as a broken button.
     expect(bar).toMatch(
-      /cleanArtistName\(current\.artistName, current\.title\)/,
+      /artistSearchQuery\(current\?\.artistName, current\?\.title\)/,
     );
   });
 

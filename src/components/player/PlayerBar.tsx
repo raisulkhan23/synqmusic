@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -8,7 +8,7 @@ import { VolumeControl } from "@/components/player/VolumeControl";
 import { accentFromString, dominantColor } from "@/lib/covers";
 import { formatTime } from "@/lib/format";
 import { toPlayableYoutube } from "@/lib/playable";
-import { cleanArtistName } from "@/lib/youtube";
+import { artistSearchQuery } from "@/lib/youtube";
 import { getAudio } from "@/lib/audio";
 import { formatRemaining, useSleepCountdown } from "@/lib/sleepTimer";
 import { formatSkipped } from "@/lib/introTrim";
@@ -234,6 +234,11 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
   const currentTime = usePlayerStore((s) => s.currentTime);
   const duration = usePlayerStore((s) => s.duration);
   const liked = usePlayerStore((s) => s.liked);
+  // null ⇒ the track has no usable artist, so the name renders as plain text.
+  const artistQuery = useMemo(
+    () => artistSearchQuery(current?.artistName, current?.title),
+    [current?.artistName, current?.title],
+  );
   // Animated like heart — declared with the other hooks so the hook order
   // never changes (it used to live after an early return, which broke React's
   // rules of hooks and could crash the player bar).
@@ -610,20 +615,26 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
             <p className="block truncate text-xs text-muted-foreground">
               {/* Tapping the artist is the fastest route to more of the same.
                 It was static text, so finding an artist's other songs meant
-                going back to search and typing the name by hand. */}
-              <button
-                type="button"
-                onClick={() =>
-                  void navigate(
-                    `/search?q=${encodeURIComponent(
-                      cleanArtistName(current.artistName, current.title),
-                    )}`,
-                  )
-                }
-                className="block max-w-full truncate text-left transition-colors hover:text-foreground hover:underline"
-              >
-                {current.artistName}
-              </button>
+                going back to search and typing the name by hand. Renders as
+                plain text when the track has no usable artist, rather than a
+                link that dead-ends into an empty result list. */}
+              {artistQuery ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    void navigate(
+                      `/search?q=${encodeURIComponent(artistQuery)}`,
+                    )
+                  }
+                  className="block max-w-full truncate text-left transition-colors hover:text-foreground hover:underline"
+                >
+                  {current.artistName}
+                </button>
+              ) : (
+                <span className="block max-w-full truncate">
+                  {current.artistName}
+                </span>
+              )}
             </p>
           </div>
           {/* Like lives in the fullscreen player — the mobile bar only needs

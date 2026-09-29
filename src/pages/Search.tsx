@@ -72,33 +72,195 @@ const MOOD_QUERIES: Record<string, string> = {
  * queue built from a search across our music sources — one tap, no setup.
  */
 const POPULAR_MIXES = [
-  { id: "top-hits", title: "Today's Top Hits", desc: "The biggest songs on the planet right now.", query: "top hits today", gradient: "from-sky-500/30 via-blue-500/15 to-transparent" },
-  { id: "rap-caviar", title: "RapCaviar", desc: "The hottest hip-hop and rap, updated constantly.", query: "hip hop rap hits", gradient: "from-red-500/30 via-orange-500/15 to-transparent" },
-  { id: "chill", title: "Chill Vibes", desc: "Relaxed tracks to unwind, study, and drift to.", query: "chill relaxing songs", gradient: "from-teal-500/30 via-emerald-500/15 to-transparent" },
-  { id: "party", title: "Party Starters", desc: "Certified bangers to get the room moving.", query: "party dance hits", gradient: "from-fuchsia-500/30 via-purple-500/15 to-transparent" },
-  { id: "throwback", title: "All Out Throwbacks", desc: "Greatest hits of the 2000s and 2010s.", query: "2000s 2010s greatest hits", gradient: "from-amber-500/30 via-yellow-500/15 to-transparent" },
-  { id: "indie", title: "Indie Pulse", desc: "Fresh indie sounds from rising voices.", query: "indie hits", gradient: "from-rose-500/30 via-pink-500/15 to-transparent" },
-  { id: "lofi", title: "Late Night Lo-fi", desc: "Mellow beats for late nights and deep focus.", query: "lo-fi beats late night", gradient: "from-indigo-500/30 via-slate-500/15 to-transparent" },
-  { id: "workout", title: "Beast Mode", desc: "High-energy tracks built for the gym.", query: "workout energy hits", gradient: "from-lime-500/30 via-green-500/15 to-transparent" },
-  { id: "daily-discovery", title: "Daily Discovery", desc: "A fresh batch of songs worth hearing today.", query: "new music discoveries today", gradient: "from-cyan-500/30 via-sky-500/15 to-transparent" },
-  { id: "global-vibes", title: "Global Sounds", desc: "Latin, African, Asian and worldwide favorites.", query: "worldwide music hits", gradient: "from-orange-500/30 via-rose-500/15 to-transparent" },
-  { id: "deep-focus", title: "Deep Focus", desc: "Instrumental textures for concentration and flow.", query: "instrumental focus music", gradient: "from-blue-500/30 via-indigo-500/15 to-transparent" },
-  { id: "after-hours", title: "After Hours", desc: "Smooth R&B and soul for the quiet hours.", query: "r&b soul after hours", gradient: "from-violet-500/30 via-purple-500/15 to-transparent" },
-  { id: "acoustic-sunrise", title: "Acoustic Sunrise", desc: "Easy acoustic songs for starting the day.", query: "acoustic morning songs", gradient: "from-yellow-500/30 via-orange-500/15 to-transparent" },
-  { id: "electronic-energy", title: "Electronic Energy", desc: "Fresh electronic sounds to move to right now.", query: "electronic dance music hits", gradient: "from-emerald-500/30 via-cyan-500/15 to-transparent" },
-  { id: "retro-arcade", title: "Retro Arcade", desc: "Bright synths and nostalgic hooks on repeat.", query: "retro synth pop hits", gradient: "from-pink-500/30 via-fuchsia-500/15 to-transparent" },
-  { id: "global-peace", title: "Peaceful World", desc: "Calm, expansive sounds for reset and reflection.", query: "calm ambient world music", gradient: "from-teal-500/30 via-blue-500/15 to-transparent" },
-  { id: "viral", title: "Viral Right Now", desc: "The songs taking over every feed today.", query: "viral songs this week", gradient: "from-pink-500/30 via-rose-500/15 to-transparent" },
-  { id: "rnb-vibes", title: "R&B After Dark", desc: "Smooth late-night R&B with a little bounce.", query: "r&b vibes after dark", gradient: "from-fuchsia-500/30 via-purple-500/15 to-transparent" },
-  { id: "indie-discovery", title: "Indie Discovery", desc: "The next favorite artist is already here.", query: "new indie artists discovery", gradient: "from-lime-500/30 via-emerald-500/15 to-transparent" },
-  { id: "dance-floor", title: "Dance Floor", desc: "Big hooks, bright lights, no warm-up needed.", query: "dance pop party hits", gradient: "from-cyan-500/30 via-blue-500/15 to-transparent" },
-  { id: "acoustic-slow", title: "Acoustic Slowdown", desc: "Stripped-back songs for a softer pace.", query: "acoustic chill songs", gradient: "from-orange-500/30 via-amber-500/15 to-transparent" },
-  { id: "90s", title: "90s Forever", desc: "The songs that still own the aux.", query: "90s hits classics", gradient: "from-purple-500/30 via-indigo-500/15 to-transparent" },
-  { id: "00s", title: "00s Rewind", desc: "Early pop, R&B, and hip-hop essentials.", query: "2000s music hits", gradient: "from-blue-500/30 via-sky-500/15 to-transparent" },
-  { id: "feel-good", title: "Feel Good Frequency", desc: "Instant mood-lifting songs, no skips.", query: "feel good upbeat songs", gradient: "from-yellow-500/30 via-orange-500/15 to-transparent" },
-  { id: "global-pop", title: "Global Pop", desc: "Bright pop favorites from around the world.", query: "international pop hits", gradient: "from-cyan-500/30 via-teal-500/15 to-transparent" },
-  { id: "soft-edges", title: "Soft Edges", desc: "Warm, hazy songs for the in-between moments.", query: "dreamy chill music", gradient: "from-violet-500/30 via-indigo-500/15 to-transparent" },
-  { id: "new-music", title: "New Music Radar", desc: "Fresh tracks from the artists on the rise.", query: "best new music this week", gradient: "from-rose-500/30 via-pink-500/15 to-transparent" },
+  {
+    id: "top-hits",
+    title: "Today's Top Hits",
+    desc: "The biggest songs on the planet right now.",
+    query: "top hits today",
+    gradient: "from-sky-500/30 via-blue-500/15 to-transparent",
+  },
+  {
+    id: "rap-caviar",
+    title: "RapCaviar",
+    desc: "The hottest hip-hop and rap, updated constantly.",
+    query: "hip hop rap hits",
+    gradient: "from-red-500/30 via-orange-500/15 to-transparent",
+  },
+  {
+    id: "chill",
+    title: "Chill Vibes",
+    desc: "Relaxed tracks to unwind, study, and drift to.",
+    query: "chill relaxing songs",
+    gradient: "from-teal-500/30 via-emerald-500/15 to-transparent",
+  },
+  {
+    id: "party",
+    title: "Party Starters",
+    desc: "Certified bangers to get the room moving.",
+    query: "party dance hits",
+    gradient: "from-fuchsia-500/30 via-purple-500/15 to-transparent",
+  },
+  {
+    id: "throwback",
+    title: "All Out Throwbacks",
+    desc: "Greatest hits of the 2000s and 2010s.",
+    query: "2000s 2010s greatest hits",
+    gradient: "from-amber-500/30 via-yellow-500/15 to-transparent",
+  },
+  {
+    id: "indie",
+    title: "Indie Pulse",
+    desc: "Fresh indie sounds from rising voices.",
+    query: "indie hits",
+    gradient: "from-rose-500/30 via-pink-500/15 to-transparent",
+  },
+  {
+    id: "lofi",
+    title: "Late Night Lo-fi",
+    desc: "Mellow beats for late nights and deep focus.",
+    query: "lo-fi beats late night",
+    gradient: "from-indigo-500/30 via-slate-500/15 to-transparent",
+  },
+  {
+    id: "workout",
+    title: "Beast Mode",
+    desc: "High-energy tracks built for the gym.",
+    query: "workout energy hits",
+    gradient: "from-lime-500/30 via-green-500/15 to-transparent",
+  },
+  {
+    id: "daily-discovery",
+    title: "Daily Discovery",
+    desc: "A fresh batch of songs worth hearing today.",
+    query: "new music discoveries today",
+    gradient: "from-cyan-500/30 via-sky-500/15 to-transparent",
+  },
+  {
+    id: "global-vibes",
+    title: "Global Sounds",
+    desc: "Latin, African, Asian and worldwide favorites.",
+    query: "worldwide music hits",
+    gradient: "from-orange-500/30 via-rose-500/15 to-transparent",
+  },
+  {
+    id: "deep-focus",
+    title: "Deep Focus",
+    desc: "Instrumental textures for concentration and flow.",
+    query: "instrumental focus music",
+    gradient: "from-blue-500/30 via-indigo-500/15 to-transparent",
+  },
+  {
+    id: "after-hours",
+    title: "After Hours",
+    desc: "Smooth R&B and soul for the quiet hours.",
+    query: "r&b soul after hours",
+    gradient: "from-violet-500/30 via-purple-500/15 to-transparent",
+  },
+  {
+    id: "acoustic-sunrise",
+    title: "Acoustic Sunrise",
+    desc: "Easy acoustic songs for starting the day.",
+    query: "acoustic morning songs",
+    gradient: "from-yellow-500/30 via-orange-500/15 to-transparent",
+  },
+  {
+    id: "electronic-energy",
+    title: "Electronic Energy",
+    desc: "Fresh electronic sounds to move to right now.",
+    query: "electronic dance music hits",
+    gradient: "from-emerald-500/30 via-cyan-500/15 to-transparent",
+  },
+  {
+    id: "retro-arcade",
+    title: "Retro Arcade",
+    desc: "Bright synths and nostalgic hooks on repeat.",
+    query: "retro synth pop hits",
+    gradient: "from-pink-500/30 via-fuchsia-500/15 to-transparent",
+  },
+  {
+    id: "global-peace",
+    title: "Peaceful World",
+    desc: "Calm, expansive sounds for reset and reflection.",
+    query: "calm ambient world music",
+    gradient: "from-teal-500/30 via-blue-500/15 to-transparent",
+  },
+  {
+    id: "viral",
+    title: "Viral Right Now",
+    desc: "The songs taking over every feed today.",
+    query: "viral songs this week",
+    gradient: "from-pink-500/30 via-rose-500/15 to-transparent",
+  },
+  {
+    id: "rnb-vibes",
+    title: "R&B After Dark",
+    desc: "Smooth late-night R&B with a little bounce.",
+    query: "r&b vibes after dark",
+    gradient: "from-fuchsia-500/30 via-purple-500/15 to-transparent",
+  },
+  {
+    id: "indie-discovery",
+    title: "Indie Discovery",
+    desc: "The next favorite artist is already here.",
+    query: "new indie artists discovery",
+    gradient: "from-lime-500/30 via-emerald-500/15 to-transparent",
+  },
+  {
+    id: "dance-floor",
+    title: "Dance Floor",
+    desc: "Big hooks, bright lights, no warm-up needed.",
+    query: "dance pop party hits",
+    gradient: "from-cyan-500/30 via-blue-500/15 to-transparent",
+  },
+  {
+    id: "acoustic-slow",
+    title: "Acoustic Slowdown",
+    desc: "Stripped-back songs for a softer pace.",
+    query: "acoustic chill songs",
+    gradient: "from-orange-500/30 via-amber-500/15 to-transparent",
+  },
+  {
+    id: "90s",
+    title: "90s Forever",
+    desc: "The songs that still own the aux.",
+    query: "90s hits classics",
+    gradient: "from-purple-500/30 via-indigo-500/15 to-transparent",
+  },
+  {
+    id: "00s",
+    title: "00s Rewind",
+    desc: "Early pop, R&B, and hip-hop essentials.",
+    query: "2000s music hits",
+    gradient: "from-blue-500/30 via-sky-500/15 to-transparent",
+  },
+  {
+    id: "feel-good",
+    title: "Feel Good Frequency",
+    desc: "Instant mood-lifting songs, no skips.",
+    query: "feel good upbeat songs",
+    gradient: "from-yellow-500/30 via-orange-500/15 to-transparent",
+  },
+  {
+    id: "global-pop",
+    title: "Global Pop",
+    desc: "Bright pop favorites from around the world.",
+    query: "international pop hits",
+    gradient: "from-cyan-500/30 via-teal-500/15 to-transparent",
+  },
+  {
+    id: "soft-edges",
+    title: "Soft Edges",
+    desc: "Warm, hazy songs for the in-between moments.",
+    query: "dreamy chill music",
+    gradient: "from-violet-500/30 via-indigo-500/15 to-transparent",
+  },
+  {
+    id: "new-music",
+    title: "New Music Radar",
+    desc: "Fresh tracks from the artists on the rise.",
+    query: "best new music this week",
+    gradient: "from-rose-500/30 via-pink-500/15 to-transparent",
+  },
 ] as const;
 
 const POPULAR_MIX_REFRESH_INTERVAL = 12 * 60 * 60 * 1000;
@@ -106,7 +268,8 @@ const POPULAR_MIX_REFRESH_KEY = "synq:popular-mixes-refreshed-at";
 const POPULAR_MIX_COUNT = 10;
 function popularMixCycle() {
   const now = Date.now();
-  if (typeof window === "undefined") return Math.floor(now / POPULAR_MIX_REFRESH_INTERVAL);
+  if (typeof window === "undefined")
+    return Math.floor(now / POPULAR_MIX_REFRESH_INTERVAL);
 
   try {
     const stored = Number(window.localStorage.getItem(POPULAR_MIX_REFRESH_KEY));
@@ -162,9 +325,9 @@ function MixCard({ mix }: { mix: (typeof POPULAR_MIXES)[number] }) {
         toast.error("Couldn't load this mix — try again");
         return;
       }
-      const queue = items.slice(0, 15).map((it, i) =>
-        toPlayableYoutube(it, it.id, items.slice(i + 1)),
-      );
+      const queue = items
+        .slice(0, 15)
+        .map((it, i) => toPlayableYoutube(it, it.id, items.slice(i + 1)));
       playTrack(queue[0], queue);
       toast.success(`Playing ${mix.title}`);
     } catch {
@@ -184,21 +347,46 @@ function MixCard({ mix }: { mix: (typeof POPULAR_MIXES)[number] }) {
       )}
     >
       <span className="absolute top-3 right-3 flex size-8 items-center justify-center rounded-full bg-black/50 text-foreground opacity-0 backdrop-blur transition-opacity group-hover:opacity-100">
-        {loading ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4 fill-current" />}
+        {loading ? (
+          <Loader2 className="size-4 animate-spin" />
+        ) : (
+          <Play className="size-4 fill-current" />
+        )}
       </span>
-      <span className="font-display text-sm font-bold tracking-tight sm:text-base">{mix.title}</span>
-      <span className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{mix.desc}</span>
+      <span className="font-display text-sm font-bold tracking-tight sm:text-base">
+        {mix.title}
+      </span>
+      <span className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+        {mix.desc}
+      </span>
     </button>
   );
 }
 
 export default function Search() {
   // Shared links open with ?q=… pre-filled — share → open → play.
-  // Seeded during the initial render (not in an effect) so the shared query
-  // is available on the very first search without a cascading render.
   const [searchParams, setSearchParams] = useSearchParams();
   const sharedQuery = searchParams.get("q");
-  const [query, setQuery] = useState(() => sharedQuery ?? "");
+  const [typedQuery, setTypedQuery] = useState("");
+  /**
+   * Adopt a query and clear the `?q=` it may have come from.
+   *
+   * The param used to be read once in a useState initialiser and then wiped
+   * from the URL in an effect. That initializer only ever runs on mount, so a
+   * `?q=` arriving while the page was ALREADY open was thrown away and then
+   * erased — which is exactly what tapping the artist in the player bar does
+   * when the user is on the search page. The query is now derived from the URL
+   * on every render, so the link works from any page, any number of times.
+   */
+  const applyQuery = useCallback(
+    (next: string) => {
+      setTypedQuery(next);
+      if (searchParams.has("q")) setSearchParams({}, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
+  /** The URL wins while it is present, so a fresh link beats stale typing. */
+  const query = sharedQuery ?? typedQuery;
   const [ytResults, setYtResults] = useState<YtItem[] | null>(null);
   // Kept separate from the primary Songs results by design. These uploads
   // must never be merged into the first result list or its radio queue.
@@ -209,10 +397,6 @@ export default function Search() {
   const [retryKey, setRetryKey] = useState(0);
 
   // Drop ?q= from the URL after it has been consumed (no setState in effect).
-  useEffect(() => {
-    if (sharedQuery) setSearchParams({}, { replace: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sharedQuery]);
   const startRadio = usePlayerStore((s) => s.startRadio);
   const playTrack = usePlayerStore((s) => s.playTrack);
   const searchYt = useAction(api.youtube.searchYoutube);
@@ -223,7 +407,9 @@ export default function Search() {
   // Search history — persisted locally, capped at 8 entries.
   const [searchHistory, setSearchHistory] = useState<string[]>(() => {
     try {
-      return JSON.parse(localStorage.getItem("ss.searchHistory") ?? "[]") as string[];
+      return JSON.parse(
+        localStorage.getItem("ss.searchHistory") ?? "[]",
+      ) as string[];
     } catch {
       return [];
     }
@@ -266,7 +452,7 @@ export default function Search() {
       setSearchError(null);
       rememberQuery(q);
       trackEvent("search_performed", { query: q.slice(0, 120) });
-          const requestPrimary = (attempt: number) => {
+      const requestPrimary = (attempt: number) => {
         // Keep the user's category visible in the input, but let the backend
         // choose multiple relevant artist-backed seeds. Mapping every chip to
         // one seed made Funk and several other categories look unrelated.
@@ -275,7 +461,10 @@ export default function Search() {
           .then(({ items }) => {
             if (cancelled) return;
             if (items.length === 0 && attempt < 2) {
-              retryTimer = window.setTimeout(() => requestPrimary(attempt + 1), attempt === 0 ? 300 : 500);
+              retryTimer = window.setTimeout(
+                () => requestPrimary(attempt + 1),
+                attempt === 0 ? 300 : 500,
+              );
               return;
             }
             setYtResults(items);
@@ -289,7 +478,10 @@ export default function Search() {
           .catch(() => {
             if (cancelled) return;
             if (attempt < 2) {
-              retryTimer = window.setTimeout(() => requestPrimary(attempt + 1), attempt === 0 ? 300 : 500);
+              retryTimer = window.setTimeout(
+                () => requestPrimary(attempt + 1),
+                attempt === 0 ? 300 : 500,
+              );
               return;
             }
             setYtResults([]);
@@ -331,7 +523,10 @@ export default function Search() {
         title: item.title.slice(0, 120),
         artist: cleanArtistName(item.artist, item.title).slice(0, 120),
       });
-      void startRadio(toPlayableYoutube(item, item.id), debouncedQuery || query);
+      void startRadio(
+        toPlayableYoutube(item, item.id),
+        debouncedQuery || query,
+      );
     },
     [startRadio, debouncedQuery, query],
   );
@@ -345,7 +540,7 @@ export default function Search() {
     // used to leave the search view in a query state that could return no
     // catalog rows; the phrase is also what the discovery search understands.
     const surpriseQuery = MOOD_QUERIES[pick] ?? `${pick} songs`;
-    setQuery(surpriseQuery);
+    applyQuery(surpriseQuery);
     // A repeated random pick can be the current query. Bump the retry key so
     // the effect still starts a fresh request instead of relying on a state
     // change that React may bail out of.
@@ -372,7 +567,9 @@ export default function Search() {
       }
       if (items.length === 0) throw new Error("No playable results");
 
-      const queue = items.slice(0, 15).map((item) => toPlayableYoutube(item, item.id));
+      const queue = items
+        .slice(0, 15)
+        .map((item) => toPlayableYoutube(item, item.id));
       const selected = queue[Math.floor(Math.random() * queue.length)];
       trackEvent("surprise_played", {
         query: playedQuery,
@@ -395,7 +592,8 @@ export default function Search() {
             Search
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Find any song — search across all our music sources and stream it instantly.
+            Find any song — search across all our music sources and stream it
+            instantly.
           </p>
         </div>
         <button
@@ -404,33 +602,33 @@ export default function Search() {
           disabled={surpriseLoading}
           className="inline-flex w-fit items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:border-[rgb(var(--tint)_/_0.4)] hover:bg-[rgb(var(--tint)_/_0.1)] hover:text-foreground disabled:cursor-wait disabled:opacity-60"
         >
-          {surpriseLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin text-[rgb(var(--tint))]" /> : <Dices className="h-3.5 w-3.5 text-[rgb(var(--tint))]" />}
+          {surpriseLoading ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-[rgb(var(--tint))]" />
+          ) : (
+            <Dices className="h-3.5 w-3.5 text-[rgb(var(--tint))]" />
+          )}
           Surprise me
         </button>
       </header>
 
       {/* search input */}
       <div className="relative max-w-xl">
-        <SearchIcon
-          className="pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2 text-muted-foreground"
-        />
+        <SearchIcon className="pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2 text-muted-foreground" />
         <input
           autoFocus
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => applyQuery(e.target.value)}
           placeholder="Search a song, artist or album…"
           className="h-12 w-full rounded-full border border-white/10 bg-white/[0.05] pr-12 pl-12 text-[15px] text-foreground placeholder:text-muted-foreground/70 focus:border-[rgb(var(--tint)_/_0.6)] focus:ring-2 focus:ring-[rgb(var(--tint)_/_0.25)] focus:outline-none"
         />
         {searching && (
-          <Loader2
-            className="absolute top-1/2 right-4 size-4 -translate-y-1/2 animate-spin text-muted-foreground"
-          />
+          <Loader2 className="absolute top-1/2 right-4 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
         )}
         {!searching && hasQuery && (
           <button
             type="button"
             aria-label="Clear search"
-            onClick={() => setQuery("")}
+            onClick={() => applyQuery("")}
             className="absolute top-1/2 right-3 flex size-7 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
           >
             <X className="size-3.5" />
@@ -459,7 +657,7 @@ export default function Search() {
                   <button
                     key={h}
                     type="button"
-                    onClick={() => setQuery(h)}
+                    onClick={() => applyQuery(h)}
                     className="rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-1.5 text-sm text-muted-foreground transition-colors hover:border-[rgb(var(--tint)_/_0.4)] hover:text-foreground"
                   >
                     {h}
@@ -468,7 +666,7 @@ export default function Search() {
               </div>
             </section>
           )}
-          <BrowseView onPick={setQuery} />
+          <BrowseView onPick={applyQuery} />
         </>
       ) : (
         <div className="flex flex-col gap-10">
@@ -513,8 +711,8 @@ export default function Search() {
               </div>
             ) : ytResults !== null && ytResults.length === 0 ? (
               <p className="rounded-2xl border border-dashed border-white/10 py-10 text-center text-sm text-muted-foreground">
-                No related results for "{query}". Try a different spelling or
-                an artist name.
+                No related results for "{query}". Try a different spelling or an
+                artist name.
               </p>
             ) : (
               <div className="flex flex-col gap-0.5">
@@ -541,42 +739,43 @@ export default function Search() {
             )}
           </section>
 
-          {!lyricSearching && lyricResults !== null && lyricResults.length > 0 && (
-            <section aria-labelledby="lyric-video-results-heading">
-              <div className="mb-2 flex items-center gap-2">
-                <Music2 className="size-4 text-[rgb(var(--tint))]" />
-                <h2
-                  id="lyric-video-results-heading"
-                  className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase"
-                >
-                  Lyric & lo-fi videos
-                </h2>
-                <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] text-muted-foreground">
-                  Separate uploads
-                </span>
-              </div>
-              <p className="mb-2 text-xs text-muted-foreground">
-                Carefully filtered music and lyric uploads. These are not mixed into the Songs results above.
-              </p>
-              <div className="flex flex-col gap-0.5">
-                {lyricResults.map((item, i) => (
-                  <RemoteTrackRow
-                    key={`lyric-${item.id}`}
-                    item={item}
-                    index={i + 1}
-                    onPlay={playRemote}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
-
+          {!lyricSearching &&
+            lyricResults !== null &&
+            lyricResults.length > 0 && (
+              <section aria-labelledby="lyric-video-results-heading">
+                <div className="mb-2 flex items-center gap-2">
+                  <Music2 className="size-4 text-[rgb(var(--tint))]" />
+                  <h2
+                    id="lyric-video-results-heading"
+                    className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase"
+                  >
+                    Lyric & lo-fi videos
+                  </h2>
+                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] text-muted-foreground">
+                    Separate uploads
+                  </span>
+                </div>
+                <p className="mb-2 text-xs text-muted-foreground">
+                  Carefully filtered music and lyric uploads. These are not
+                  mixed into the Songs results above.
+                </p>
+                <div className="flex flex-col gap-0.5">
+                  {lyricResults.map((item, i) => (
+                    <RemoteTrackRow
+                      key={`lyric-${item.id}`}
+                      item={item}
+                      index={i + 1}
+                      onPlay={playRemote}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
         </div>
       )}
     </div>
   );
 }
-
 
 /** Debounce a value with a trailing delay. */
 function useDebounced<T>(value: T, delay: number): T {
@@ -588,17 +787,16 @@ function useDebounced<T>(value: T, delay: number): T {
   return debounced;
 }
 
-function BrowseView({
-  onPick,
-}: {
-  onPick: (q: string) => void;
-}) {
+function BrowseView({ onPick }: { onPick: (q: string) => void }) {
   const mixCycle = usePopularMixCycle();
   const popularMixes = useMemo(() => {
     const start = (mixCycle * 3) % POPULAR_MIXES.length;
     return [
       ...POPULAR_MIXES.slice(start, start + POPULAR_MIX_COUNT),
-      ...POPULAR_MIXES.slice(0, Math.max(0, start + POPULAR_MIX_COUNT - POPULAR_MIXES.length)),
+      ...POPULAR_MIXES.slice(
+        0,
+        Math.max(0, start + POPULAR_MIX_COUNT - POPULAR_MIXES.length),
+      ),
     ];
   }, [mixCycle]);
 
@@ -613,7 +811,9 @@ function BrowseView({
             <MixCard key={mix.id} mix={mix} />
           ))}
         </div>
-        <p className="mt-2 text-[10px] text-muted-foreground/70">Live from YouTube Music · picks rotate every 12 hours</p>
+        <p className="mt-2 text-[10px] text-muted-foreground/70">
+          Live from YouTube Music · picks rotate every 12 hours
+        </p>
       </section>
 
       <section>
