@@ -1,4 +1,5 @@
 import { Logo } from "@/components/brand/Logo";
+import { InfiniteSlider } from "@/components/core/infinite-slider";
 import { ShieldCheck } from "lucide-react";
 import { Link } from "react-router";
 
@@ -101,7 +102,10 @@ export function SiteFooter() {
       {/* Clipping lives on its own layer, NOT on the footer: the scalloped
           edge is drawn above the footer's top border, so an `overflow-hidden`
           here would cut the bumps off entirely. */}
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 overflow-hidden"
+      >
         {/* Oversized wordmark bleeding off the bottom, the way a masthead sets
             its own name behind the content. */}
         <span className="absolute inset-x-0 -bottom-4 block select-none text-center font-display text-[26vw] leading-none font-bold tracking-tighter text-white/[0.05] sm:-bottom-6">
@@ -119,32 +123,47 @@ export function SiteFooter() {
               clutter, and a queue that moves like you do.
             </p>
 
-            <span aria-hidden="true" className="mt-8 block h-px w-5 bg-[rgb(var(--tint))]/90" />
+            <span
+              aria-hidden="true"
+              className="mt-8 block h-px w-5 bg-[rgb(var(--tint))]/90"
+            />
             <p className="mt-3 font-mono text-[10px] tracking-[0.2em] text-foreground/60 uppercase">
               Featured on
             </p>
-            <ul className="mt-3 flex flex-wrap items-center gap-2.5">
+            {/* The badges drift rather than wrap. They were a flex-wrap list,
+                which broke into two ragged rows in a narrow column and read as
+                an accident; a marquee reads as deliberate and keeps the row to
+                a single line at every width. The badges stay exactly as they
+                were — real links, real hover and focus states — and only the
+                copies past the first are inert, so each launch directory is
+                clickable and keyboard-reachable once, not four times. */}
+            <InfiniteSlider
+              speed={14}
+              speedOnHover={4}
+              gap={10}
+              label="Launch directories featuring SYNQ"
+              className="mt-3"
+            >
               {featuredOn.map((badge) => (
-                <li key={badge.name}>
-                  <a
-                    href={badge.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={`block border border-white/75 transition-all duration-200 hover:-translate-y-0.5 hover:border-white focus-visible:-translate-y-0.5 focus-visible:border-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[rgb(var(--tint))] ${badge.radius}`}
-                  >
-                    <img
-                      src={badge.badge}
-                      alt={`Featured on ${badge.name}`}
-                      width={badge.width}
-                      height={badge.height}
-                      loading="lazy"
-                      decoding="async"
-                      className="block h-8 w-auto"
-                    />
-                  </a>
-                </li>
+                <a
+                  key={badge.name}
+                  href={badge.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`block shrink-0 border border-white/75 transition-all duration-200 hover:-translate-y-0.5 hover:border-white focus-visible:-translate-y-0.5 focus-visible:border-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[rgb(var(--tint))] ${badge.radius}`}
+                >
+                  <img
+                    src={badge.badge}
+                    alt={`Featured on ${badge.name}`}
+                    width={badge.width}
+                    height={badge.height}
+                    loading="lazy"
+                    decoding="async"
+                    className="block h-8 w-auto"
+                  />
+                </a>
               ))}
-            </ul>
+            </InfiniteSlider>
           </div>
 
           {/* link columns */}
@@ -200,7 +219,9 @@ export function SiteFooter() {
               <span className="flex size-7 items-center justify-center rounded-full bg-[rgb(var(--tint))]/15 text-[rgb(var(--tint))]">
                 <ShieldCheck className="size-3.5" />
               </span>
-              <span className="text-xs font-semibold text-foreground">Zero ads</span>
+              <span className="text-xs font-semibold text-foreground">
+                Zero ads
+              </span>
               <span className="rounded-full bg-[rgb(var(--tint))] px-2 py-0.5 text-[10px] font-bold text-black">
                 forever
               </span>
