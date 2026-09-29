@@ -141,7 +141,13 @@ const schema = defineSchema(
       ),
       nowPlaying: v.optional(v.string()),
       updatedAt: v.number(),
-    }).index("by_host", ["hostId"]),
+    })
+      .index("by_host", ["hostId"])
+      // Lets the rooms directory read the most recently active rooms first
+      // and stop there, instead of collecting the whole table. Rooms are only
+      // deleted on an explicit leave, so a closed tab would otherwise leave
+      // one behind forever.
+      .index("by_updatedAt", ["updatedAt"]),
 
     importedPlaylists: defineTable({
       userId: v.id("users"),

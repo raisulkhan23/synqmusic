@@ -28,8 +28,9 @@ import {
   presentOverlay,
   trackFrame,
 } from "@/lib/youtubePlayer";
-import { hasAudioProcessing } from "@/lib/audio";
+import { hasAudioProcessing, ensureGraph } from "@/lib/audio";
 import { artistSearchQuery } from "@/lib/youtube";
+import { formatSkipped } from "@/lib/introTrim";
 import {
   AUDIO_EFFECT_DELAY_MESSAGE,
   AUDIO_FILTERS as FILTER_DEFS,
@@ -46,6 +47,8 @@ import {
   MicVocal,
   Moon,
   Repeat,
+  Scissors,
+  Undo2,
   X,
   Waves,
 } from "lucide-react";
@@ -324,6 +327,74 @@ function LyricsPanel({ onClose }: { onClose: () => void }) {
 // ---------------------------------------------------------------------------
 
 /** A-B repeat loop controls. */
+/**
+ * Smart intro trim, for the fullscreen player.
+ *
+ * The player bar's chip is hidden on phones — the mobile bar is a 68px island
+ * and two wide text pills collide with the transport there — so the manual
+ * skip and its undo live here instead, alongside the other playback tools.
+ * The automatic probe is app-wide and unaffected.
+ */
+function IntroTrimControl() {
+  const enabled = usePlayerStore((s) => s.introTrim);
+  const skipped = usePlayerStore((s) => s.introTrimSkipped);
+  const skipIntro = usePlayerStore((s) => s.skipIntro);
+  const undoIntroTrim = usePlayerStore((s) => s.undoIntroTrim);
+  const toggleIntroTrim = usePlayerStore((s) => s.toggleIntroTrim);
+
+  if (skipped !== null) {
+    return (
+      <div className="flex items-center gap-1.5 rounded-full border border-[rgb(var(--tint)_/_0.5)] bg-[rgb(var(--tint)_/_0.1)] py-1 pr-1 pl-2.5 text-[11px] font-semibold text-[rgb(var(--tint))]">
+        <Scissors className="size-3.5" />
+        Trimmed {formatSkipped(skipped)}
+        <button
+          type="button"
+          onClick={() => {
+            undoIntroTrim();
+            toast("Intro restored");
+          }}
+          className="rounded-full p-1 transition-colors hover:bg-white/15"
+          title="Undo intro trim"
+          aria-label="Undo intro trim"
+        >
+          <Undo2 className="size-3" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        if (!enabled) {
+          toggleIntroTrim();
+          if (!ensureGraph())
+            toast("Press play once to let SYNQ listen for a silent intro");
+          return;
+        }
+        const applied = skipIntro();
+        if (applied > 0) toast(`Skipped ${formatSkipped(applied)} of intro`);
+        else toast.error("Nothing left to skip on this track");
+      }}
+      title={
+        enabled
+          ? "Skip ahead past a slow intro"
+          : "Turn on smart intro trimming"
+      }
+      className={cn(
+        "flex items-center gap-1.5 rounded-full border py-1 pr-2.5 pl-2.5 text-[11px] font-semibold transition-colors",
+        enabled
+          ? "border-white/10 bg-white/[0.05] text-foreground hover:bg-white/[0.1]"
+          : "border-white/10 bg-white/[0.05] text-muted-foreground hover:bg-white/[0.1] hover:text-foreground",
+      )}
+    >
+      <Scissors className="size-3.5" />
+      {enabled ? "Skip intro" : "Smart trim"}
+    </button>
+  );
+}
+
 function AbRepeatControls() {
   const abA = usePlayerStore((s) => s.abA);
   const abB = usePlayerStore((s) => s.abB);
@@ -1086,6 +1157,7 @@ export function FullscreenPlayer() {
             {/* extra playback tools */}
             <div className="flex flex-wrap items-center justify-center gap-2">
               <AbRepeatControls />
+              <IntroTrimControl />
 
               {/* speed — icon only until a non-1× speed is active */}
               <DropdownMenu modal={false}>

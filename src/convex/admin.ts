@@ -35,7 +35,7 @@ export const claimAdminIfEmpty = mutation({
     const me = await ctx.db.get(userId);
     if (me === null || me.role !== undefined) return false;
 
-    const users = await ctx.db.query("users").collect();
+    const users = await scanAll(ctx.db.query("users"));
     const adminExists = users.some((u) => u.role === "admin");
     if (adminExists) return false;
 
@@ -58,9 +58,9 @@ export const status = query({
     if (me === null || me.role !== "admin") return null;
 
     const [users, playlists, likes] = await Promise.all([
-      ctx.db.query("users").collect(),
-      ctx.db.query("playlists").collect(),
-      ctx.db.query("likedSongs").collect(),
+      scanAll(ctx.db.query("users")),
+      scanAll(ctx.db.query("playlists")),
+      scanAll(ctx.db.query("likedSongs")),
     ]);
 
     return {
@@ -98,18 +98,36 @@ function normalizeAuthProvider(raw: string | undefined | null): string {
   return value;
 }
 
+/**
+ * Ceiling on how many documents any one admin query will read.
+ *
+ * Every admin view was a bare `.collect()`. Convex enforces a per-query read
+ * budget, so past a few thousand rows the whole admin panel — including the
+ * accounts list behind the CSV export — stopped loading at all, and there was
+ * no way to tell that apart from "the page is broken". Bounded reads turn a
+ * hard failure into a page that renders the most recent slice.
+ */
+export const ADMIN_SCAN_LIMIT = 2000;
+
+/** A bounded stand-in for `collect()`, for the admin views. */
+function scanAll<T>(reader: {
+  take: (n: number) => Promise<T[]>;
+}): Promise<T[]> {
+  return reader.take(ADMIN_SCAN_LIMIT);
+}
+
 /** Every account on the deployment (admin only). */
 export const listUsers = query({
   args: {},
   handler: async (ctx) => {
     await getAdminUser(ctx);
-    const users = await ctx.db.query("users").collect();
+    const users = await scanAll(ctx.db.query("users"));
     // Enrich with the auth provider(s) each account signed up with —
     // Convex Auth keeps one authAccounts row per linked credential
     // ("github", "google", "email-otp", "anonymous", …). Both fields live on
     // the row itself: `provider` is the registered provider id and
     // `providerAccountId` is the external id (e.g. the GitHub numeric id).
-    const accounts = await ctx.db.query("authAccounts").collect();
+    const accounts = await scanAll(ctx.db.query("authAccounts"));
     const byUser = new Map<
       string,
       { provider: string; accountId: string | null }[]
@@ -236,8 +254,8 @@ export const listAllPlaylists = query({
   handler: async (ctx) => {
     await getAdminUser(ctx);
     const [playlists, users] = await Promise.all([
-      ctx.db.query("playlists").collect(),
-      ctx.db.query("users").collect(),
+      scanAll(ctx.db.query("playlists")),
+      scanAll(ctx.db.query("users")),
     ]);
     const owners = new Map(users.map((u) => [u._id, u]));
     return playlists
@@ -278,9 +296,9 @@ export const listAllLikes = query({
   handler: async (ctx) => {
     await getAdminUser(ctx);
     const [likes, remotes, users] = await Promise.all([
-      ctx.db.query("likedSongs").collect(),
-      ctx.db.query("likedRemote").collect(),
-      ctx.db.query("users").collect(),
+      scanAll(ctx.db.query("likedSongs")),
+      scanAll(ctx.db.query("likedRemote")),
+      scanAll(ctx.db.query("users")),
     ]);
     const owners = new Map(users.map((u) => [u._id, u]));
     const remoteByUserTrack = new Map(
@@ -314,7 +332,7 @@ export const recentSignups = query({
   args: { limit: v.optional(v.number()) },
   handler: async (ctx, { limit }) => {
     await getAdminUser(ctx);
-    const users = await ctx.db.query("users").collect();
+    const users = await scanAll(ctx.db.query("users"));
     return users
       .sort((a, b) => b._creationTime - a._creationTime)
       .slice(0, limit ?? 10)
@@ -389,8 +407,8 @@ export const listRooms = query({
   args: {},
   handler: async (ctx) => {
     await getAdminUser(ctx);
-    const rooms = await ctx.db.query("listeningRooms").collect();
-    const users = await ctx.db.query("users").collect();
+    const rooms = await scanAll(ctx.db.query("listeningRooms"));
+    const users = await scanAll(ctx.db.query("users"));
     const names = new Map(
       users.map((u) => [u._id, u.name ?? u.email ?? "Anonymous"]),
     );
@@ -426,8 +444,8 @@ export const listImports = query({
   handler: async (ctx) => {
     await getAdminUser(ctx);
     const [imports, users] = await Promise.all([
-      ctx.db.query("importedPlaylists").collect(),
-      ctx.db.query("users").collect(),
+      scanAll(ctx.db.query("importedPlaylists")),
+      scanAll(ctx.db.query("users")),
     ]);
     const names = new Map(
       users.map((u) => [u._id, u.name ?? u.email ?? "Anonymous"]),
@@ -493,7 +511,7 @@ export const globalTopTracks = query({
   args: {},
   handler: async (ctx) => {
     await getAdminUser(ctx);
-    const history = await ctx.db.query("playHistory").collect();
+    const history = await scanAll(ctx.db.query("playHistory"));
     const byTrack = new Map<
       string,
       { plays: number; listeners: Set<string> }
@@ -524,24 +542,45 @@ export const userActivity = query({
   handler: async (ctx) => {
     await getAdminUser(ctx);
     const [users, likes, playlists, history] = await Promise.all([
-      ctx.db.query("users").collect(),
-      ctx.db.query("likedSongs").collect(),
-      ctx.db.query("playlists").collect(),
-      ctx.db.query("playHistory").collect(),
+      scanAll(ctx.db.query("users")),
+      scanAll(ctx.db.query("likedSongs")),
+      scanAll(ctx.db.query("playlists")),
+      scanAll(ctx.db.query("playHistory")),
     ]);
+    // Tally in a SINGLE pass. This used to re-scan the whole likes, playlists
+    // and history tables once per user, so the query was O(users x rows): an
+    // admin page that crawled to a halt as the deployment grew, and blew
+    // through Convex's read budget long before the numbers were useful.
+    const likeCount = new Map<string, number>();
+    for (const l of likes) {
+      likeCount.set(l.userId, (likeCount.get(l.userId) ?? 0) + 1);
+    }
+    const playlistCount = new Map<string, number>();
+    for (const p of playlists) {
+      playlistCount.set(p.userId, (playlistCount.get(p.userId) ?? 0) + 1);
+    }
+    const playCount = new Map<string, number>();
+    const lastPlayedAt = new Map<string, number>();
+    for (const h of history) {
+      playCount.set(h.userId, (playCount.get(h.userId) ?? 0) + h.playCount);
+      // Reduced in the same pass: this used to be a per-user
+      // `history.filter(...).reduce(...)`, which put the query straight back
+      // into O(users x rows) after the counters had just been fixed.
+      lastPlayedAt.set(
+        h.userId,
+        Math.max(lastPlayedAt.get(h.userId) ?? 0, h.playedAt),
+      );
+    }
+
     return users
       .map((u) => ({
         _id: u._id,
         name: u.name ?? null,
         email: u.email ?? null,
-        likes: likes.filter((l) => l.userId === u._id).length,
-        playlists: playlists.filter((p) => p.userId === u._id).length,
-        plays: history
-          .filter((h) => h.userId === u._id)
-          .reduce((sum, h) => sum + h.playCount, 0),
-        lastPlayedAt: history
-          .filter((h) => h.userId === u._id)
-          .reduce((max, h) => Math.max(max, h.playedAt), 0),
+        likes: likeCount.get(u._id) ?? 0,
+        playlists: playlistCount.get(u._id) ?? 0,
+        plays: playCount.get(u._id) ?? 0,
+        lastPlayedAt: lastPlayedAt.get(u._id) ?? 0,
       }))
       .sort((a, b) => b.plays - a.plays);
   },

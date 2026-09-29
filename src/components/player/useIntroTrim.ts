@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
-import { ensureGraph, getSignalLevel } from "@/lib/audio";
+import { getSignalLevel } from "@/lib/audio";
 import {
   DEFAULT_INTRO_TRIM_OPTIONS,
   detectIntroEnd,
@@ -74,12 +74,17 @@ export function useIntroTrim(): void {
 
       const level = getSignalLevel();
       if (level < 0) {
-        // No graph yet. Building it needs a user gesture the effect cannot
-        // manufacture, but ensureGraph is cheap and succeeds when one is
-        // already available (e.g. the EQ is on, or the user just toggled this
-        // setting in Settings).
-        ensureGraph();
-        if (!warned && performance.now() - startedAt > GRAPH_GRACE_MS) {
+        // No graph, so nothing to listen to. The graph is built where a user
+        // gesture actually exists — the Settings toggle and the fullscreen
+        // control — not here: `createMediaElementSource` permanently reroutes
+        // the shared audio element, and this effect has no gesture to justify
+        // that. Worse, `ensureGraph` resets its context to null on failure, so
+        // retrying it from a 250ms timer churns through AudioContexts for the
+        // whole track. Say so once, then stop the probe entirely; the manual
+        // skip button still works.
+        if (performance.now() - startedAt <= GRAPH_GRACE_MS) return;
+        window.clearInterval(timer);
+        if (!warned) {
           warned = true;
           toast("Smart trim is waiting for audio", {
             id: "intro-trim-graph",

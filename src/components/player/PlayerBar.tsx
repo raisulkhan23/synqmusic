@@ -63,7 +63,7 @@ function SleepTimerChip() {
   if (sleepEndsAt === null && !sleepAtSongEnd) return null;
 
   return (
-    <div className="flex shrink-0 items-center gap-1 rounded-full bg-white/[0.07] py-1 pr-0.5 pl-2 text-[10px] font-semibold text-muted-foreground">
+    <div className="hidden shrink-0 items-center gap-1 rounded-full bg-white/[0.07] py-1 pr-0.5 pl-2 text-[10px] font-semibold text-muted-foreground sm:flex">
       <Moon className="size-3 text-[rgb(var(--tint))]" aria-hidden="true" />
       <span className="tabular-nums">
         {sleepEndsAt !== null
@@ -108,7 +108,7 @@ function IntroTrimChip() {
   const inIntro = hasTrack && currentTime <= 60;
   if (skipped !== null) {
     return (
-      <div className="flex shrink-0 items-center gap-1 rounded-full bg-white/[0.07] py-1 pr-0.5 pl-2 text-[10px] font-semibold text-muted-foreground">
+      <div className="hidden shrink-0 items-center gap-1 rounded-full bg-white/[0.07] py-1 pr-0.5 pl-2 text-[10px] font-semibold text-muted-foreground sm:flex">
         <Scissors
           className="size-3 text-[rgb(var(--tint))]"
           aria-hidden="true"
@@ -142,7 +142,7 @@ function IntroTrimChip() {
           });
       }}
       title="Skip ahead past a slow intro"
-      className="flex shrink-0 items-center gap-1 rounded-full bg-white/[0.07] px-2 py-1 text-[10px] font-semibold text-muted-foreground transition-colors hover:bg-white/[0.12] hover:text-foreground"
+      className="hidden shrink-0 items-center gap-1 rounded-full bg-white/[0.07] px-2 py-1 text-[10px] font-semibold text-muted-foreground transition-colors hover:bg-white/[0.12] hover:text-foreground sm:flex"
     >
       <Scissors className="size-3" aria-hidden="true" />
       Skip intro
@@ -683,9 +683,13 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
           </div>
         </div>
 
-        {/* right cluster — desktop keeps queue + volume + expand; mobile gets
-            just the expand chevron (queue lives in the fullscreen player and
-            the bottom tab bar already covers navigation) */}
+        {/* right cluster — desktop keeps the status chips + queue + volume +
+            expand. The mobile bar is a 68px island holding art, title, the
+            transport and the expand chevron, and the footer clips overflow:
+            the sleep and intro-trim chips are wide text pills, so with both
+            armed they pushed the transport out from under them. They are
+            hidden below `sm` and both controls have a home in the fullscreen
+            player, which is one tap away on a phone. */}
         <div className="relative z-10 flex w-auto shrink-0 items-center justify-end gap-0.5">
           <SleepTimerChip />
           <IntroTrimChip />
