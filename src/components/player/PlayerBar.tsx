@@ -11,6 +11,7 @@ import { toPlayableYoutube } from "@/lib/playable";
 import { cleanArtistName } from "@/lib/youtube";
 import { getAudio } from "@/lib/audio";
 import { formatRemaining, useSleepCountdown } from "@/lib/sleepTimer";
+import { formatSkipped } from "@/lib/introTrim";
 import { usePlayerStore } from "@/store/player";
 import {
   Heart,
@@ -20,7 +21,9 @@ import {
   Maximize2,
   Minimize2,
   Moon,
+  Scissors,
   Search,
+  Undo2,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -80,6 +83,70 @@ function SleepTimerChip() {
         <X className="size-3" />
       </button>
     </div>
+  );
+}
+
+/**
+ * Smart intro trim control.
+ *
+ * Appears once the setting is on, and whenever a trim has actually been
+ * applied. The automatic probe can only see tracks whose audio flows through
+ * the Web Audio graph, so the manual button is the escape hatch for everything
+ * else — a cinematic upload playing through the YouTube engine, or a listener
+ * who simply knows the intro is dead.
+ */
+function IntroTrimChip() {
+  const introTrim = usePlayerStore((s) => s.introTrim);
+  const skipped = usePlayerStore((s) => s.introTrimSkipped);
+  const currentTime = usePlayerStore((s) => s.currentTime);
+  const hasTrack = usePlayerStore((s) => s.current !== null);
+  const skipIntro = usePlayerStore((s) => s.skipIntro);
+  const undoIntroTrim = usePlayerStore((s) => s.undoIntroTrim);
+
+  // Once a trim has landed the playhead is past the intro, so the button has
+  // nothing left to do — the undo affordance replaces it.
+  const inIntro = hasTrack && currentTime <= 60;
+  if (skipped !== null) {
+    return (
+      <div className="flex shrink-0 items-center gap-1 rounded-full bg-white/[0.07] py-1 pr-0.5 pl-2 text-[10px] font-semibold text-muted-foreground">
+        <Scissors
+          className="size-3 text-[rgb(var(--tint))]"
+          aria-hidden="true"
+        />
+        <span className="tabular-nums">Trimmed {formatSkipped(skipped)}</span>
+        <button
+          type="button"
+          aria-label="Undo intro trim"
+          title="Undo intro trim"
+          onClick={() => {
+            undoIntroTrim();
+            toast("Intro restored");
+          }}
+          className="rounded-full p-0.5 transition-colors hover:bg-white/10 hover:text-foreground"
+        >
+          <Undo2 className="size-3" />
+        </button>
+      </div>
+    );
+  }
+  if (!introTrim || !inIntro) return null;
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        const applied = skipIntro();
+        if (applied > 0)
+          toast(`Skipped ${formatSkipped(applied)} of intro`, {
+            description: "Undo it any time from here.",
+          });
+      }}
+      title="Skip ahead past a slow intro"
+      className="flex shrink-0 items-center gap-1 rounded-full bg-white/[0.07] px-2 py-1 text-[10px] font-semibold text-muted-foreground transition-colors hover:bg-white/[0.12] hover:text-foreground"
+    >
+      <Scissors className="size-3" aria-hidden="true" />
+      Skip intro
+    </button>
   );
 }
 
@@ -610,6 +677,7 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
             the bottom tab bar already covers navigation) */}
         <div className="relative z-10 flex w-auto shrink-0 items-center justify-end gap-0.5">
           <SleepTimerChip />
+          <IntroTrimChip />
           <button
             type="button"
             aria-label="Open queue"

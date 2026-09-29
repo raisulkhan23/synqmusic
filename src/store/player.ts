@@ -16,6 +16,11 @@ import {
 } from "@/lib/audio";
 import type { RGB } from "@/lib/covers";
 import {
+  clampIntroSkip,
+  DEFAULT_INTRO_TRIM_OPTIONS,
+  DEFAULT_MANUAL_INTRO_SKIP,
+} from "@/lib/introTrim";
+import {
   applyCardTransparency,
   CARD_TRANSPARENCY_KEY,
   readCardTransparency,
@@ -318,6 +323,17 @@ interface PlayerStore {
   /** Active audio effect filter (8D, bass boost, …) — catalog playback. */
   audioFilter: AudioFilterId;
 
+  /**
+   * Smart intro trim: while the first seconds of a track play, watch the
+   * signal level and seek past a silent/quiet lead-in.
+   */
+  introTrim: boolean;
+  /**
+   * Seconds of lead-in skipped on the CURRENT track, or null when nothing has
+   * been trimmed yet. Drives the "trimmed / undo" chip in the player bar.
+   */
+  introTrimSkipped: number | null;
+
   // sleep timer
   /** Epoch ms when playback will pause; null when off. */
   sleepEndsAt: number | null;
@@ -441,6 +457,16 @@ interface PlayerStore {
   setAudioFilter: (id: AudioFilterId) => void;
   /** minutes, "end" (after current song) or null to cancel */
   setSleepTimer: (mode: number | "end" | null) => void;
+  /** Turn smart intro trim on/off. Persisted like every other preference. */
+  toggleIntroTrim: () => void;
+  /**
+   * Seek past a lead-in now. With no argument it uses the default manual
+   * skip; the automatic probe calls this once it has decided. Returns the
+   * seconds actually skipped, or 0 when nothing was skipped.
+   */
+  skipIntro: (seconds?: number) => number;
+  /** Undo a trim on the current track by seeking back to the start. */
+  undoIntroTrim: () => void;
   setAbPoint: (which: "a" | "b", seconds: number | null) => void;
   clearAb: () => void;
   setQueueOpen: (open: boolean) => void;
@@ -607,6 +633,7 @@ const initialVolume = Math.min(1, Math.max(0, readNum("ss.volume", 0.8)));
 const initialMuted = readBool("ss.muted", false);
 const initialShuffle = readBool("ss.shuffle", false);
 const initialSmartShuffle = readBool("ss.smartShuffle", false);
+const initialIntroTrim = readBool("ss.introTrim", false);
 // Validated rather than cast: the repeat button shows itself as ACTIVE for
 // any value other than "off", while `handleEnded` only ever acts on the exact
 // strings "all" and "one". A stale or hand-edited value therefore lit the
@@ -1769,6 +1796,9 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       // A-B points don't carry across tracks
       abA: null,
       abB: null,
+      // */ and neither does a trim decision, which is per-track by
+      // definition: the next song gets its own fresh look.
+      introTrimSkipped: null,
     });
 
     // Route to the YouTube IFrame engine by video id; otherwise use the audio element.
@@ -2609,6 +2639,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
         isBuffering: true,
         abA: null,
         abB: null,
+        introTrimSkipped: null,
       });
       syncMediaSession(track, true);
       // Only one source at a time: stop the IFrame engine before the filtered
@@ -2725,6 +2756,38 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     }, 1000);
   };
 
+  const toggleIntroTrim = () => {
+    const next = !get().introTrim;
+    writeSetting("ss.introTrim", next ? "1" : "0");
+    set({ introTrim: next, introTrimSkipped: null });
+  };
+
+  const skipIntro = (seconds?: number) => {
+    const s = get();
+    const requested =
+      seconds ??
+      (s.introTrimSkipped !== null
+        ? // Already trimmed once: a second press walks further in, so the
+          // control stays useful on a 60s+ cinematic intro.
+          s.introTrimSkipped * 2
+        : DEFAULT_MANUAL_INTRO_SKIP);
+    const skip = clampIntroSkip(
+      requested,
+      s.duration || DEFAULT_INTRO_TRIM_OPTIONS.maxSkipSeconds * 10,
+    );
+    if (skip < 1) return 0;
+    seek(skip);
+    set({ introTrimSkipped: skip });
+    return skip;
+  };
+
+  const undoIntroTrim = () => {
+    const s = get();
+    if (s.introTrimSkipped === null) return;
+    seek(0);
+    set({ introTrimSkipped: null });
+  };
+
   const setAbPoint = (which: "a" | "b", seconds: number | null) => {
     set(which === "a" ? { abA: seconds } : { abB: seconds });
   };
@@ -2806,6 +2869,8 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     muted: initialMuted,
     shuffle: initialShuffle,
     smartShuffle: initialSmartShuffle,
+    introTrim: initialIntroTrim,
+    introTrimSkipped: null,
     unshuffledQueue: null,
     unshuffledIndex: -1,
     repeat: initialRepeat,
@@ -2999,6 +3064,9 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     cycleRepeat,
     setRate,
     setSleepTimer,
+    toggleIntroTrim,
+    skipIntro,
+    undoIntroTrim,
     setAbPoint,
     clearAb,
     setQueueOpen: (queueOpen) => set({ queueOpen }),

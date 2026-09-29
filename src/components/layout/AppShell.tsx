@@ -16,6 +16,7 @@ import {
 import { FullscreenPlayer } from "@/components/player/FullscreenPlayer";
 import { PlayerBar } from "@/components/player/PlayerBar";
 import { QueuePanel } from "@/components/player/QueuePanel";
+import { useIntroTrim } from "@/components/player/useIntroTrim";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { SettingsDialog } from "@/components/settings/SettingsDialog";
 import { Logo } from "@/components/brand/Logo";
@@ -910,6 +911,7 @@ export function AppShell() {
       <QueuePanel />
       <FullscreenPlayer />
       <NowPlayingAnnouncer />
+      <IntroTrimProbe />
       <SettingsDialog
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
@@ -923,6 +925,19 @@ export function AppShell() {
 }
 
 export default AppShell;
+
+/**
+ * Smart intro trim, mounted app-wide.
+ *
+ * Rendered as a component (rather than a bare hook call) so it lives in the
+ * tree and the probe keeps running while the user is anywhere in the app —
+ * a long cinematic lead-in can still be skipped from the queue panel or the
+ * library. It renders nothing.
+ */
+function IntroTrimProbe() {
+  useIntroTrim();
+  return null;
+}
 
 /**
  * Screen-reader announcements for what is playing.

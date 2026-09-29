@@ -24,6 +24,7 @@ import {
   type AudioFilterId,
   AUDIO_FILTERS,
   AUDIO_EFFECT_DELAY_MESSAGE,
+  ensureGraph,
 } from "@/lib/audio";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -194,6 +195,8 @@ export function SettingsDialog({
   const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
   const smartShuffle = usePlayerStore((s) => s.smartShuffle);
   const toggleSmartShuffle = usePlayerStore((s) => s.toggleSmartShuffle);
+  const introTrim = usePlayerStore((s) => s.introTrim);
+  const toggleIntroTrim = usePlayerStore((s) => s.toggleIntroTrim);
   const sleepEndsAt = usePlayerStore((s) => s.sleepEndsAt);
   const sleepAtSongEnd = usePlayerStore((s) => s.sleepAtSongEnd);
   // Ticking clock for the preset highlight below. Reading `Date.now()` during
@@ -1076,6 +1079,20 @@ export function SettingsDialog({
             onToggle={() => {
               toggleSmartShuffle();
               toast(smartShuffle ? "Smart shuffle off" : "Smart shuffle on");
+            }}
+          />
+          <ToggleRow
+            label="Smart intro trim"
+            description="Skip the silent lead-in on cinematic and visualiser uploads. Works on streams that play through the audio pipeline; the player bar keeps a manual skip button for everything else."
+            on={introTrim}
+            onToggle={() => {
+              toggleIntroTrim();
+              // The trim listens to the Web Audio analyser, and an
+              // AudioContext can only be created inside a user gesture. This
+              // click is that gesture, so build the graph now instead of
+              // waiting for the probe to fail on its own.
+              if (!introTrim) ensureGraph();
+              toast(introTrim ? "Smart intro trim off" : "Smart intro trim on");
             }}
           />
 

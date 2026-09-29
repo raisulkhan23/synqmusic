@@ -1073,3 +1073,238 @@ export const resolveStream = action({
     };
   },
 });
+
+// ---------------------------------------------------------------------------
+// Playlist import (YouTube / YouTube Music).
+//
+// The importer used to be CSV-only, which made a two-click YouTube playlist
+// take a Takeout export plus a file picker. InnerTube already serves the
+// contents of a public playlist through the SAME public endpoint `search`
+// uses, so the track list can be read directly from the share link with no
+// OAuth app, no user token and no key.
+//
+// Deliberately a pure fetch: it returns the parsed rows and the caller hands
+// them to the `playlists.saveImported` mutation, which is where the
+// signed-in check and the ownership rules live. An unauthenticated caller can
+// therefore read a public playlist (harmless — anyone can view it on
+// YouTube) but can never write one.
+// ---------------------------------------------------------------------------
+
+/** One row of an imported playlist, in the shape saveImported expects. */
+export interface ImportedRow {
+  title: string;
+  artist: string;
+  duration?: number;
+}
+
+export interface PlaylistBrowseResult {
+  name: string;
+  tracks: ImportedRow[];
+  /** Token for the next page of a long playlist, when there is one. */
+  continuation: string | null;
+  /** Playlists over this length are refused rather than silently truncated. */
+  tooLong: boolean;
+}
+
+/** A playlist longer than this is a "mix"/"radio" seed, not a real list. */
+export const MAX_IMPORT_TRACKS = 500;
+
+function textOf(value: unknown): string {
+  const direct = get(value, ["simpleText"]) as string | undefined;
+  if (direct) return direct;
+  const runs = get(value, ["runs"]);
+  if (Array.isArray(runs)) {
+    return runs
+      .map((r) => (get(r, ["text"]) as string) ?? "")
+      .join("")
+      .trim();
+  }
+  return "";
+}
+
+/**
+ * Depth-bounded search for the first node under `key`.
+ *
+ * InnerTube reshuffles the browse response between client versions, so the
+ * exact path to the playlist list is not something to hard-code. Walking the
+ * tree for a known renderer name survives those moves; the depth cap keeps a
+ * malformed response from turning into an unbounded walk.
+ */
+function findRenderer(node: unknown, key: string, depth: number): unknown {
+  if (depth <= 0 || !node || typeof node !== "object") return undefined;
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const hit = findRenderer(child, key, depth - 1);
+      if (hit !== undefined) return hit;
+    }
+    return undefined;
+  }
+  const record = node as Record<string, unknown>;
+  if (key in record) return record[key];
+  for (const child of Object.values(record)) {
+    const hit = findRenderer(child, key, depth - 1);
+    if (hit !== undefined) return hit;
+  }
+  return undefined;
+}
+
+/**
+ * Parse an InnerTube `browse` response for a playlist page.
+ *
+ * Pure and exported so the shape handling is testable without a network call.
+ * Rows missing a video id, a title, or a usable artist are dropped: a playlist
+ * full of "Watch on YouTube" promos is better imported short than not at all.
+ */
+export function extractPlaylistBrowse(
+  data: Record<string, unknown>,
+): PlaylistBrowseResult {
+  const header =
+    get(data, ["header", "playlistHeaderRenderer"]) ??
+    get(data, ["metadata", "playlistMetadataRenderer"]) ??
+    get(data, ["sidebar", "playlistSidebarRenderer"]);
+  const name =
+    textOf(get(header, ["title"])) ||
+    textOf(
+      get(header, ["items", 0, "playlistSidebarPrimaryInfoRenderer", "title"]),
+    ) ||
+    "Imported playlist";
+
+  const list = findRenderer(data, "playlistVideoListRenderer", 16);
+  const contents = get(list, ["contents"]);
+  const tracks: ImportedRow[] = [];
+  let tooLong = false;
+
+  if (Array.isArray(contents)) {
+    for (const entry of contents) {
+      const vr = get(entry, ["playlistVideoRenderer"]) as
+        | Record<string, unknown>
+        | undefined;
+      if (!vr) continue;
+      const videoId = vr.videoId as string | undefined;
+      if (!videoId) continue;
+
+      const rawTitle =
+        textOf(vr.title) || (get(vr, ["title", "simpleText"]) as string) || "";
+      const title = cleanTrackTitle(rawTitle);
+      if (!title) continue;
+
+      const artist = firstCreatorName(
+        title,
+        get(vr, ["shortBylineText"]),
+        get(vr, ["longBylineText"]),
+        get(vr, ["shortBylineText", "runs", 0, "text"]),
+      );
+      if (artist === "Unknown artist") continue;
+
+      const seconds = Number(vr.lengthSeconds);
+      const duration =
+        Number.isFinite(seconds) && seconds > 0
+          ? seconds
+          : parseLength(
+              (get(vr, ["lengthText", "simpleText"]) as string) ||
+                textOf(vr.lengthText) ||
+                undefined,
+            ) || undefined;
+
+      tracks.push({ title, artist, duration });
+      if (tracks.length > MAX_IMPORT_TRACKS) {
+        tooLong = true;
+        break;
+      }
+    }
+  }
+
+  const continuations = get(list, ["continuations"]);
+  const continuation =
+    (Array.isArray(continuations)
+      ? continuations
+          .map(
+            (c) =>
+              get(c, ["nextContinuationData", "continuation"]) as
+                | string
+                | undefined,
+          )
+          .find(Boolean)
+      : undefined) ??
+    (get(list, [
+      "continuations",
+      0,
+      "reloadContinuationData",
+      "continuation",
+    ]) as string | undefined) ??
+    undefined;
+
+  return { name, tracks, continuation: continuation ?? null, tooLong };
+}
+
+/**
+ * Read a public YouTube / YouTube Music playlist by id.
+ *
+ * `browseId` is the bare list id prefixed with "VL" for playlists, which is
+ * how InnerTube addresses them. Long playlists are paged with the continuation
+ * token so a 500-song list imports whole instead of stopping at the first
+ * ~100 rows the response happens to carry.
+ */
+export const importPlaylistById = action({
+  args: { playlistId: v.string() },
+  handler: async (
+    _ctx,
+    { playlistId },
+  ): Promise<{
+    name: string;
+    origin: string;
+    tracks: ImportedRow[];
+    partial: boolean;
+  }> => {
+    const id = playlistId.trim().replace(/^VL/, "");
+    if (!/^[A-Za-z0-9_-]{8,64}$/.test(id)) {
+      throw new ConvexError("That doesn't look like a YouTube playlist ID");
+    }
+
+    let data = await innerTube("browse", MUSIC_CLIENT, {
+      context: clientContext(MUSIC_CLIENT),
+      browseId: `VL${id}`,
+    });
+    const first = extractPlaylistBrowse(data);
+
+    const tracks: ImportedRow[] = [...first.tracks];
+    let continuation = first.continuation;
+    let name = first.name;
+    // Up to 4 extra pages (~500 rows) — enough for a real playlist without
+    // letting a "mix everything" radio seed run forever.
+    for (let page = 0; page < 4 && continuation; page++) {
+      if (tracks.length >= MAX_IMPORT_TRACKS) break;
+      try {
+        data = await innerTube("browse", MUSIC_CLIENT, {
+          context: clientContext(MUSIC_CLIENT),
+          continuation,
+        });
+      } catch {
+        break;
+      }
+      const next = extractPlaylistBrowse(data);
+      if (next.name && next.name !== "Imported playlist") name = next.name;
+      for (const row of next.tracks) {
+        if (tracks.length >= MAX_IMPORT_TRACKS) break;
+        const dupe = tracks.some(
+          (t) => t.title === row.title && t.artist === row.artist,
+        );
+        if (!dupe) tracks.push(row);
+      }
+      continuation = next.continuation;
+    }
+
+    if (tracks.length === 0) {
+      throw new ConvexError(
+        "That playlist looks private, empty, or unavailable — try a public playlist link",
+      );
+    }
+
+    return {
+      name: name || "Imported playlist",
+      origin: "YouTube Music",
+      tracks,
+      partial: tracks.length >= MAX_IMPORT_TRACKS,
+    };
+  },
+});
