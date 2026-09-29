@@ -24,11 +24,22 @@ describe("artist and album links navigate instead of hijacking the click", () =>
     expect(linkBlock).not.toContain("onNavigate");
   });
 
+  test("the link never invokes the card's own action", () => {
+    // THE actual bug. `ArtistLink` took a `stop` prop wired to the card's
+    // `onOpen` — the PLAY action — and called it on every press. Clicking an
+    // artist name therefore started playing the track instead of navigating,
+    // which is why the page only ever appeared after a full reload discarded
+    // the race. `stopPropagation()` alone is what keeps the click off the
+    // card; nothing may call into it.
+    expect(linkBlock).not.toContain("stop()");
+    expect(linkBlock).not.toContain("stop,");
+    expect(card).not.toContain("stop={onOpen}");
+  });
+
   test("the link still keeps the click off the card", () => {
-    // Removing the timer must not mean the card also starts playing, so the
-    // propagation guard is now the whole job and has to stay.
+    // The card's handler is on an ancestor, so stopping propagation is what
+    // prevents playback from starting alongside the navigation.
     expect(linkBlock).toContain("event.stopPropagation()");
-    expect(linkBlock).toContain("stop()");
   });
 
   test("the link is a real router link to the artist route", () => {

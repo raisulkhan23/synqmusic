@@ -176,18 +176,14 @@ export function MediaCard({
             </p>
             <p className="mt-0.5 truncate text-xs text-muted-foreground">
               {artistHref && variant !== "artist" ? (
-                <ArtistLink href={artistHref} stop={onOpen}>
-                  {subtitle}
-                </ArtistLink>
+                <ArtistLink href={artistHref}>{subtitle}</ArtistLink>
               ) : (
                 subtitle
               )}
             </p>
             {albumHref ? (
               <p className="mt-0.5 truncate text-[11px] text-muted-foreground/80">
-                <ArtistLink href={albumHref} stop={onOpen}>
-                  {item.album}
-                </ArtistLink>
+                <ArtistLink href={albumHref}>{item.album}</ArtistLink>
               </p>
             ) : null}
             {meta ? (
@@ -223,42 +219,32 @@ export function MediaCard({
 /**
  * A quiet inline link inside a card.
  *
- * The card itself is a button that plays, so the link has to stop the click
- * from also starting playback.
+ * The card itself is a button that plays, so the link must keep the click
+ * from ALSO starting playback.
  *
- * There is deliberately NO `setTimeout` fallback here any more. The fallback
- * ran the CARD's own action — which for every non-artist card is "play this
- * track" — on a 0ms timer after EVERY link press. That is a race the fallback
- * usually lost and occasionally won, and when it won it played the song
- * instead of opening the artist, so the click appeared to do nothing. The
- * search that started could also change the route underneath the link and
- * strand the listener on the page they started from, which is why the artist
- * link only appeared to work after a full reload remounted everything.
+ * `event.stopPropagation()` alone does that, and it is the only thing needed:
+ * the card's handler is on an ancestor, so stopping propagation means it never
+ * runs.
  *
- * A plain `<Link>` already does the one thing that matters: keep the click off
- * the card, and let the router own navigation.
+ * There is deliberately nothing else here. This used to take a `stop` callback
+ * that was wired to the card's own `onOpen` — the PLAY action — and call it on
+ * every press. So clicking an artist name did the exact opposite of what it
+ * said: it started playing the track, and the router was left racing a search
+ * that had just been kicked off. The page appeared not to work, and only a
+ * full reload (which discards the race) ever showed the artist.
  */
-function ArtistLink({
-  href,
-  children,
-  stop,
-}: {
-  href: string;
-  children: ReactNode;
-  stop: () => void;
-}) {
+function ArtistLink({ href, children }: { href: string; children: ReactNode }) {
   return (
     <Link
       to={href}
       onClick={(event) => {
         // Keep the click off the card so it does not start playback as well.
+        // Do NOT invoke any card action from here: the router owns navigation.
         event.stopPropagation();
-        stop();
       }}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.stopPropagation();
-          stop();
         }
       }}
       className="underline-offset-2 transition-colors hover:text-foreground hover:underline focus-visible:underline focus-visible:outline-none"
