@@ -70,11 +70,29 @@ describe("the logo is a real, valid image everywhere it is referenced", () => {
   });
 
   test("the favicon and the in-app logo point at the same file", () => {
-    expect(indexHtml).toContain('href="/logo.svg"');
+    expect(indexHtml).toMatch(/href="\/logo\.svg\?v=\d+"/);
     const logo = readSource("src/components/brand/Logo.tsx");
-    expect(logo).toContain('src="/logo.svg"');
+    expect(logo).toMatch(/export const LOGO_SRC = "\/logo\.svg\?v=\d+"/);
     // Every <img> of the mark must reference it, never an older asset.
     expect(logo).not.toMatch(/src="\/logo\.png"/);
+    expect(logo).not.toMatch(/src="\/logo\.svg"/);
+  });
+
+  test("the logo URL is versioned so a new mark can never be served stale", () => {
+    // A /public asset keeps the SAME url when its contents change, so an
+    // unversioned reference lets the browser — and any proxy in front of the
+    // preview — keep showing the PREVIOUS logo indefinitely. That is exactly
+    // how a correctly-replaced file can look like it was never changed.
+    const logo = readSource("src/components/brand/Logo.tsx");
+    const version = logo.match(/LOGO_SRC = "\/logo\.svg\?v=(\d+)"/);
+    expect(version).not.toBeNull();
+
+    // Every consumer must use that same version, or they will disagree.
+    const player = readSource("src/lib/youtubePlayer.ts");
+    expect(player).toContain(`logo.src = "/logo.svg?v=${version[1]}"`);
+    expect(indexHtml).toContain(`/logo.svg?v=${version[1]}`);
+    // The iOS icon is versioned for the same reason.
+    expect(indexHtml).toMatch(/href="\/product-icon\.png\?v=\d+"/);
   });
 });
 

@@ -338,7 +338,9 @@ function ensureShields(): void {
       "position:absolute;inset:0;display:none;align-items:center;justify-content:center;" +
       "background:#090a0f;z-index:6;pointer-events:none;transition:opacity .2s;";
     const logo = document.createElement("img");
-    logo.src = "/logo.svg";
+    // Versioned for the same reason as the in-app Logo: a /public asset keeps
+    // its URL, so an unversioned one can be served stale from cache.
+    logo.src = "/logo.svg?v=2";
     logo.style.cssText = "width:56px;opacity:.5;";
     logo.onerror = () => {
       logo.style.display = "none";

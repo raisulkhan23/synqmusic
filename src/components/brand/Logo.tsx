@@ -3,6 +3,18 @@ import { cn } from "@/lib/utils";
 import { Link } from "react-router";
 import { ArrowRightFromLine } from "lucide-react";
 
+/**
+ * Versioned so a new mark is never served from a browser's cache.
+ *
+ * The file lives in /public, so its URL never changes when the asset does —
+ * which means a browser (and any proxy in front of the preview) can happily
+ * keep showing the PREVIOUS logo long after the new one was deployed. Bumping
+ * this string is the whole fix: a changed query string is a different
+ * resource, so the old cached copy cannot be reused. Bump it whenever the
+ * mark itself changes.
+ */
+export const LOGO_SRC = "/logo.svg?v=2";
+
 /** iconOnly renders just the mark — used in the collapsed sidebar rail.
  *  Passing `onToggle` there turns the mark into the rail's expand control. */
 export function Logo({
@@ -37,7 +49,7 @@ export function Logo({
       >
         <span className="relative inline-flex items-center justify-center">
           <img
-            src="/logo.svg"
+            src={LOGO_SRC}
             alt="SYNQ logo"
             aria-hidden={hovered || undefined}
             className={cn(
@@ -62,14 +74,23 @@ export function Logo({
   if (iconOnly) {
     return (
       <Link to={to} className={cn("group inline-flex", className)}>
-        <img src="/logo.svg" alt="SYNQ logo" className="h-7 w-auto shrink-0" width={104} height={104} />
+        <img
+          src={LOGO_SRC}
+          alt="SYNQ logo"
+          className="h-7 w-auto shrink-0"
+          width={104}
+          height={104}
+        />
       </Link>
     );
   }
   return (
-    <Link to={to} className={cn("group inline-flex items-center gap-2.5", className)}>
+    <Link
+      to={to}
+      className={cn("group inline-flex items-center gap-2.5", className)}
+    >
       <img
-        src="/logo.svg"
+        src={LOGO_SRC}
         alt="SYNQ logo"
         className="shrink-0 h-[26px] w-auto"
         width={104}
@@ -79,10 +100,9 @@ export function Logo({
         SYNQ
       </span>
       {!iconOnly && (
-      <span
-        className="rounded-full border border-[rgb(var(--tint)/0.35)] bg-[rgb(var(--tint)/0.12)] px-1.5 py-px text-[9px] font-bold tracking-[0.08em] text-[rgb(var(--tint))] uppercase"
-      >
-        Beta        </span>
+        <span className="rounded-full border border-[rgb(var(--tint)/0.35)] bg-[rgb(var(--tint)/0.12)] px-1.5 py-px text-[9px] font-bold tracking-[0.08em] text-[rgb(var(--tint))] uppercase">
+          Beta{" "}
+        </span>
       )}
     </Link>
   );
