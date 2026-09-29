@@ -176,11 +176,7 @@ export function MediaCard({
             </p>
             <p className="mt-0.5 truncate text-xs text-muted-foreground">
               {artistHref && variant !== "artist" ? (
-                <ArtistLink
-                  href={artistHref}
-                  stop={onOpen}
-                  onNavigate={() => onOpen()}
-                >
+                <ArtistLink href={artistHref} stop={onOpen}>
                   {subtitle}
                 </ArtistLink>
               ) : (
@@ -189,11 +185,7 @@ export function MediaCard({
             </p>
             {albumHref ? (
               <p className="mt-0.5 truncate text-[11px] text-muted-foreground/80">
-                <ArtistLink
-                  href={albumHref}
-                  stop={onOpen}
-                  onNavigate={() => onOpen()}
-                >
+                <ArtistLink href={albumHref} stop={onOpen}>
                   {item.album}
                 </ArtistLink>
               </p>
@@ -232,36 +224,41 @@ export function MediaCard({
  * A quiet inline link inside a card.
  *
  * The card itself is a button that plays, so the link has to stop the click
- * from also starting playback. The fallback handler exists for the rare case
- * where navigation does not take the browser out of the page (a modified
- * click, an in-app router edge): the card's own action still runs, so the tap
- * is never swallowed.
+ * from also starting playback.
+ *
+ * There is deliberately NO `setTimeout` fallback here any more. The fallback
+ * ran the CARD's own action — which for every non-artist card is "play this
+ * track" — on a 0ms timer after EVERY link press. That is a race the fallback
+ * usually lost and occasionally won, and when it won it played the song
+ * instead of opening the artist, so the click appeared to do nothing. The
+ * search that started could also change the route underneath the link and
+ * strand the listener on the page they started from, which is why the artist
+ * link only appeared to work after a full reload remounted everything.
+ *
+ * A plain `<Link>` already does the one thing that matters: keep the click off
+ * the card, and let the router own navigation.
  */
 function ArtistLink({
   href,
   children,
   stop,
-  onNavigate,
 }: {
   href: string;
   children: ReactNode;
   stop: () => void;
-  onNavigate: () => void;
 }) {
   return (
     <Link
       to={href}
       onClick={(event) => {
+        // Keep the click off the card so it does not start playback as well.
         event.stopPropagation();
         stop();
-        // Let the router navigate; if it does not, fall back to the card.
-        setTimeout(onNavigate, 0);
       }}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.stopPropagation();
           stop();
-          setTimeout(onNavigate, 0);
         }
       }}
       className="underline-offset-2 transition-colors hover:text-foreground hover:underline focus-visible:underline focus-visible:outline-none"
