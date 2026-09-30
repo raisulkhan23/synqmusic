@@ -960,10 +960,19 @@ export interface LastPlayedSnapshot {
   albumName: string;
   coverUrl: string;
   duration: number;
-  source: "youtube";
+  /**
+   * Widened from `"youtube"` when Jamendo arrived. A snapshot is the durable
+   * "recently played" record, so it has to be able to describe a track that
+   * plays through the `<audio>` element rather than the IFrame engine —
+   * otherwise restoring history silently mislabels it and the resume path
+   * takes the YouTube branch for a track with no `youtubeId`.
+   */
+  source: "youtube" | "jamendo";
   youtubeId?: string;
   audioUrl: string;
   at: number;
+  /** Kept so a restored Creative Commons track still credits its licence. */
+  attribution?: Playable["attribution"];
 }
 
 export function readLastPlayed(): LastPlayedSnapshot | null {
@@ -992,6 +1001,7 @@ function saveLastPlayed(track: Playable): void {
       youtubeId: track.youtubeId,
       audioUrl: track.audioUrl,
       at: Date.now(),
+      attribution: track.attribution,
     };
     writeSetting(LAST_PLAYED_KEY, JSON.stringify(snap));
   } catch {
@@ -1104,6 +1114,7 @@ function lastSnapshotOf(track: Playable): LastPlayedSnapshot {
     youtubeId: track.youtubeId,
     audioUrl: track.audioUrl,
     at: Date.now(),
+    attribution: track.attribution,
   };
 }
 

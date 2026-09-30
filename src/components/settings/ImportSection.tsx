@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ImportServiceHint } from "@/components/settings/ImportServiceHint";
 import { useAction, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { parsePlaylistImport } from "@/lib/importPlaylist";
@@ -22,7 +23,6 @@ import {
 import {
   AlertCircle,
   Check,
-  Info,
   Link2,
   Loader2,
   Music4,
@@ -359,37 +359,16 @@ export function ImportSection({
           connect your account. Everything else works with an exported file.
         </p>
 
-        {/* Detection badge: what was recognised, before anything is clicked. */}
+        {/* Detection badge + the "importable but not playable" note. Both live
+            in their own component so the note can be rendered and tested on
+            its own — it is the only place the app states that a service's API
+            keys are not a streaming licence. */}
         {detected && capabilities ? (
-          <div className="mt-2.5 flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-[11px]">
-            <Music4 className="size-3.5 shrink-0 text-[rgb(var(--tint))]" />
-            <span className="min-w-0 flex-1 truncate">
-              <span className="font-semibold text-foreground">
-                {capabilities.label}
-              </span>{" "}
-              <span className="text-muted-foreground">
-                {detected.kind === "track" ? "track" : detected.kind}
-                {detected.id ? "" : " link"} detected
-              </span>
-            </span>
-            <span className="shrink-0 text-muted-foreground">
-              {!canImport
-                ? "File only"
-                : capabilities.needsAuth
-                  ? "Connect to import"
-                  : "Ready"}
-            </span>
-          </div>
-        ) : null}
-
-        {/* Importable but not playable. Tidal/Spotify/Apple keys buy metadata,
-            never audio, and finding that out only after wiring up credentials
-            reads as a broken app rather than a platform limit. */}
-        {detected && capabilities?.playbackNote ? (
-          <p className="mt-2 flex items-start gap-1.5 text-[11px] leading-relaxed text-muted-foreground">
-            <Info className="mt-px size-3.5 shrink-0" />
-            <span>{capabilities.playbackNote}</span>
-          </p>
+          <ImportServiceHint
+            detected={detected}
+            capabilities={capabilities}
+            canImport={canImport}
+          />
         ) : null}
 
         <div className="mt-2.5 flex items-center gap-2">

@@ -349,9 +349,14 @@ describe("importable is not the same as playable", () => {
 
   test("the note is rendered, not left in the registry", () => {
     // The blurb field was never rendered anywhere, which is exactly how this
-    // information was already lost once. Assert the surface, not the data.
+    // information was already lost once. Assert the surface, not the data:
+    // the note is rendered by ImportServiceHint, and the panel has to actually
+    // use that component rather than sitting next to it.
+    const hint = readSource("src/components/settings/ImportServiceHint.tsx");
+    expect(hint).toContain("playbackNote");
+
     const client = readSource("src/components/settings/ImportSection.tsx");
-    expect(client).toContain("playbackNote");
+    expect(client).toContain("ImportServiceHint");
   });
 });
 

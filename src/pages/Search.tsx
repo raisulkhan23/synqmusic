@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
+import { JamendoResults } from "@/components/search/JamendoResults";
 import { RemoteTrackRow } from "@/components/tracks/RemoteTrackRow";
 import { api } from "@/convex/_generated/api";
 import { toPlayableYoutube } from "@/lib/playable";
@@ -738,6 +739,11 @@ export default function Search() {
               </div>
             )}
           </section>
+
+          {/* Creative Commons audio — the only results here that play without
+              a YouTube lookup. Self-contained, so it never blocks or delays
+              the YouTube results above. */}
+          <JamendoResults query={debouncedQuery || query} />
 
           {!lyricSearching &&
             lyricResults !== null &&
