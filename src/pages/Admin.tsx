@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { downloadCsv, toCsv } from "@/lib/csvExport";
+import { VisitAnalytics } from "@/components/admin/VisitAnalytics";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useAction, useMutation, useQuery } from "convex/react";
@@ -149,6 +150,12 @@ export default function Admin() {
   const topTracks = useQuery(api.admin.globalTopTracks);
   const activity = useQuery(api.admin.userActivity);
   const me = useQuery(api.users.currentUser);
+
+  // Visit analytics. The window is state HERE rather than inside the panel so
+  // the range buttons actually change what is fetched — the panel asks, this
+  // refetches.
+  const [visitDays, setVisitDays] = useState<7 | 14 | 30>(14);
+  const visitSummary = useQuery(api.admin.visitAnalytics, { days: visitDays });
 
   const setRole = useMutation(api.admin.setRole);
   const deleteUser = useMutation(api.admin.deleteUser);
@@ -455,6 +462,9 @@ export default function Admin() {
           </TabsTrigger>
           <TabsTrigger value="insights" className="shrink-0">
             Insights
+          </TabsTrigger>
+          <TabsTrigger value="visits" className="shrink-0">
+            Visits
           </TabsTrigger>
           <TabsTrigger value="likes" className="shrink-0">
             Liked songs
@@ -1279,6 +1289,14 @@ export default function Admin() {
               </div>
             )}
           </div>
+        </TabsContent>
+
+        <TabsContent value="visits" className="mt-6">
+          <VisitAnalytics
+            summary={visitSummary}
+            days={visitDays}
+            onDaysChange={setVisitDays}
+          />
         </TabsContent>
 
         <TabsContent value="rooms" className="mt-6">

@@ -22,6 +22,9 @@ import { MobileMoreMenu } from "@/components/layout/MobileMoreMenu";
 import { SettingsDialog } from "@/components/settings/SettingsDialog";
 import { Logo } from "@/components/brand/Logo";
 import { SiteFooter } from "@/components/landing/SiteFooter";
+import { VisitTracker } from "@/components/analytics/VisitTracker";
+import { BackToTop } from "@/components/core/BackToTop";
+import { CommandPalette } from "@/components/core/CommandPalette";
 import { api } from "@/convex/_generated/api";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
@@ -928,6 +931,11 @@ export function AppShell() {
               focusLayout === "sleep" && "max-w-4xl",
             )}
           >
+            {/* Visit analytics. Renders null, creates no DOM node, and writes
+                through a fire-and-forget mutation, so it cannot affect layout
+                or navigation. Mounted once here so it sees every route change
+                exactly once. */}
+            <VisitTracker />
             <Outlet />
           </div>
 
@@ -988,6 +996,10 @@ export function AppShell() {
       </div>
 
       <QueuePanel />
+      {/* Mounted once each, at the shell level. Both render null until they
+          have something to show, so neither can affect layout. */}
+      <CommandPalette />
+      <BackToTop />
       <FullscreenPlayer />
       <NowPlayingAnnouncer />
       <IntroTrimProbe />

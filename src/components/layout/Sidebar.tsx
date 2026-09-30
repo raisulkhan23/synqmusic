@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Logo } from "@/components/brand/Logo";
 import { PlaylistDialog } from "@/components/playlists/PlaylistDialog";
 import { SettingsDialog } from "@/components/settings/SettingsDialog";
+import { CommandPaletteHint } from "@/components/core/CommandPalette";
 import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/hooks/use-auth";
 import { usePlayerStore } from "@/store/player";
@@ -203,6 +204,10 @@ export function Sidebar() {
             >
               <Settings className="size-4" />
             </button>
+            {/* Makes the ⌘K palette discoverable. A shortcut nobody can find
+                is not a shortcut, and this drives the same store the hotkey
+                does, so the two can never disagree. */}
+            <CommandPaletteHint className="ml-1" />
           </div>
 
           <PlaylistDialog open={dialogOpen} onOpenChange={setDialogOpen} />

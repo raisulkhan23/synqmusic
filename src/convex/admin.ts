@@ -7,6 +7,8 @@ import {
   MutationCtx,
   QueryCtx,
 } from "./_generated/server";
+// Relative, not the `@/` alias: the Convex bundler does not resolve it.
+import { summariseVisits } from "../lib/visitAnalytics";
 
 type Ctx = QueryCtx | MutationCtx;
 
@@ -583,5 +585,46 @@ export const userActivity = query({
         lastPlayedAt: lastPlayedAt.get(u._id) ?? 0,
       }))
       .sort((a, b) => b.plays - a.plays);
+  },
+});
+
+/**
+ * Visit analytics for the admin Visits tab (admin only).
+ *
+ * Reads the `visitDaily` rollup rather than the raw log, so the cost is
+ * bounded by days x distinct pages instead of by traffic. Authorisation goes
+ * through the same `getAdminUser` gate as every other function in this file,
+ * so there is exactly ONE place in the codebase that decides who is an admin —
+ * a second check is a second thing to forget to update.
+ */
+export const visitAnalytics = query({
+  args: { days: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    await getAdminUser(ctx);
+    const days = Math.max(1, Math.min(90, Math.floor(args.days ?? 14)));
+
+    // One indexed read per day in the window, rather than a full table scan.
+    // The day list is built in JS so a day with no rows still appears, as a
+    // zero, instead of silently vanishing from the chart.
+    const rollup = [];
+    for (const day of summariseVisits([], days).days) {
+      rollup.push(
+        ...(await ctx.db
+          .query("visitDaily")
+          .withIndex("by_day", (q) => q.eq("day", day))
+          .collect()),
+      );
+    }
+
+    return summariseVisits(
+      rollup.map((r) => ({
+        day: r.day,
+        path: r.path,
+        views: r.views,
+        visitors: r.visitors,
+        members: r.members,
+      })),
+      days,
+    );
   },
 });

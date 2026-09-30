@@ -290,6 +290,64 @@ const schema = defineSchema(
       createdAt: v.number(),
     }).index("by_user", ["userId"]),
 
+    // ---------------------------------------------------------------------
+    // Visit analytics (first-party, for the admin page).
+    //
+    // Amplitude is an outbound, optional integration that needs a key the
+    // workspace may not have. These tables are the app's OWN record of who
+    // opened which page, so the admin Visits tab works on a fresh deployment
+    // with no third-party account at all.
+    //
+    // Privacy: deliberately NO ip, NO user agent, NO fingerprint. A visitor is
+    // a random per-browser id that the client generates and can forget, which
+    // is enough to count unique visitors and nothing more. This matches what
+    // /privacy promises.
+    //
+    // Two tables, because an admin dashboard wants two very different reads.
+    // `visitEvents` is the raw append-only log and answers "what just
+    // happened"; it grows without bound, so `pruneVisits` deletes rows older
+    // than RAW_RETENTION_DAYS. `visitDaily` is the rollup that answers "what
+    // does the trend look like"; it has one row per (day, path), so it grows
+    // with days x distinct pages rather than with traffic, and the admin query
+    // reads a bounded number of rows no matter how busy the app gets.
+    // ---------------------------------------------------------------------
+
+    // Raw page-view log. Append-only, pruned by a daily cron.
+    visitEvents: defineTable({
+      /** UTC day, "YYYY-MM-DD". Denormalised so the rollup never re-reads rows. */
+      day: v.string(),
+      /** Route PATTERN, not a URL: "/artist/:artist", never "/artist/Bjork". */
+      path: v.string(),
+      at: v.number(),
+      /** Random per-browser id. Not a fingerprint, not derived from anything. */
+      visitorId: v.string(),
+      /** Auth subject when signed in, so visits can be split signed-in vs anon. */
+      userId: v.optional(v.string()),
+      /** Same-origin path only; a cross-site referrer is dropped, not stored. */
+      referrer: v.optional(v.string()),
+      /** Coarse bucket, never a UA string. */
+      device: v.optional(v.string()),
+    })
+      .index("by_at", ["at"])
+      .index("by_day", ["day"])
+      .index("by_visitor_at", ["visitorId", "at"]),
+
+    // One row per (day, path). The table the admin dashboard actually reads.
+    visitDaily: defineTable({
+      day: v.string(),
+      path: v.string(),
+      views: v.number(),
+      /** Distinct visitorIds seen on this day for this path. Bounded — see the
+       *  cap in convex/analytics.ts, which stops recording rather than
+       *  silently overstating the number. */
+      visitors: v.array(v.string()),
+      /** Distinct signed-in auth subjects, same cap. */
+      members: v.array(v.string()),
+      updatedAt: v.number(),
+    })
+      .index("by_day", ["day"])
+      .index("by_day_path", ["day", "path"]),
+
     // Lyrics lookups, keyed by the normalised "title|artist" that actually hit.
     // Stores misses too (`missing: true`) so a song with no lyrics anywhere is
     // only looked up once instead of on every open of the panel. Free lyrics
