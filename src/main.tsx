@@ -84,6 +84,7 @@ import AuthPage from "./pages/Auth.tsx";
 import TrackLink from "./pages/TrackLink.tsx";
 import Home from "./pages/Home.tsx";
 import Search from "./pages/Search.tsx";
+import Discover from "./pages/Discover.tsx";
 import Artist from "./pages/Artist.tsx";
 import Album from "./pages/Album.tsx";
 import Liked from "./pages/Liked.tsx";
@@ -380,6 +381,14 @@ createRoot(document.getElementById("root")!).render(
                     element={
                       <PageBoundary>
                         <Search />
+                      </PageBoundary>
+                    }
+                  />
+                  <Route
+                    path="/discover"
+                    element={
+                      <PageBoundary>
+                        <Discover />
                       </PageBoundary>
                     }
                   />

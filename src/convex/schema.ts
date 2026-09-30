@@ -33,6 +33,40 @@ const schema = defineSchema(
       following: v.optional(v.array(v.id("users"))), // social follows
     }).index("email", ["email"]), // index for the email. do not remove or modify
 
+    /**
+     * Music vector records, one per (user, track).
+     *
+     * Durable storage for the vector database so results survive a container
+     * restart and are identical on every instance — an in-memory store would
+     * silently drop a listener's index and serve different results depending
+     * on which replica answered.
+     *
+     * Scoped by `ownerId` (the auth subject). A user's listening-derived
+     * vectors are their own: the Discover search always filters on this field,
+     * so one listener can never read another's history through search.
+     *
+     * `signature` is a hash of the metadata that produced the vectors. It is
+     * what makes re-sync cheap and idempotent: an unchanged track is skipped
+     * rather than re-embedded, so syncing a 2000-track library does not
+     * re-run the embedder over all of it every time.
+     */
+    vectorRecords: defineTable({
+      ownerId: v.string(),
+      trackId: v.string(),
+      /** Full music metadata for this item. */
+      properties: v.any(),
+      /** Typed vectors: { audio: number[], lyrics: number[], ... } */
+      vectors: v.any(),
+      /** Embedding provenance per vector type (spec §13). */
+      versions: v.any(),
+      /** Hash of the metadata that produced these vectors. */
+      signature: v.string(),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    })
+      .index("by_owner_track", ["ownerId", "trackId"])
+      .index("by_owner", ["ownerId"]),
+
     // catalog track ids liked by a user (ordered by when they were liked)
     likedSongs: defineTable({
       userId: v.id("users"),

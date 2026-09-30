@@ -398,3 +398,49 @@ export const DEFAULTS = {
   similarityWeights: DEFAULT_SIMILARITY_WEIGHTS,
   diversity: DEFAULT_DIVERSITY,
 };
+
+/**
+ * A hash of the metadata that produced a record's vectors.
+ *
+ * Ingestion is expensive — every changed track is re-embedded — so a sync must
+ * be able to tell "this track is unchanged" from "this track changed" without
+ * re-embedding it to find out. The signature covers exactly the fields the
+ * embedder reads, in a fixed order, so it is stable across runs and machines.
+ * Vector version is deliberately NOT part of it: a model change is handled by
+ * `needsReembedding`, which asks a different and more accurate question.
+ */
+export function metadataSignature(properties: MusicProperties): string {
+  const canonical = [
+    properties.trackId,
+    properties.title,
+    properties.artist ?? "",
+    properties.album ?? "",
+    properties.language ?? "",
+    properties.region ?? "",
+    String(properties.releaseYear ?? ""),
+    String(properties.duration ?? ""),
+    String(properties.bpm ?? ""),
+    String(properties.energy ?? ""),
+    String(properties.danceability ?? ""),
+    String(properties.instrumentalness ?? ""),
+    String(properties.valence ?? ""),
+    listKey(properties.genres),
+    listKey(properties.moods),
+    listKey(properties.tags),
+    listKey(properties.instruments),
+    listKey(properties.subgenres),
+  ].join(" ");
+
+  // FNV-1a, matching the embedder's hash so there is one algorithm in the file.
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < canonical.length; i++) {
+    h ^= canonical.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return (h >>> 0).toString(36);
+}
+
+/** Sorted so a re-ordered list is not mistaken for a changed one. */
+function listKey(values: string[] | undefined): string {
+  return values ? [...values].sort().join(",") : "";
+}
