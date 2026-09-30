@@ -22,8 +22,10 @@
  *    and goes through `v` validators before it reaches the engine, so a
  *    malformed limit cannot turn into an unbounded scan.
  */
+import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
-import { action, query } from "./_generated/server";
+import { api } from "./_generated/api";
+import { action, query, type ActionCtx } from "./_generated/server";
 import {
   HashingEmbedder,
   MemoryVectorStore,
@@ -525,14 +527,46 @@ export const vectorHealth = query({
   },
 });
 
-async function requireAdmin(ctx: {
-  auth: { getUserIdentity(): Promise<unknown> };
-}): Promise<{ subject: string }> {
-  const identity = await requireIdentity(ctx);
-  // TODO(spec §17): replace with the real admin role from the users table.
-  // Until then this is authentication only, which is NOT authorisation — the
-  // distinction is recorded here rather than left to look finished.
-  return identity;
+/**
+ * The caller's role, and nothing else.
+ *
+ * A whole-file `users` scan would be the obvious way to check "is this an
+ * admin", and it would be wrong: it reads every account on the deployment just
+ * to answer a yes/no question, and it burns the read budget that keeps the
+ * admin panel itself loading past a few thousand rows. `getAuthUserId` is an
+ * index lookup on the session, so this stays O(1) and owner-scoped.
+ */
+export const myRole = query({
+  args: {},
+  handler: async (ctx): Promise<string | null> => {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) return null;
+    const me = await ctx.db.get(userId);
+    return me?.role ?? null;
+  },
+});
+
+/**
+ * Authorisation, not authentication.
+ *
+ * Signing in is not permission to rewrite the vector database. `ingestVectors`
+ * and `deleteVectors` write across every listener's records, so before this
+ * check they were reachable by anyone who had merely signed up — a real
+ * privilege-escalation hole wearing a `requireAdmin` name. The role comes from
+ * the `users` table (see `admin.setRole`); the identity is still required
+ * first so an anonymous caller gets "Not authenticated" rather than a null
+ * dereference.
+ *
+ * An action has no `ctx.db`, so the role is read through `myRole` rather than
+ * duplicating the user lookup here. `admin.status` is not a substitute: it
+ * scans three whole tables before it will answer.
+ */
+async function requireAdmin(ctx: ActionCtx): Promise<void> {
+  await requireIdentity(ctx);
+  const role = await ctx.runQuery(api.musicVectorDb.myRole);
+  if (role !== "admin") {
+    throw new Error("Admin access required");
+  }
 }
 
 /** Identity is required for anything touching a listening history. Throwing

@@ -38,6 +38,17 @@ export interface ImporterCapabilities {
   notConfiguredCode: Extract<ImportErrorCode, "not-configured" | "unsupported">;
   /** One line for the detection badge and the empty state. */
   blurb: string;
+  /**
+   * Rendered under the badge when the service can be imported but cannot be
+   * PLAYED from, so nobody spends an afternoon wiring up API keys expecting
+   * audio and concluding SYNQ is broken.
+   *
+   * Deliberately separate from `blurb`, which is about importing. Spotify,
+   * Apple Music and Tidal all import fine and all stream nothing: their APIs
+   * are catalog endpoints, and Tidal's in particular restricts actual audio to
+   * approved partner apps. Absent means "no caveat worth showing".
+   */
+  playbackNote?: string;
 }
 
 export const IMPORTERS: Record<PlaylistService, ImporterCapabilities> = {
@@ -73,6 +84,8 @@ export const IMPORTERS: Record<PlaylistService, ImporterCapabilities> = {
     notConfiguredCode: "not-configured",
     blurb:
       "Connects to Spotify so SYNQ can read the playlist's tracks. Spotify is a metadata source here — playback still comes from YouTube.",
+    playbackNote:
+      "Spotify's API has no audio endpoint for third-party apps, so these tracks play through SYNQ's usual source.",
   },
   "apple-music": {
     service: "apple-music",
@@ -90,6 +103,8 @@ export const IMPORTERS: Record<PlaylistService, ImporterCapabilities> = {
     notConfiguredCode: "not-configured",
     blurb:
       "Uses Apple's catalog API to read the playlist. Needs Apple developer credentials on the server.",
+    playbackNote:
+      "Catalog only — Apple Music doesn't hand audio to third-party apps, so these tracks play through SYNQ's usual source.",
   },
   soundcloud: {
     service: "soundcloud",
@@ -125,6 +140,8 @@ export const IMPORTERS: Record<PlaylistService, ImporterCapabilities> = {
     envVars: ["TIDAL_CLIENT_ID", "TIDAL_CLIENT_SECRET"],
     notConfiguredCode: "not-configured",
     blurb: "Uses Tidal's developer API — add API keys to connect.",
+    playbackNote:
+      "Imports titles and artwork only. Tidal API keys can't stream audio — Tidal restricts playback to approved partner apps — so tracks play through SYNQ's usual source.",
   },
   bandcamp: {
     service: "bandcamp",

@@ -316,6 +316,45 @@ describe("the importer registry describes every service", () => {
   });
 });
 
+describe("importable is not the same as playable", () => {
+  // Tidal, Spotify and Apple Music all hand over catalog data and none of them
+  // hands over audio. Tidal is the sharpest case: its developer keys look like
+  // a streaming licence and are not one, because playback is restricted to
+  // approved partner apps. Someone who wires up credentials expecting sound
+  // should be told plainly, at the point of detection.
+
+  const METADATA_ONLY = ["tidal", "spotify", "apple-music"];
+
+  test("every metadata-only service carries a playback note", () => {
+    for (const service of METADATA_ONLY) {
+      const note = importerFor(service).playbackNote;
+      expect(note).toBeTruthy();
+      expect(note.length).toBeGreaterThan(20);
+    }
+  });
+
+  test("Tidal's note says the keys are not a streaming licence", () => {
+    // Guards the specific claim. "Metadata" alone reads like an omission; the
+    // note has to name the restriction or the user assumes a bug.
+    const note = importerFor("tidal").playbackNote.toLowerCase();
+    expect(note).toContain("audio");
+    expect(note).toMatch(/stream|partner|restrict/);
+  });
+
+  test("YouTube is never given a caveat it does not have", () => {
+    // YouTube IS the playback source, so a note here would be a lie.
+    expect(importerFor("youtube").playbackNote).toBeUndefined();
+    expect(importerFor("youtube-music").playbackNote).toBeUndefined();
+  });
+
+  test("the note is rendered, not left in the registry", () => {
+    // The blurb field was never rendered anywhere, which is exactly how this
+    // information was already lost once. Assert the surface, not the data.
+    const client = readSource("src/components/settings/ImportSection.tsx");
+    expect(client).toContain("playbackNote");
+  });
+});
+
 describe("Spotify identifiers", () => {
   test("accepts a real 22-character id and rejects anything else", () => {
     expect(isSpotifyId("37i9dQZF1DX0XUsuxWHRQd")).toBe(true);

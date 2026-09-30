@@ -22,6 +22,7 @@ import {
 import {
   AlertCircle,
   Check,
+  Info,
   Link2,
   Loader2,
   Music4,
@@ -379,6 +380,16 @@ export function ImportSection({
                   : "Ready"}
             </span>
           </div>
+        ) : null}
+
+        {/* Importable but not playable. Tidal/Spotify/Apple keys buy metadata,
+            never audio, and finding that out only after wiring up credentials
+            reads as a broken app rather than a platform limit. */}
+        {detected && capabilities?.playbackNote ? (
+          <p className="mt-2 flex items-start gap-1.5 text-[11px] leading-relaxed text-muted-foreground">
+            <Info className="mt-px size-3.5 shrink-0" />
+            <span>{capabilities.playbackNote}</span>
+          </p>
         ) : null}
 
         <div className="mt-2.5 flex items-center gap-2">
