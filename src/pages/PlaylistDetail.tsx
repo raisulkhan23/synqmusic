@@ -116,9 +116,19 @@ export default function PlaylistDetail() {
     });
 
   const directPlayable = (row: PlaylistRow): Playable | null => {
-    if (!row.hasSnapshot) return null;
+    // A REAL YouTube id is the only thing that can be played directly.
+    //
+    // This used to accept any row that had a snapshot and fall back to
+    // `row.id`. That is fine for a song added from a search result, but a track
+    // that arrived through a playlist import has a synthetic namespaced id like
+    // `import:spotify|bjork|...` and NO `youtubeId`. Handing that to the player
+    // as if it were a video id produces a row that looks playable, is
+    // playable, and plays nothing — and because this function runs first in
+    // `resolveLegacyRow`, the search-based fallback was never reached for
+    // imported tracks at all.
+    if (!row.hasSnapshot || !row.youtubeId) return null;
     const item: YtItem = {
-      id: row.youtubeId ?? row.id,
+      id: row.youtubeId,
       title: row.title,
       artist: cleanArtistName(row.artist, row.title),
       thumbnail: row.thumbnail,

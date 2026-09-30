@@ -33,8 +33,13 @@ function normalizeSnapshot(track: TrackSnapshot): TrackSnapshot {
     artist: track.artist,
     ...(track.album ? { album: track.album } : {}),
     coverUrl: typeof track.coverUrl === "string" ? track.coverUrl : "",
-    duration: typeof track.duration === "number" && Number.isFinite(track.duration) ? track.duration : 0,
-    ...(typeof track.youtubeId === "string" && track.youtubeId ? { youtubeId: track.youtubeId } : {}),
+    duration:
+      typeof track.duration === "number" && Number.isFinite(track.duration)
+        ? track.duration
+        : 0,
+    ...(typeof track.youtubeId === "string" && track.youtubeId
+      ? { youtubeId: track.youtubeId }
+      : {}),
   };
 }
 
@@ -80,8 +85,10 @@ export const create = mutation({
     const snapshots = (tracks ?? []).filter((track) => track.id.trim());
     const uniqueSnapshots = [
       ...new Map(
-        snapshots
-          .map((track) => [track.id, normalizeSnapshot(track as TrackSnapshot)] as const),
+        snapshots.map(
+          (track) =>
+            [track.id, normalizeSnapshot(track as TrackSnapshot)] as const,
+        ),
       ).values(),
     ];
     const uniqueIds = uniqueSnapshots.map((track) => track.id);
@@ -90,7 +97,9 @@ export const create = mutation({
       name: playlistName,
       description,
       trackIds: uniqueIds,
-      ...(uniqueSnapshots.length > 0 ? { trackSnapshots: uniqueSnapshots } : {}),
+      ...(uniqueSnapshots.length > 0
+        ? { trackSnapshots: uniqueSnapshots }
+        : {}),
       createdAt: now,
       updatedAt: now,
     });
@@ -131,7 +140,14 @@ export const rename = mutation({
       name: name.trim() || playlist.name,
       updatedAt: Date.now(),
     });
-    await logEvent(ctx, userId, playlistId, name.trim() || playlist.name, "renamed", playlist.name);
+    await logEvent(
+      ctx,
+      userId,
+      playlistId,
+      name.trim() || playlist.name,
+      "renamed",
+      playlist.name,
+    );
   },
 });
 
@@ -154,7 +170,10 @@ export const addTrack = mutation({
     if (!playlist.trackIds.includes(trackId)) {
       const snapshots = playlist.trackSnapshots ?? [];
       const nextSnapshots = track
-        ? [...snapshots.filter((snapshot) => snapshot.id !== trackId), normalizeSnapshot(track as TrackSnapshot)]
+        ? [
+            ...snapshots.filter((snapshot) => snapshot.id !== trackId),
+            normalizeSnapshot(track as TrackSnapshot),
+          ]
         : snapshots;
       await ctx.db.patch(playlistId, {
         trackIds: [...playlist.trackIds, trackId],
@@ -182,13 +201,18 @@ export const removeTrack = mutation({
       throw new ConvexError("Playlist not found");
     }
     const removed = playlist.trackIds.includes(trackId);
-    const snapshots = playlist.trackSnapshots?.filter((track) => track.id !== trackId);
+    const snapshots = playlist.trackSnapshots?.filter(
+      (track) => track.id !== trackId,
+    );
     await ctx.db.patch(playlistId, {
       trackIds: playlist.trackIds.filter((id) => id !== trackId),
-      ...(playlist.trackSnapshots !== undefined ? { trackSnapshots: snapshots ?? [] } : {}),
+      ...(playlist.trackSnapshots !== undefined
+        ? { trackSnapshots: snapshots ?? [] }
+        : {}),
       updatedAt: Date.now(),
     });
-    if (removed) await logEvent(ctx, userId, playlistId, playlist.name, "removed", detail);
+    if (removed)
+      await logEvent(ctx, userId, playlistId, playlist.name, "removed", detail);
   },
 });
 
@@ -208,8 +232,47 @@ export const changeHistory = query({
 });
 
 /**
+ * A stable id for a track that came in through an import.
+ *
+ * An imported track has no provider id — a CSV row is a title and an artist —
+ * so one is derived. It MUST be namespaced: a bare YouTube video id would
+ * collide with a real track, and two different imported songs with the same
+ * title and artist would collapse into one.
+ *
+ * Deterministic on purpose. Re-importing the same file produces the same ids,
+ * so the playlist's own de-duplication does the sensible thing instead of
+ * stacking up five copies of the same song.
+ */
+function importedTrackId(
+  origin: string,
+  title: string,
+  artist: string,
+): string {
+  const key = `${origin}|${title}|${artist}`
+    .toLowerCase()
+    .replace(/[^a-z0-9|]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 120);
+  return `import:${key}`;
+}
+
+/**
  * Save a playlist imported from another music service (CSV/text export).
  * Tracks are snapshots — resolved to playable streams at play time.
+ *
+ * It writes to BOTH tables, and that is the fix rather than a flourish.
+ *
+ * `importedPlaylists` is the import system's own record and is what the admin
+ * Imports tab reads, so it stays. But it was the ONLY table written, and the
+ * one thing a listener actually looks at — "Your library" — reads `playlists`.
+ * So an import reported success, showed a green toast, and then appeared
+ * nowhere at all. `myImportedPlaylists` existed the whole time and nothing
+ * called it.
+ *
+ * Writing a real `playlists` row as well is what makes the import land: it
+ * shows up in the library immediately and is playable, editable, renameable
+ * and deletable through the UI that is already there, rather than needing a
+ * second screen built to display a table nobody renders.
  */
 export const saveImported = mutation({
   args: {
@@ -228,13 +291,55 @@ export const saveImported = mutation({
     if (tracks.length === 0) {
       throw new ConvexError("No tracks found in the import");
     }
+    const playlistName = name.trim() || "Imported playlist";
     const id = await ctx.db.insert("importedPlaylists", {
       userId,
-      name: name.trim() || "Imported playlist",
+      name: playlistName,
       origin,
       tracks,
       createdAt: Date.now(),
     });
+
+    // The same tracks as real playlist snapshots, so the import is a first
+    // class library entry rather than a record only the admin can see.
+    // De-duplicated by id for the same reason `create` does it: a 200-row
+    // export that repeats a track should not show it twice.
+    const snapshots: TrackSnapshot[] = [];
+    const seen = new Set<string>();
+    for (const track of tracks) {
+      const title = track.title.trim();
+      if (!title) continue;
+      const snapshot: TrackSnapshot = {
+        id: importedTrackId(origin, title, track.artist),
+        title,
+        artist: track.artist.trim(),
+        coverUrl: "",
+        duration:
+          typeof track.duration === "number" && Number.isFinite(track.duration)
+            ? track.duration
+            : 0,
+      };
+      if (seen.has(snapshot.id)) continue;
+      seen.add(snapshot.id);
+      snapshots.push(snapshot);
+    }
+
+    if (snapshots.length > 0) {
+      const now = Date.now();
+      await ctx.db.insert("playlists", {
+        userId,
+        name: playlistName,
+        // No invented album: the import did not supply one, and fabricating
+        // "Imported" as an album name would show up in the detail view as
+        // though the data existed.
+        description: `Imported from ${origin}`,
+        trackIds: snapshots.map((snapshot) => snapshot.id),
+        trackSnapshots: snapshots,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
     return id;
   },
 });

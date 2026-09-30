@@ -142,7 +142,14 @@ export function ImportSection({
           ? { detail: verdict.outcome.warnings.join(" ") }
           : {}),
       });
-      toast.success(`${name} — ${summary}`);
+      // The toast has to say WHERE it went. A green confirmation with no
+      // destination is exactly what made this feel broken: the import reported
+      // success and the listener went looking for it in their library and found
+      // nothing, with no way to tell whether the save or the search was at
+      // fault. "Added to Your library" is both true and a direction.
+      toast.success(`${name} — ${summary}`, {
+        description: "Added to Your library.",
+      });
     },
     [saveImported],
   );
