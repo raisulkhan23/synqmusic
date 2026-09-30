@@ -827,6 +827,39 @@ function getResumePosition(id: string, duration: number): number {
   return hit.t;
 }
 
+/**
+ * Forget a track's saved position, so it stops appearing in "Continue
+ * listening".
+ *
+ * Deliberately narrow: it clears the RESUME POSITION and nothing else. The
+ * play history entry, the listening stats and the recommendation signals all
+ * stay exactly where they were, because "stop showing me this in one shelf" is
+ * not "pretend I never played it". Forgetting history would also quietly
+ * corrupt the recommendation engine, which reads those signals.
+ *
+ * The shelf reappears for a track played again, because a new position is
+ * then saved. That is the honest behaviour: the listener chose to come back to
+ * it, so the app should offer it again.
+ *
+ * Returns true when something was actually removed, so a caller can report
+ * honestly rather than claiming success for a no-op.
+ */
+export function forgetResumePosition(id: string): boolean {
+  try {
+    const key = id.trim();
+    if (!key) return false;
+    const map = readResumeMap();
+    if (!(key in map)) return false;
+    delete map[key];
+    writeSetting(RESUME_KEY, JSON.stringify(map));
+    return true;
+  } catch {
+    // Storage unavailable (private browsing). The card will simply still be
+    // there, which is recoverable; throwing would break the menu instead.
+    return false;
+  }
+}
+
 // --- smart-shuffle memory -----------------------------------------------------
 
 /** Ids of recently heard tracks (most recent first) — smart shuffle avoids these. */

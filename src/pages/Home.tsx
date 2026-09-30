@@ -2,6 +2,7 @@ import { Link, useNavigate } from "react-router";
 import { artistPath } from "@/lib/artistLinks";
 import { PlaylistCard } from "@/components/playlists/PlaylistCard";
 import { MediaCard } from "@/components/tracks/MediaCard";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Shelf } from "@/components/core/shelf";
 import { api } from "@/convex/_generated/api";
 import type { RecoCandidate } from "@/lib/recommend";
@@ -10,7 +11,11 @@ import { toPlayableYoutube, type Playable } from "@/lib/playable";
 import { shuffleList } from "@/lib/queueOrder";
 
 import { cleanArtistName, type YtItem } from "@/lib/youtube";
-import { usePlayerStore, peekResumePosition } from "@/store/player";
+import {
+  usePlayerStore,
+  peekResumePosition,
+  forgetResumePosition,
+} from "@/store/player";
 import {
   readLastPlayed,
   readPlayHistory,
@@ -31,6 +36,7 @@ import {
   ListMusic,
   Play,
   PlayCircle,
+  X,
   Repeat2,
   Search,
   Sparkles,
@@ -38,7 +44,13 @@ import {
   UsersRound,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
 type RemoteMap = Record<string, YtItem[] | undefined>;
 
@@ -154,6 +166,9 @@ export default function Home() {
   const searchYt = useAction(api.youtube.searchYoutube);
 
   const [resolvingId, setResolvingId] = useState<string | null>(null);
+  // Bumped whenever a saved resume position is cleared, so the "Continue
+  // listening" shelf recomputes even though nothing it reads from changed.
+  const [resumeVersion, setResumeVersion] = useState(0);
   const [remote, setRemote] = useState<RemoteMap>({});
   const [remoteRefreshToken, setRemoteRefreshToken] = useState(0);
 
@@ -625,6 +640,12 @@ export default function Home() {
   // Continue listening: only tracks the app has a REAL saved position for.
   // Nothing is invented here — if there is no resume map entry, the track is
   // not shown as unfinished.
+  //
+  // `resumeVersion` exists because clearing a saved position writes to
+  // localStorage, and `historyItems` does not change when that happens — so
+  // without something to key the memo on, the card the listener just dismissed
+  // would sit there until they reloaded the page. A dismissed card reappearing
+  // is exactly the behaviour that makes a remove button feel broken.
   const resumableItems = useMemo(
     () =>
       usable(historyItems)
@@ -633,8 +654,35 @@ export default function Home() {
           at: peekResumePosition(item.id, item.duration),
         }))
         .filter(({ item, at }) => at > 0 && item.duration > 0),
-    [historyItems],
+    // `resumeVersion` is deliberately NOT read inside the memo. Clearing a
+    // saved position writes to localStorage, which React cannot observe, so
+    // this is a cache-busting key and nothing more — without it the card the
+    // listener just dismissed stays on screen until a reload, which is exactly
+    // what makes a remove button feel broken.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [historyItems, resumeVersion],
   );
+
+  /**
+   * Stop offering this track in "Continue listening".
+   *
+   * Only the saved position is cleared. The play history, the listening stats
+   * and the recommendation signals are left alone — this is "don't show me
+   * this in one shelf again", not "erase that I listened to it", and wiping
+   * history would quietly poison the recommender that reads those same rows.
+   */
+  const dismissResume = useCallback((item: YtItem) => {
+    const removed = forgetResumePosition(item.id);
+    // Bump either way: on a storage failure the card stays, and saying so
+    // honestly is better than leaving the user tapping a button that does
+    // nothing.
+    setResumeVersion((v) => v + 1);
+    if (removed) {
+      toast.success(`Removed "${item.title}" from Continue listening`);
+    } else {
+      toast.error("Couldn't remove that here — try clearing site data");
+    }
+  }, []);
 
   const playShelf = (item: YtItem) => {
     setResolvingId(item.id);
@@ -842,6 +890,21 @@ export default function Home() {
               onOpen={() => playShelf(item)}
               onPlay={() => playShelf(item)}
               meta={`${Math.round((at / Math.max(1, item.duration)) * 100)}% played`}
+              // A resume entry is an OFFER, not a record. Without a way to
+              // decline it, a shelf of stale or unplayable tracks is
+              // something the listener has to scroll past forever.
+              menuItems={
+                <DropdownMenuItem
+                  className="gap-2"
+                  onSelect={(event) => {
+                    event.stopPropagation();
+                    dismissResume(item);
+                  }}
+                >
+                  <X className="size-4" />
+                  Remove from Continue listening
+                </DropdownMenuItem>
+              }
             />
           ))}
         </Shelf>
