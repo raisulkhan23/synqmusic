@@ -36,6 +36,13 @@ import type { ImportFailure } from "../lib/importModel";
  *    So no limit is hardcoded as if it were fact: this file keeps its own
  *    conservative budget to stay a good citizen, and treats the provider's own
  *    rate-limit response as the authoritative signal.
+ * 3. IT SOMETIMES ANSWERS A GOOD QUERY WITH A SUCCESSFUL NOTHING. Measured
+ *    against a live key, roughly a third of calls for a query with thousands
+ *    of matches come back `status: "success"`, `code: 0`, an EMPTY
+ *    `error_message` and zero rows. Taken at face value that is "no results",
+ *    and it is indistinguishable from a genuine miss at the HTTP level. So an
+ *    empty page is treated as a failed attempt and retried before the listener
+ *    is told a search found nothing — see `MAX_EMPTY_ATTEMPTS`.
  */
 
 const API = "https://api.jamendo.com/v3.0/tracks/";
@@ -43,10 +50,16 @@ const REQUEST_TIMEOUT_MS = 15_000;
 
 /** Our own budget, not Jamendo's. Deliberately well under any plausible free
  *  tier; the upstream response is what actually ends a quota, this just avoids
- *  spending it on a listener hammering the search box. */
+ *  spending it on a listener hammering the search box.
+ *
+ *  Counted in UPSTREAM CALLS, not searches, so that the empty-result retries
+ *  below cannot quietly triple the load we put on a free key. */
 const RATE_WINDOW_MS = 60_000;
 const RATE_MAX = 20;
 const rateBuckets = new Map<string, { count: number; resetAt: number }>();
+
+/** How many upstream calls one search may cost. See `attemptOnce`. */
+const MAX_EMPTY_ATTEMPTS = 3;
 
 /** Hard ceiling on rows asked for. Jamendo's own max is 200; a search result
  *  list does not need that many and each row carries a waveform blob. */
@@ -99,19 +112,6 @@ export const searchJamendo = action({
     // rather than letting anonymous traffic draw from an unlimited line.
     const identity = await ctx.auth.getUserIdentity();
     const key = `jamendo:${identity?.subject ?? "anon"}`;
-    const limit = checkRateLimit(key);
-    if (!limit.ok) {
-      return {
-        ok: false,
-        failure: {
-          code: "rate-limited",
-          message: "Too many Jamendo searches just now.",
-          retryable: true,
-          hint: "Give it a minute — SYNQ pauses after 20 searches a minute to stay inside the free tier.",
-        },
-        retryAfterMs: limit.retryAfterMs,
-      };
-    }
 
     const url = new URL(API);
     url.searchParams.set("client_id", id);
@@ -131,40 +131,68 @@ export const searchJamendo = action({
     // per track via `audiodownload_allowed`.
     url.searchParams.set("audioformat", "mp31");
 
-    let response: Response;
-    try {
-      response = await fetch(url.toString(), {
-        headers: { Accept: "application/json" },
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      });
-    } catch {
-      return { ok: false, failure: networkFailure() };
+    /**
+     * One upstream call, returning either a normalised page or a failure.
+     *
+     * Split out of the handler because a search may need more than one of
+     * these, and the request/parse logic must not drift between attempts.
+     */
+    const attemptOnce = async (): Promise<JamendoSearchResult> => {
+      const limit = checkRateLimit(key);
+      if (!limit.ok) {
+        return {
+          ok: false,
+          failure: {
+            code: "rate-limited",
+            message: "Too many Jamendo searches just now.",
+            retryable: true,
+            hint: "Give it a minute — SYNQ pauses after 20 Jamendo calls a minute to stay inside the free tier.",
+          },
+          retryAfterMs: limit.retryAfterMs,
+        };
+      }
+
+      let response: Response;
+      try {
+        response = await fetch(url.toString(), {
+          headers: { Accept: "application/json" },
+          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        });
+      } catch {
+        return { ok: false, failure: networkFailure() };
+      }
+
+      // A real 429 is the one status worth special-casing, and it is the
+      // authoritative "your quota is gone" signal.
+      if (response.status === 429) {
+        return { ok: false, failure: httpQuotaFailure() };
+      }
+
+      let body: unknown;
+      try {
+        body = await response.json();
+      } catch {
+        return { ok: false, failure: networkFailure() };
+      }
+
+      // The important one: a 200 that contains a failure.
+      const unwrapped = unwrap(body);
+      if (!unwrapped.ok) {
+        return { ok: false, failure: unwrapped.failure ?? networkFailure() };
+      }
+      return { ok: true, tracks: normalizeTracks(unwrapped.results) };
+    };
+
+    for (let attempt = 0; attempt < MAX_EMPTY_ATTEMPTS; attempt++) {
+      const outcome = await attemptOnce();
+      // A failure is final and must NOT be retried: turning a quota wall or a
+      // bad key into three wasted calls would only make a real problem worse.
+      if (!outcome.ok) return outcome;
+      if (outcome.tracks.length > 0) return outcome;
+      // A clean success with zero rows is retried — see MAX_EMPTY_ATTEMPTS.
     }
 
-    // A real 429 is the one status worth special-casing, and it is the
-    // authoritative "your quota is gone" signal.
-    if (response.status === 429) {
-      return { ok: false, failure: httpQuotaFailure() };
-    }
-
-    let body: unknown;
-    try {
-      body = await response.json();
-    } catch {
-      return { ok: false, failure: networkFailure() };
-    }
-
-    // The important one: a 200 that contains a failure.
-    const unwrapped = unwrap(body);
-    if (!unwrapped.ok) {
-      return { ok: false, failure: unwrapped.failure ?? networkFailure() };
-    }
-
-    const tracks = normalizeTracks(unwrapped.results);
-    if (tracks.length === 0) {
-      return { ok: false, failure: emptyResult() };
-    }
-    return { ok: true, tracks };
+    return { ok: false, failure: emptyResult() };
   },
 });
 

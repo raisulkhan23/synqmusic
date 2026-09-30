@@ -284,6 +284,128 @@ describe("the action's states", () => {
   });
 });
 
+/**
+ * Jamendo's free tier intermittently answers a query with thousands of
+ * matches using `status: "success"`, `code: 0`, an EMPTY `error_message` and
+ * zero rows — measured live at roughly a third of calls. Taken at face value
+ * that is "no results", and it is indistinguishable from a genuine miss, so
+ * the only defence is to try again before telling a listener a search found
+ * nothing. These tests pin that behaviour, because the bug it fixes is
+ * invisible: without them the app simply loses a third of all searches.
+ */
+describe("a successful nothing is retried, not believed", () => {
+  test("a silent empty page is retried and the retry's tracks are returned", async () => {
+    process.env.JAMENDO_CLIENT_ID = "key";
+    let calls = 0;
+    globalThis.fetch = async () => {
+      calls += 1;
+      // First call: the silent-empty success. Second: the real page.
+      if (calls === 1) {
+        return Response.json({
+          headers: {
+            status: "success",
+            code: 0,
+            results_count: 0,
+            error_message: "",
+          },
+          results: [],
+        });
+      }
+      return Response.json(successEnvelope([goodTrack()]));
+    };
+    const out = await searchJamendo._handler(ctxFor("r1"), { query: "techno" });
+    expect(out.ok).toBe(true);
+    expect(out.tracks).toHaveLength(1);
+    expect(calls).toBe(2);
+  });
+
+  test("retries are bounded, then reported as a genuine empty", async () => {
+    process.env.JAMENDO_CLIENT_ID = "key";
+    let calls = 0;
+    globalThis.fetch = async () => {
+      calls += 1;
+      return Response.json(successEnvelope([]));
+    };
+    const out = await searchJamendo._handler(ctxFor("r2"), { query: "jazz" });
+    expect(out.ok).toBe(false);
+    expect(out.failure.code).toBe("empty");
+    // Bounded: it gives up rather than retrying forever.
+    expect(calls).toBe(3);
+  });
+
+  test("an all-unplayable page is still retried, because it is still empty", async () => {
+    process.env.JAMENDO_CLIENT_ID = "key";
+    let calls = 0;
+    globalThis.fetch = async () => {
+      calls += 1;
+      return Response.json(successEnvelope([goodTrack({ audio: "" })]));
+    };
+    const out = await searchJamendo._handler(ctxFor("r3"), { query: "jazz" });
+    expect(out.ok).toBe(false);
+    expect(out.failure.code).toBe("empty");
+    expect(calls).toBe(3);
+  });
+
+  test("a genuine failure is NOT retried, so a real problem is not made worse", async () => {
+    process.env.JAMENDO_CLIENT_ID = "key";
+    let calls = 0;
+    globalThis.fetch = async () => {
+      calls += 1;
+      throw new Error("ECONNRESET");
+    };
+    const out = await searchJamendo._handler(ctxFor("r4"), { query: "jazz" });
+    expect(out.ok).toBe(false);
+    expect(out.failure.code).toBe("network");
+    // Retrying a quota wall or a bad key would only spend more of a budget
+    // that is already gone.
+    expect(calls).toBe(1);
+  });
+
+  test("a bad key is reported once, not three times", async () => {
+    process.env.JAMENDO_CLIENT_ID = "key";
+    let calls = 0;
+    globalThis.fetch = async () => {
+      calls += 1;
+      return Response.json({
+        headers: {
+          status: "failed",
+          code: 5,
+          error_message:
+            "Jamendo Api Invalid Client Id Error: Your credential is not authorized.",
+        },
+        results: [],
+      });
+    };
+    const out = await searchJamendo._handler(ctxFor("r5"), { query: "jazz" });
+    expect(out.ok).toBe(false);
+    expect(out.failure.code).toBe("not-configured");
+    expect(calls).toBe(1);
+  });
+
+  test("retries spend the own-budget, so they cannot multiply upstream load", async () => {
+    process.env.JAMENDO_CLIENT_ID = "key";
+    let calls = 0;
+    globalThis.fetch = async () => {
+      calls += 1;
+      return Response.json(successEnvelope([]));
+    };
+    const ctx = ctxFor("r6");
+    // Each search costs 3 upstream calls, so the 20-call budget runs out
+    // part-way through the seventh search rather than after twenty.
+    for (let i = 0; i < 6; i += 1) {
+      const out = await searchJamendo._handler(ctx, { query: `q${i}` });
+      expect(out.ok).toBe(false);
+      expect(out.failure.code).toBe("empty");
+    }
+    const blocked = await searchJamendo._handler(ctx, {
+      query: "one too many",
+    });
+    expect(blocked.ok).toBe(false);
+    expect(blocked.failure.code).toBe("rate-limited");
+    expect(calls).toBe(20);
+  });
+});
+
 describe("the failures are written for a listener", () => {
   test("the quota hint names the real constraint", () => {
     const f = httpQuotaFailure();
