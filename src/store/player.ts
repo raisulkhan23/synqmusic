@@ -78,101 +78,25 @@ const resolveYoutubeStream = async (
       })
       .catch(() => undefined);
   }
-  // 1) Browser-side InnerTube resolution. Runs from the USER's IP, which is
-  //    NOT subject to YouTube's datacenter bot-check (cloud functions get
-  //    "Sign in to confirm you're not a bot" for most videos, which is what
-  //    made every effect report "Effect unavailable"). The returned
-  //    googlevideo URL then goes through our CORS proxy so the <audio>
-  //    element (and therefore the EQ chain) can load it.
-  try {
-    const clients = [
-      {
-        name: "ANDROID_VR",
-        id: "28",
-        version: "1.60.19",
-        ua: "com.google.android.apps.youtube.vr.oculus/1.60.19 (Linux; U; Android 12; eureka-user Build/SQ3A.220605.009.A1) gzip",
-        extra: { androidSdkVersion: 31, osName: "Android", osVersion: "12" },
-      },
-      {
-        name: "TVHTML5",
-        id: "7",
-        version: "7.20240801.18.00",
-        ua: "Mozilla/5.0 (PlayStation; PlayStation 4/12.00) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Safari/605.1.15",
-        extra: {},
-      },
-    ];
-    for (const c of clients) {
-      try {
-        const ctrl = new AbortController();
-        const timer = setTimeout(() => ctrl.abort(), 8000);
-        const res = await fetch(
-          `https://www.youtube.com/youtubei/v1/player?prettyPrint=false`,
-          {
-            method: "POST",
-            signal: ctrl.signal,
-            headers: {
-              "Content-Type": "application/json",
-              "User-Agent": c.ua,
-              "X-Youtube-Client-Name": c.id,
-              "X-Youtube-Client-Version": c.version,
-              Origin: "https://www.youtube.com",
-            },
-            body: JSON.stringify({
-              context: {
-                client: {
-                  hl: "en",
-                  gl: "US",
-                  clientName: c.name,
-                  clientVersion: c.version,
-                  ...c.extra,
-                },
-              },
-              videoId,
-              contentCheckOk: true,
-              racyCheckOk: true,
-              thirdParty: { embedUrl: "https://www.youtube.com" },
-            }),
-          },
-        );
-        clearTimeout(timer);
-        if (!res.ok) continue;
-        const data = (await res.json()) as {
-          playabilityStatus?: { status?: string };
-          streamingData?: {
-            adaptiveFormats?: Record<string, unknown>[];
-            formats?: Record<string, unknown>[];
-          };
-        };
-        if (
-          data.playabilityStatus?.status &&
-          data.playabilityStatus.status !== "OK"
-        )
-          continue;
-        const formats = [
-          ...(data.streamingData?.adaptiveFormats ?? []),
-          ...(data.streamingData?.formats ?? []),
-        ];
-        const audio = formats
-          .filter(
-            (f) =>
-              typeof f.url === "string" &&
-              typeof f.mimeType === "string" &&
-              f.mimeType.startsWith("audio/"),
-          )
-          .sort((a, b) => (b.bitrate as number) - (a.bitrate as number));
-        const best = audio[0];
-        if (typeof best?.url === "string") {
-          return `${audioProxyBase}?u=${encodeURIComponent(best.url)}`;
-        }
-      } catch {
-        continue;
-      }
-    }
-  } catch {
-    /* fall through to the other resolvers */
-  }
-  // 2) Server-side InnerTube resolution as a backup (may be bot-blocked, but
-  //    occasionally the cloud IP isn't).
+  // NOTE: there used to be a browser-side InnerTube attempt here, spoofing an
+  // ANDROID_VR / TVHTML5 client to resolve a direct googlevideo URL from the
+  // USER's IP so audio effects would survive YouTube's datacenter bot-check.
+  // It has been removed because it CANNOT work from a browser, for two
+  // structural reasons rather than fixable ones:
+  //
+  //   1. `https://www.youtube.com/youtubei/v1/player` returns no
+  //      `Access-Control-Allow-Origin` at all, and answers the preflight with
+  //      403. Verified directly against the live endpoint rather than assumed:
+  //      an OPTIONS request carrying an Origin returns 403 and not one
+  //      `access-control-*` header.
+  //   2. `User-Agent` is a FORBIDDEN header name, so `fetch` silently dropped
+  //      the one header the client-spoofing depended on. It never reached the
+  //      network wearing the identity it was pretending to have.
+  //
+  // So it never returned a URL, and all it actually produced was two CORS
+  // errors in the console on every single play, alongside a comment claiming
+  // resolution ran from the user's IP. The two resolvers below are the real
+  // paths, and they are unchanged.
   try {
     ytResolveClient =
       ytResolveClient ??

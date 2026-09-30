@@ -96,7 +96,14 @@ export type CandidateSource =
   | "playlist"
   | "related_to_current"
   | "discovery"
-  | "global";
+  | "global"
+  /**
+   * From the music vector index rather than a text search: the candidate was
+   * found by sounding like something the listener played, not by matching an
+   * artist or title string. This is the only source that can surface music the
+   * listener has never searched for by name.
+   */
+  | "vector_sound_alike";
 
 /** The full explainable breakdown. Every field is a real computed number. */
 export interface ScoreBreakdown {

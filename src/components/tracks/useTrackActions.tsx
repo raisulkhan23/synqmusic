@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
 
 import { AddToPlaylistItems } from "@/components/playlists/AddToPlaylistItems";
 import { PlaylistDialog } from "@/components/playlists/PlaylistDialog";
@@ -22,6 +24,8 @@ import {
   ListMusic,
   ListStart,
   MoreVertical,
+  ThumbsDown,
+  UserX,
 } from "lucide-react";
 
 /**
@@ -56,6 +60,12 @@ export function useTrackActions(
   }, [item, source]);
   const { addTo } = useAddToPlaylist(track);
 
+  const markNotInterested = useMutation(api.notInterested.markNotInterested);
+  const unmarkNotInterested = useMutation(
+    api.notInterested.unmarkNotInterested,
+  );
+  const invalidateRecommendCache = useMutation(api.recommend.invalidateCache);
+
   const likeThis = () =>
     toggleLike(item.id, {
       title,
@@ -79,6 +89,90 @@ export function useTrackActions(
     toast.success("Added to queue");
   };
 
+  /**
+   * "Not interested" — the deliberate negative signal.
+   *
+   * Two things make this feel trustworthy rather than ignored, and both were
+   * the obvious failure modes:
+   *
+   * 1. THE CACHE IS DROPPED. Home payloads are cached for ten minutes. Writing
+   *    the exclusion without invalidating would leave the listener staring at
+   *    the song they just rejected, on a row that refreshes by itself, which
+   *    reads as a broken button rather than a slow one.
+   * 2. THERE IS AN UNDO. A one-tap permanent exclusion with no way back is a
+   *    trap — a mis-tap silently removes an artist forever. The toast carries
+   *    the reversal, and undo ALSO restores the cache state by invalidating
+   *    again rather than trying to surgically re-insert a payload.
+   *
+   * If the write fails, the listener is told so rather than being left to
+   * believe a preference was saved.
+   *
+   * The queue is deliberately NOT touched, and the current track is not
+   * skipped. "Not interested" is a statement about what to be shown next, not a
+   * stop button: silently cutting off audio mid-listen is a surprise, and the
+   * one thing this feature must never be is destructive.
+   */
+  const notInterested = async () => {
+    try {
+      await markNotInterested({
+        scope: "track",
+        trackId: item.id,
+        artistName,
+      });
+      await invalidateRecommendCache();
+      toast.success(`Hidden "${title}"`, {
+        description: artistName
+          ? `We'll stop recommending it.`
+          : "We'll stop recommending it.",
+        action: {
+          label: "Undo",
+          onClick: () => {
+            void undoNotInterested();
+          },
+        },
+      });
+    } catch {
+      toast.error("Couldn't save that — try again");
+    }
+  };
+
+  /** Not interested in the whole artist, not just this song. */
+  const notInterestedInArtist = async () => {
+    try {
+      await markNotInterested({
+        scope: "artist",
+        trackId: item.id,
+        artistName,
+      });
+      await invalidateRecommendCache();
+      toast.success(`No more ${artistName}`, {
+        description: "We'll stop recommending this artist.",
+        action: {
+          label: "Undo",
+          onClick: () => {
+            void undoNotInterested("artist");
+          },
+        },
+      });
+    } catch {
+      toast.error("Couldn't save that — try again");
+    }
+  };
+
+  const undoNotInterested = async (scope: "track" | "artist" = "track") => {
+    try {
+      await unmarkNotInterested({
+        scope,
+        trackId: item.id,
+        artistName,
+      });
+      await invalidateRecommendCache();
+      toast.success("Restored");
+    } catch {
+      toast.error("Couldn't undo that");
+    }
+  };
+
   return {
     track,
     title,
@@ -87,6 +181,8 @@ export function useTrackActions(
     likeThis,
     playNext,
     addQueued,
+    notInterested,
+    notInterestedInArtist,
     playlistDialogOpen,
     setPlaylistDialogOpen,
     renderPlaylistDialog: (
@@ -182,6 +278,29 @@ export function TrackActionsMenu({
               }
             />
             {actions.isLiked ? "Remove from liked songs" : "Add to liked songs"}
+          </DropdownMenuItem>
+          {/* The deliberate negative signal. Its own submenu because "not this
+              song" and "not this artist" are different decisions, and burying
+              the artist one behind a long-press would mean it never gets used. */}
+          <DropdownMenuItem
+            className="gap-2"
+            onSelect={(event) => {
+              event.stopPropagation();
+              void actions.notInterested();
+            }}
+          >
+            <ThumbsDown className="size-4" />
+            Not interested in this
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="gap-2"
+            onSelect={(event) => {
+              event.stopPropagation();
+              void actions.notInterestedInArtist();
+            }}
+          >
+            <UserX className="size-4" />
+            Not interested in {actions.artistName}
           </DropdownMenuItem>
           {extraItems ? (
             <>

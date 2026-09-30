@@ -39,6 +39,10 @@ import {
   type UserSignals,
 } from "../lib/recommend";
 import type { YtItem } from "./youtube";
+// Relative, not the `@/` alias: the Convex bundler does not resolve it.
+import { applyExclusions, mergeExtra } from "../lib/recoMerge";
+import { NO_EXCLUSIONS, type Exclusions } from "../lib/notInterested";
+import { VECTOR_SEED } from "./recommendVectors";
 
 // ---------------------------------------------------------------------------
 // Tuning
@@ -90,6 +94,7 @@ const SECTION_IDS = [
   "based_on_likes",
   "from_artists",
   "discover",
+  "sound_alike",
 ] as const;
 
 type SectionId = (typeof SECTION_IDS)[number];
@@ -198,6 +203,11 @@ function seedsForSection(section: SectionId, seeds: CandidateSeed[]) {
       return seeds.filter((s) => s.source === "artists");
     case "discover":
       return seeds.filter((s) => s.source === "discovery");
+    case "sound_alike":
+      // Only the vector seed. Without this the row would be populated by the
+      // same text-search candidates as every other row, and the title would be
+      // claiming a sound-alike search that never happened.
+      return seeds.filter((s) => s.source === "vector_sound_alike");
     default:
       return [];
   }
@@ -230,6 +240,12 @@ function sectionEligibility(
     based_on_likes: userSignals.likes.length >= MIN_LIKES,
     from_artists: artistsWithPlays >= MIN_ARTISTS,
     discover: built.personalised && artistsWithPlays >= 1,
+    // The sound-alike row needs RECENT PLAYS, not plays in general: it is
+    // built by asking the vector index "what is near what I just played", so
+    // with no recent plays there is nothing to be near. Gating on a total
+    // count instead would show the row to a listener whose last play was
+    // months ago, populated by similarity to a stale session.
+    sound_alike: realPlays >= MIN_PLAYS,
   };
 }
 
@@ -253,6 +269,10 @@ const SECTION_META: Record<SectionId, { title: string; subtitle: string }> = {
   discover: {
     title: "Discover something new",
     subtitle: "Near your taste, but not in your history yet.",
+  },
+  sound_alike: {
+    title: "Sounds like what you play",
+    subtitle: "Matched by sound, from your own library.",
   },
 };
 
@@ -450,6 +470,60 @@ async function resolvePool(
   return { items, seedByTrackId, seeds };
 }
 
+/**
+ * The listener's "not interested" set, or an empty one.
+ *
+ * Never throws: an exclusion set that fails to load must not take the
+ * recommendations down with it, and NO_EXCLUSIONS degrades to exactly the
+ * behaviour the app had before the feature existed.
+ */
+async function loadExclusions(ctx: ActionCtx): Promise<Exclusions> {
+  try {
+    const row = await ctx.runQuery(api.notInterested.exclusions, {});
+    return row ?? NO_EXCLUSIONS;
+  } catch {
+    return NO_EXCLUSIONS;
+  }
+}
+
+/**
+ * Vector-derived candidates, fetched but NOT yet merged.
+ *
+ * Returns an empty array rather than throwing in every failure case, because
+ * the recommender must be exactly as good as it was before the vector database
+ * existed. Two are worth naming: a library that was never indexed (the normal
+ * state for a new account) and a failure inside the vector store. In both
+ * cases `mergeExtra` declines to add anything and the pool is left alone.
+ */
+async function fetchVectorCandidates(
+  ctx: ActionCtx,
+  args: {
+    recentPlays: Array<{ trackId: string; at: number }>;
+    excludeIds: Set<string>;
+  },
+): Promise<RecoCandidate[]> {
+  // Seed from the most RECENT plays rather than the most liked: "what does
+  // this sound like" is a question about now, and a listener whose taste moved
+  // on six months ago should not keep getting their old self back.
+  const seedTrackIds = args.recentPlays
+    .slice()
+    .sort((a, b) => b.at - a.at)
+    .map((entry) => entry.trackId);
+  if (seedTrackIds.length === 0) return [];
+
+  try {
+    const result = await ctx.runAction(api.recommendVectors.vectorCandidates, {
+      seedTrackIds,
+      excludeIds: [...args.excludeIds],
+      limit: 24,
+    });
+    return result?.candidates ?? [];
+  } catch {
+    // The vector index is an enhancement, never a dependency.
+    return [];
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Section assembly
 // ---------------------------------------------------------------------------
@@ -580,6 +654,37 @@ export const forYou = action({
     const excludeIds = new Set(recentPlays.map((entry) => entry.trackId));
 
     let pool = await resolvePool(ctx, seeds, excludeIds);
+
+    // ---- "Not interested" -----------------------------------------
+    // Applied to the resolved pool rather than baked into the seeds: a seed is
+    // a search string and a rejection is about a specific track or artist, so
+    // filtering after resolution is the only place both can be honoured.
+    const exclusions = await loadExclusions(ctx);
+    if (pool.items.length > 0) {
+      pool = { ...pool, items: applyExclusions(pool.items, exclusions) };
+    }
+
+    // ---- vector candidates ----------------------------------------
+    // Merged in AFTER the text-search pool so these are genuinely additional
+    // candidates rather than a re-ranking of the same ones. The whole call is
+    // best-effort: a cold or missing vector index returns nothing and the row
+    // is simply absent, which is the correct behaviour for a feature that
+    // depends on the listener having indexed a library.
+    const vectorCandidates = await fetchVectorCandidates(ctx, {
+      recentPlays,
+      excludeIds,
+    });
+    const merged = mergeExtra(pool.items, vectorCandidates, exclusions);
+    if (merged) {
+      pool = {
+        items: merged.pool,
+        seedByTrackId: new Map([
+          ...pool.seedByTrackId,
+          ...merged.usable.map((c) => [c.id, VECTOR_SEED] as const),
+        ]),
+        seeds: [...pool.seeds, VECTOR_SEED],
+      };
+    }
 
     // RELATED fallback: the personalised seeds came back empty. Ask for
     // something adjacent rather than dropping straight to global charts.
@@ -759,8 +864,7 @@ export const nextTrack = action({
         currentTrack: current,
         tuning,
       });
-      const pool = await resolvePool(ctx, seeds, excludeIds);
-      if (pool.items.length === 0) return NOTHING;
+      let pool = await resolvePool(ctx, seeds, excludeIds);
 
       let recentPlays: Array<{ trackId: string; at: number }> = [];
       try {
@@ -769,6 +873,31 @@ export const nextTrack = action({
       } catch {
         /* optional */
       }
+
+      // The same two corrections Home gets, so "what plays next" cannot
+      // contradict the shelves: a rejected track or artist stays out of
+      // autoplay, and a sound-alike from the vector index is a legitimate
+      // candidate here too.
+      const exclusions = await loadExclusions(ctx);
+      if (pool.items.length > 0) {
+        pool = { ...pool, items: applyExclusions(pool.items, exclusions) };
+      }
+      const vectorCandidates = await fetchVectorCandidates(ctx, {
+        recentPlays,
+        excludeIds,
+      });
+      const merged = mergeExtra(pool.items, vectorCandidates, exclusions);
+      if (merged) {
+        pool = {
+          items: merged.pool,
+          seedByTrackId: new Map([
+            ...pool.seedByTrackId,
+            ...merged.usable.map((c) => [c.id, VECTOR_SEED] as const),
+          ]),
+          seeds: [...pool.seeds, VECTOR_SEED],
+        };
+      }
+      if (pool.items.length === 0) return NOTHING;
 
       const limit = args.limit && args.limit > 1 ? args.limit : 1;
       const best =

@@ -348,6 +348,27 @@ const schema = defineSchema(
       .index("by_day", ["day"])
       .index("by_day_path", ["day", "path"]),
 
+    // Explicit "I'm not into this". Distinct from a skip: a skip is a reflex
+    // on a song that happened to be playing, whereas this is a deliberate
+    // statement that the listener does not want to be shown it again.
+    //
+    // Two scopes, because "not this song" and "not this artist" are different
+    // requests and collapsing them would either over- or under-filter. Both
+    // are consumed as HARD EXCLUSIONS by the recommender, so a listener who
+    // says no is not shown a near-miss of the thing they said no to.
+    notInterested: defineTable({
+      userId: v.id("users"),
+      /** "track" | "artist" */
+      scope: v.string(),
+      /** Present for scope "track". */
+      trackId: v.optional(v.string()),
+      /** Present for both scopes; the artist row is what filters the catalogue. */
+      artistName: v.optional(v.string()),
+      createdAt: v.number(),
+    })
+      .index("by_user", ["userId"])
+      .index("by_user_scope", ["userId", "scope"]),
+
     // Lyrics lookups, keyed by the normalised "title|artist" that actually hit.
     // Stores misses too (`missing: true`) so a song with no lyrics anywhere is
     // only looked up once instead of on every open of the panel. Free lyrics
