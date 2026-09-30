@@ -40,8 +40,15 @@ import {
 } from "../lib/recommend";
 import type { YtItem } from "./youtube";
 // Relative, not the `@/` alias: the Convex bundler does not resolve it.
-import { applyExclusions, mergeExtra } from "../lib/recoMerge";
+import { applyExclusions, mergeExtra, poolIds } from "../lib/recoMerge";
 import { NO_EXCLUSIONS, type Exclusions } from "../lib/notInterested";
+import {
+  jamendoDiscoveryQueries,
+  isResolvableDiscovery,
+  resolveDiscoveries,
+  type DiscoveryCandidate,
+  type DiscoveryTrack,
+} from "../lib/jamendoDiscovery";
 import { VECTOR_SEED } from "./recommendVectors";
 
 // ---------------------------------------------------------------------------
@@ -202,7 +209,9 @@ function seedsForSection(section: SectionId, seeds: CandidateSeed[]) {
     case "from_artists":
       return seeds.filter((s) => s.source === "artists");
     case "discover":
-      return seeds.filter((s) => s.source === "discovery");
+      return seeds.filter(
+        (s) => s.source === "discovery" || s.source === "jamendo_discovery",
+      );
     case "sound_alike":
       // Only the vector seed. Without this the row would be populated by the
       // same text-search candidates as every other row, and the title would be
@@ -524,6 +533,144 @@ async function fetchVectorCandidates(
   }
 }
 
+/**
+ * The candidate seed for one Jamendo discovery query.
+ *
+ * A seed, not a track — Jamendo tells us WHAT to listen to, YouTube resolves
+ * WHERE it plays. The `discovery` section is the only one allowed to render
+ * these, so the card's wording ("Discover something new") stays true.
+ */
+function jamendoDiscoverySeed(query: string): CandidateSeed {
+  return {
+    query,
+    source: "jamendo_discovery",
+    weight: 0.5,
+    seed: query,
+    reason: "discovery",
+  };
+}
+
+/**
+ * How many Jamendo hits are carried through to a YouTube lookup.
+ *
+ * Every hit costs an extra upstream search, so this is deliberately small.
+ * Jamendo is an enhancement to the "Discover" row, never a dependency: if any
+ * of this fails, the row is simply the row it always was.
+ *
+ * The number is 4 rather than 2 because roughly HALF of Jamendo hits do not
+ * resolve — measured live against the deployment, 2 of 4 independent releases
+ * had no genuine YouTube upload and were correctly dropped rather than
+ * substituted. Two attempts therefore usually yielded nothing at all.
+ */
+const MAX_JAMENDO_HITS = 4;
+
+/**
+ * Jamendo discovery, resolved into playable YouTube candidates.
+ *
+ * Fetches Jamendo for the listener's strongest artists, takes the top few
+ * independent releases, looks each one up on YouTube and returns only the
+ * ones that genuinely resolved. Returns [] in every failure case — an
+ * unconfigured key, a rate limit, an upstream outage — because a Home page
+ * that renders nothing because a bonus source was unreachable is a far worse
+ * outcome than a Home page without the bonus row.
+ */
+async function fetchJamendoDiscovery(
+  ctx: ActionCtx,
+  args: { artistNames: string[]; excludeIds: Set<string> },
+): Promise<Array<{ item: RecoCandidate; seed: CandidateSeed }>> {
+  const queries = jamendoDiscoveryQueries(args.artistNames);
+  if (queries.length === 0) return [];
+
+  const discovered: DiscoveryTrack[] = [];
+  const seedsByJamendoId = new Map<string, CandidateSeed>();
+  try {
+    const results = await Promise.all(
+      queries.map(async (query) => ({
+        query,
+        result: await ctx.runAction(api.jamendo.searchJamendo, {
+          query,
+          limit: MAX_JAMENDO_HITS,
+        }),
+      })),
+    );
+    for (const { query, result } of results) {
+      if (!result?.ok) continue;
+      const seed = jamendoDiscoverySeed(query);
+      for (const track of result.tracks) {
+        if (discovered.length >= MAX_JAMENDO_HITS) break;
+        if (!isResolvableDiscovery(track)) continue;
+        discovered.push(track);
+        seedsByJamendoId.set(track.jamendoId, seed);
+      }
+    }
+  } catch {
+    return [];
+  }
+  if (discovered.length === 0) return [];
+
+  // Resolve each hit to a real YouTube upload. A hit that does not resolve
+  // is dropped here rather than surfaced: it can never play.
+  let resolved: Array<{
+    jamendoId: string;
+    ytId: string;
+    title: string;
+    artist: string;
+    score: number;
+  }>;
+  // Every YouTube item seen across the lookups, so a resolved hit can be
+  // rebuilt into a real candidate with its actual duration and artwork
+  // instead of a stub.
+  const allItems = new Map<string, YtItem>();
+  try {
+    const searches = await Promise.all(
+      discovered.map(async (track) => ({
+        track,
+        items: await searchOnce(ctx, {
+          query: `${track.title} ${track.artistName}`.trim(),
+          source: "jamendo_discovery",
+          weight: 0.5,
+          seed: null,
+          reason: "discovery",
+        }),
+      })),
+    );
+    for (const { items } of searches) {
+      for (const raw of items) {
+        if (raw?.id) allItems.set(raw.id, raw);
+      }
+    }
+    resolved = resolveDiscoveries(
+      discovered,
+      new Map(
+        searches.map(({ track, items }) => [
+          track.jamendoId,
+          items as DiscoveryCandidate[],
+        ]),
+      ),
+    );
+  } catch {
+    return [];
+  }
+
+  const out: Array<{ item: RecoCandidate; seed: CandidateSeed }> = [];
+  const seen = new Set<string>();
+  for (const hit of resolved) {
+    if (args.excludeIds.has(hit.ytId)) continue;
+    if (seen.has(hit.ytId)) continue;
+    seen.add(hit.ytId);
+    const sourceItem = allItems.get(hit.ytId);
+    if (!sourceItem) continue;
+    const item = toCandidate(sourceItem);
+    if (!item.title.trim() || item.duration <= 0) continue;
+    out.push({
+      item,
+      seed:
+        seedsByJamendoId.get(hit.jamendoId) ?? jamendoDiscoverySeed(hit.title),
+    });
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // Section assembly
 // ---------------------------------------------------------------------------
@@ -684,6 +831,45 @@ export const forYou = action({
         ]),
         seeds: [...pool.seeds, VECTOR_SEED],
       };
+    }
+
+    // ---- Jamendo discovery ----------------------------------------
+    // Jamendo is a DISCOVERY index here, never a playback source: it names
+    // independent Creative Commons releases, and each one is resolved to a
+    // real YouTube upload before it can be offered. Anything that fails to
+    // resolve is dropped inside the fetch, so this can never add a dead
+    // track to a row.
+    const artistNames = [...built.artists.values()]
+      .sort((a, b) => b.affinity - a.affinity)
+      .map((a) => a.display);
+    const jamendoPicks = await fetchJamendoDiscovery(ctx, {
+      artistNames,
+      excludeIds,
+    });
+    if (jamendoPicks.length > 0) {
+      const known = poolIds(pool.items);
+      const fresh = jamendoPicks.filter((pick) => !known.has(pick.item.id));
+      const merged = mergeExtra(
+        pool.items,
+        fresh.map((p) => p.item),
+        exclusions,
+      );
+      if (merged) {
+        const seedById = new Map(jamendoPicks.map((p) => [p.item.id, p.seed]));
+        pool = {
+          items: merged.pool,
+          seedByTrackId: new Map([
+            ...pool.seedByTrackId,
+            ...[...seedById].filter(([id]) => !known.has(id)),
+          ]),
+          seeds: [
+            ...pool.seeds,
+            ...jamendoPicks
+              .filter((p) => !known.has(p.item.id))
+              .map((p) => p.seed),
+          ],
+        };
+      }
     }
 
     // RELATED fallback: the personalised seeds came back empty. Ask for

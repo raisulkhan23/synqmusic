@@ -918,18 +918,15 @@ export interface LastPlayedSnapshot {
   coverUrl: string;
   duration: number;
   /**
-   * Widened from `"youtube"` when Jamendo arrived. A snapshot is the durable
-   * "recently played" record, so it has to be able to describe a track that
-   * plays through the `<audio>` element rather than the IFrame engine —
-   * otherwise restoring history silently mislabels it and the resume path
-   * takes the YouTube branch for a track with no `youtubeId`.
+   * The durable "recently played" record. Only `"youtube"` is possible now
+   * that Jamendo is a discovery index rather than a playback source, so
+   * restoring history can no longer mislabel a track as one that plays
+   * through the `<audio>` element.
    */
-  source: "youtube" | "jamendo";
+  source: "youtube";
   youtubeId?: string;
   audioUrl: string;
   at: number;
-  /** Kept so a restored Creative Commons track still credits its licence. */
-  attribution?: Playable["attribution"];
 }
 
 export function readLastPlayed(): LastPlayedSnapshot | null {
@@ -958,7 +955,6 @@ function saveLastPlayed(track: Playable): void {
       youtubeId: track.youtubeId,
       audioUrl: track.audioUrl,
       at: Date.now(),
-      attribution: track.attribution,
     };
     writeSetting(LAST_PLAYED_KEY, JSON.stringify(snap));
   } catch {
@@ -1071,7 +1067,6 @@ function lastSnapshotOf(track: Playable): LastPlayedSnapshot {
     youtubeId: track.youtubeId,
     audioUrl: track.audioUrl,
     at: Date.now(),
-    attribution: track.attribution,
   };
 }
 
@@ -2115,6 +2110,21 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       // definition: the next song gets its own fresh look.
       introTrimSkipped: null,
     });
+
+    // A track with NO video id and no stream URL cannot play at all. This
+    // was reachable and failed SILENTLY: `audio.src = undefined` resolves to
+    // the page itself, which is never playable, so the element neither errors
+    // nor plays. Fail fast and say so instead.
+    if (!track.youtubeId && !track.audioUrl) {
+      set({ isBuffering: false, isPlaying: false });
+      toast.error(
+        "Can't play \"" +
+          track.title +
+          '" \u2014 this track has no audio source',
+        { id: "yt-fallback" },
+      );
+      return;
+    }
 
     // Route to the YouTube IFrame engine by video id; otherwise use the audio element.
     // EXCEPTION: when an audio effect is active, YouTube tracks play through

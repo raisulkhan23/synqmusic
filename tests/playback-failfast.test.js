@@ -1,17 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import {
-  giveUpNotice,
-  pickJamendoFallback,
-} from "../src/lib/playbackFallback.ts";
 import { isFatalError } from "../src/lib/youtubePlayer.ts";
 import { readSource } from "./helpers/tailwind-css.js";
 
 /**
- * Fail fast, then auto-fallback.
+ * Fail fast.
  *
- * The bug that started this: playback was completely dead, with no feedback
- * at all. Two independent causes had to be fixed, and BOTH of them were
- * about failure never being reported:
+ * The bug that started this: playback was completely dead, with no feedback at
+ * all. Three independent causes had to be fixed, and ALL of them were about
+ * failure never being reported:
  *
  *  1. `isFatalError` did not include YT error code 153. That is the code a
  *     network blocker (uBlock/AdGuard/1Blocker) produces when it stops
@@ -20,109 +16,15 @@ import { readSource } from "./helpers/tailwind-css.js";
  *  2. `loadApi()` had no `onerror` and no timeout, so a blocked
  *     `youtube.com/iframe_api` left its promise pending FOREVER — play()
  *     neither resolved nor rejected.
+ *  3. `audio.play()`'s rejection was swallowed, and a track with no video id
+ *     and no stream URL assigned `audio.src = undefined` — the page itself,
+ *     which never plays and never errors.
  *
- * The excluded-source rule matters just as much: on the self-rescue path the
- * candidate list contains the very stream that just failed, so without
- * excluding it the fallback reloads the same broken audio in an endless loop.
+ * There is deliberately NO cross-provider fallback any more. Jamendo was tried
+ * in that role, its streams were silent too, and a second silent provider is
+ * not a fallback — it is a second way to be silent. It is a discovery index
+ * now; see `tests/jamendo-discovery.test.js`.
  */
-
-const yt = (over = {}) => ({
-  id: "yt-1",
-  title: "Hyperballad",
-  artistName: "Björk",
-  duration: 312,
-  audioUrl: "",
-  youtubeId: "yt-1",
-  source: "youtube",
-  ...over,
-});
-
-const jam = (over = {}) => ({
-  jamendoId: "111",
-  title: "Hyperballad",
-  artistName: "Björk",
-  albumName: "",
-  coverUrl: "",
-  audioUrl: "https://prod-1.storage.jamendo.com/?trackid=111",
-  duration: 312,
-  licenseUrl: "",
-  tags: [],
-  shareUrl: "",
-  ...over,
-});
-
-describe("a source that just failed is never chosen again", () => {
-  test("the failed track is excluded from its own rescue", () => {
-    // THE infinite-loop case: a Jamendo track that failed, re-matched against
-    // Jamendo. The dead stream is in the candidate list and must be skipped.
-    const me = {
-      ...jam(),
-      id: "jamendo:111",
-      youtubeId: "",
-      source: "jamendo",
-    };
-    const picked = pickJamendoFallback(
-      me,
-      [jam({ jamendoId: "111" })],
-      [me.id],
-    );
-    expect(picked).toBeNull();
-  });
-
-  test("exclusion works for a raw jamendo id too", () => {
-    expect(
-      pickJamendoFallback(yt(), [jam({ jamendoId: "111" })], ["111"]),
-    ).toBeNull();
-  });
-
-  test("it still finds another upload of the same song", () => {
-    const me = {
-      ...jam(),
-      id: "jamendo:111",
-      youtubeId: "",
-      source: "jamendo",
-    };
-    const picked = pickJamendoFallback(
-      me,
-      [jam({ jamendoId: "111" }), jam({ jamendoId: "222" })],
-      [me.id],
-    );
-    expect(picked?.jamendoId).toBe("222");
-  });
-
-  test("excluding nothing keeps the current behaviour", () => {
-    expect(pickJamendoFallback(yt(), [jam()])?.jamendoId).toBe("111");
-  });
-
-  test("excluding every candidate is null, not a crash", () => {
-    const picked = pickJamendoFallback(yt(), [jam()], ["111"]);
-    expect(picked).toBeNull();
-  });
-});
-
-describe("the blocker is named, because that is the only actionable thing", () => {
-  test("a blocked provider is named so the listener can allow it", () => {
-    const msg = giveUpNotice({ blockedProvider: "YouTube" });
-    expect(msg).toContain("YouTube");
-    expect(msg).toMatch(/block/i);
-    expect(msg).toMatch(/allow/i);
-  });
-
-  test("a song nobody hosts is reported as simply unavailable", () => {
-    const msg = giveUpNotice({});
-    expect(msg).toMatch(/couldn/i);
-  });
-
-  test("alternatives change the message when nothing was blocked", () => {
-    expect(giveUpNotice({ hasAlternatives: true })).toMatch(/every version/i);
-  });
-
-  test("the blocked message wins: it is the more useful one", () => {
-    expect(
-      giveUpNotice({ blockedProvider: "Jamendo", hasAlternatives: true }),
-    ).toContain("Jamendo");
-  });
-});
 
 describe("a blocked YouTube embed fails immediately, not after 12 seconds", () => {
   test("153 (embedding refused — what a blocker causes) is fatal", () => {
@@ -188,15 +90,11 @@ describe("the wired-up player actually does this", () => {
     expect(playerSrc).toContain('name === "AbortError"');
   });
 
-  test("direct-audio tracks get a rescue instead of being dropped", () => {
-    // The effect used to bail on `source !== "youtube"`, so a failed Jamendo
-    // stream produced silence and not even an error toast.
-    expect(barSrc).not.toMatch(
-      /if \(!track \|\| track\.source !== "youtube"\) return;/,
-    );
-    expect(barSrc).toContain("directAudioRetried");
-    expect(barSrc).toMatch(
-      /if \(track\.source !== "youtube"\)[\s\S]{0,700}?void tryJamendoVersion\(track\)/,
+  test("a track with no video id and no stream URL is refused up front", () => {
+    // `audio.src = undefined` resolves to the page itself: never playable,
+    // never an error. This is the silent case that must never happen.
+    expect(playerSrc).toMatch(
+      /if \(!track\.youtubeId && !track\.audioUrl\) \{[\s\S]{0,400}?return;/,
     );
   });
 
@@ -209,14 +107,18 @@ describe("the wired-up player actually does this", () => {
     expect(guards?.length).toBe(3);
   });
 
-  test("the Jamendo rescue excludes the stream that just died", () => {
-    expect(barSrc).toContain(
-      "pickJamendoFallback(track, result.tracks, [track.id])",
-    );
+  test("the dead cross-provider fallback is gone from the rescue chain", () => {
+    // Jamendo is a discovery index now. Leaving it in the chain only bought
+    // more silence, and it kept a second broken path alive in the code.
+    expect(barSrc).not.toContain("tryJamendoVersion");
+    expect(barSrc).not.toContain("pickJamendoFallback");
+    expect(barSrc).not.toContain("toPlayableJamendo");
+    expect(barSrc).not.toContain("searchJamendo");
   });
 
-  test("a direct-audio track is only retried once, so it cannot loop", () => {
-    expect(barSrc).toContain("directAudioRetried.current.has(track.id)");
-    expect(barSrc).toMatch(/directAudioRetried\.current\.size > \d+/);
+  test("running out of ways to play names the blocker instead of going quiet", () => {
+    expect(barSrc).toMatch(
+      /const next = alternatives\[attempts\.current - 1\][\s\S]{0,700}?blockedProvider: "YouTube"/,
+    );
   });
 });

@@ -1,27 +1,25 @@
 /**
- * Cross-provider playback fallback — PURE decision logic.
+ * Playback honesty — PURE decision logic.
  *
- * WHY THIS EXISTS. Both playback paths can be blocked for a given listener at
- * the same time, and when that happens the app used to go quiet: a YouTube
- * track whose IFrame is blocked by an ad blocker, plus a direct-stream rescue
- * that YouTube bot-checks from any datacenter IP. Measured on the live
- * deployment, `youtube.resolveStream` returns `url: null` with "Sign in to
- * confirm you're not a bot" — so for that listener there was NO working path
- * and the only feedback was a toast twelve seconds later.
+ * This module used to decide which OTHER SOURCE to try when a track could not
+ * play. That is gone. Jamendo was wired in as a second playable provider so a
+ * listener whose blocker stops youtube.com would have something to hear, and
+ * it did not work: Jamendo's streams were silent too. It is now a DISCOVERY
+ * index (see `src/lib/jamendoDiscovery.ts`) and never a playback source, so
+ * there is no second source to fall back to.
  *
- * The fix is not to make one provider more reliable. It is to stop depending
- * on a single domain: if YouTube cannot play here, try Jamendo, and vice
- * versa. Content blockers work by domain, so whichever of the two the
- * listener's blocker happens to allow is the one that plays.
+ * What survives here is the part that was never about providers:
  *
- * PURE, and that is the point. This module picks a fallback; it never fetches,
- * never plays and never touches the store. The matching rules below are the
- * part that is easy to get subtly wrong, so they are unit-testable without a
- * browser, a network or a deployment.
+ *  - `matchScore`, the rule for deciding whether two differently-spelled
+ *    titles and credits are the same song. It is the single definition of
+ *    "same song" in the app, and the discovery resolver depends on it.
+ *  - `giveUpNotice`, so that running out of ways to play something produces
+ *    an honest, actionable message instead of silence. Silence is the bug
+ *    this whole area started from: a listener with every track muted and no
+ *    idea why.
+ *
+ * PURE, so both are testable without a browser, a network or a deployment.
  */
-
-import type { Playable } from "./playable";
-import type { JamendoTrack } from "./jamendo";
 
 /** Reduce a string for comparison: case, accents, punctuation, filler words. */
 function key(value: string | null | undefined): string {
@@ -39,21 +37,13 @@ function key(value: string | null | undefined): string {
     .trim();
 }
 
-/** The query to send a provider when looking for this song by name. */
-export function fallbackQueryFor(track: Playable): string {
-  // One artist only: "Artist, Other Artist & Third" is a credit list, and
-  // pasting the whole thing into a search reliably finds nothing.
-  const artist = (track.artistName ?? "").split(",")[0]?.trim() ?? "";
-  return `${track.title} ${artist}`.trim();
-}
-
 /**
  * How well a candidate matches what we were trying to play, 0..1.
  *
  * Deliberately conservative about the TITLE and lenient about the artist.
  * Titles are what a listener recognises; an artist credit is frequently
- * spelled differently between a YouTube upload and a Jamendo release, and
- * being too strict there throws away the only playable option they have left.
+ * spelled differently between an upload and a catalogue release, and being
+ * too strict there throws away the only playable option they have left.
  */
 export function matchScore(
   wanted: { title: string; artist: string },
@@ -84,63 +74,12 @@ export function matchScore(
   return Math.min(1, score);
 }
 
-/** Below this, a "match" is a different song wearing the same name. */
-const MIN_MATCH = 0.5;
-
-/**
- * Best Jamendo track for a song that could not play where it was.
- *
- * Returns null rather than the top result, because a fallback that silently
- * plays the WRONG song is worse than one that admits defeat: the listener
- * would hear something and assume the app worked.
- *
- * `excludeIds` drops sources that are already known to be dead here. It is
- * essential on the self-rescue path (a Jamendo track that failed being
- * re-matched against Jamendo), where the candidate list contains the very
- * track that just failed — picking it again would reload the same broken
- * stream in an endless loop.
- */
-export function pickJamendoFallback(
-  track: Playable,
-  candidates: JamendoTrack[],
-  excludeIds: readonly string[] = [],
-): JamendoTrack | null {
-  // Callers hold a Playable id (`jamendo:<jamendoId>`) while a candidate
-  // carries the raw `jamendoId`, so accept either spelling.
-  const dead = new Set<string>();
-  for (const id of excludeIds) {
-    dead.add(id);
-    if (id.startsWith("jamendo:")) dead.add(id.slice("jamendo:".length));
-  }
-  let best: JamendoTrack | null = null;
-  let bestScore = 0;
-  for (const candidate of candidates) {
-    if (dead.has(candidate.jamendoId)) continue;
-    const score = matchScore(
-      { title: track.title, artist: track.artistName ?? "" },
-      { title: candidate.title, artist: candidate.artistName },
-    );
-    // A track with no usable duration cannot be played or seeked.
-    if (score > bestScore && candidate.duration > 0) {
-      best = candidate;
-      bestScore = score;
-    }
-  }
-  return bestScore >= MIN_MATCH ? best : null;
-}
-
-/** The label shown when a track is swapped for another source's copy. */
-export function fallbackNotice(from: Playable, to: Playable): string {
-  const where = to.source === "jamendo" ? "Jamendo" : "YouTube";
-  return `Couldn't play this here — using the ${where} version`;
-}
-
 /**
  * What to tell the listener when EVERY rescue path for this track is dead.
  *
- * Two distinct messages, because the two failures mean different things: a
- * blocked provider is worth naming (so the listener can allow it or turn a
- * blocker off), while a song nobody hosts anywhere is simply unavailable.
+ * Naming a blocked provider is the whole point: it is the only thing the
+ * listener can act on, and it is what was missing when playback was reported
+ * as simply broken.
  */
 export function giveUpNotice(options: {
   blockedProvider?: string | null;

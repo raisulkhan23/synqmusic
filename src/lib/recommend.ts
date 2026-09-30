@@ -103,7 +103,16 @@ export type CandidateSource =
    * artist or title string. This is the only source that can surface music the
    * listener has never searched for by name.
    */
-  | "vector_sound_alike";
+  | "vector_sound_alike"
+  /**
+   * Found through the Jamendo catalogue and then resolved to a YouTube upload.
+   *
+   * The song came from an independent, Creative Commons index; the audio that
+   * plays is YouTube's. Kept distinct from `discovery` because it is sourced
+   * from a different catalogue with a different licensing story, and the UI
+   * credits the independent release.
+   */
+  | "jamendo_discovery";
 
 /** The full explainable breakdown. Every field is a real computed number. */
 export interface ScoreBreakdown {

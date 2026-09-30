@@ -1,5 +1,5 @@
 import { useAction } from "convex/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Disc3,
   Loader2,
@@ -7,19 +7,29 @@ import {
   Sparkles,
   TriangleAlert,
 } from "lucide-react";
+import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
-import { toPlayableJamendo } from "@/lib/playable";
+import { toPlayableYoutube } from "@/lib/playable";
 import { usePlayerStore } from "@/store/player";
 import type { JamendoTrack } from "@/lib/jamendo";
+import { matchDiscovery } from "@/lib/jamendoDiscovery";
 import type { ImportFailure } from "@/lib/importModel";
 
 /**
- * Jamendo search results.
+ * Jamendo search results — a DISCOVERY index, not a playback source.
  *
- * The one section of the search page that plays something other than YouTube.
- * Everything else here resolves a title against YouTube; a Jamendo track brings
- * its own Creative Commons stream URL, so this list is genuinely playable
- * audio and not a second-class mirror of the results above it.
+ * Jamendo used to be wired in as a second playable provider: it returned
+ * Creative Commons stream URLs and the player fed them straight to the
+ * `<audio>` element. That path never worked for the listeners it was built
+ * for — every Jamendo track came back silent, and a silent row teaches the
+ * listener the app is broken rather than that one row is.
+ *
+ * What is worth keeping is what never touches the audio element: Jamendo is a
+ * large index of independent, openly-licensed music that YouTube search does
+ * not surface reliably. So a click here now asks YouTube for that specific
+ * song and plays the upload it finds. Jamendo decides what is offered;
+ * YouTube decides what plays. If no real match exists, the listener is told
+ * so plainly instead of being handed silence.
  *
  * Self-contained on purpose: it owns its query, its request and every state it
  * can be in, so the search page's own loading/error logic is not extended with
@@ -31,6 +41,7 @@ import type { ImportFailure } from "@/lib/importModel";
  */
 export function JamendoResults({ query }: { query: string }) {
   const searchJamendo = useAction(api.jamendo.searchJamendo);
+  const searchYoutube = useAction(api.youtube.searchYoutube);
   const playTrack = usePlayerStore((s) => s.playTrack);
 
   /**
@@ -50,6 +61,8 @@ export function JamendoResults({ query }: { query: string }) {
     failure: ImportFailure | null;
   } | null>(null);
   const [attempt, setAttempt] = useState(0);
+  /** The row currently being resolved to a playable upload, by jamendoId. */
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
   // Guards against a stale response overwriting a newer one when the listener
   // keeps typing: the last request wins, and the rest are dropped.
   const requestId = useRef(0);
@@ -96,21 +109,55 @@ export function JamendoResults({ query }: { query: string }) {
   const tracks = fresh?.tracks ?? null;
   const failure = fresh?.failure ?? null;
 
-  const playables = useMemo(
-    () => (tracks ?? []).map(toPlayableJamendo),
-    [tracks],
+  /**
+   * Play this Creative Commons release by finding its YouTube upload.
+   *
+   * `matchDiscovery` returns null unless the result really is the same song.
+   * Playing "Unrelated Song" because its title matched would be worse than
+   * saying nothing: the listener would hear music and conclude SYNQ works,
+   * and would never learn their blocker is what is silencing the app.
+   */
+  const onPick = useCallback(
+    async (track: JamendoTrack) => {
+      if (resolvingId) return;
+      setResolvingId(track.jamendoId);
+      toast.loading(`Finding "${track.title}"…`, { id: "jamendo-play" });
+      try {
+        const { items } = await searchYoutube({
+          query: `${track.title} ${track.artistName}`.trim(),
+        });
+        const results = items ?? [];
+        const hit = matchDiscovery(track, results);
+        const chosen = hit
+          ? results.find((it) => it.id === hit.ytId)
+          : undefined;
+        if (!hit || !chosen) {
+          toast.error(`No playable version of "${track.title}" was found`, {
+            id: "jamendo-play",
+          });
+          return;
+        }
+        const others = results.filter((it) => it.id !== hit.ytId);
+        const playable = toPlayableYoutube(chosen, "", others);
+        // The queue is the resolved upload plus its siblings, so "next" keeps
+        // moving through the same results rather than stopping dead.
+        playTrack(playable, [
+          playable,
+          ...others.map((it) => toPlayableYoutube(it, "", [])),
+        ]);
+        toast.success(`Playing "${track.title}"`, { id: "jamendo-play" });
+      } catch {
+        toast.error("Couldn't look that up — try again", {
+          id: "jamendo-play",
+        });
+      } finally {
+        setResolvingId(null);
+      }
+    },
+    [resolvingId, searchYoutube, playTrack],
   );
 
   if (!runnable) return null;
-
-  const onPick = (index: number) => {
-    const chosen = playables[index];
-    if (!chosen) return;
-    // Finite queue, not radio: the listener asked for this search, so the
-    // results ARE the queue. Starting a YouTube radio here would replace a
-    // precise Creative Commons selection with unrelated uploads.
-    playTrack(chosen, playables);
-  };
 
   return (
     <section aria-labelledby="jamendo-heading" className="mt-6">
@@ -120,7 +167,7 @@ export function JamendoResults({ query }: { query: string }) {
           id="jamendo-heading"
           className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase"
         >
-          Creative Commons audio
+          Independent & Creative Commons
         </h2>
         <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] text-muted-foreground">
           Jamendo
@@ -137,18 +184,20 @@ export function JamendoResults({ query }: { query: string }) {
           failure={failure}
           onRetry={() => setAttempt((n) => n + 1)}
         />
-      ) : playables.length > 0 ? (
+      ) : tracks && tracks.length > 0 ? (
         <>
           <p className="mb-2 text-xs text-muted-foreground">
-            Independent and Creative Commons licensed. These play directly in
-            SYNQ — no YouTube lookup.
+            Independent and Creative Commons licensed releases that YouTube
+            search rarely surfaces. Picking one finds it on YouTube and plays it
+            there.
           </p>
           <div className="flex flex-col gap-0.5">
-            {playables.map((track, i) => (
+            {tracks.map((track) => (
               <JamendoRow
-                key={track.id}
-                index={i}
+                key={track.jamendoId}
                 track={track}
+                resolving={resolvingId === track.jamendoId}
+                disabled={resolvingId !== null}
                 onPlay={onPick}
               />
             ))}
@@ -203,19 +252,22 @@ function JamendoFailure({
 }
 
 function JamendoRow({
-  index,
   track,
+  resolving,
+  disabled,
   onPlay,
 }: {
-  index: number;
-  track: ReturnType<typeof toPlayableJamendo>;
-  onPlay: (index: number) => void;
+  track: JamendoTrack;
+  resolving: boolean;
+  disabled: boolean;
+  onPlay: (track: JamendoTrack) => void;
 }) {
   return (
     <button
       type="button"
-      onClick={() => onPlay(index)}
-      className="group flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors hover:bg-white/[0.05]"
+      disabled={disabled}
+      onClick={() => onPlay(track)}
+      className="group flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors hover:bg-white/[0.05] disabled:cursor-progress disabled:opacity-60"
     >
       {track.coverUrl ? (
         <img
@@ -238,6 +290,9 @@ function JamendoRow({
           {track.albumName ? ` · ${track.albumName}` : ""}
         </span>
       </span>
+      {resolving ? (
+        <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
+      ) : null}
       <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">
         {formatDuration(track.duration)}
       </span>

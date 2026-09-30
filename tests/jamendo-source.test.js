@@ -1,5 +1,5 @@
 /**
- * Jamendo as a real playback source.
+ * Jamendo as a discovery index (never a playback source).
  *
  * The bug this file is built around: Jamendo reports its failures INSIDE an
  * HTTP 200. A bad key, a spent quota and a successful empty search all come
@@ -13,6 +13,7 @@
  */
 import { afterEach, describe, expect, test } from "bun:test";
 import { searchJamendo } from "../src/convex/jamendo";
+import { readSource } from "./helpers/tailwind-css.js";
 import {
   httpQuotaFailure,
   networkFailure,
@@ -21,7 +22,6 @@ import {
   notConfiguredFailure,
   unwrap,
 } from "../src/lib/jamendo";
-import { toPlayableJamendo } from "../src/lib/playable";
 
 /** A well-formed track as Jamendo actually returns one. */
 function goodTrack(overrides = {}) {
@@ -423,36 +423,27 @@ describe("the failures are written for a listener", () => {
   });
 });
 
-describe("a Jamendo track plays through the audio element", () => {
-  test("it carries NO youtubeId, which is what switches the engine", () => {
-    // The player's routing rule is: no youtubeId + an http(s) audioUrl means
-    // the <audio> element owns playback. A stray youtubeId would hand a
-    // Creative Commons stream to the YouTube IFrame engine and it would never
-    // play.
-    const playable = toPlayableJamendo(normalizeTrack(goodTrack()));
-    expect(playable.source).toBe("jamendo");
-    expect(playable.youtubeId).toBeUndefined();
-    expect(playable.audioUrl).toMatch(/^https?:\/\//);
+describe("a Jamendo track can no longer become a playable", () => {
+  // Jamendo's streams were silent for the listeners this was built for, so
+  // the queue-building path was deleted outright rather than left to fail
+  // quietly. These tests exist so it cannot creep back.
+  const playableSrc = readSource("src/lib/playable.ts");
+
+  test("no Jamendo track can be turned into a queueable track", () => {
+    expect(playableSrc).not.toContain("toPlayableJamendo");
   });
 
-  test("its id is namespaced so it cannot collide with a YouTube id", () => {
-    // Queue, liked map and resume positions are all keyed on `id`.
-    const playable = toPlayableJamendo(normalizeTrack(goodTrack()));
-    expect(playable.id).toBe("jamendo:1848357");
+  test("the only playback source is YouTube", () => {
+    // A second source that cannot play is not a fallback, it is a second way
+    // to be silent.
+    expect(playableSrc).not.toContain('"jamendo"');
   });
 
-  test("the licence travels with the track", () => {
-    // Attribution is a condition of the Creative Commons licence, not a
-    // courtesy, so it cannot be dropped at the queue boundary.
-    const playable = toPlayableJamendo(normalizeTrack(goodTrack()));
-    expect(playable.attribution.licenseUrl).toContain("creativecommons.org");
-    expect(playable.attribution.shareUrl).toContain("jamendo.com");
-  });
-
-  test("it does not fabricate an album for a single", () => {
-    const playable = toPlayableJamendo(
-      normalizeTrack(goodTrack({ album_name: "" })),
-    );
-    expect(playable.albumName).toBe("");
+  test("the licence fields are still parsed, so discovery can credit them", () => {
+    // Dropping the parser would have been the easy way to "remove" Jamendo,
+    // and it would have taken the discovery index with it.
+    const lib = readSource("src/lib/jamendo.ts");
+    expect(lib).toContain("license_ccurl");
+    expect(lib).toContain("shareUrl");
   });
 });

@@ -1,5 +1,7 @@
-import { cleanArtistName, cleanTrackTitle, type YtItem } from "@/lib/youtube";
-import type { JamendoTrack } from "@/lib/jamendo";
+// Relative, not the `@/` alias: the Convex bundler does not resolve it, and
+// this module is reachable from `src/convex/` via the recommendation
+// discovery path.
+import { cleanArtistName, cleanTrackTitle, type YtItem } from "./youtube";
 
 /**
  * A normalized item in the player queue. Every source (YouTube, Jamendo,
@@ -17,28 +19,23 @@ export interface Playable {
   /**
    * Which engine owns this track.
    *
-   * `"youtube"` means the IFrame engine, addressed by `youtubeId`.
-   * `"jamendo"` means a direct Creative Commons stream played by the `<audio>`
-   * element — the branch the player already had for "catalog tracks" and which
-   * Jamendo is the first real provider to use.
+   * Only `"youtube"` remains, and that is deliberate. Jamendo used to be a
+   * second playable source — a direct Creative Commons stream fed to the
+   * `<audio>` element — and every track came back silent, because that stream
+   * never made a sound for the listeners it was built for. A second source
+   * that cannot play is not a fallback, it is a second way to be silent, so
+   * the branch was removed rather than left to fail quietly.
+   *
+   * Jamendo itself is not gone: it is a DISCOVERY index. It names independent
+   * releases for search and recommendations, and each one is resolved to a
+   * real YouTube upload before it can be played. See
+   * `src/lib/jamendoDiscovery.ts`.
    */
-  source: "youtube" | "jamendo";
+  source: "youtube";
   /** Set when this track plays through the YouTube IFrame engine (by video id). */
   youtubeId?: string;
   /** Present for YouTube tracks, used for manual source switching. */
   alternatives?: YtItem[];
-  /**
-   * Licence and origin for a non-YouTube source.
-   *
-   * Jamendo's catalogue is Creative Commons, and attribution is a condition of
-   * those licences rather than a courtesy. Carrying the licence URL and the
-   * artist's own page on the track means the UI can credit them and can send
-   * the listener somewhere that pays the artist.
-   */
-  attribution?: {
-    licenseUrl: string;
-    shareUrl: string;
-  };
   /**
    * How this track entered the queue. `undefined` means the listener put it
    * there on purpose — the recommendation engine only ever appends tracks
@@ -74,33 +71,10 @@ export function toPlayableYoutube(
 }
 
 /**
- * A Jamendo track, queued for the direct-audio engine.
+ * A Jamendo track, described for DISCOVERY — never for playback.
  *
- * `id` is namespaced (`jamendo:<id>`) rather than the bare Jamendo id. A
- * Jamendo track and a YouTube video are different things that can share a
- * title, and the queue, the liked map and the resume-position store are all
- * keyed on `id` — an unnamespaced id would let one silently overwrite the
- * other's saved position.
- *
- * `youtubeId` is deliberately absent, which is the switch that routes this
- * track to the `<audio>` element instead of the IFrame engine.
+ * Removed: this used to build a queueable `Playable` carrying Jamendo's own
+ * stream URL, and every track it produced was silent. What remains of the
+ * idea lives in `src/lib/jamendoDiscovery.ts`, which resolves a Jamendo hit
+ * to a YouTube upload before anything can be queued.
  */
-export function toPlayableJamendo(track: JamendoTrack): Playable {
-  return {
-    id: `jamendo:${track.jamendoId}`,
-    title: track.title,
-    artistName: track.artistName,
-    // Left empty rather than filled with "Single": Jamendo genuinely has no
-    // album for a single, and inventing one would give the recommendation
-    // engine a fake album axis to diversify on.
-    albumName: track.albumName,
-    coverUrl: track.coverUrl,
-    audioUrl: track.audioUrl,
-    duration: track.duration,
-    source: "jamendo",
-    attribution: {
-      licenseUrl: track.licenseUrl,
-      shareUrl: track.shareUrl,
-    },
-  };
-}

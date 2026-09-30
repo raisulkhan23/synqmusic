@@ -1,61 +1,20 @@
 import { describe, expect, test } from "bun:test";
-import {
-  fallbackNotice,
-  fallbackQueryFor,
-  matchScore,
-  pickJamendoFallback,
-} from "../src/lib/playbackFallback.ts";
+import { giveUpNotice, matchScore } from "../src/lib/playbackFallback.ts";
 
 /**
- * Cross-provider playback fallback.
+ * Playback honesty: what counts as "the same song", and what the listener is
+ * told when nothing will play.
  *
- * The failure this exists for: a listener whose blocker stops YouTube AND
- * whose stream rescue is bot-checked from our datacenter IP. Measured live —
- * `youtube.resolveStream` returns `url: null`. For that listener there was no
- * working playback path at all.
+ * The failure this started from: playback was completely dead with no
+ * feedback. The rule that matters most here is the one about NOT playing the
+ * wrong song — a substitution that quietly plays something else is worse than
+ * silence, because the listener hears music and concludes the app works.
  *
- * The rule that matters most here is the one about NOT playing the wrong song.
- * A fallback that silently substitutes something else is worse than one that
- * admits defeat, because the listener hears music and concludes the app works.
+ * The cross-provider half of this file is gone. Jamendo's streams were silent
+ * too, so it is a discovery index now rather than a playback fallback; the
+ * matching rule lives on, because resolving a discovery hit to a real YouTube
+ * upload depends on it.
  */
-
-const yt = (over = {}) => ({
-  id: "yt-1",
-  title: "Hyperballad",
-  artistName: "Björk",
-  duration: 312,
-  audioUrl: "",
-  youtubeId: "yt-1",
-  source: "youtube",
-  ...over,
-});
-
-const jam = (over = {}) => ({
-  jamendoId: "111",
-  title: "Hyperballad",
-  artistName: "Björk",
-  albumName: "",
-  coverUrl: "",
-  audioUrl: "https://prod-1.storage.jamendo.com/?trackid=111",
-  duration: 312,
-  licenseUrl: "",
-  tags: [],
-  shareUrl: "",
-  ...over,
-});
-
-describe("the search query drops the credit list", () => {
-  test("only the first artist is used", () => {
-    // "A, B & C" pasted into a search reliably finds nothing.
-    expect(fallbackQueryFor(yt({ artistName: "Björk, Someone & Other" }))).toBe(
-      "Hyperballad Björk",
-    );
-  });
-
-  test("a missing artist does not leave a trailing space", () => {
-    expect(fallbackQueryFor(yt({ artistName: "" }))).toBe("Hyperballad");
-  });
-});
 
 describe("matching is lenient about the artist, strict about the song", () => {
   test("the same song scores highest", () => {
@@ -68,8 +27,8 @@ describe("matching is lenient about the artist, strict about the song", () => {
   });
 
   test("artist spelling differences do not disqualify a real match", () => {
-    // A YouTube upload and a Jamendo release spell the credit differently
-    // all the time. Being strict here throws away the only playable option.
+    // An upload and a catalogue release spell the credit differently all the
+    // time. Being strict here throws away the only playable option.
     const s = matchScore(
       { title: "Hyperballad", artist: "Björk" },
       { title: "Hyperballad", artist: "Bjork" },
@@ -93,57 +52,33 @@ describe("matching is lenient about the artist, strict about the song", () => {
       ),
     ).toBe(0);
   });
-});
 
-describe("a fallback never plays the wrong song", () => {
-  test("it picks the real match", () => {
-    const picked = pickJamendoFallback(yt(), [
-      jam({ jamendoId: "999", title: "Unrelated Song" }),
-      jam(),
-    ]);
-    expect(picked?.jamendoId).toBe("111");
-  });
-
-  test("it returns null rather than the top result when nothing matches", () => {
-    // THE important case. Playing "Unrelated Song" would sound like success
-    // while being completely wrong.
-    const picked = pickJamendoFallback(yt(), [
-      jam({ jamendoId: "999", title: "Unrelated Song" }),
-      jam({ jamendoId: "888", title: "Different Track" }),
-    ]);
-    expect(picked).toBeNull();
-  });
-
-  test("an empty candidate list is null, not a crash", () => {
-    expect(pickJamendoFallback(yt(), [])).toBeNull();
-  });
-
-  test("a zero-duration candidate is never chosen", () => {
-    // A row with no length cannot be played or seeked, and would hang the
-    // player exactly like the failure we are rescuing from.
-    const picked = pickJamendoFallback(yt(), [jam({ duration: 0 })]);
-    expect(picked).toBeNull();
-  });
-
-  test("a title-only match is enough when the artist does not line up", () => {
-    const picked = pickJamendoFallback(yt(), [
-      jam({ artistName: "Björk Guðmundsdóttir" }),
-    ]);
-    expect(picked?.jamendoId).toBe("111");
+  test("an empty title on either side never matches", () => {
+    expect(
+      matchScore({ title: "", artist: "Björk" }, { title: "", artist: "" }),
+    ).toBe(0);
   });
 });
 
 describe("the listener is told what happened", () => {
-  test("swapping to Jamendo says so", () => {
-    expect(fallbackNotice(yt(), { source: "jamendo" })).toContain("Jamendo");
+  test("a blocked provider is named, because that is the only actionable thing", () => {
+    const msg = giveUpNotice({ blockedProvider: "YouTube" });
+    expect(msg).toContain("YouTube");
+    expect(msg).toMatch(/block/i);
+    expect(msg).toMatch(/allow/i);
   });
 
-  test("swapping back to YouTube says so", () => {
-    expect(fallbackNotice({ source: "jamendo" }, yt())).toContain("YouTube");
+  test("a song nobody hosts is reported as simply unavailable", () => {
+    expect(giveUpNotice({})).toMatch(/couldn/i);
   });
 
-  test("it never claims the original would have played", () => {
-    // The whole point is honesty: the original source did not work here.
-    expect(fallbackNotice(yt(), { source: "jamendo" })).toMatch(/couldn/i);
+  test("alternatives change the message when nothing was blocked", () => {
+    expect(giveUpNotice({ hasAlternatives: true })).toMatch(/every version/i);
+  });
+
+  test("the blocked message wins: it is the more useful one", () => {
+    expect(
+      giveUpNotice({ blockedProvider: "Jamendo", hasAlternatives: true }),
+    ).toContain("Jamendo");
   });
 });

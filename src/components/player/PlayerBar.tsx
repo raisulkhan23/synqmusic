@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -7,17 +7,8 @@ import { TransportControls } from "@/components/player/TransportControls";
 import { VolumeControl } from "@/components/player/VolumeControl";
 import { accentFromString, dominantColor } from "@/lib/covers";
 import { formatTime } from "@/lib/format";
-import {
-  toPlayableYoutube,
-  toPlayableJamendo,
-  type Playable,
-} from "@/lib/playable";
-import {
-  fallbackNotice,
-  fallbackQueryFor,
-  giveUpNotice,
-  pickJamendoFallback,
-} from "@/lib/playbackFallback";
+import { toPlayableYoutube } from "@/lib/playable";
+import { giveUpNotice } from "@/lib/playbackFallback";
 import { artistSearchQuery } from "@/lib/youtube";
 import { getAudio } from "@/lib/audio";
 import { formatRemaining, useSleepCountdown } from "@/lib/sleepTimer";
@@ -305,88 +296,11 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
   const attempts = useRef(0);
   const rescueExhausted = useRef(false);
   const lastErrorTrack = useRef<string | null>(null);
-  const searchJamendo = useAction(api.jamendo.searchJamendo);
-
-  /**
-   * Play this song from Jamendo instead.
-   *
-   * Only used once every YouTube-native rescue has failed, and it refuses to
-   * substitute a different song: `pickJamendoFallback` returns null unless the
-   * match is real. A fallback that quietly played the wrong track would be
-   * worse than silence, because the listener would hear music and conclude the
-   * app had worked.
-   */
-  const tryJamendoVersion = useCallback(
-    async (track: Playable) => {
-      toast.loading("Looking for it on Jamendo…", { id: "yt-fallback" });
-      const giveUp = () =>
-        toast.error(
-          giveUpNotice({
-            // Coming in from a dead Jamendo stream means Jamendo itself is
-            // unreachable here; coming in from YouTube means the blocker
-            // stopped every YouTube rescue. Naming the provider is the only
-            // actionable thing we can tell the listener.
-            blockedProvider: track.source === "jamendo" ? "Jamendo" : "YouTube",
-            hasAlternatives: (track.alternatives ?? []).length > 0,
-          }),
-          { id: "yt-fallback" },
-        );
-      try {
-        const result = await searchJamendo({
-          query: fallbackQueryFor(track),
-          limit: 8,
-        });
-        if (!result.ok) return giveUp();
-        // Exclude the track itself: on the self-rescue path the candidate
-        // list contains the exact stream that just failed, and picking it
-        // again would reload the same broken audio forever.
-        const match = pickJamendoFallback(track, result.tracks, [track.id]);
-        if (!match) return giveUp();
-        const playable = toPlayableJamendo(match);
-        replaceCurrentStream(playable);
-        toast.success(fallbackNotice(track, playable), { id: "yt-fallback" });
-      } catch {
-        giveUp();
-      }
-    },
-    [searchJamendo, replaceCurrentStream],
-  );
-
-  /**
-   * Direct-audio tracks (Jamendo) get one rescue of their own.
-   *
-   * They used to be dropped on the floor: the effect bailed out on
-   * `source !== "youtube"`, so a Jamendo stream that failed produced a
-   * bumped error counter and nothing at all — no message, no second try.
-   * There are no YouTube uploads to try from here, so the only remaining
-   * move is another upload of the same song from the same provider.
-   *
-   * One try per track, tracked by id, so a chain of failing replacements
-   * can't loop forever.
-   */
-  const directAudioRetried = useRef<Set<string>>(new Set());
-
   useEffect(() => {
     if (errorNonce === 0) return;
     const s = usePlayerStore.getState();
     const track = s.current;
     if (!track) return;
-
-    if (track.source !== "youtube") {
-      if (directAudioRetried.current.has(track.id)) {
-        toast.error(giveUpNotice({ blockedProvider: "Jamendo" }), {
-          id: "yt-fallback",
-        });
-        return;
-      }
-      // Bound the set: a long session cycles through hundreds of tracks and
-      // this ref would otherwise grow forever.
-      if (directAudioRetried.current.size > 50)
-        directAudioRetried.current.clear();
-      directAudioRetried.current.add(track.id);
-      void tryJamendoVersion(track);
-      return;
-    }
 
     if (lastErrorTrack.current !== track.id) {
       lastErrorTrack.current = track.id;
@@ -408,6 +322,7 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
           blockedProvider: "YouTube",
           hasAlternatives: alternatives.length > 0,
         }),
+        { id: "yt-fallback" },
       );
       return;
     }
@@ -454,7 +369,7 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
               (it.duration === 0 || (it.duration >= 30 && it.duration <= 900)),
           );
           if (!candidate) {
-            toast.error(`"${track.title}" couldn't be played`, {
+            toast.error(giveUpNotice({ hasAlternatives: true }), {
               id: "yt-fallback",
             });
             return;
@@ -478,14 +393,18 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
 
     const next = alternatives[attempts.current - 1];
     if (!next) {
-      // LAST RESORT: another PROVIDER, not another upload.
-      //
-      // Every rescue above stays on YouTube, so a listener whose blocker
-      // stops youtube.com exhausts all of them and hears nothing — which is
-      // exactly the state this was reported from. Jamendo streams from a
-      // different domain entirely, and blockers work by domain, so whichever
-      // of the two the listener's blocker allows is the one that plays.
-      void tryJamendoVersion(track);
+      // Every upload of this song has been tried and none of them play. Jamendo
+      // used to be the last resort here, but its streams are silent for a
+      // blocked listener, so trying it only bought more silence — it is now a
+      // DISCOVERY index (it feeds recommendations and search) and never a
+      // playback source. The honest end of the chain is to say what happened.
+      toast.error(
+        giveUpNotice({
+          blockedProvider: "YouTube",
+          hasAlternatives: alternatives.length > 0,
+        }),
+        { id: "yt-fallback" },
+      );
       return;
     }
     attempts.current += 1;
@@ -495,13 +414,7 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
     // The IFrame engine plays by video id — just swap the current track.
     replaceCurrentStream(toPlayableYoutube(next, next.id, alternatives));
     toast.success("Playing a matching version", { id: "yt-fallback" });
-  }, [
-    errorNonce,
-    replaceCurrentStream,
-    playViaStream,
-    searchSameSong,
-    tryJamendoVersion,
-  ]);
+  }, [errorNonce, replaceCurrentStream, playViaStream, searchSameSong]);
 
   // AirPods and other Bluetooth media remotes dispatch Media Session actions
   // rather than key events. Registering the handlers makes a double tap send

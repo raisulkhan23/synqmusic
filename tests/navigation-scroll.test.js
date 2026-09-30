@@ -12,7 +12,9 @@ describe("navigation scroll reset", () => {
   test("is actually mounted inside the router", () => {
     // Without this, deleting <ScrollToTop /> from the tree would leave every
     // other test in this file green while the reset silently stopped working.
-    expect(mainSource).toContain('import { ScrollToTop } from "@/components/ScrollToTop"');
+    expect(mainSource).toContain(
+      'import { ScrollToTop } from "@/components/ScrollToTop"',
+    );
     expect(mainSource).toMatch(/<BrowserRouter>[\s\S]{0,400}<ScrollToTop \/>/);
   });
 
@@ -43,25 +45,34 @@ describe("navigation scroll reset", () => {
     // behaviour-less scrollTo animate, which slid the new page up from the old
     // offset instead of snapping to the top.
     expect(cssSource).toMatch(/html \{\s*[^}]*scroll-behavior: smooth/);
-    const reset = scrollTopSource.match(/const resetToTop = [\s\S]*?\n    };/)?.[0];
+    const reset = scrollTopSource.match(
+      /const resetToTop = [\s\S]*?\n    };/,
+    )?.[0];
     expect(reset).toBeDefined();
     expect(reset).not.toMatch(/behavior: "smooth"/);
     expect(
-      (reset.match(/scrollTo\(\{ top: 0, left: 0, behavior: "instant" \}\)/g) ?? []).length,
+      (
+        reset.match(
+          /scrollTo\(\{ top: 0, left: 0, behavior: "instant" \}\)/g,
+        ) ?? []
+      ).length,
     ).toBe(2);
   });
 
   test("resets immediately and again after paint", () => {
     // A single effect-time reset lost the race with the new route painting.
     expect(scrollTopSource).toContain("requestAnimationFrame");
-    const scheduledFrames = scrollTopSource.match(/requestAnimationFrame/g) ?? [];
+    const scheduledFrames =
+      scrollTopSource.match(/requestAnimationFrame/g) ?? [];
     expect(scheduledFrames.length).toBeGreaterThanOrEqual(2);
   });
 
   test("an in-page anchor wins over the top-of-page reset", () => {
     expect(scrollTopSource).toContain("scrollIntoView");
     expect(scrollTopSource).toMatch(/if \(!hash\) resetToTop\(\)/);
-    expect(scrollTopSource).toMatch(/if \(!scrollToAnchor\(\)\) resetToTop\(\)/);
+    expect(scrollTopSource).toMatch(
+      /if \(!scrollToAnchor\(\)\) resetToTop\(\)/,
+    );
   });
 
   test("re-running on the same path still resets (location.key in deps)", () => {
