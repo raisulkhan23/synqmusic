@@ -136,27 +136,67 @@ const OFFSCREEN_STYLE =
 
 let apiPromise: Promise<void> | null = null;
 
+/**
+ * How long to wait for `youtube.com/iframe_api` before declaring it blocked.
+ * The script is tiny and normally arrives in well under a second, so this is
+ * deliberately short: the listener is waiting on music, not on a spinner.
+ */
+const API_LOAD_TIMEOUT_MS = 5_000;
+
 function loadApi(): Promise<void> {
   if (typeof window === "undefined") return Promise.resolve();
   if (window.YT?.Player) return Promise.resolve();
   if (apiPromise) return apiPromise;
 
-  apiPromise = new Promise<void>((resolve) => {
+  apiPromise = new Promise<void>((resolve, reject) => {
+    let settled = false;
+    function finish(err?: Error): void {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (!err) return resolve();
+      // Don't cache the failure forever: the listener may allow youtube.com
+      // (or switch the blocker off) and press play again.
+      apiPromise = null;
+      reject(err);
+    }
+    // Declared before `finish` can ever run so the closure is never in TDZ.
+    const timer = setTimeout(
+      () =>
+        finish(
+          new Error(
+            "YouTube player API timed out — a blocker may be blocking youtube.com",
+          ),
+        ),
+      API_LOAD_TIMEOUT_MS,
+    );
     const prev = window.onYouTubeIframeAPIReady;
     window.onYouTubeIframeAPIReady = () => {
       prev?.();
-      resolve();
+      finish();
     };
     const tag = document.createElement("script");
     tag.src = "https://www.youtube.com/iframe_api";
     tag.async = true;
+    // A blocker REJECTS this request outright, so the script fires `error`
+    // and `onYouTubeIframeAPIReady` never runs. Previously the promise simply
+    // never settled: `ytEngine.play()` neither resolved nor rejected, and
+    // the click produced absolute silence.
+    tag.onerror = () =>
+      finish(
+        new Error(
+          "YouTube player API blocked — a blocker may be blocking youtube.com",
+        ),
+      );
     document.head.appendChild(tag);
   });
   return apiPromise;
 }
 
 // Warm the API script as early as possible so the first play click is fast.
-void loadApi();
+// Swallow the rejection: a blocked/blocked-forever API must not surface as an
+// unhandled rejection at module scope — `play()` re-attempts and reports it.
+void loadApi().catch(() => undefined);
 
 function startPolling() {
   if (pollTimer) return;
@@ -492,10 +532,27 @@ export function trackFrame(frame: HTMLElement): () => void {
   };
 }
 
-/** YT error code → human message (100/101/150 = unusable video). */
+/**
+ * YT error codes that will never resolve by retrying the SAME video id, so
+ * playback must be escalated to the fallback chain immediately.
+ *
+ * 2 invalid param · 5 HTML5 player error · 100 removed/private ·
+ * 101/150 owner has disabled embedding · 153 embedding refused.
+ *
+ * 153 is the important one that used to be MISSING: a network blocker
+ * (uBlock, AdGuard, 1Blocker) that stops `youtube.com/embed/*` makes the
+ * IFrame report 153, and because it wasn't treated as fatal no error was
+ * ever surfaced at all — the click produced total silence and only the
+ * watchdog rescued it.
+ */
 export function isFatalError(code: number): boolean {
   return (
-    code === 2 || code === 5 || code === 100 || code === 101 || code === 150
+    code === 2 ||
+    code === 5 ||
+    code === 100 ||
+    code === 101 ||
+    code === 150 ||
+    code === 153
   );
 }
 

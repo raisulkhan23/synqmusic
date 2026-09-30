@@ -1939,23 +1939,28 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
   /** Increments on every track load; stale async results are discarded. */
   let loadSeq = 0;
 
+  /**
+   * Report a hard playback failure so PlayerBar's fallback chain runs.
+   *
+   * Late failures from a source the listener has already moved on from are
+   * ignored, or the chain would "rescue" a song that isn't the one that
+   * actually failed and silently swap the wrong track in.
+   */
+  const reportLoadFailure = (token: number, trackId: string) => {
+    if (token !== loadSeq || get().current?.id !== trackId) return;
+    set((state) => ({
+      isBuffering: false,
+      isPlaying: false,
+      errorNonce: state.errorNonce + 1,
+    }));
+  };
+
   const watchAudioErrors = (
     audio: HTMLAudioElement,
     token: number,
     trackId: string,
   ) => {
-    const onError = () => {
-      // Ignore errors from a previous source that arrive after the user has
-      // already switched tracks. Without this guard they increment errorNonce
-      // and PlayerBar mistakes them for a failure of the new song, then
-      // searches for and swaps in a completely different upload.
-      if (token !== loadSeq || get().current?.id !== trackId) return;
-      set((state) => ({
-        isBuffering: false,
-        isPlaying: false,
-        errorNonce: state.errorNonce + 1,
-      }));
-    };
+    const onError = () => reportLoadFailure(token, trackId);
     audio.addEventListener("error", onError, { once: true });
   };
 
@@ -2145,6 +2150,14 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       }
       getAudio().pause();
       clearYtLoadWatchdog();
+      // Last-resort watchdog: the IFrame never reported playing.
+      //
+      // It used to be 12s, which meant a blocked embed left the listener
+      // staring at a silent player for twelve seconds before anything
+      // happened. A healthy IFrame reports state 1 (PLAYING) within a
+      // couple of seconds, so 5s is already very generous — and the fatal
+      // paths (API blocked, error 153, stream blocked) now short-circuit
+      // long before this fires, so it only has to cover genuinely slow nets.
       ytLoadWatchdog = setTimeout(() => {
         const state = usePlayerStore.getState();
         if (seq !== loadSeq || !state.current?.youtubeId || state.isPlaying)
@@ -2155,7 +2168,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
           isPlaying: false,
           errorNonce: currentState.errorNonce + 1,
         }));
-      }, 12_000);
+      }, 5_000);
       ytEngine
         .play(track.youtubeId, {
           volume: get().volume,
@@ -2202,7 +2215,18 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       // Actually start playback. loadTrack is always reached from a user
       // gesture (row click) or auto-advance, so autoplay is permitted —
       // without this the song only loads and needs a second click.
-      void audio.play().catch(() => undefined);
+      //
+      // A rejected `play()` used to be swallowed, which is a silent dead end:
+      // the element reports nothing, no `error` event fires, and the listener
+      // just got silence with no fallback. Only `NotAllowedError` (autoplay
+      // policy — the source is fine, it just needs a tap) and `AbortError`
+      // (a newer load interrupted this one) are ignored; everything else is a
+      // source that cannot play and must escalate.
+      void audio.play().catch((err: unknown) => {
+        const name = (err as { name?: string } | null)?.name;
+        if (name === "NotAllowedError" || name === "AbortError") return;
+        reportLoadFailure(seq, track.id);
+      });
       // If this is a YouTube track on the audio path with video enabled,
       // keep the muted visual slave in sync so the fullscreen player shows
       // THIS song's video instead of the previous one's frozen thumbnail.
@@ -2875,6 +2899,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
               once: true,
             });
         }
+        watchAudioErrors(audio, seq, track.id);
         void audio.play().catch(() => undefined);
         usePlayerStore.setState({
           current: { ...track, audioUrl: url },
@@ -3006,6 +3031,10 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
               once: true,
             });
         }
+        // A blocked stream host fails silently here otherwise: the element
+        // never errors, `play()` never rejects, and the listener just gets
+        // nothing on the very path that exists to rescue playback.
+        watchAudioErrors(audio, seq, track.id);
         void audio.play().catch(() => undefined);
         set({ current: { ...track, audioUrl: url }, currentTime: from });
         // Sound now comes from the audio element — make sure the muted video
