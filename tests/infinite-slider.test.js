@@ -137,12 +137,19 @@ describe("the badges stay clickable", () => {
     }
   });
 
-  test("the marquee only holds the first copy, and the rest are inert", () => {
-    // Every copy after the first is a visual repeat. Left live, each link
-    // would be announced twice and get a keyboard stop on a duplicate that
-    // scrolls away mid-focus.
-    expect(slider).toContain("inert={copy > 0 ? true : undefined}");
+  test("duplicate copies leave the a11y tree but stay clickable", () => {
+    // CORRECTED. This test used to REQUIRE `inert` on the repeat copies, and
+    // that assertion is what kept the bug alive: `inert` means "not
+    // clickable", and because the strip drifts continuously, after one
+    // group-width every badge on screen belonged to a later copy. The whole
+    // marquee looked alive and every link on it was dead.
+    //
+    // The de-duplication goal is still real — a keyboard user should not tab
+    // through the same link four times — and it is met with `aria-hidden` plus
+    // `tabIndex={-1}`, neither of which blocks a pointer.
     expect(slider).toContain("aria-hidden={copy > 0 ? true : undefined}");
+    expect(slider).toContain("tabIndex: -1");
+    expect(slider).not.toContain("inert={copy > 0 ? true : undefined}");
   });
 
   test("there are at least two copies, or the strip has nowhere to wrap to", () => {

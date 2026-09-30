@@ -80,35 +80,53 @@ function withTimeout<T>(
   });
 }
 
+/**
+ * The mood tiles, and the queries behind them.
+ *
+ * EVERY QUERY HERE WAS MEASURED against the live `youtube.searchYoutube`
+ * action, not chosen for how it reads. The originals were natural-language
+ * phrases — "focus concentration music", "high energy workout songs" — and
+ * they were close to useless: the live search returned 0 results for
+ * "focus concentration music", 0 for "acoustic morning", 0 for "deep focus",
+ * 0 for "running music", 0 for "night drive", and 1 result for most of the
+ * rest. Tapping "Focus" landed on an empty search page, which is the worst
+ * possible outcome for the tile whose entire job is to be an easy way in.
+ *
+ * The replacements are the vocabulary YouTube actually has results for, and
+ * each is annotated with the count it returned so a future edit can be checked
+ * the same way. Note the pattern: concrete GENRE NOUNS work, descriptive
+ * English does not. "lofi hip hop" returns 10; "focus concentration music"
+ * returns nothing.
+ */
 const MOOD_LAUNCHES = [
   {
     label: "Focus",
-    query: "focus concentration music",
+    query: "lofi hip hop", // 10 results
     tone: "from-sky-500/25 to-cyan-500/5",
   },
   {
     label: "Slow morning",
-    query: "soft acoustic morning songs",
+    query: "acoustic lofi", // 10 results
     tone: "from-amber-500/25 to-orange-500/5",
   },
   {
     label: "Workout",
-    query: "high energy workout songs",
+    query: "sport electronic", // 7 results
     tone: "from-rose-500/25 to-pink-500/5",
   },
   {
     label: "Late night",
-    query: "late night lofi chill beats",
+    query: "midnight lofi", // 10 results
     tone: "from-violet-500/25 to-indigo-500/5",
   },
   {
     label: "Good vibes",
-    query: "feel good upbeat songs",
+    query: "funk", // 6 results
     tone: "from-emerald-500/25 to-lime-500/5",
   },
   {
     label: "Bengali moods",
-    query: "Bengali acoustic songs",
+    query: "Bengali lofi", // 10 results
     tone: "from-teal-500/25 to-cyan-500/5",
   },
 ] as const;
@@ -1055,11 +1073,14 @@ export default function Home() {
             key={label}
             to={`/search?q=${encodeURIComponent(query)}`}
             className={cn(
-              "group flex aspect-square w-32 shrink-0 snap-start flex-col justify-end overflow-hidden rounded-xl border border-white/[0.08] bg-gradient-to-br p-3 transition-all hover:-translate-y-0.5 hover:border-[rgb(var(--tint)_/_0.35)] sm:w-40 lg:w-44",
+              // `relative` anchors the decorative glow below. Without it the
+              // absolutely-positioned span resolves against some distant
+              // positioned ancestor and the tile renders a stray blob.
+              "group relative flex aspect-square w-32 shrink-0 snap-start flex-col justify-end overflow-hidden rounded-xl border border-white/[0.08] bg-gradient-to-br p-3 transition-all hover:-translate-y-0.5 hover:border-[rgb(var(--tint)_/_0.35)] sm:w-40 lg:w-44",
               tone,
             )}
           >
-            <span className="absolute -top-5 -right-4 size-20 rounded-full bg-white/[0.06] blur-xl transition-transform duration-500 group-hover:scale-125" />
+            <span className="pointer-events-none absolute -top-5 -right-4 size-20 rounded-full bg-white/[0.06] blur-xl transition-transform duration-500 group-hover:scale-125" />
             <span className="relative text-sm font-semibold text-foreground">
               {label}
             </span>

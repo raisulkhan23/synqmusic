@@ -1,10 +1,13 @@
 import {
   Children,
+  cloneElement,
+  isValidElement,
   useEffect,
   useMemo,
   useRef,
   useState,
   type CSSProperties,
+  type ReactElement,
   type ReactNode,
 } from "react";
 import {
@@ -33,7 +36,17 @@ export type InfiniteSliderProps = {
   children: ReactNode;
   /** Base drift, in pixels per second. Deliberately slow. */
   speed?: number;
-  /** Multiplier applied while the pointer is over the strip. `1` disables. */
+  /**
+   * Multiplier applied while the pointer is over the strip.
+   *
+   * Values BELOW 1 slow the drift down, which is the point: a moving target is
+   * hard to click, and every carousel convention in the world eases off when
+   * the pointer arrives so the item can actually be hit. The default is 0.25.
+   *
+   * A value above 1 does the opposite and used to be what shipped here (4),
+   * which meant hovering made the strip four times faster — the exact moment
+   * the user is trying to click something. Pass one only deliberately.
+   */
   speedOnHover?: number;
   /** Space between items, in pixels. Mirrors Tailwind's spacing scale. */
   gap?: number;
@@ -47,7 +60,7 @@ export type InfiniteSliderProps = {
 export function InfiniteSlider({
   children,
   speed = 18,
-  speedOnHover = 1,
+  speedOnHover = 0.25,
   gap = 16,
   reverse = false,
   label,
@@ -166,14 +179,34 @@ export function InfiniteSlider({
             ref={copy === 0 ? groupRef : undefined}
             className="flex shrink-0 items-center"
             style={{ paddingRight: gap }}
-            // Every copy after the first is a visual repeat. Leaving them in
+            // Every copy after the first is a visual repeat, and leaving them in
             // the accessibility tree would announce each link twice and put a
-            // keyboard stop on a duplicate that scrolls off mid-focus; `inert`
-            // takes them out of both without hiding the visible one.
-            inert={copy > 0 ? true : undefined}
+            // keyboard stop on a duplicate that scrolls off mid-focus.
+            //
+            // They must NOT be `inert`, though. That was the bug: once the
+            // track drifted one group-width to the left, every badge on screen
+            // belonged to a later copy, so the entire strip stopped responding
+            // to clicks — the drift was continuous, but the links were dead.
+            // `aria-hidden` plus `tabIndex={-1}` on the duplicates removes them
+            // from the a11y tree and the tab order while leaving them
+            // clickable, which is the only combination a marquee actually
+            // needs.
             aria-hidden={copy > 0 ? true : undefined}
           >
-            {items}
+            {copy === 0
+              ? items
+              : items.map((child, index) =>
+                  isValidElement(child)
+                    ? cloneElement(
+                        child as ReactElement<Record<string, unknown>>,
+                        {
+                          key: `copy-${index}`,
+                          tabIndex: -1,
+                          "aria-hidden": true,
+                        },
+                      )
+                    : child,
+                )}
           </div>
         ))}
       </div>

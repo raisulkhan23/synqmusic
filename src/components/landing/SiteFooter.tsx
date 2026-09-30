@@ -139,7 +139,11 @@ export function SiteFooter() {
                 clickable and keyboard-reachable once, not four times. */}
             <InfiniteSlider
               speed={14}
-              speedOnHover={4}
+              // EASE OFF on hover. A badge is a link to somebody's launch
+              // directory, and a link you cannot hit is a dead button. This
+              // used to be 4, which accelerated the strip four-fold at exactly
+              // the moment the pointer arrived to click something.
+              speedOnHover={0.2}
               gap={10}
               label="Launch directories featuring SYNQ"
               className="mt-3"
