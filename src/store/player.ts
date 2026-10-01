@@ -1,6 +1,10 @@
 import { create } from "zustand";
 import {
   getAudio,
+  getSpareAudio,
+  setDeckVolume,
+  setDeckMuted,
+  setDeckRate,
   setAudioFilter,
   setEqBass as setEqBassLib,
   setEqTreble as setEqTrebleLib,
@@ -11,9 +15,29 @@ import {
   getSignalLevel,
   resumeGraph,
   onEqChange,
+  onActiveDeckChange,
+  scheduleCrossfade,
+  canCrossfadeNow,
+  releaseDeck,
+  resetAllDeckGains,
+  activeDeckSlot,
+  spareDeckSlot,
+  swapActiveDeck,
+  pauseAllDecks,
   AUDIO_FILTERS,
   type AudioFilterId,
 } from "@/lib/audio";
+import {
+  DEFAULT_CROSSFADE,
+  DEFAULT_GAPLESS,
+  fadeGains,
+  normalizeCrossfade,
+  planTransition,
+  preloadLead,
+  shouldStartFade,
+  type TransitionPlan,
+  type TransitionReason,
+} from "@/lib/transition";
 import type { RGB } from "@/lib/covers";
 import {
   clampIntroSkip,
@@ -370,6 +394,21 @@ interface PlayerStore {
   audioFilter: AudioFilterId;
 
   /**
+   * Crossfade length in seconds; 0 disables it. Persisted locally as
+   * `ss.crossfade` and applied only when both songs can play through the
+   * <audio> element — the YouTube IFrame engine cannot be routed through Web
+   * Audio, so those tracks fall back to gapless playback.
+   */
+  crossfade: number;
+  setCrossfade: (seconds: number) => void;
+  /**
+   * Gapless playback: start the next track the moment the current one stops
+   * instead of leaving a beat of silence while the next track loads.
+   */
+  gapless: boolean;
+  toggleGapless: () => void;
+
+  /**
    * Smart intro trim: while the first seconds of a track play, watch the
    * signal level and seek past a silent/quiet lead-in.
    */
@@ -707,6 +746,10 @@ const initialVolume = Math.min(1, Math.max(0, readNum("ss.volume", 0.8)));
 const initialMuted = readBool("ss.muted", false);
 const initialShuffle = readBool("ss.shuffle", false);
 const initialSmartShuffle = readBool("ss.smartShuffle", false);
+const initialCrossfade = normalizeCrossfade(
+  readNum("ss.crossfade", DEFAULT_CROSSFADE),
+);
+const initialGapless = readBool("ss.gapless", DEFAULT_GAPLESS);
 
 /**
  * Discovery-vs-familiarity preference for recommendations, 0..100.
@@ -1465,9 +1508,23 @@ function playlistMixContext(tracks: Playable[]): string | null {
 function handleEnded(): void {
   const s = usePlayerStore.getState();
 
+  // A crossfade has already advanced the queue while this song was still
+  // fading out. Advancing again here would skip a track and leave the queue
+  // index pointing at a song nobody heard.
+  if (transition?.committed) {
+    transition = null;
+    resetAllDeckGains();
+    return;
+  }
+  // A transition was armed but never completed (the incoming track would not
+  // load, the listener skipped, the graph went away). Discard it and advance
+  // normally — the failure path must still play the next song.
+  cancelTransition("ended");
+
   // sleep timer "stop after this song"
   if (s.sleepAtSongEnd) {
-    getAudio().pause();
+    // Both decks: a blend may have the incoming song audible already.
+    pauseAllDecks();
     ytEngine.pause();
     usePlayerStore.setState({ isPlaying: false, sleepAtSongEnd: false });
     return;
@@ -1643,6 +1700,337 @@ function prefetchTrack(track: Playable | undefined): void {
   }
 }
 
+// --- song transitions (crossfade + gapless) ----------------------------------
+
+/**
+ * The transition currently in flight, if any.
+ *
+ * `armed` is set once the next track has been decided and its stream is being
+ * prepared; `running` is set from the moment the incoming element is asked to
+ * play until the blend has finished and the decks have swapped. Both flags
+ * exist to guarantee the thing the spec calls out as non-negotiable: only ONE
+ * intended audible transition at a time. Every entry point checks them, and
+ * the "rapid Next presses" case simply falls through to normal playback rather
+ * than stacking a second blend on top of the first.
+ */
+let transition: {
+  plan: TransitionPlan;
+  index: number;
+  track: Playable;
+  armed: boolean;
+  running: boolean;
+  /** Seconds remaining at the previous poll, used to fire the fade exactly once. */
+  lastRemaining: number | null;
+  /** Set once the incoming element is confirmed audible. */
+  committed: boolean;
+} | null = null;
+
+/** Cancel a pending or running transition and put the decks back to normal. */
+function cancelTransition(why: string): void {
+  if (!transition) return;
+  if (why) transition.armed = false;
+  transition = null;
+  resetAllDeckGains();
+}
+
+/**
+ * Work out which track plays next WITHOUT consuming it.
+ *
+ * This mirrors `handleEnded` exactly — shuffle, repeat-all, end of queue — but
+ * it must agree with it, or a transition would fade into one song and the
+ * advance would start another. Returning null at the end of the queue is
+ * deliberate: at that point the next track may be an autoplay recommendation
+ * that has not been fetched yet, and guessing would be worse than waiting.
+ */
+function peekNextTrack(): { track: Playable; index: number } | null {
+  const s = usePlayerStore.getState();
+  if (s.queue.length === 0 || s.queueIndex < 0) return null;
+  let index: number;
+  if (s.shuffle && s.queue.length > 1) {
+    index = pickShuffleIndex(s.queue.length, s.queueIndex, s.smartShuffle);
+  } else if (s.queueIndex < s.queue.length - 1) {
+    index = s.queueIndex + 1;
+  } else if (s.repeat === "all") {
+    index = 0;
+  } else {
+    return null; // end of queue — autoplay may still fetch something
+  }
+  const track = s.queue[index];
+  if (!track || track.id === s.current?.id) return null;
+  return { track, index };
+}
+
+/**
+ * Can BOTH of these songs be played through an <audio> element at once?
+ *
+ * This is the honest gate for a real crossfade. The YouTube IFrame engine owns
+ * its own audio inside a cross-origin iframe that Web Audio cannot tap, so
+ * while that engine is the sound source there is nothing to fade — claiming
+ * otherwise would be exactly the fake transition the spec forbids. In that
+ * case `planTransition` degrades to gapless/cut, which is still an improvement
+ * over a hard stop.
+ */
+function crossfadePossible(current: Playable | null, next: Playable): boolean {
+  if (!audioElementIsSource(current)) return false;
+  return audioElementIsSource(next) || !!next.youtubeId;
+}
+
+/** Ask the deck scheduler to consider a transition (manual skips). */
+export function requestTransition(reason: TransitionReason): void {
+  // A skip is an explicit "stop this now": any blend already in progress is
+  // abandoned so the listener's click always wins.
+  cancelTransition("manual-skip");
+  const s = usePlayerStore.getState();
+  if (!s.current || !s.isPlaying) return;
+  armTransition(reason, 0);
+}
+
+/**
+ * Prepare the next track for a transition: resolve its stream and hand it to
+ * the spare deck so it buffers while the current song finishes.
+ *
+ * Only ONE track is ever prepared. Preloading further would double the
+ * network and decode cost for no audible benefit — the song after next is not
+ * needed until the incoming one has finished playing.
+ */
+function prepareIncoming(track: Playable): Promise<HTMLAudioElement | null> {
+  const el = getSpareAudio();
+  const ready = async (): Promise<HTMLAudioElement | null> => {
+    let url = track.audioUrl;
+    // "stream" is a marker meaning "resolve this YouTube video", not a URL.
+    if (!audioElementIsSource(track) || track.audioUrl === "stream") {
+      if (!track.youtubeId) return null;
+      url = (await ytResolve(track.youtubeId)) ?? "";
+    }
+    if (!url || !/^https?:/.test(url)) return null;
+    el.src = url;
+    el.preload = "auto";
+    el.playbackRate = usePlayerStore.getState().rate;
+    el.load();
+    return el;
+  };
+  // Never let a slow or failing resolver throw into the scheduler — a failed
+  // preload must simply mean "play it normally when we get there".
+  return ready().catch(() => null);
+}
+
+/**
+ * Decide and arm a transition. Called on every time update once the track is
+ * close enough to its end to be worth preparing for, and directly by the
+ * manual-skip path.
+ */
+function armTransition(reason: TransitionReason, atSeconds: number): void {
+  const s = usePlayerStore.getState();
+  if (transition?.armed || transition?.running) return;
+  const next = peekNextTrack();
+  if (!next) return;
+
+  const plan = planTransition({
+    crossfadeSeconds: s.crossfade,
+    gaplessEnabled: s.gapless,
+    reason,
+    currentDuration: s.duration,
+    currentTime: atSeconds,
+    hasNext: true,
+    canCrossfade: crossfadePossible(s.current, next.track),
+    sameAlbum: sameAlbumRun(s.current, next.track),
+    abRepeatActive: s.abA !== null && s.abB !== null,
+    repeatOne: s.repeat === "one",
+    paused: !s.isPlaying,
+  });
+  if (plan.mode === "cut") return;
+
+  transition = {
+    plan,
+    index: next.index,
+    track: next.track,
+    armed: true,
+    running: false,
+    lastRemaining: null,
+    committed: false,
+  };
+  // Start buffering the incoming track now if there is time for it to land.
+  if (plan.mode === "crossfade" && preloadLead(plan) > 0) {
+    void prepareIncoming(next.track);
+  }
+}
+
+/** Two consecutive tracks from the same album want a gapless boundary. */
+function sameAlbumRun(a: Playable | null, b: Playable): boolean {
+  if (!a || !a.albumName || !b.albumName) return false;
+  return a.albumName.trim().toLowerCase() === b.albumName.trim().toLowerCase();
+}
+
+/**
+ * Start the crossfade, if the plan says one should start right now.
+ *
+ * Every failure path here returns WITHOUT touching playback: the current song
+ * keeps playing at full volume and `handleEnded` advances normally when it
+ * finishes. A transition that cannot be performed must never be the reason a
+ * listener hears nothing.
+ */
+async function maybeRunCrossfade(remaining: number): Promise<void> {
+  const t = transition;
+  if (!t || !t.armed || t.running) return;
+  if (!shouldStartFade(t.plan, remaining, t.lastRemaining)) return;
+  t.lastRemaining = remaining;
+  if (t.plan.mode !== "crossfade") return;
+
+  const s = usePlayerStore.getState();
+  // The audio context must be RUNNING. A suspended one turns a fade into
+  // silence, which is the exact failure this whole feature exists to remove.
+  if (!canCrossfadeNow()) {
+    cancelTransition("no-running-graph");
+    return;
+  }
+
+  const outgoingSlot = activeDeckSlot();
+  const incomingSlot = spareDeckSlot();
+  const incoming = getSpareAudio();
+
+  // Make sure the incoming deck really is holding this track before fading to
+  // it. If the resolver was slow or failed, fall back rather than fade to
+  // silence.
+  if (!incoming.currentSrc || !incoming.currentSrc.startsWith("http")) {
+    const prepared = await prepareIncoming(t.track);
+    if (!prepared || !transition || transition !== t) return;
+    if (!canCrossfadeNow()) {
+      cancelTransition("graph-lost");
+      return;
+    }
+  }
+
+  t.running = true;
+  resetAllDeckGains();
+  // Start the incoming song from silence; the curve brings it up. Muting the
+  // element itself would fight the user's mute state, so the deck gain does
+  // the work and master volume is untouched.
+  incoming.volume = s.volume;
+  incoming.muted = s.muted;
+  incoming.playbackRate = s.rate;
+
+  const started = await new Promise<boolean>((resolve) => {
+    let settled = false;
+    const done = (ok: boolean) => {
+      if (settled) return;
+      settled = true;
+      incoming.removeEventListener("playing", onPlaying);
+      incoming.removeEventListener("error", onError);
+      resolve(ok);
+    };
+    const onPlaying = () => done(true);
+    const onError = () => done(false);
+    incoming.addEventListener("playing", onPlaying, { once: true });
+    incoming.addEventListener("error", onError, { once: true });
+    void incoming
+      .play()
+      .then(() => done(true))
+      .catch(() => done(false));
+  });
+
+  if (!started || !transition || transition !== t) {
+    // Could not start the incoming track. Put everything back exactly as it
+    // was: the current song is still playing and will advance normally.
+    cancelTransition("incoming-failed");
+    return;
+  }
+
+  const ok = scheduleCrossfade(
+    outgoingSlot,
+    incomingSlot,
+    t.plan.seconds,
+    fadeGains,
+  );
+  if (!ok) {
+    cancelTransition("automation-refused");
+    return;
+  }
+
+  // Let the blend finish before handing the decks over, so the listener never
+  // hears the outgoing song cut off early.
+  await new Promise<void>((resolve) => {
+    const started2 = Date.now();
+    const poll = () => {
+      if (Date.now() - started2 >= t.plan.seconds * 1000 + 120) {
+        resolve();
+        return;
+      }
+      setTimeout(poll, 60);
+    };
+    poll();
+  });
+
+  // The listener may have skipped again mid-fade. Only finish the transition
+  // we started if it is still the current one.
+  if (transition !== t || t.committed) return;
+  t.committed = true;
+  finishTransition(t, outgoingSlot);
+}
+
+/**
+ * Set by the store once it exists, so the module-level transition code can
+ * commit a crossfaded advance through the same queue bookkeeping every other
+ * advance uses without the two needing to live in the same scope.
+ */
+let commitCrossfadeAdvance: ((index: number, track: Playable) => void) | null =
+  null;
+
+/** Complete a crossfade: promote the incoming deck and commit the new track. */
+function finishTransition(
+  t: NonNullable<typeof transition>,
+  outgoingSlot: "a" | "b",
+): void {
+  const s = usePlayerStore.getState();
+  // Advance the queue exactly the way a normal advance would, but tell the
+  // loader the audio is ALREADY playing on a deck so it does not re-load the
+  // stream and restart the song from zero.
+  transition = null;
+  resetAllDeckGains();
+  const incoming = getSpareAudio();
+  incoming.volume = s.volume;
+  incoming.muted = s.muted;
+  incoming.playbackRate = s.rate;
+
+  const previousId = s.current?.id;
+  if (previousId && t.track.id !== previousId && s.current) {
+    usePlayerStore.setState((state) => ({
+      history: [
+        state.current as Playable,
+        ...state.history.filter((h) => h.id !== previousId),
+      ].slice(0, 50),
+    }));
+  }
+  swapActiveDeck();
+  releaseDeck(outgoingSlot);
+  // Now loadTrack sees the deck already playing this song and skips the
+  // source swap, so playback position and queue state stay correct.
+  commitCrossfadeAdvance?.(t.index, t.track);
+}
+
+/** Run on every position update to keep an armed transition on schedule. */
+function tickTransition(t: number, duration: number): void {
+  const s = usePlayerStore.getState();
+  if (!Number.isFinite(duration) || duration <= 0) return;
+  const remaining = Math.max(0, duration - t);
+  if (!transition) {
+    // Arm once the track is close enough to its end that preparing the next
+    // one still has time to buffer.
+    const lead =
+      s.crossfade > 0
+        ? preloadLead({
+            mode: "crossfade",
+            seconds: s.crossfade,
+            leadSeconds: s.crossfade,
+            reason: "track-ended",
+            because: "",
+          })
+        : 0;
+    if (lead > 0 && remaining <= lead) armTransition("track-ended", t);
+    return;
+  }
+  void maybeRunCrossfade(remaining);
+}
+
 function onTimeUpdate(t: number, duration: number): void {
   const s = usePlayerStore.getState();
   if (s.abA !== null && s.abB !== null && t >= s.abB) {
@@ -1662,12 +2050,16 @@ function onTimeUpdate(t: number, duration: number): void {
     lastResumeSave = Date.now();
     saveResumePosition(id, t);
   }
+  tickTransition(t, duration);
 }
 
 // --- audio element wiring (catalog playback) ---------------------------------
 
 let wired = false;
 let audioBufferWatchdog: ReturnType<typeof setTimeout> | null = null;
+/** The deck the store's element listeners are currently attached to. */
+let boundAudio: HTMLAudioElement | null = null;
+let boundAudioHandlers: [string, EventListener][] = [];
 
 function clearAudioBufferWatchdog(): void {
   if (audioBufferWatchdog !== null) clearTimeout(audioBufferWatchdog);
@@ -1710,10 +2102,9 @@ function armAudioBufferWatchdog(audio: HTMLAudioElement): void {
 function wireAudio() {
   if (wired) return;
   wired = true;
-  const audio = getAudio();
-  audio.volume = initialVolume;
-  audio.muted = initialMuted;
-  audio.playbackRate = initialRate;
+  setDeckVolume(initialVolume);
+  setDeckMuted(initialMuted);
+  setDeckRate(initialRate);
 
   // Restore persisted audio settings (EQ / balance / mono / sound filter).
   try {
@@ -1735,20 +2126,54 @@ function wireAudio() {
     /* ignore */
   }
 
-  audio.addEventListener("timeupdate", () => {
+  bindAudioDeck(getAudio());
+
+  // A crossfade promotes the other deck to "live". Move these listeners with
+  // it, or every position, buffering and end-of-track update would keep coming
+  // from the element that just went silent and playback would appear frozen
+  // for the rest of the song.
+  onActiveDeckChange((next) => {
+    bindAudioDeck(next);
+  });
+}
+
+/**
+ * Attach the element-level listeners to whichever deck is live, detaching them
+ * from the previous one. Handlers ignore events from an element that is no
+ * longer the live deck, which is what makes a mid-swap event harmless.
+ */
+function bindAudioDeck(audio: HTMLAudioElement): void {
+  if (boundAudio && boundAudio !== audio) {
+    for (const [type, fn] of boundAudioHandlers) {
+      boundAudio.removeEventListener(type, fn);
+    }
+  }
+  boundAudioHandlers = [];
+  boundAudio = audio;
+
+  const live = () => audio === getAudio();
+  const on = (type: string, fn: EventListener) => {
+    audio.addEventListener(type, fn);
+    boundAudioHandlers.push([type, fn]);
+  };
+
+  on("timeupdate", (() => {
+    if (!live()) return;
     const duration =
       audio.duration && Number.isFinite(audio.duration) ? audio.duration : 0;
     usePlayerStore.setState({ currentTime: audio.currentTime, duration });
     onTimeUpdate(audio.currentTime, duration);
-  });
+  }) as EventListener);
 
-  audio.addEventListener("durationchange", () => {
+  on("durationchange", (() => {
+    if (!live()) return;
     if (audio.duration && Number.isFinite(audio.duration)) {
       usePlayerStore.setState({ duration: audio.duration });
     }
-  });
+  }) as EventListener);
 
-  audio.addEventListener("progress", () => {
+  on("progress", (() => {
+    if (!live()) return;
     try {
       if (audio.buffered.length > 0) {
         const end = audio.buffered.end(audio.buffered.length - 1);
@@ -1757,32 +2182,42 @@ function wireAudio() {
     } catch {
       /* ignore */
     }
-  });
+  }) as EventListener);
 
-  audio.addEventListener("waiting", () => {
+  on("waiting", (() => {
+    if (!live()) return;
     usePlayerStore.setState({ isBuffering: true });
     armAudioBufferWatchdog(audio);
-  });
-  audio.addEventListener("stalled", () => {
+  }) as EventListener);
+
+  on("stalled", (() => {
+    if (!live()) return;
     usePlayerStore.setState({ isBuffering: true });
     armAudioBufferWatchdog(audio);
-  });
-  audio.addEventListener("playing", () => {
+  }) as EventListener);
+
+  on("playing", (() => {
+    if (!live()) return;
     clearAudioBufferWatchdog();
     usePlayerStore.setState({ isBuffering: false, isPlaying: true });
-  });
-  audio.addEventListener("pause", () => {
+  }) as EventListener);
+
+  on("pause", (() => {
+    if (!live()) return;
     clearAudioBufferWatchdog();
     usePlayerStore.setState({ isPlaying: false, isBuffering: false });
-  });
-  audio.addEventListener("play", () =>
-    usePlayerStore.setState({ isPlaying: true }),
-  );
+  }) as EventListener);
 
-  audio.addEventListener("ended", () => {
+  on("play", (() => {
+    if (!live()) return;
+    usePlayerStore.setState({ isPlaying: true });
+  }) as EventListener);
+
+  on("ended", (() => {
+    if (!live()) return;
     clearAudioBufferWatchdog();
     handleEnded();
-  });
+  }) as EventListener);
 }
 
 // --- youtube iframe engine wiring --------------------------------------------
@@ -2006,7 +2441,17 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
   };
 
   /** Route loading/playback to the right engine for the given track. */
-  const loadTrack = (track: Playable, startSeconds?: number) => {
+  const loadTrack = (
+    track: Playable,
+    startSeconds?: number,
+    /**
+     * Set when a crossfade already started this song on a deck. The audio is
+     * genuinely playing, so the engine-routing code below is skipped entirely:
+     * re-assigning `src` would restart the song from zero right after the
+     * blend, which is the audible stutter the transition exists to remove.
+     */
+    opts?: { deckAlreadyPlaying?: boolean },
+  ) => {
     const seq = ++loadSeq;
     const prev = get().current;
     playedSessionIds.add(track.id);
@@ -2110,6 +2555,18 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       // definition: the next song gets its own fresh look.
       introTrimSkipped: null,
     });
+
+    // The crossfade already has this track sounding on the deck we just
+    // promoted. Do all the bookkeeping (queue, history, engagement, media
+    // session, prefetch) but leave the audio completely alone.
+    if (opts?.deckAlreadyPlaying) {
+      const audio = getAudio();
+      audio.playbackRate = get().rate;
+      syncMediaSession(track, true);
+      prefetchTrack(get().queue[get().queueIndex + 1]);
+      maybeAutofillQueue();
+      return;
+    }
 
     // A track with NO video id and no stream URL cannot play at all. This
     // was reachable and failed SILENTLY: `audio.src = undefined` resolves to
@@ -2432,6 +2889,25 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     maybeAutofillQueue();
   };
 
+  /**
+   * Commit a crossfaded advance. The audio is already playing on the deck we
+   * just promoted, so this reuses the normal queue bookkeeping (saved queue,
+   * index, autoplay top-up, history) and tells `loadTrack` not to touch the
+   * source. Going through `playIndex` instead would re-assign `src` and
+   * restart the song at zero.
+   */
+  const advanceTrackForTransition = (index: number, track: Playable) => {
+    const s = get();
+    if (index < 0 || index >= s.queue.length) return;
+    if (s.queue[index]?.id !== track.id) return; // queue moved under us
+    saveQueue(s.queue, index, track.id ?? null);
+    set({ queueIndex: index });
+    loadTrack(s.queue[index], undefined, { deckAlreadyPlaying: true });
+  };
+  // Hand the transition engine the one thing it cannot do on its own: commit
+  // the queue exactly the way a normal advance does.
+  commitCrossfadeAdvance = advanceTrackForTransition;
+
   const togglePlay = () => {
     const s = get();
     if (s.current) {
@@ -2462,10 +2938,17 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       }
       const audio = getAudio();
       if (audio.paused) {
+        // Resuming after a pause must not restart a half-finished blend: the
+        // decks are back at unity, so a blend would run from the wrong place.
+        cancelTransition("resume");
         void audio.play().catch(() => undefined);
         syncMediaSession(s.current, true);
       } else {
-        audio.pause();
+        // A crossfade has two songs audible at once, so pausing only the live
+        // deck would leave the incoming song playing over a "paused" UI — and
+        // resuming would then bring both songs back together.
+        cancelTransition("pause");
+        pauseAllDecks();
         syncMediaSession(s.current, false);
       }
       return;
@@ -2478,6 +2961,10 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
   const next = () => {
     const s = get();
     if (s.queue.length === 0) return;
+    // An explicit skip always wins: drop any blend that is in flight so two
+    // transitions can never overlap, then start the short manual blend.
+    cancelTransition("manual-next");
+    if (s.isPlaying && s.current) requestTransition("manual-next");
     // Shuffle ON: play a RANDOM other track (not the one directly below).
     if (s.shuffle && s.queue.length > 1) {
       playIndex(
@@ -2495,6 +2982,10 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
   const prev = () => {
     const s = get();
     if (s.queue.length === 0) return;
+    // Previous never crossfades. Going back is a navigation intent, and the
+    // existing "restart the song if you are past 3s" behaviour has to keep
+    // working untouched.
+    cancelTransition("manual-prev");
     if (s.currentTime > 3) {
       s.seek(0);
       return;
@@ -2515,6 +3006,9 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     // NaN to audio.currentTime THROWS "non-finite", which killed the whole
     // click handler and left the transport stuck.
     if (!Number.isFinite(time)) return;
+    // Seeking during a blend would leave the incoming track playing from a
+    // position the listener never chose, so abandon the transition first.
+    cancelTransition("seek");
     const duration = s.duration;
     const t = Math.max(0, Math.min(time, duration || time));
     // Seek whichever engine actually owns the sound (see audioElementIsSource).
@@ -2528,7 +3022,10 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
 
   const setVolume = (volume: number) => {
     const v = Math.min(1, Math.max(0, volume));
-    getAudio().volume = v;
+    // Both decks, not just the live one: after a crossfade the idle deck is
+    // already holding the next song, and a volume change that missed it would
+    // silently play the next track at the old level.
+    setDeckVolume(v);
     ytEngine.setVolume(v);
     writeSetting("ss.volume", String(v));
     set({ volume: v });
@@ -2537,7 +3034,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
   const toggleMute = () => {
     const s = get();
     const nextMuted = !s.muted;
-    getAudio().muted = nextMuted;
+    setDeckMuted(nextMuted);
     ytEngine.setMuted(nextMuted);
     writeSetting("ss.muted", nextMuted ? "1" : "0");
     if (!nextMuted && s.volume === 0) {
@@ -2658,13 +3155,17 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     const order: RepeatMode[] = ["off", "all", "one"];
     const idx = order.indexOf(get().repeat);
     const next = order[(idx + 1) % order.length];
+    // Switching to repeat-one while a blend is running would fade the track
+    // out and restart it on top of itself.
+    cancelTransition("repeat-changed");
     writeSetting("ss.repeat", next);
     set({ repeat: next });
   };
 
   const setRate = (rate: number) => {
     const r = Math.min(2, Math.max(0.5, rate));
-    getAudio().playbackRate = r;
+    // Both decks: a prepared incoming track must not start at the old speed.
+    setDeckRate(r);
     ytEngine.setRate(r);
     writeSetting("ss.rate", String(r));
     set({ rate: r });
@@ -3115,7 +3616,9 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     sleepCheckInterval = setInterval(() => {
       const s = get();
       if (s.sleepEndsAt !== null && Date.now() >= s.sleepEndsAt) {
-        getAudio().pause();
+        // Both decks: the sleep timer must stop the music outright, including
+        // a track that a crossfade had already started fading in.
+        pauseAllDecks();
         ytEngine.pause();
         if (sleepCheckInterval) {
           clearInterval(sleepCheckInterval);
@@ -3249,6 +3752,21 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     },
     introTrim: initialIntroTrim,
     introTrimSkipped: null,
+    crossfade: initialCrossfade,
+    setCrossfade: (seconds: number) => {
+      const next = normalizeCrossfade(seconds);
+      writeSetting("ss.crossfade", String(next));
+      // Changing the length mid-playback must never leave a half-finished
+      // blend running, so any armed transition is recomputed from scratch.
+      cancelTransition("setting-changed");
+      set({ crossfade: next });
+    },
+    gapless: initialGapless,
+    toggleGapless: () =>
+      set((state) => {
+        writeSetting("ss.gapless", state.gapless ? "0" : "1");
+        return { gapless: !state.gapless };
+      }),
     unshuffledQueue: null,
     unshuffledIndex: -1,
     repeat: initialRepeat,
@@ -3684,7 +4202,9 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
         return { queue, unshuffledQueue: null, unshuffledIndex: -1 };
       });
     },
-    clearQueue: () =>
+    clearQueue: () => {
+      // A blend targeting a track that is being removed must not commit later.
+      cancelTransition("queue-cleared");
       set((s2) => {
         const queue = s2.current ? [s2.current] : [];
         saveQueue(queue, s2.current ? 0 : -1, s2.current?.id ?? null);
@@ -3698,7 +4218,8 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
           unshuffledQueue: null,
           unshuffledIndex: -1,
         };
-      }),
+      });
+    },
     setHistoryRecorder: (fn) => {
       // Retained for compatibility. SYNQ installs the signal bridge instead,
       // so nothing currently calls it; the play it used to record is recorded

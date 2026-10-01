@@ -16,6 +16,7 @@ import { Slider } from "@/components/ui/slider";
 import { DEFAULT_CARD_TRANSPARENCY } from "@/lib/cardTransparency";
 import { downloadJson } from "@/lib/download";
 import { useSleepCountdown } from "@/lib/sleepTimer";
+import { CROSSFADE_CHOICES } from "@/lib/transition";
 import {
   applyEqPreset,
   setAudioFilter,
@@ -162,6 +163,10 @@ export function SettingsDialog({
   const clearHistory = useMutation(api.history.clearHistory);
 
   const rate = usePlayerStore((s) => s.rate);
+  const crossfade = usePlayerStore((s) => s.crossfade);
+  const setCrossfade = usePlayerStore((s) => s.setCrossfade);
+  const gapless = usePlayerStore((s) => s.gapless);
+  const toggleGapless = usePlayerStore((s) => s.toggleGapless);
   const setRate = usePlayerStore((s) => s.setRate);
   const autoplay = usePlayerStore((s) => s.autoplay);
   const toggleAutoplay = usePlayerStore((s) => s.toggleAutoplay);
@@ -1092,6 +1097,66 @@ export function SettingsDialog({
             <SlidersHorizontal className="size-3.5" />
             Audio
           </p>
+
+          {/* crossfade — blends one song into the next */}
+          <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">Crossfade</p>
+                <p className="text-xs text-muted-foreground">
+                  Blend the end of one song into the next
+                </p>
+              </div>
+              <span className="shrink-0 text-[10px] font-semibold uppercase tracking-widest text-[rgb(var(--tint))] tabular-nums">
+                {crossfade === 0 ? "Off" : `${crossfade}s`}
+              </span>
+            </div>
+            <div
+              role="radiogroup"
+              aria-label="Crossfade duration"
+              className="mt-2.5 grid grid-cols-6 gap-1"
+            >
+              {CROSSFADE_CHOICES.map((seconds) => (
+                <button
+                  key={seconds}
+                  type="button"
+                  role="radio"
+                  aria-checked={crossfade === seconds}
+                  onClick={() => {
+                    setCrossfade(seconds);
+                    toast(
+                      seconds === 0
+                        ? "Crossfade off"
+                        : `Crossfade set to ${seconds} seconds`,
+                    );
+                  }}
+                  className={cn(
+                    "rounded-lg border px-1 py-1.5 text-[11px] font-semibold tabular-nums transition-colors",
+                    crossfade === seconds
+                      ? "border-[rgb(var(--tint))] bg-[rgb(var(--tint)_/_0.14)] text-[rgb(var(--tint))]"
+                      : "border-white/10 text-muted-foreground hover:border-white/25 hover:text-foreground",
+                  )}
+                >
+                  {seconds === 0 ? "Off" : `${seconds}s`}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground/80">
+              Crossfading needs both songs playing through the audio pipeline.
+              Songs served by the YouTube player keep their gapless boundary
+              instead.
+            </p>
+          </div>
+
+          <ToggleRow
+            label="Gapless playback"
+            description="Start the next track the moment this one stops, with no added silence. Albums and live sets are unaffected by the crossfade setting."
+            on={gapless}
+            onToggle={() => {
+              toggleGapless();
+              toast(gapless ? "Gapless playback off" : "Gapless playback on");
+            }}
+          />
 
           {/* presets */}
           <div className="flex flex-wrap gap-1.5">

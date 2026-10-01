@@ -1,34 +1,206 @@
 import { useEffect } from "react";
 
-/** Single shared <audio> element for direct-stream playback. */
+/**
+ * A playback "deck": one <audio> element plus the Web Audio nodes that belong
+ * to it.
+ *
+ * SYNQ runs on TWO decks, not one. A crossfade needs the outgoing song and the
+ * incoming song to be audible at the same time, and a single <audio> element
+ * can only ever play one of them — so the second element is not a luxury, it
+ * is the whole mechanism. Whichever deck is `active` is what `getAudio()`
+ * returns, which is why the rest of the app needed no changes at all to
+ * support crossfading: a transition simply swaps which deck is active.
+ *
+ * The spec allows exactly one MediaElementSource per ELEMENT (not per context),
+ * so each deck gets its own source and they share the single downstream EQ /
+ * balance / effects / analyser chain.
+ */
+interface Deck {
+  el: HTMLAudioElement;
+  source: MediaElementAudioSourceNode | null;
+  /** Transition multiplier for this deck only. 1 = untouched. */
+  gain: GainNode | null;
+}
+
+function createDeckElement(): HTMLAudioElement {
+  const audio = new Audio();
+  audio.preload = "auto";
+  audio.crossOrigin = "anonymous";
+  // Mobile browsers are more consistent about continuing Media Session
+  // playback when the media element remains in the document. Keep it
+  // hidden and non-interactive; the player store still owns all controls.
+  audio.setAttribute("aria-hidden", "true");
+  audio.setAttribute("playsinline", "true");
+  audio.style.display = "none";
+  if (document.body) document.body.appendChild(audio);
+  return audio;
+}
+
+let decks: Record<"a" | "b", Deck> | null = null;
+/** Which deck `getAudio()` currently resolves to. */
+let activeDeck: "a" | "b" = "a";
+
+function ensureDecks(): Record<"a" | "b", Deck> {
+  if (decks) return decks;
+  const w = window as unknown as {
+    __ssAudio?: HTMLAudioElement;
+    __ssAudioSpare?: HTMLAudioElement;
+  };
+  // Reuse an element left over from a previous page load when one is already
+  // on the window, so a hot reload does not orphan a playing element.
+  const first = w.__ssAudio ?? createDeckElement();
+  const second = w.__ssAudioSpare ?? createDeckElement();
+  w.__ssAudio = first;
+  w.__ssAudioSpare = second;
+  decks = {
+    a: { el: first, source: null, gain: null },
+    b: { el: second, source: null, gain: null },
+  };
+  return decks;
+}
+
+/**
+ * The deck that currently owns playback. Every existing call site keeps
+ * working unchanged; a crossfade works by making the *other* deck active once
+ * the blend finishes.
+ */
 export function getAudio(): HTMLAudioElement {
   if (typeof window === "undefined") {
     return new Audio();
   }
-  const w = window as unknown as { __ssAudio?: HTMLAudioElement };
-  if (!w.__ssAudio) {
-    const audio = new Audio();
-    audio.preload = "auto";
-    audio.crossOrigin = "anonymous";
-    // Mobile browsers are more consistent about continuing Media Session
-    // playback when the media element remains in the document. Keep it
-    // hidden and non-interactive; the player store still owns all controls.
-    audio.setAttribute("aria-hidden", "true");
-    audio.setAttribute("playsinline", "true");
-    audio.style.display = "none";
-    if (document.body) document.body.appendChild(audio);
-    w.__ssAudio = audio;
-  } else if (!w.__ssAudio.isConnected && document.body) {
-    document.body.appendChild(w.__ssAudio);
-  }
-  return w.__ssAudio;
+  const d = ensureDecks();
+  const el = d[activeDeck].el;
+  if (!el.isConnected && document.body) document.body.appendChild(el);
+  // Kept in sync for the benefit of anything reading the legacy global.
+  (window as unknown as { __ssAudio?: HTMLAudioElement }).__ssAudio = el;
+  return el;
 }
 
-/** Keep the audio element's playback rate in sync (call from an effect). */
+/** The idle deck — the one a crossfade loads the incoming song onto. */
+export function getSpareAudio(): HTMLAudioElement {
+  if (typeof window === "undefined") {
+    return new Audio();
+  }
+  const d = ensureDecks();
+  const slot = activeDeck === "a" ? "b" : "a";
+  const el = d[slot].el;
+  if (!el.isConnected && document.body) document.body.appendChild(el);
+  return el;
+}
+
+/**
+ * Notified after the active deck changes so the player store can move its
+ * event listeners onto the new element. Without this the store would keep
+ * listening to the deck that just went silent and playback position, buffering
+ * and end-of-track would all freeze at the moment of the swap.
+ */
+let activeDeckListener:
+  | ((next: HTMLAudioElement, prev: HTMLAudioElement) => void)
+  | null = null;
+export function onActiveDeckChange(
+  cb: ((next: HTMLAudioElement, prev: HTMLAudioElement) => void) | null,
+): void {
+  activeDeckListener = cb;
+}
+
+/**
+ * Make the spare deck the active one. Returns false when there is nothing to
+ * swap, so a caller can never believe a transition happened when it did not.
+ */
+export function swapActiveDeck(): HTMLAudioElement | null {
+  if (typeof window === "undefined") return null;
+  const d = ensureDecks();
+  const next = activeDeck === "a" ? "b" : "a";
+  const prevEl = d[activeDeck].el;
+  const nextEl = d[next].el;
+  if (prevEl === nextEl) return null;
+  activeDeck = next;
+  // Restore the outgoing deck to a neutral gain so it is clean if it is ever
+  // used for playback again.
+  try {
+    if (d[next].gain) d[next].gain.gain.cancelScheduledValues(0);
+    if (d[next].gain) d[next].gain.gain.value = 1;
+  } catch {
+    /* not built yet */
+  }
+  try {
+    activeDeckListener?.(nextEl, prevEl);
+  } catch {
+    /* a listener must never break the swap */
+  }
+  return nextEl;
+}
+
+/** Keep both decks' playback rate in sync (call from an effect). */
 export function useAudioRate(rate: number): void {
   useEffect(() => {
-    getAudio().playbackRate = rate;
+    setDeckRate(rate);
   }, [rate]);
+}
+
+/** Apply the rate to BOTH decks, so a swap never lands on a stale speed. */
+export function setDeckRate(rate: number): void {
+  if (typeof window === "undefined") return;
+  const d = ensureDecks();
+  const r = Math.min(2, Math.max(0.5, rate));
+  for (const slot of ["a", "b"] as const) {
+    try {
+      d[slot].el.playbackRate = r;
+    } catch {
+      /* not ready */
+    }
+  }
+}
+
+/**
+ * Master volume applies to both decks. `getAudio().volume = v` only reaches one
+ * of them, which after a crossfade would leave the listener's volume change
+ * silently applying to the idle deck.
+ */
+export function setDeckVolume(v: number): void {
+  if (typeof window === "undefined") return;
+  const d = ensureDecks();
+  const value = Math.min(1, Math.max(0, v));
+  for (const slot of ["a", "b"] as const) {
+    try {
+      d[slot].el.volume = value;
+    } catch {
+      /* not ready */
+    }
+  }
+}
+
+/**
+ * Pause BOTH decks.
+ *
+ * Necessary because a crossfade has two songs audible at once. Pausing only
+ * `getAudio()` — which is what this code did before decks existed — leaves the
+ * incoming song playing while the UI says "paused", and then resuming makes
+ * both songs audible together. Unpausing has to stop the blend too.
+ */
+export function pauseAllDecks(): void {
+  if (typeof window === "undefined") return;
+  const d = ensureDecks();
+  for (const slot of ["a", "b"] as const) {
+    try {
+      d[slot].el.pause();
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+/** Mute must cover both decks, for the same reason as volume. */
+export function setDeckMuted(muted: boolean): void {
+  if (typeof window === "undefined") return;
+  const d = ensureDecks();
+  for (const slot of ["a", "b"] as const) {
+    try {
+      d[slot].el.muted = muted;
+    } catch {
+      /* not ready */
+    }
+  }
 }
 
 // --- audio filter chain -------------------------------------------------------
@@ -98,12 +270,13 @@ let activeFilter: AudioFilterId = "off";
 let rotateRaf = 0;
 
 /**
- * True once `createMediaElementSource` has succeeded for the shared audio
- * element. The spec allows exactly ONE MediaElementSource per element, so this
- * can never be undone: any later "rebuild" throws InvalidStateError. Without
- * this flag the old code closed and recreated the AudioContext on every failed
- * attempt, which tore down the graph the YouTube player was routed through and
- * made playback skip to another track.
+ * True once `createMediaElementSource` has succeeded for ANY of our elements.
+ * The spec allows exactly ONE MediaElementSource per ELEMENT — so this is
+ * tracked per element on the deck, but the flag below is what stops a failed
+ * rebuild from closing the live context: without it the old code closed and
+ * recreated the AudioContext on every failed attempt, which tore down the graph
+ * the YouTube player was routed through and made playback skip to another
+ * track.
  */
 let mediaSourceAttached = false;
 
@@ -152,8 +325,30 @@ export function ensureGraph(): boolean {
     if (!AudioCtx) return false;
     audioCtx = audioCtx ?? new AudioCtx();
 
-    filterSource = audioCtx.createMediaElementSource(getAudio());
-    mediaSourceAttached = true;
+    // Both decks get their own MediaElementSource — the spec allows one per
+    // ELEMENT, so two elements may each have exactly one — and both feed the
+    // SAME downstream chain. That is what makes a crossfade a real audio
+    // crossfade: the outgoing and incoming songs are mixed inside the graph
+    // while the user's EQ, balance and effects apply to both at once.
+    const d = ensureDecks();
+    for (const slot of ["a", "b"] as const) {
+      if (d[slot].source) continue;
+      try {
+        d[slot].source = audioCtx.createMediaElementSource(d[slot].el);
+        mediaSourceAttached = true;
+      } catch {
+        // A deck whose element is already claimed simply stays out of the
+        // graph; the other deck still works.
+        d[slot].source = null;
+      }
+    }
+    const activeSlot = activeDeck;
+    filterSource = d[activeSlot].source;
+    if (!filterSource) {
+      // Neither deck could be attached. Leave the context alone rather than
+      // closing it: closing is unrecoverable and would cut off playback.
+      return false;
+    }
 
     // user EQ stage
     eqBassNode = audioCtx.createBiquadFilter();
@@ -191,7 +386,24 @@ export function ensureGraph(): boolean {
     panner = audioCtx.createStereoPanner();
     gainOut = audioCtx.createGain();
 
-    filterSource.connect(eqBassNode);
+    // Each deck's transition GainNode sits BEFORE the EQ stage, so the blend
+    // volume is multiplied independently of the listener's master volume and
+    // their EQ settings. A crossfade therefore never disturbs either.
+    for (const slot of ["a", "b"] as const) {
+      const deck = d[slot];
+      if (!deck.source) continue;
+      if (!deck.gain) {
+        deck.gain = audioCtx.createGain();
+        deck.gain.gain.value = 1;
+      }
+      try {
+        deck.source.connect(deck.gain);
+        deck.gain.connect(eqBassNode);
+      } catch {
+        /* already connected */
+      }
+    }
+
     eqBassNode.connect(eqTrebleNode);
     eqTrebleNode.connect(balanceNode);
     balanceNode.connect(fxIn);
@@ -447,4 +659,144 @@ export function applyEqPreset(preset: { bass: number; treble: number }): void {
 /** Copy the current frequency magnitudes into `out` (0-255 per bin). */
 export function readFrequencyData(node: AnalyserNode, out: Uint8Array): void {
   node.getByteFrequencyData(out as Uint8Array<ArrayBuffer>);
+}
+
+// --- transitions (crossfade) --------------------------------------------------
+
+/** Cancel any fade automation and park a deck at an exact gain immediately. */
+export function setDeckGainNow(slot: "a" | "b" | "auto", value: number): void {
+  const d = decks;
+  if (!d) return;
+  const target = slot === "auto" ? activeDeck : slot;
+  const gain = d[target].gain;
+  if (!gain) return;
+  try {
+    gain.gain.cancelScheduledValues(0);
+    gain.gain.setValueAtTime(value, audioCtx?.currentTime ?? 0);
+  } catch {
+    /* context not running */
+  }
+}
+
+/** Put every deck back to full volume — used when a transition is abandoned. */
+export function resetAllDeckGains(): void {
+  setDeckGainNow("a", 1);
+  setDeckGainNow("b", 1);
+}
+
+/**
+ * Schedule a crossfade between the two decks using an equal-power curve.
+ *
+ * The curve is sampled and handed to Web Audio as a `Float32Array`, so the
+ * actual audio follows the same sin/cos shape the unit tests assert on rather
+ * than a straight line. A linear crossfade of two uncorrelated songs audibly
+ * dips about 6dB in the middle (each track at half volume), which listeners
+ * hear as a surge at the moment the new song takes over.
+ *
+ * Automation is sample-accurate, which is also what prevents clicks: the gain
+ * moves continuously rather than stepping once per `timeupdate`.
+ *
+ * Returns false when the graph is not ready, so the caller falls back to
+ * normal playback instead of starting a fade it cannot finish.
+ */
+export function scheduleCrossfade(
+  outgoingSlot: "a" | "b",
+  incomingSlot: "a" | "b",
+  seconds: number,
+  curve: (t: number) => { outgoing: number; incoming: number },
+): boolean {
+  const d = decks;
+  const ctx = audioCtx;
+  if (!d || !ctx || ctx.state !== "running") return false;
+  const out = d[outgoingSlot].gain;
+  const inc = d[incomingSlot].gain;
+  if (!out || !inc) return false;
+  const duration = Math.max(0.05, Math.min(seconds, 60));
+  const steps = Math.max(2, Math.min(256, Math.ceil(duration * 40)));
+  const outCurve = new Float32Array(steps);
+  const inCurve = new Float32Array(steps);
+  for (let i = 0; i < steps; i++) {
+    const t = i / (steps - 1);
+    const g = curve(t);
+    outCurve[i] = g.outgoing;
+    inCurve[i] = g.incoming;
+  }
+  const now = ctx.currentTime;
+  try {
+    out.gain.cancelScheduledValues(now);
+    inc.gain.cancelScheduledValues(now);
+    out.gain.setValueAtTime(outCurve[0], now);
+    inc.gain.setValueAtTime(inCurve[0], now);
+    out.gain.linearRampToValueAtTime(outCurve[steps - 1], now + duration);
+    inc.gain.linearRampToValueAtTime(inCurve[steps - 1], now + duration);
+  } catch {
+    return false;
+  }
+  return true;
+}
+
+/** Which deck is currently live. Callers need this to know exactly what a
+ * swap is about to replace, so the outgoing deck can be released afterwards.
+ */
+export function activeDeckSlot(): "a" | "b" {
+  return activeDeck;
+}
+
+/** The deck that is NOT live — the one an incoming track is loaded onto. */
+export function spareDeckSlot(): "a" | "b" {
+  return activeDeck === "a" ? "b" : "a";
+}
+
+/**
+ * True when a real crossfade is possible right now: both decks are attached to
+ * a RUNNING audio context. A suspended context means silence, so fading into
+ * one would be worse than not fading at all.
+ */
+export function canCrossfadeNow(): boolean {
+  const d = decks;
+  return !!(
+    d &&
+    audioCtx &&
+    audioCtx.state === "running" &&
+    d.a.gain &&
+    d.b.gain
+  );
+}
+
+/**
+ * Tear a deck down after it has been faded out (or a transition was
+ * abandoned): stop it, drop the source and free the buffer.
+ *
+ * Without this the old element keeps a decoded stream and a network connection
+ * alive for the whole session, which is the leak that turns a crossfade into
+ * a slow memory climb over an evening's listening.
+ */
+export function releaseDeck(slot: "a" | "b"): void {
+  const d = decks;
+  if (!d || typeof window === "undefined") return;
+  const deck = d[slot];
+  if (slot === activeDeck) return; // never release the live deck
+  try {
+    deck.el.pause();
+  } catch {
+    /* ignore */
+  }
+  try {
+    deck.el.removeAttribute("src");
+    deck.el.load();
+  } catch {
+    /* ignore */
+  }
+  try {
+    deck.source?.disconnect();
+  } catch {
+    /* ignore */
+  }
+  try {
+    deck.gain?.disconnect();
+  } catch {
+    /* ignore */
+  }
+  deck.source = null;
+  deck.gain = null;
 }
