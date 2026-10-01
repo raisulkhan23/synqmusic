@@ -523,14 +523,22 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>
+            {/* Deferred-auth bridge. Inside `ConvexAuthProvider` because it
+                reads the session from it, and inside `BrowserRouter` because
+                the prompt uses `useLocation` to return the visitor to the exact
+                page they were on. It sits OUTSIDE `<Routes>` so it is not tied
+                to any one route and survives navigation.
+
+                It deliberately does NOT sit outside the router on the theory
+                that an OAuth round-trip might unmount it. That reasoning was
+                wrong: OAuth replaces the entire document, so no React position
+                could survive it — the pending intent survives because it is
+                JSON in `sessionStorage`, not because of where this component
+                is mounted. */}
+            <AuthGateProvider />
           </MotionPrefs>
         </BrowserRouter>
         <Toaster />
-        {/* Deferred-auth bridge. Inside `ConvexAuthProvider` because it reads
-            the session from it, and OUTSIDE any route so a pending action can
-            be finished after an OAuth round-trip has replaced the entire tree.
-            It renders nothing but the prompt dialog itself. */}
-        <AuthGateProvider />
       </ConvexAuthProvider>
     </RootErrorBoundary>
   </StrictMode>,

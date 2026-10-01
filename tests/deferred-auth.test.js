@@ -627,3 +627,56 @@ describe("queue building is NOT gated, on purpose", () => {
     );
   });
 });
+
+describe("the bridge is mounted somewhere it can actually work", () => {
+  test("it is inside BrowserRouter, because the prompt uses useLocation", () => {
+    // This is a real crash, not a style preference. `useLocation` throws
+    // "may be used only in the context of a <Router> component" when called
+    // outside one, and the throw happens on EVERY render of the dialog — so
+    // mounting the provider as a sibling of `</BrowserRouter>` took down the
+    // whole app the moment the prompt appeared.
+    const routerOpen = main.indexOf("<BrowserRouter>");
+    const routerClose = main.indexOf("</BrowserRouter>");
+    const mount = main.indexOf("<AuthGateProvider />");
+    expect(mount).toBeGreaterThan(-1);
+    expect(routerOpen).toBeGreaterThan(-1);
+    expect(routerClose).toBeGreaterThan(routerOpen);
+    expect(mount).toBeGreaterThan(routerOpen);
+    expect(mount).toBeLessThan(routerClose);
+  });
+
+  test("it is inside ConvexAuthProvider, because it reads the session", () => {
+    const authOpen = main.indexOf("<ConvexAuthProvider");
+    const authClose = main.indexOf("</ConvexAuthProvider>");
+    const mount = main.indexOf("<AuthGateProvider />");
+    expect(mount).toBeGreaterThan(authOpen);
+    expect(mount).toBeLessThan(authClose);
+  });
+
+  test("it is OUTSIDE <Routes>, so it is not tied to one route", () => {
+    // Mounted inside a route it would unmount on every navigation, taking the
+    // prompt with it.
+    const routesClose = main.indexOf("</Routes>");
+    const mount = main.indexOf("<AuthGateProvider />");
+    expect(routesClose).toBeGreaterThan(-1);
+    expect(mount).toBeGreaterThan(routesClose);
+  });
+
+  test("the prompt really does read router state", () => {
+    // The reason for the placement above. If this ever stops using
+    // `useLocation`, the placement becomes a free choice again.
+    const dialogSource = readSource("src/components/auth/AuthPromptDialog.tsx");
+    expect(dialogSource).toMatch(/useLocation/);
+  });
+
+  test("every hook the prompt uses has a provider above it", () => {
+    // A cheap, general guard: the dialog uses router state and the form uses
+    // the auth context, so both providers must enclose the mount.
+    const dialogSource = readSource("src/components/auth/AuthPromptDialog.tsx");
+    const usesRouter = /useLocation|useNavigate|Link/.test(dialogSource);
+    if (usesRouter) {
+      const mount = main.indexOf("<AuthGateProvider />");
+      expect(main.lastIndexOf("<BrowserRouter>", mount)).toBeGreaterThan(-1);
+    }
+  });
+});
