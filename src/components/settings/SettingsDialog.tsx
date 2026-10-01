@@ -749,7 +749,6 @@ export function SettingsDialog({
   // Section navigation. The hook owns which category is active, scrolls to
   // the one that was asked for, and cancels any animation still in flight when
   // a new chip is clicked. See the hook for what that fixes.
-  const navContainerRef = useRef<HTMLElement | null>(null);
   const navStickyRef = useRef<HTMLElement | null>(null);
   const sectionIds = useMemo(() => SETTINGS_SECTIONS.map(([, id]) => id), []);
   const {
@@ -758,7 +757,13 @@ export function SettingsDialog({
     goTo: goToSection,
   } = useSettingsNavigation({
     ids: sectionIds,
-    containerRef: navContainerRef,
+    // No `containerRef`: in page mode the panel is rendered inside the
+    // shell's `<main>`, which is a DOM ancestor this component cannot hold a
+    // ref to. It used to declare one, never attach it, and pass it along —
+    // which read as "the container is handled" while every click silently fell
+    // back to the nearest-scrollable-ancestor search. The hook does that
+    // search properly now, and it walks past a non-scrolling wrapper to the
+    // box whose `scrollTop` actually moves.
     stickyRef: navStickyRef,
     // Only the full settings page scrolls; the compact dialog is short
     // enough that the rail never needs to follow the reader.
@@ -2266,6 +2271,8 @@ export function SettingsDialog({
           </p>
           <InstallAppRow />
         </section>
+
+        <Separator className="bg-white/[0.07]" />
 
         <section
           id="settings-data"

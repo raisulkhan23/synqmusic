@@ -60,6 +60,27 @@ const clamp = (value: number, min: number, max: number) =>
 
 const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
 
+/**
+ * Ancestors that could plausibly be the scroll container.
+ *
+ * `[data-app-scroll]` is what the app shell marks its scroll container with
+ * (`ScrollToTop` and the focus-layout effects already key off it); the others
+ * cover the compact dialog's `role="dialog"` panel and a plain page.
+ */
+const CONTAINER_SELECTOR =
+  "[data-app-scroll], [data-settings-scroll], main, [role='dialog']";
+
+/**
+ * Can this element actually be scrolled?
+ *
+ * `scrollHeight` and `clientHeight` are both 0 for a `display: none` subtree
+ * and equal for a non-scrolling box, so this is the honest test — and the
+ * reason "the nearest match" is not good enough.
+ */
+function canScroll(element: HTMLElement): boolean {
+  return element.scrollHeight > element.clientHeight + 1;
+}
+
 function prefersReducedMotion(): boolean {
   if (typeof window === "undefined" || !window.matchMedia) return false;
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -72,8 +93,15 @@ export interface SectionNavOptions {
    * list the hook is driven from.
    */
   ids: readonly string[];
-  /** The scrolling element. Defaults to the closest scrollable ancestor. */
-  containerRef: RefObject<HTMLElement | null>;
+  /**
+   * The scrolling element, when the caller can name it.
+   *
+   * Optional on purpose: in page mode the settings panel is rendered inside
+   * the shell's `<main>`, which is a DOM ancestor the dialog cannot hold a ref
+   * to. Callers that CAN name it should; the rest get
+   * {@link resolveContainer}'s nearest-scrollable-ancestor search.
+   */
+  containerRef?: RefObject<HTMLElement | null>;
   /** The sticky rail whose height has to be cleared. */
   stickyRef: RefObject<HTMLElement | null>;
   /** Track the reader's position. Only the full settings page scrolls. */
@@ -138,13 +166,33 @@ export function useSettingsNavigation({
 
   const resolveContainer = useCallback(
     (element: HTMLElement): HTMLElement => {
-      const explicit = containerRef.current;
+      const explicit = containerRef?.current;
       if (explicit) return explicit;
-      const closest = element.closest<HTMLElement>(
-        "[data-settings-scroll], main, [role='dialog']",
-      );
+      // The NEAREST SCROLLABLE ancestor, not the nearest MATCHING one.
+      //
+      // `closest()` stops at the first ancestor that matches the selector,
+      // whether or not that box can scroll. Both settings surfaces put a
+      // non-scrolling wrapper between the sections and the real scroller:
+      // the page-mode panel is `!overflow-y-visible` inside the shell's
+      // `<main>`, and the compact dialog's panel is the scroller while the
+      // `<main>` around it is not. Writing `scrollTop` to a box that cannot
+      // scroll is a silent no-op, so a chip appears to do nothing at all.
+      //
+      // `[data-app-scroll]` is the attribute the shell actually marks its
+      // scroll container with; the previous selector asked for
+      // `[data-settings-scroll]`, which exists nowhere in the app, so it only
+      // ever worked because `main` happened to be in the list too.
+      let node: HTMLElement | null = element.parentElement;
+      let fallback: HTMLElement | null = null;
+      while (node) {
+        if (node.matches?.(CONTAINER_SELECTOR)) {
+          fallback ??= node;
+          if (canScroll(node)) return node;
+        }
+        node = node.parentElement;
+      }
       return (
-        closest ??
+        fallback ??
         (document.scrollingElement as HTMLElement | null) ??
         document.documentElement
       );
