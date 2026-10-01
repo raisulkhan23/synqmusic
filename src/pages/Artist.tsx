@@ -1,4 +1,9 @@
 import { Link, useParams } from "react-router";
+import type React from "react";
+import {
+  REPAIR_SEARCH_ATTEMPTS,
+  REPAIR_SEARCH_GAP_MS,
+} from "@/lib/importRepair";
 import { useAction } from "convex/react";
 import { Disc3, Loader2, Play, Radio, Search, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -45,6 +50,16 @@ export default function Artist() {
     related: YtItem[];
   } | null>(null);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
+  // The QUERY the failure belongs to, not a bare boolean. Leaving a stale
+  // "failed" flag behind would label the next artist's page with the previous
+  // one's error, and the obvious fix — `useEffect(() => setSearchFailed(false),
+  // [query])` — is a synchronous setState in an effect, which cascades an extra
+  // render on every navigation between two artists. Tagging it and deriving it
+  // is both correct and cheaper; it is the same shape `result` already uses.
+  const [failedKey, setFailedKey] = useState<string | null>(null);
+  // Bumped by the retry button. It is in the effect's dependency list so a
+  // retry is a real re-run rather than a no-op re-render.
+  const [retryNonce, setRetryNonce] = useState(0);
 
   useEffect(() => {
     if (!query) return;
@@ -52,12 +67,54 @@ export default function Artist() {
     const owned = cleanArtistName(query, "").toLowerCase();
 
     void (async () => {
-      const [mine, similar] = await Promise.all([
-        searchYt({ query }).catch(() => ({ items: [] as YtItem[] })),
-        searchYt({ query: `artists similar to ${query}` }).catch(() => ({
-          items: [] as YtItem[],
-        })),
-      ]);
+      // SEQUENTIAL, paced, and retried — never `Promise.all`.
+      //
+      // This page used to fire both searches at once:
+      //
+      //   const [mine, similar] = await Promise.all([searchYt(q), searchYt(similarQ)]);
+      //
+      // That is the exact pattern the import-repair work measured against this
+      // deployment and rejected. `src/convex/playlists.ts` records the finding
+      // verbatim: "two concurrent InnerTube searches return `{"items": []}` while
+      // the identical two queries run one after the other return full results.
+      // YouTube throttles the burst and answers with silence rather than with an
+      // error." The same file notes that even paced, roughly half of all
+      // searches from this deployment come back empty, which is why there is a
+      // retry here too.
+      //
+      // Both failures used to land in the same `.catch(() => ({items: []}))`,
+      // so a throttled search was rendered as "Nothing found — we couldn't find
+      // any playable tracks for <artist>", which is a fabrication: the tracks
+      // exist, the request was refused. `failed` now tells those apart.
+      const search = async (
+        q: string,
+      ): Promise<{ items: YtItem[]; empty: boolean; errored: boolean }> => {
+        for (let attempt = 0; attempt < REPAIR_SEARCH_ATTEMPTS; attempt++) {
+          if (attempt > 0) {
+            await new Promise((r) => setTimeout(r, REPAIR_SEARCH_GAP_MS));
+          }
+          if (cancelled) return { items: [], empty: true, errored: true };
+          try {
+            const res = await searchYt({ query: q });
+            const items = (res?.items ?? []) as YtItem[];
+            // A response WITH results is a real answer, even if the filters
+            // below end up discarding every one of them.
+            if (items.length > 0)
+              return { items, empty: false, errored: false };
+          } catch {
+            // Keep going: a thrown upstream failure is not evidence about the
+            // artist, it is evidence about the connection.
+          }
+        }
+        return { items: [], empty: true, errored: false };
+      };
+
+      const mine = await search(query);
+      // Sequential: the second search must not overlap the first.
+      const similar = mine.errored
+        ? { items: [], empty: true, errored: true }
+        : await search(`artists similar to ${query}`);
+
       if (cancelled) return;
       setResult({
         key: query,
@@ -84,12 +141,13 @@ export default function Artist() {
           ),
         ),
       });
+      setFailedKey(mine.errored ? query : null);
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [query, searchYt]);
+  }, [query, searchYt, retryNonce]);
 
   // `null` means "not resolved for the artist we are currently showing" and
   // drives the skeletons; the result is kept in a memo keyed on the query so a
@@ -104,6 +162,10 @@ export default function Artist() {
   );
 
   const albums = useMemo(() => groupByAlbum(tracks ?? []), [tracks]);
+
+  // Only true for the artist we are actually showing, and only once a search
+  // for THAT artist has come back throttled.
+  const searchFailed = query !== "" && failedKey === query;
 
   const playAll = (list: YtItem[]) => {
     const playable = list.map((item) =>
@@ -240,9 +302,24 @@ export default function Artist() {
         </section>
       ) : (
         <EmptyState
-          title="Nothing found"
-          body={`We couldn't find any playable tracks for ${artistName}.`}
+          title={searchFailed ? "Couldn't reach YouTube" : "Nothing found"}
+          body={
+            searchFailed
+              ? `We couldn't load ${artistName} right now — YouTube is rate-limiting this app, so the search came back empty rather than having no results. It usually clears in a few seconds.`
+              : `We couldn't find any playable tracks for ${artistName}.`
+          }
           searchTerm={artistName}
+          action={
+            searchFailed ? (
+              <button
+                type="button"
+                onClick={() => setRetryNonce((n) => n + 1)}
+                className="rounded-full bg-[rgb(var(--tint))] px-3.5 py-1.5 text-xs font-semibold text-black transition-transform hover:scale-[1.03]"
+              >
+                Try again
+              </button>
+            ) : undefined
+          }
         />
       )}
 
@@ -297,10 +374,13 @@ function EmptyState({
   title,
   body,
   searchTerm,
+  action,
 }: {
   title: string;
   body: string;
   searchTerm?: string;
+  /** Shown above the search link; used for a retry on a throttled search. */
+  action?: React.ReactNode;
 }) {
   return (
     <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-8 text-center">
@@ -308,6 +388,7 @@ function EmptyState({
       <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
         {body}
       </p>
+      {action ? <div className="mt-4">{action}</div> : null}
       {searchTerm ? (
         <Link
           to={`/search?q=${encodeURIComponent(searchTerm)}`}
