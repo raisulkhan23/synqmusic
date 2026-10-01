@@ -3,6 +3,7 @@ import type { Id } from "@/convex/_generated/dataModel";
 import type { Playable } from "@/lib/playable";
 import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
+import { useAuthGate } from "@/store/authGate";
 
 /**
  * Shared "add this track to a playlist" logic. Returns the user's playlists and
@@ -13,6 +14,14 @@ export function useAddToPlaylist(track: Playable) {
   const addTrack = useMutation(api.playlists.addTrack);
 
   const addTo = async (playlistId: Id<"playlists">, name: string) => {
+    // Saving to a playlist is account-scoped, so a guest gets the same
+    // contextual prompt as liking a song rather than a server error toast
+    // reading "Sign in to manage playlists".
+    //
+    // No intent is passed: the playlist the visitor picked belongs to an
+    // account that does not exist yet, so there is nothing meaningful to
+    // resume afterwards. They choose a destination again once signed in.
+    if (!useAuthGate.getState().request("library", null)) return;
     // Duplicate detection: warn if the song is already in this playlist.
     const target = playlists?.find((p) => p._id === playlistId);
     if (target?.trackIds.includes(track.id)) {

@@ -136,8 +136,10 @@ describe("autoplay and Home run on the same engine", () => {
     const start = store.indexOf("function handleEnded");
     const body = store.slice(start, start + 4000);
     // Manual queue actions run first and return; the engine is reached only
-    // after every queued track has been consumed.
-    const manual = body.indexOf("s.playIndex(s.queueIndex + 1)");
+    // after every queued track has been consumed. `autoAdvanceToIndex` is the
+    // ungated advance these paths use — an end-of-track is playback already in
+    // progress, so it must never route through the deferred-auth gate.
+    const manual = body.indexOf("autoAdvanceToIndex?.(s.queueIndex + 1)");
     const engine = body.indexOf("fetchPersonalNext(seed, queueIds)");
     expect(manual).toBeGreaterThan(-1);
     expect(engine).toBeGreaterThan(manual);

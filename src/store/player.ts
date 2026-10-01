@@ -64,6 +64,7 @@ import { api } from "@/convex/_generated/api";
 import { ConvexClient } from "convex/browser";
 import { toast } from "sonner";
 import { track as trackEvent } from "@/lib/analytics";
+import { useAuthGate, type AuthIntent } from "@/store/authGate";
 
 /**
  * Resolve a direct audio stream URL for a YouTube video via the Convex
@@ -680,6 +681,31 @@ const persistPlayable = (p: Playable): PersistedPlayable => ({
   artistName: p.artistName,
   coverUrl: p.coverUrl,
   duration: p.duration,
+});
+
+/**
+ * The snapshot stored inside a deferred-auth intent.
+ *
+ * Deliberately NOT `persistPlayable`. That one is for the saved queue, which
+ * only needs enough to rebuild an entry and always re-resolves the audio URL
+ * later. A deferred intent has to be able to START playback on its own after
+ * an OAuth round-trip has destroyed every in-memory object, so it carries the
+ * full playable shape: `audioUrl`, `source` and `albumName` are all load-
+ * bearing here and dropping any of them produces a track that resolves to
+ * silence. Everything in it is JSON-safe by construction.
+ */
+type IntentPlayable = Playable;
+
+const intentPlayable = (p: Playable): IntentPlayable => ({
+  id: p.id,
+  title: p.title,
+  artistName: p.artistName,
+  albumName: p.albumName ?? "",
+  coverUrl: p.coverUrl ?? "",
+  audioUrl: p.audioUrl,
+  duration: p.duration ?? 0,
+  source: "youtube",
+  ...(p.youtubeId ? { youtubeId: p.youtubeId } : {}),
 });
 
 function saveQueue(
@@ -1549,19 +1575,21 @@ function handleEnded(): void {
   settleEngagement("ended");
   if (s.queue.length > 0) {
     // Shuffle ON: jump to a RANDOM upcoming track, not the next in line.
+    // Ungated, for the same reason as the ordered advance below.
     if (s.shuffle && s.queue.length > 1) {
-      s.playIndex(
+      autoAdvanceToIndex?.(
         pickShuffleIndex(s.queue.length, s.queueIndex, s.smartShuffle),
       );
       return;
     }
-    // Normal: advance in order.
+    // Normal: advance in order. UNGATED: this is a track finishing, not a
+    // request to start playback.
     if (s.queueIndex < s.queue.length - 1) {
-      s.playIndex(s.queueIndex + 1);
+      autoAdvanceToIndex?.(s.queueIndex + 1);
       return;
     }
     if (s.repeat === "all") {
-      s.playIndex(0);
+      autoAdvanceToIndex?.(0);
       return;
     }
   }
@@ -1599,7 +1627,7 @@ function handleEnded(): void {
           const after = usePlayerStore.getState();
           saveQueue(after.queue, after.queueIndex, after.current?.id ?? null);
           if (after.current?.id === seed.id) {
-            after.playIndex(after.queue.length - 1);
+            autoAdvanceToIndex?.(after.queue.length - 1);
           }
           return;
         }
@@ -1632,7 +1660,7 @@ function handleEnded(): void {
         // Only auto-advance if nothing else started playing meanwhile.
         const after = usePlayerStore.getState();
         if (after.current?.id === seed.id && !after.isPlaying) {
-          after.playIndex(after.queue.length - appended);
+          autoAdvanceToIndex?.(after.queue.length - appended);
         }
       });
     return;
@@ -1984,6 +2012,17 @@ async function maybeRunCrossfade(remaining: number): Promise<void> {
  */
 let commitCrossfadeAdvance: ((index: number, track: Playable) => void) | null =
   null;
+
+/**
+ * The UNGATED queue advance, hoisted to module scope for `handleEnded`.
+ *
+ * `handleEnded` lives outside the store closure, so it cannot close over
+ * `advanceToIndex` directly. It must use the ungated version: a track reaching
+ * its end is playback already in progress, not a request to start it, so
+ * routing it through the auth gate would pop a sign-in dialog at someone at
+ * the exact moment a song finished. Assigned once when the store is built.
+ */
+let autoAdvanceToIndex: ((index: number) => void) | null = null;
 
 /** Complete a crossfade: promote the incoming deck and commit the new track. */
 function finishTransition(
@@ -2724,6 +2763,35 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
    * exactly as handed over, which is what a page's "Play all" means and what
    * a page's "Shuffle all" builds by shuffling the array itself.
    */
+  /**
+   * The ONE deferred-auth check for playback.
+   *
+   * Every way a listener can start audio in this app — a Home shelf row, an
+   * album Play, a playlist Play, an artist Radio, the queue's next button, the
+   * transport, a keyboard shortcut, a media-key handler — bottoms out in one
+   * of the store actions wrapped below. Putting the check here rather than in
+   * each component is the difference between one rule that cannot be missed
+   * and two dozen scattered `if (!user)` checks, three of which somebody
+   * eventually forgets.
+   *
+   * It runs BEFORE any state is touched. That ordering is the whole point:
+   * a guest who clicks Play must not end up with `isPlaying: true`, a
+   * populated `current`, and a progress bar advancing over a silent player.
+   * Nothing is mutated and no audio is started until this returns true.
+   *
+   * `intent` is the action to finish once they are signed in. Passing null
+   * means "this action is not worth resuming" — used by paths that only
+   * advance an already-authenticated session.
+   */
+  const gatePlayback = (intent: AuthIntent | null): boolean =>
+    useAuthGate.getState().request("playback", intent);
+
+  /** Same check for actions that persist to the account rather than play. */
+  const gateAccount = (
+    reason: "save" | "library",
+    intent: AuthIntent | null,
+  ): boolean => useAuthGate.getState().request(reason, intent);
+
   const playResolved = (
     track: Playable,
     list: Playable[] | undefined,
@@ -2784,14 +2852,40 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
   };
 
   const playTrack = (track: Playable, list?: Playable[]) => {
+    if (
+      !gatePlayback({
+        kind: "playTrack",
+        track: intentPlayable(norm(track)),
+        ...(list && list.length > 0
+          ? { list: list.map((t) => intentPlayable(norm(t))) }
+          : {}),
+      })
+    )
+      return;
     playResolved(track, list, true);
   };
 
   const playListOrdered = (track: Playable, list: Playable[]) => {
+    if (
+      !gatePlayback({
+        kind: "playListOrdered",
+        track: intentPlayable(norm(track)),
+        list: list.map((t) => intentPlayable(norm(t))),
+      })
+    )
+      return;
     playResolved(track, list, false);
   };
 
   const startRadio = (track: Playable, contextQuery?: string) => {
+    if (
+      !gatePlayback({
+        kind: "startRadio",
+        track: intentPlayable(norm(track)),
+        ...(contextQuery ? { contextQuery } : {}),
+      })
+    )
+      return;
     const seed = norm(track);
     // Remember what the user searched so every later queue fill (autofill,
     // end-of-queue) stays in the SAME genre instead of drifting.
@@ -2834,6 +2928,14 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     const list = tracks.map(norm).filter((t) => !!t.youtubeId || !!t.audioUrl);
     const first = list[0];
     if (!first) return;
+    if (
+      !gatePlayback({
+        kind: "startPlaylistRadio",
+        tracks: list.map((t) => intentPlayable(t)),
+        label,
+      })
+    )
+      return;
 
     activeMixContext = playlistMixContext(list);
     // The WHOLE playlist is queued, not just the first track: this is a
@@ -2875,14 +2977,27 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
   };
 
   const playViaStream = (track: Playable, startSeconds?: number) => {
+    const marked = { ...track, audioUrl: track.audioUrl || "stream" };
+    if (
+      !gatePlayback({
+        kind: "playViaStream",
+        track: intentPlayable(norm(marked)),
+        ...(startSeconds ? { startSeconds } : {}),
+      })
+    )
+      return;
     // Mark the track as stream-loaded so loadTrack takes the audio path even
     // with no filter active — this is how non-embeddable videos get rescued.
-    const marked = { ...track, audioUrl: track.audioUrl || "stream" };
     set({ queue: get().queue.map((t) => (t.id === marked.id ? marked : t)) });
     loadTrack(marked, startSeconds);
   };
 
   const replaceCurrentStream = (playable: Playable, startSeconds?: number) => {
+    // Source switching only happens in response to a stream that already
+    // failed, which means playback was already under way and therefore
+    // already authenticated. Gated anyway for the case where a guest reaches
+    // it directly, so there is no ungated hole into `loadTrack`.
+    if (!gatePlayback(null)) return;
     const s = get();
     const index = Math.max(0, s.queueIndex);
     const queue = s.queue.map((t, i) => (i === index ? playable : t));
@@ -2890,13 +3005,46 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     loadTrack(playable, startSeconds);
   };
 
-  const playIndex = (index: number) => {
+  /**
+   * Move to a queue position. UNGATED.
+   *
+   * This is the internal advance, used by `handleEnded` (a track finishing),
+   * by radio autoplay, and by the crossfade commit. None of those are user
+   * requests to start playback: they are a consequence of playback that is
+   * already happening, and the session that started it was necessarily
+   * authenticated.
+   *
+   * Gating this would be actively wrong. It would mean the end of a queue
+   * threw a sign-in dialog at someone purely because the app wanted to
+   * auto-play a recommendation — the exact "surprise popup triggered entirely
+   * by background autoplay" the deferred-auth design exists to avoid.
+   */
+  const advanceToIndex = (index: number) => {
     const s = get();
     if (index < 0 || index >= s.queue.length) return;
     saveQueue(s.queue, index, s.queue[index]?.id ?? null);
     set({ queueIndex: index });
     loadTrack(s.queue[index]);
     maybeAutofillQueue();
+  };
+
+  /**
+   * The user-facing "play this row in the queue" action. Gated, because a
+   * click on the queue IS a deliberate request to start audio.
+   */
+  const playIndex = (index: number) => {
+    const s = get();
+    if (index < 0 || index >= s.queue.length) return;
+    const target = s.queue[index];
+    if (
+      !gatePlayback({
+        kind: "playTrack",
+        track: intentPlayable(target),
+        list: s.queue.map((t) => intentPlayable(t)),
+      })
+    )
+      return;
+    advanceToIndex(index);
   };
 
   /**
@@ -2917,6 +3065,9 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
   // Hand the transition engine the one thing it cannot do on its own: commit
   // the queue exactly the way a normal advance does.
   commitCrossfadeAdvance = advanceTrackForTransition;
+  // Same idea, for the ungated advance `handleEnded` needs. See the
+  // declaration for why this one must NOT be gated.
+  autoAdvanceToIndex = advanceToIndex;
 
   const togglePlay = () => {
     const s = get();
@@ -3682,6 +3833,18 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
   };
 
   const toggleLike = (trackId: string, remote?: RemoteLikeSnapshot) => {
+    // Gated BEFORE the optimistic flip. Flipping first would light the heart
+    // for someone with no account to save it to, and then the prompt appears
+    // over a control showing the wrong state — so if they dismiss it, the
+    // heart stays lit and lies about being saved.
+    if (
+      !gateAccount("save", {
+        kind: "like",
+        trackId,
+        ...(remote ? { remote } : {}),
+      })
+    )
+      return;
     const s = get();
     const wasLiked = s.liked[trackId] !== undefined;
     const createdAt = Date.now();
@@ -3932,22 +4095,26 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
 
     likedAlbums: initialLikedAlbums,
     followedArtists: initialFollowedArtists,
-    toggleLikedAlbum: (albumId) =>
+    toggleLikedAlbum: (albumId) => {
+      if (!gateAccount("save", { kind: "likeAlbum", albumId })) return;
       set((state) => {
         const next = { ...state.likedAlbums };
         if (next[albumId]) delete next[albumId];
         else next[albumId] = true;
         writeIdSet("ss.likedAlbums", next);
         return { likedAlbums: next };
-      }),
-    toggleFollowArtist: (artistId) =>
+      });
+    },
+    toggleFollowArtist: (artistId) => {
+      if (!gateAccount("save", { kind: "followArtist", artistId })) return;
       set((state) => {
         const next = { ...state.followedArtists };
         if (next[artistId]) delete next[artistId];
         else next[artistId] = true;
         writeIdSet("ss.followedArtists", next);
         return { followedArtists: next };
-      }),
+      });
+    },
 
     playTrack,
     playListOrdered,
@@ -4058,6 +4225,15 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       const s = get();
       const item = s.history[index];
       if (!item) return;
+      // Starts audio, so it is gated like any other playback request.
+      if (
+        !gatePlayback({
+          kind: "playTrack",
+          track: intentPlayable(item),
+          list: s.queue.map((t) => intentPlayable(t)),
+        })
+      )
+        return;
       set((state) => ({
         history: state.history.filter((_, i) => i !== index),
       }));

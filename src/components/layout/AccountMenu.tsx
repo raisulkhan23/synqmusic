@@ -3,6 +3,7 @@ import { useNavigate } from "react-router";
 import {
   ChevronUp,
   Loader2,
+  LogIn,
   LogOut,
   Settings as SettingsIcon,
   UserRound,
@@ -40,12 +41,19 @@ export function AccountMenu({
   /** Honours the existing "Hide email in sidebar" setting. */
   hideEmail?: boolean;
 }) {
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const { pending, signOut, switchAccount } = useAccountActions();
   const navigate = useNavigate();
 
-  const name =
-    user?.name ?? (user?.isAnonymous ? "Guest" : "Signed in as Listener");
+  /**
+   * No session at all. This is the normal state for a visitor browsing SYNQ
+   * before creating an account, not an error — so the menu says "guest" and
+   * offers a sign-in instead of pretending there is a profile to open and a
+   * session to end.
+   */
+  const isGuest = !isAuthenticated;
+
+  const name = user?.name ?? (isGuest ? "Guest" : "Signed in as Listener");
   const initials =
     user?.name
       ?.split(/\s+/)
@@ -100,6 +108,7 @@ export function AccountMenu({
             name={name}
             email={user?.email ?? null}
             pending={pending}
+            isGuest={isGuest}
             onSignOut={signOut}
             onSwitchAccount={switchAccount}
             onGo={go}
@@ -129,6 +138,7 @@ export function AccountMenu({
           name={name}
           email={user?.email ?? null}
           pending={pending}
+          isGuest={isGuest}
           onSignOut={signOut}
           onSwitchAccount={switchAccount}
           onGo={go}
@@ -147,11 +157,20 @@ export function AccountMenu({
  *
  * "Switch account" is listed above "Sign out" on purpose: on a shared device
  * it is the action people reach for, and it differs only in where it lands.
+ *
+ * ## Guests get a different menu
+ *
+ * A visitor who has not signed in has no profile, no library and no session to
+ * end. Offering them "Your profile", "Sign out" and "Anonymous session" is
+ * three dead controls and a lie about their state — which is exactly the
+ * impression deferred authentication works to avoid. They get one honest
+ * action: sign in.
  */
 function AccountRows({
   name,
   email,
   pending,
+  isGuest,
   onSignOut,
   onSwitchAccount,
   onGo,
@@ -159,16 +178,45 @@ function AccountRows({
   name: string;
   email: string | null;
   pending: boolean;
+  isGuest: boolean;
   onSignOut: () => void;
   onSwitchAccount: () => void;
   onGo: (to: string) => void;
 }) {
+  if (isGuest) {
+    return (
+      <>
+        <DropdownMenuLabel className="flex flex-col gap-0.5 px-2 py-1.5 font-normal">
+          <span className="truncate text-sm font-semibold">
+            Browsing as guest
+          </span>
+          <span className="truncate text-xs text-muted-foreground">
+            Play and save to sync your library
+          </span>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onClick={onSwitchAccount}
+          disabled={pending}
+          className="cursor-pointer font-semibold"
+        >
+          {pending ? (
+            <Loader2 className="mr-2 size-4 animate-spin" />
+          ) : (
+            <LogIn className="mr-2 size-4" />
+          )}
+          Sign in
+        </DropdownMenuItem>
+      </>
+    );
+  }
+
   return (
     <>
       <DropdownMenuLabel className="flex flex-col gap-0.5 px-2 py-1.5 font-normal">
         <span className="truncate text-sm font-semibold">{name}</span>
         <span className="truncate text-xs text-muted-foreground">
-          {email ?? "Anonymous session"}
+          {email ?? "Signed in"}
         </span>
       </DropdownMenuLabel>
       <DropdownMenuSeparator />

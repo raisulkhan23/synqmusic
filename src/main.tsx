@@ -1,6 +1,7 @@
 import "@vly-ai/integrations";
 import { Toaster } from "@/components/ui/sonner";
 import { RequireAuth } from "@/components/RequireAuth";
+import { AuthGateProvider } from "@/components/auth/AuthGateProvider";
 import { ScrollToTop } from "@/components/ScrollToTop";
 import { VlyToolbar } from "../vly-toolbar-readonly.tsx";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
@@ -361,13 +362,30 @@ createRoot(document.getElementById("root")!).render(
                     </RequireAuth>
                   }
                 />
-                <Route
-                  element={
-                    <RequireAuth>
-                      <AppShell />
-                    </RequireAuth>
-                  }
-                >
+                {/*
+                  DEFERRED AUTHENTICATION.
+                  This shell is no longer behind a blanket `<RequireAuth>`.
+                  A visitor can open /home, browse, search and explore artists
+                  and albums without an account, and is asked to sign in at the
+                  moment they do something that genuinely needs an identity —
+                  playing a song, liking it, saving it to their library. That
+                  is the flow every major music service uses, and it is the
+                  only one where somebody understands the product before being
+                  asked to create an account.
+
+                  The genuinely PRIVATE routes further down (/liked, /playlists,
+                  /playlist/:id, /stats, /recent, /social, /profile,
+                  /settings, /admin) keep their own `<RequireAuth>` each. They
+                  show a signed-in person's library and history; there is
+                  nothing there for a stranger, and rendering them empty would
+                  be worse than redirecting.
+
+                  This is a UX change only. Every Convex mutation that needs an
+                  identity still calls `getAuthUserId` and still throws without
+                  one — the backend remains the authority, and the client-side
+                  gate is a courtesy, not a security control.
+                */}
+                <Route element={<AppShell />}>
                   <Route
                     path="/home"
                     element={
@@ -411,73 +429,91 @@ createRoot(document.getElementById("root")!).render(
                   <Route
                     path="/liked"
                     element={
-                      <PageBoundary>
-                        <Liked />
-                      </PageBoundary>
+                      <RequireAuth>
+                        <PageBoundary>
+                          <Liked />
+                        </PageBoundary>
+                      </RequireAuth>
                     }
                   />
                   <Route
                     path="/playlists"
                     element={
-                      <PageBoundary>
-                        <Playlists />
-                      </PageBoundary>
+                      <RequireAuth>
+                        <PageBoundary>
+                          <Playlists />
+                        </PageBoundary>
+                      </RequireAuth>
                     }
                   />
                   <Route
                     path="/playlist/:id"
                     element={
-                      <PageBoundary>
-                        <PlaylistDetail />
-                      </PageBoundary>
+                      <RequireAuth>
+                        <PageBoundary>
+                          <PlaylistDetail />
+                        </PageBoundary>
+                      </RequireAuth>
                     }
                   />
                   <Route
                     path="/stats"
                     element={
-                      <PageBoundary>
-                        <Stats />
-                      </PageBoundary>
+                      <RequireAuth>
+                        <PageBoundary>
+                          <Stats />
+                        </PageBoundary>
+                      </RequireAuth>
                     }
                   />
                   <Route
                     path="/recent"
                     element={
-                      <PageBoundary>
-                        <Recent />
-                      </PageBoundary>
+                      <RequireAuth>
+                        <PageBoundary>
+                          <Recent />
+                        </PageBoundary>
+                      </RequireAuth>
                     }
                   />
                   <Route
                     path="/social"
                     element={
-                      <PageBoundary>
-                        <Social />
-                      </PageBoundary>
+                      <RequireAuth>
+                        <PageBoundary>
+                          <Social />
+                        </PageBoundary>
+                      </RequireAuth>
                     }
                   />
                   <Route
                     path="/profile"
                     element={
-                      <PageBoundary>
-                        <Profile />
-                      </PageBoundary>
+                      <RequireAuth>
+                        <PageBoundary>
+                          <Profile />
+                        </PageBoundary>
+                      </RequireAuth>
                     }
                   />
                   <Route
                     path="/settings"
                     element={
-                      <PageBoundary>
-                        <Settings />
-                      </PageBoundary>
+                      <RequireAuth>
+                        <PageBoundary>
+                          <Settings />
+                        </PageBoundary>
+                      </RequireAuth>
                     }
                   />
                   <Route
                     path="/admin"
                     element={
-                      <PageBoundary>
-                        <Admin />
-                      </PageBoundary>
+                      <RequireAuth>
+                        <PageBoundary>
+                          <Admin />
+                        </PageBoundary>
+                      </RequireAuth>
                     }
                   />
                 </Route>
@@ -490,6 +526,11 @@ createRoot(document.getElementById("root")!).render(
           </MotionPrefs>
         </BrowserRouter>
         <Toaster />
+        {/* Deferred-auth bridge. Inside `ConvexAuthProvider` because it reads
+            the session from it, and OUTSIDE any route so a pending action can
+            be finished after an OAuth round-trip has replaced the entire tree.
+            It renders nothing but the prompt dialog itself. */}
+        <AuthGateProvider />
       </ConvexAuthProvider>
     </RootErrorBoundary>
   </StrictMode>,

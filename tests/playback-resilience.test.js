@@ -93,19 +93,25 @@ describe("end of queue advances to the track it actually appended", () => {
     // Compare against the comment-stripped body so prose about the old
     // expression cannot satisfy (or trip) the assertion.
     const code = handleEnded.replace(/\/\/[^\n]*/g, "");
-    expect(code).toMatch(/playIndex\(after\.queue\.length - appended\)/);
+    // `autoAdvanceToIndex` is the UNGATED advance. Autoplay must not route
+    // through the deferred-auth gate: a queue running dry is playback already
+    // in progress, and gating it would throw a sign-in dialog at someone the
+    // moment a song ended.
+    expect(code).toMatch(
+      /autoAdvanceToIndex\?\.\(after\.queue\.length - appended\)/,
+    );
     expect(code).not.toMatch(/related\.length/);
   });
 
   test("a fully duplicate mix does not jump to an arbitrary earlier track", () => {
     // Scope this to the related-mix fallback. handleEnded now tries the
-    // recommendation engine first, and that branch has its own playIndex, so
+    // recommendation engine first, and that branch has its own advance, so
     // a bare indexOf would find that one instead of the fallback's.
     const fallback = handleEnded.indexOf("fetchRelatedMix(seed, s.queue, 5");
     expect(fallback).toBeGreaterThan(-1);
     const body = handleEnded.slice(fallback);
     const guard = body.indexOf("if (appended === 0) return;");
-    const advance = body.indexOf("after.playIndex(");
+    const advance = body.indexOf("autoAdvanceToIndex?.(");
     expect(guard).toBeGreaterThan(-1);
     expect(advance).toBeGreaterThan(guard);
   });
