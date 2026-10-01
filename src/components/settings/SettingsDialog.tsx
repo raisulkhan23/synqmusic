@@ -17,7 +17,11 @@ import { DEFAULT_CARD_TRANSPARENCY } from "@/lib/cardTransparency";
 import { downloadJson } from "@/lib/download";
 import { useSleepCountdown } from "@/lib/sleepTimer";
 import { CROSSFADE_CHOICES } from "@/lib/transition";
-import { manualInstallHint, usePwaInstall } from "@/lib/pwa";
+import {
+  installBlockedReason,
+  manualInstallHint,
+  usePwaInstall,
+} from "@/lib/pwa";
 import {
   applyEqPreset,
   setAudioFilter,
@@ -2362,7 +2366,13 @@ function InstallAppRow() {
         ? "Launch it in its own window, with the player intact."
         : state === "dismissed"
           ? "You dismissed this earlier."
-          : "This browser hasn't offered installation yet.";
+          : // Say WHY it cannot be installed instead of a vague "not yet".
+            // The most common cause by far is that this build is a preview
+            // rather than a published build, and Chrome will not offer the
+            // install at all in that case — so "this browser hasn't offered
+            // installation yet" reads as a broken PWA when nothing is broken.
+            (installBlockedReason() ??
+            "This browser hasn't offered installation yet.");
 
   return (
     <div className="flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">

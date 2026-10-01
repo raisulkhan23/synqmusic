@@ -9,12 +9,26 @@ import {
   getPwaUpdateIdServerSnapshot,
   getPwaUpdateServerSnapshot,
   getPwaUpdateSnapshot,
+  installBlockedReason,
   isStandalone,
   manualInstallHint,
+  planInstallBlock,
   resolveInstallState,
   subscribePwaUpdate,
 } from "../src/lib/pwa.ts";
 import { readSource } from "./helpers/tailwind-css.js";
+
+/**
+ * Strip comments before asserting on class names.
+ *
+ * The comment that explains WHY the install card is no longer `fixed` right
+ * next to it necessarily contains the words `fixed` and `right-4`. Asserting
+ * on raw source text therefore "fails" on the explanation of the fix — which
+ * is how a source-text assertion quietly stops testing anything.
+ */
+function stripComments(text) {
+  return text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+}
 
 /**
  * SYNQ's PWA layer.
@@ -651,6 +665,100 @@ describe("existing playback is untouched", () => {
       .readdirSync(path.join(root, "public"))
       .filter((f) => /manifest.*\.webmanifest$/.test(f));
     expect(manifests.length).toBe(1);
+  });
+});
+
+describe("the install prompt never covers the right-hand surface", () => {
+  // The Queue panel is a `side="right"` sheet; the install card used to be a
+  // `fixed right-4 bottom-... z-40` panel pinned over exactly the pixels that
+  // sheet slides across — and it was there on every single launch, with no way
+  // to move it. It is an in-flow strip now.
+  const manager = stripComments(
+    readSource("src/components/pwa/PwaManager.tsx"),
+  );
+
+  test("nothing in PwaManager is fixed-positioned any more", () => {
+    expect(manager).not.toMatch(/\bfixed\b/);
+    expect(manager).not.toMatch(/right-4/);
+    expect(manager).not.toMatch(/bottom-\[/);
+  });
+
+  test("it renders as an in-flow strip, not an overlay", () => {
+    expect(manager).toMatch(/border-b border-white\/\[0\.06\]/);
+  });
+
+  test("the install card carries no z-index or positioning of its own", () => {
+    // Scoped to the install card alone: the UPDATE banner above it is
+    // legitimately `z-50` and sits in flow beside the offline banner, so a
+    // blanket "no z-index anywhere" assertion would be wrong.
+    const start = manager.indexOf("showInstall &&");
+    expect(start).toBeGreaterThan(-1);
+    const card = manager.slice(start);
+    expect(card).not.toMatch(/\bz-\[/);
+    expect(card).not.toMatch(/\bz-\d/);
+    expect(card).not.toMatch(/\bfixed\b/);
+    expect(card).not.toMatch(/\babsolute\b/);
+  });
+});
+
+describe("the app says WHY it cannot be installed", () => {
+  // `registerServiceWorker` is gated behind `import.meta.env.PROD`, and Chrome
+  // will not even offer to install an app with no registered service worker.
+  // A preview build is therefore never installable, and without this the only
+  // message was "This browser hasn't offered installation yet" — which reads
+  // as a broken PWA when nothing is broken.
+
+  test("a production build over HTTPS with worker support is NOT blocked", () => {
+    expect(
+      planInstallBlock({
+        hasServiceWorker: true,
+        isProd: true,
+        isSecureContext: true,
+      }),
+    ).toBeNull();
+  });
+
+  test("a dev/preview build is blocked, and says why", () => {
+    const reason = planInstallBlock({
+      hasServiceWorker: true,
+      isProd: false,
+      isSecureContext: true,
+    });
+    expect(reason).toBeTypeOf("string");
+    expect(reason).toMatch(/published build/i);
+    expect(reason).toMatch(/dev server/i);
+  });
+
+  test("a browser with no service worker support is called out first", () => {
+    // This is the criterion Chrome actually enforces, so it must be named.
+    const reason = planInstallBlock({
+      hasServiceWorker: false,
+      isProd: true,
+      isSecureContext: true,
+    });
+    expect(reason).toMatch(/service worker/i);
+  });
+
+  test("a published build on plain http says it needs HTTPS", () => {
+    const reason = planInstallBlock({
+      hasServiceWorker: true,
+      isProd: true,
+      isSecureContext: false,
+    });
+    expect(reason).toMatch(/HTTPS|localhost/i);
+  });
+
+  test("Settings uses the reason instead of the vague fallback", () => {
+    const dialog = readSource("src/components/settings/SettingsDialog.tsx");
+    expect(dialog).toMatch(/installBlockedReason\(\)/);
+    expect(dialog).toMatch(
+      /installBlockedReason\(\)\s*\?\?\s*"This browser hasn't offered installation yet\."/,
+    );
+  });
+
+  test("the worker really is production-only, which is what makes it true", () => {
+    const pwa = readSource("src/lib/pwa.ts");
+    expect(pwa).toMatch(/if \(!import\.meta\.env\.PROD\) return null;/);
   });
 });
 

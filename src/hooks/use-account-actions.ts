@@ -60,13 +60,16 @@ export function useAccountActions() {
   return {
     /** True while a sign-out is in flight; used to disable and spin the rows. */
     pending,
-    /** Plain sign out — back to the landing page. */
-    signOut: useCallback(() => void signOutAndGo("/"), [signOutAndGo]),
+    /**
+     * Plain sign out — back to the landing page.
+     *
+     * Returns the promise rather than swallowing it, so `SettingsDialog`'s
+     * `await onSignOut()` actually keeps its spinner up for the duration.
+     * Fire-and-forget made that button flash once and stop.
+     */
+    signOut: useCallback(() => signOutAndGo("/"), [signOutAndGo]),
     /** Sign out and open the sign-in form for a different account. */
-    switchAccount: useCallback(
-      () => void signOutAndGo("/auth"),
-      [signOutAndGo],
-    ),
+    switchAccount: useCallback(() => signOutAndGo("/auth"), [signOutAndGo]),
     /** Escape hatch for callers that need the raw promise. */
     signOutAndGo,
   };

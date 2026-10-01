@@ -128,6 +128,59 @@ export function manualInstallHint(ios: boolean): string {
     : "Open your browser menu and choose “Install app” or “Add to Home Screen”.";
 }
 
+/**
+ * Why this browser cannot install SYNQ right now, or null if it can.
+ *
+ * The important one is the DEV/PROD gate. `registerServiceWorker` refuses to
+ * register unless `import.meta.env.PROD`, and that is deliberate: a service
+ * worker in front of the Vite dev server caches module URLs that are
+ * regenerated on every dependency re-optimisation, which produces precisely
+ * the "stale bundle that never updates" failure a service worker exists to
+ * prevent.
+ *
+ * The consequence, though, is that a local or preview build is NOT installable
+ * — and Chrome will not even offer it, because a registered service worker is
+ * part of the installability criteria. So `beforeinstallprompt` never fires,
+ * the in-app card never appears, and Chrome's own omnibox install icon stays
+ * hidden. Without an explanation that reads as "the PWA is broken", which is
+ * exactly the wrong conclusion to reach.
+ *
+ * Returns null whenever nothing is actually blocking, so the caller can fall
+ * back to "this browser hasn't offered it yet".
+ */
+export function installBlockedReason(): string | null {
+  if (typeof window === "undefined") return null;
+  return planInstallBlock({
+    hasServiceWorker: "serviceWorker" in navigator,
+    isProd: import.meta.env.PROD,
+    isSecureContext: window.isSecureContext,
+  });
+}
+
+/**
+ * The decision behind {@link installBlockedReason}, kept pure so it can be
+ * tested without a browser, a service worker or a build mode.
+ *
+ * Order matters and mirrors `registerServiceWorker`: a browser with no service
+ * worker support can never install, then the build gate, then the context.
+ */
+export function planInstallBlock(input: {
+  hasServiceWorker: boolean;
+  isProd: boolean;
+  isSecureContext: boolean;
+}): string | null {
+  if (!input.hasServiceWorker) {
+    return "This browser doesn't support service workers, so SYNQ can't be installed here.";
+  }
+  if (!input.isProd) {
+    return "Installing needs the published build. This preview runs a dev server, where a service worker would cache stale bundles.";
+  }
+  if (!input.isSecureContext) {
+    return "Installing needs HTTPS (or localhost) — service workers won't register on plain http.";
+  }
+  return null;
+}
+
 // --- service worker ----------------------------------------------------------
 
 interface PwaCallbacks {

@@ -129,43 +129,57 @@ export function PwaManager() {
       )}
 
       {showInstall && (
-        <div className="fixed right-4 bottom-[calc(7rem+env(safe-area-inset-bottom))] z-40 flex max-w-[min(22rem,calc(100vw-2rem))] flex-col items-start gap-2 rounded-2xl border border-white/[0.07] bg-[rgb(18_20_28_/_0.92)] px-4 py-3 shadow-[0_18px_50px_rgb(0_0_0_/_0.45)] backdrop-blur-xl">
-          <div className="flex items-center gap-2">
+        // In the normal flow, NOT fixed.
+        //
+        // This used to be a `fixed right-4 bottom-... z-40` card, which is the
+        // one place in the app it must never occupy: it sat permanently over
+        // the bottom-right of the content, directly under the Queue panel —
+        // the right-hand surface that slides in over exactly those pixels.
+        // A floating promo over the right side of a music player is both a
+        // layout collision and an interruption on every single launch.
+        //
+        // As an in-flow strip below the offline banner it cannot overlap
+        // anything: the Queue sheet and the Settings dialog are both `z-[75]`
+        // and `z-50` overlays that render above the whole column, and this
+        // strip simply occupies its own line in the layout when it is shown.
+        <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] bg-white/[0.03] px-4 py-2">
+          <span className="flex min-w-0 items-center gap-2">
             <img
               src="/icons/icon-192.png"
               alt=""
-              width={36}
-              height={36}
-              className="size-9 shrink-0 rounded-lg"
+              width={22}
+              height={22}
+              className="size-[22px] shrink-0 rounded-md"
             />
-            <div className="min-w-0">
-              <p className="text-sm font-semibold">Install SYNQ</p>
-              <p className="text-xs text-muted-foreground">
-                {state === "ready"
-                  ? "Launch it in its own window, with the player intact."
-                  : manualInstallHint(true)}
-              </p>
-            </div>
-          </div>
-          <span className="flex items-center gap-2">
+            <span className="min-w-0 truncate text-xs text-muted-foreground">
+              <span className="font-semibold text-foreground">
+                Install SYNQ
+              </span>{" "}
+              {state === "ready"
+                ? "— run it in its own window, with the player intact."
+                : manualInstallHint(true)}
+            </span>
+          </span>
+          <span className="flex shrink-0 items-center gap-1.5">
             {state === "ready" && (
               <button
                 type="button"
                 onClick={() => {
                   void install();
                 }}
-                className="flex items-center gap-1.5 rounded-full bg-[rgb(var(--tint))] px-3 py-1.5 text-xs font-semibold text-black transition-transform hover:scale-[1.03]"
+                className="rounded-full bg-[rgb(var(--tint))] px-2.5 py-1 text-[11px] font-semibold text-black transition-transform hover:scale-[1.03]"
               >
-                <Download className="size-3.5" />
-                Install app
+                <Download className="size-3" />
+                Install
               </button>
             )}
             <button
               type="button"
               onClick={dismiss}
-              className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-white/25 hover:text-foreground"
+              aria-label="Dismiss install notice"
+              className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
             >
-              Not now
+              <X className="size-3.5" />
             </button>
           </span>
         </div>
