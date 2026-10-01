@@ -9,6 +9,7 @@ import {
   ArrowRight,
   AudioWaveform,
   Check,
+  Download,
   Headphones,
   Heart,
   Keyboard,
@@ -26,6 +27,46 @@ import {
   Waves,
   Zap,
 } from "lucide-react";
+
+/**
+ * The features added in this build. Kept as data so the section renders from
+ * one list rather than repeating the same markup three times.
+ */
+const whatsNewCards = [
+  {
+    icon: AudioWaveform,
+    title: "Crossfade & gapless",
+    body: "Songs blend into each other instead of stopping dead.",
+    points: [
+      "Crossfade from 2 to 10 seconds, or off",
+      "Gapless playback on by default — no silence between tracks",
+      "The next song is fetched before you need it",
+      "Automatically rescues tracks that refuse to embed",
+    ],
+  },
+  {
+    icon: Download,
+    title: "Installable app",
+    body: "SYNQ installs to your device and keeps working offline.",
+    points: [
+      "Install from this page, the app, or Settings",
+      "Launches in its own window, no browser chrome",
+      "Works offline — the shell and your images are cached",
+      "Updates wait for you instead of interrupting the music",
+    ],
+  },
+  {
+    icon: ShieldCheck,
+    title: "Browse first, sign in when you're ready",
+    body: "No more login wall before you've heard a single song.",
+    points: [
+      "Explore home, search, artists and albums straight away",
+      "We only ask when you press play, like, or save",
+      "Your action resumes automatically after signing in",
+      '"Maybe later" puts you back exactly where you were',
+    ],
+  },
+] as const;
 
 const fadeUp = {
   initial: { opacity: 0, y: 20 },
@@ -406,6 +447,12 @@ export default function Landing() {
         <Logo to="/" />
         <nav className="hidden items-center gap-7 text-sm font-medium text-muted-foreground md:flex">
           <a
+            href="#whats-new"
+            className="transition-colors hover:text-foreground"
+          >
+            What&apos;s new
+          </a>
+          <a
             href="#features"
             className="transition-colors hover:text-foreground"
           >
@@ -678,6 +725,62 @@ export default function Landing() {
               </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/*
+        What's New.
+
+        Deliberately only FEATURES — the bug fixes from this cycle are real but
+        they are not things to sell, and a changelog padded with "fixed the
+        thing that was broken" reads as a confession. The full list, fixes
+        included, lives in CHANGELOG.md.
+      */}
+      <section
+        id="whats-new"
+        className="relative z-10 mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 sm:py-28"
+      >
+        <motion.div {...fadeUp} className="mx-auto max-w-2xl text-center">
+          <span className="inline-flex items-center gap-2 text-[10px] font-bold tracking-[0.24em] text-brand uppercase">
+            <Sparkles className="size-3.5" /> Just landed
+          </span>
+          <h2 className="mt-4 font-display text-3xl font-bold tracking-tight sm:text-5xl">
+            New in this build.
+          </h2>
+          <p className="mt-4 text-base leading-7 text-muted-foreground">
+            The three things that changed how SYNQ feels day to day.
+          </p>
+        </motion.div>
+        <div className="mt-12 grid gap-4 lg:grid-cols-3">
+          {whatsNewCards.map(({ icon: Icon, title, body, points }, index) => (
+            <motion.div
+              key={title}
+              {...fadeUp}
+              transition={{ ...fadeUp.transition, delay: index * 0.08 }}
+              className="group flex flex-col rounded-2xl border border-white/[0.07] bg-white/[0.03] p-6 transition-all hover:-translate-y-1 hover:border-brand/30 hover:bg-white/[0.05]"
+            >
+              <span className="flex size-10 items-center justify-center rounded-xl bg-brand/12 text-brand ring-1 ring-brand/20 transition-transform group-hover:scale-110">
+                <Icon className="size-5" />
+              </span>
+              <h3 className="mt-4 font-display text-lg font-semibold">
+                {title}
+              </h3>
+              <p className="mt-1.5 text-sm leading-6 text-muted-foreground">
+                {body}
+              </p>
+              <ul className="mt-5 flex flex-col gap-2">
+                {points.map((point) => (
+                  <li
+                    key={point}
+                    className="flex items-start gap-2 text-sm leading-6 text-muted-foreground"
+                  >
+                    <Check className="mt-1 size-3.5 shrink-0 text-brand" />
+                    <span>{point}</span>
+                  </li>
+                ))}
+              </ul>
+            </motion.div>
+          ))}
         </div>
       </section>
 

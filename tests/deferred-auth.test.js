@@ -820,3 +820,91 @@ describe("SYNQ can be downloaded from the landing page", () => {
     expect(button).toMatch(/if \(state === "manual"\)/);
   });
 });
+
+describe("the What's New section tells the truth", () => {
+  const landing = readSource("src/pages/Landing.tsx");
+
+  test("it exists, is anchored, and is linked from the nav", () => {
+    // A section nobody can reach is not published copy.
+    expect(landing).toMatch(/id="whats-new"/);
+    expect(landing).toMatch(/href="#whats-new"/);
+  });
+
+  test("it is driven by data, not repeated markup", () => {
+    // Three cards written out three times is how they drift apart.
+    expect(landing).toMatch(/const whatsNewCards = \[/);
+    expect(landing).toMatch(/whatsNewCards\.map\(/);
+  });
+
+  test("it covers the three features from this cycle", () => {
+    expect(landing).toMatch(/Crossfade & gapless/);
+    expect(landing).toMatch(/Installable app/);
+    expect(landing).toMatch(/Browse first, sign in when you're ready/);
+  });
+
+  test("it sells features, not bug fixes", () => {
+    // The honest reason the fixes live in CHANGELOG.md instead. Padding a
+    // changelog with "fixed the thing that was broken" reads as a confession,
+    // and this assertion is what stops someone helpfully adding them back.
+    //
+    // Scoped to BOTH the card data and the section markup. The card text is
+    // defined at the top of the file and rendered inside the section, so
+    // slicing only the markup misses every word a visitor actually reads —
+    // which is exactly how bug-fix language got published as a feature the
+    // first time this assertion was written.
+    const cards = landing.slice(
+      landing.indexOf("const whatsNewCards = ["),
+      landing.indexOf("const fadeUp = {"),
+    );
+    const section = landing.slice(
+      landing.indexOf('id="whats-new"'),
+      landing.indexOf("Ready when you are."),
+    );
+    expect(cards.length).toBeGreaterThan(0);
+    // Targeted at BUG-FIX FRAMING, not individual words. A blunt word ban
+    // fails on legitimate copy — "no silence between tracks" is a feature
+    // selling point, and banning "silence" made this test wrong rather than
+    // the copy. What must never appear is the retrospective voice.
+    //
+    // Compared LOWERCASED. Checking exact case let "Used to be broken" through
+    // a guard looking for "used to", which is the same defect in miniature:
+    // a check that reads as covering something and does not.
+    for (const raw of [cards, section]) {
+      const copy = raw.toLowerCase();
+      for (const framing of [
+        "silent playback",
+        "no longer clipped",
+        "restarted the song",
+        "nothing found",
+        "bug fix",
+        "fixed:",
+        "we fixed",
+        "used to",
+        "no longer",
+      ]) {
+        expect(copy).not.toContain(framing);
+      }
+    }
+  });
+
+  test("the changelog carries the full record, fixes included", () => {
+    // The counterpart to the assertion above: the fixes have to be written
+    // down *somewhere*, or "sell features not bugs" just means hiding them.
+    const changelog = readSource("CHANGELOG.md");
+    expect(changelog).toMatch(/### Fixed/);
+    expect(changelog).toMatch(/Silent playback/);
+    expect(changelog).toMatch(/#### Deferred authentication/);
+    expect(changelog).toMatch(/#### Crossfade & gapless playback/);
+    expect(changelog).toMatch(/#### Installable app \(PWA\)/);
+  });
+
+  test("the changelog is explicit that the gate is not a security control", () => {
+    // Publishing a UX change that reads like a security change is the failure
+    // mode worth pre-empting in writing.
+    //
+    // Matched against whitespace-collapsed prose: markdown wraps at roughly 80
+    // columns, so "not a security\ncontrol" is the same sentence as
+    // "not a security control" and must satisfy the same assertion.
+    expect(code(readSource("CHANGELOG.md"))).toMatch(/not a security control/);
+  });
+});
