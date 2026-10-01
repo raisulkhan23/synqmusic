@@ -11,7 +11,7 @@
  * includes the "no data yet" state, which is the very first thing a real
  * admin sees on a fresh deployment and the easiest one to get wrong.
  */
-import { beforeAll, describe, expect, test } from "bun:test";
+import { beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { Window } from "happy-dom";
 import React from "react";
 import { createRoot } from "react-dom/client";
@@ -20,8 +20,23 @@ import { summariseVisits } from "../src/lib/visitAnalytics.ts";
 
 let win;
 
-beforeAll(() => {
-  win = new Window({ url: "https://example.test/admin" });
+/**
+ * Install this file's window as the process-wide DOM.
+ *
+ * Called before EVERY test, not just once. `bun test` runs all files in a
+ * single process, and another DOM test file (`real-navigation-click`) installs
+ * its own happy-dom Window over these same globals in its own `beforeAll`.
+ * Whichever ran last owned `globalThis.document` for both files.
+ *
+ * The failure that produced was silent and looked like a component bug: the
+ * host element below is created from THIS file's `win.document`, while
+ * react-dom creates its elements using `globalThis.document`. Once the other
+ * file's Window won, the component rendered cross-document nodes into a
+ * container that stayed empty — every assertion on the panel's text failed,
+ * 0 bars, no headline numbers, in a suite that passed in isolation. Re-asserting
+ * the globals per test makes the file order-independent.
+ */
+function installGlobals() {
   globalThis.window = win;
   globalThis.document = win.document;
   globalThis.navigator = win.navigator;
@@ -43,6 +58,14 @@ beforeAll(() => {
     removeEventListener() {},
   });
   globalThis.matchMedia = win.matchMedia;
+}
+
+beforeAll(() => {
+  win = new Window({ url: "https://example.test/admin" });
+});
+
+beforeEach(() => {
+  installGlobals();
 });
 
 /** Mount and return the rendered text plus a query helper. */
