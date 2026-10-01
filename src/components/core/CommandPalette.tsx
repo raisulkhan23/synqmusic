@@ -181,21 +181,54 @@ export function CommandPalette() {
  * The visible affordance, so the palette is discoverable rather than a
  * secret. Drives the same store as the hotkey, so the two cannot disagree.
  */
-export function CommandPaletteHint({ className }: { className?: string }) {
+/**
+ * The button that makes the ⌘K palette discoverable. A shortcut nobody can
+ * find is not a shortcut, and this drives the same store the hotkey does, so
+ * the two can never disagree.
+ *
+ * `compact` is the 72px collapsed-rail form: a `⌕ Search ⌘K` pill is roughly
+ * 110px wide and CANNOT fit there — it overflowed and was clipped, which is
+ * what the screenshot showed. The rail gets a bare icon sized like its
+ * neighbours; the full pill, which does fit, goes in the expanded sidebar.
+ */
+export function CommandPaletteHint({
+  className,
+  compact = false,
+}: {
+  className?: string;
+  compact?: boolean;
+}) {
   const setOpen = usePalette((s) => s.setOpen);
+  if (compact) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label="Open command palette"
+        title="Search (⌘K)"
+        className={cn(
+          "flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground",
+          className,
+        )}
+      >
+        <Search className="size-4" />
+      </button>
+    );
+  }
   return (
     <button
       type="button"
       onClick={() => setOpen(true)}
       aria-label="Open command palette"
+      title="Search (⌘K)"
       className={cn(
-        "flex items-center gap-1.5 rounded-full border border-white/10 px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:border-white/20 hover:text-foreground",
+        "flex w-full items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[13px] text-muted-foreground transition-colors hover:border-white/20 hover:text-foreground",
         className,
       )}
     >
-      <Search className="size-3" />
-      <span>Search</span>
-      <kbd className="rounded border border-white/10 bg-white/[0.06] px-1 text-[10px]">
+      <Search className="size-4 shrink-0" />
+      <span className="flex-1 text-left">Search</span>
+      <kbd className="shrink-0 rounded border border-white/10 bg-white/[0.06] px-1.5 py-0.5 text-[10px]">
         ⌘K
       </kbd>
     </button>

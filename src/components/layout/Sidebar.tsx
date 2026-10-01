@@ -181,8 +181,10 @@ export function Sidebar() {
             </button>
             {/* Makes the ⌘K palette discoverable. A shortcut nobody can find
                 is not a shortcut, and this drives the same store the hotkey
-                does, so the two can never disagree. */}
-            <CommandPaletteHint className="ml-1" />
+                does, so the two can never disagree. `compact` because the
+                rail is 72px: the full `⌕ Search ⌘K` pill is ~110px and was
+                overflowing and being clipped here. */}
+            <CommandPaletteHint compact />
           </div>
 
           <PlaylistDialog open={dialogOpen} onOpenChange={setDialogOpen} />
@@ -231,6 +233,13 @@ export function Sidebar() {
               </NavLink>
             )}
           </nav>
+
+          {/* The ⌘K hint lives in BOTH rails, in the form that actually fits
+              each. It used to exist only in the collapsed 72px rail, where a
+              ~110px pill could only ever overflow and get clipped. */}
+          <div className="px-3 pt-3">
+            <CommandPaletteHint />
+          </div>
 
           {/* Spotify-style Library card */}
           <div className="glass-card mx-3 mt-4 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl">
