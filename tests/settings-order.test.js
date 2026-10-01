@@ -18,8 +18,11 @@ const SECTIONS = [
   "settings-personalization",
   "settings-profile",
   "settings-shortcuts",
+  "settings-app",
   "settings-data",
 ];
+
+const css = readSource("src/index.css");
 
 describe("settings sections are ordered by how often they are used", () => {
   test("the document renders them in the rail's order", () => {
@@ -42,7 +45,12 @@ describe("settings sections are ordered by how often they are used", () => {
     );
     let previous = -1;
     for (const id of SECTIONS) {
-      const index = rail.indexOf(id);
+      // Match the QUOTED id. `"settings-app"` is a substring of
+      // `"settings-appearance"`, so a bare substring search finds Appearance
+      // first and reports App as sitting near the top of the rail — which is
+      // the exact class of lie this file exists to catch.
+      const index = rail.indexOf(`"${id}"`);
+      expect({ id, index }).toEqual({ id, index: rail.indexOf(`"${id}"`) });
       expect(index).toBeGreaterThan(previous);
       previous = index;
     }
@@ -59,6 +67,36 @@ describe("settings sections are ordered by how often they are used", () => {
 
   test("destructive data controls stay last", () => {
     expect(SECTIONS[SECTIONS.length - 1]).toBe("settings-data");
+  });
+
+  test("the CSS must not re-order the panel behind the rail's back", () => {
+    // This is the bug this file missed for so long. The panel used to carry an
+    // `order:` ladder — half keyed by `#id`, half by `section:nth-of-type(N)`.
+    // `ImportSection` renders a `<section>`, so it occupies an `nth-of-type`
+    // slot too; inserting the App section shifted every index after it, and the
+    // Data section fell off the end of the ladder with no rule at all. An
+    // unmatched child keeps the initial `order: 0`, ties with `.settings-header`,
+    // and ties break on document order — so "Your Data" rendered directly under
+    // the page title.
+    //
+    // The consequence was not just misplaced: the scroll hook documents its
+    // `ids` as DOCUMENT order, so the rail highlighted Data while the reader
+    // was looking at App.
+    //
+    // Document order is now the only source of truth, which means a ladder
+    // cannot exist here at all.
+    expect(css).not.toMatch(/\.settings-liquid-glass\s*>[^{]*\{\s*order:/);
+    expect(css).not.toMatch(/settings-liquid-glass[^{}]*nth-of-type/);
+  });
+
+  test("the rail and the document still agree on where App sits", () => {
+    // App is not the last section, so it must not be treated as one. It was
+    // inserted before Data in both the rail and the markup, and the ladder is
+    // what quietly disagreed.
+    expect(SECTIONS.indexOf("settings-app")).toBe(SECTIONS.length - 2);
+    const app = at('<section id="settings-app"');
+    const data = at('<section id="settings-data"');
+    expect(app).toBeLessThan(data);
   });
 });
 

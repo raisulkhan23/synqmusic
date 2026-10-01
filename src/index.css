@@ -751,60 +751,33 @@ html.reduce-motion *::after {
     }
   }
 
-  /* Put the controls people reach for most first: playback, sound, and
-     appearance stay above profile and maintenance tasks. The page remains
-     a single scroll surface, so the jump bar and anchors keep working. */
-  .settings-liquid-glass > .settings-header {
-    order: 0;
-  }
-  .settings-liquid-glass > .settings-jump-bar {
-    order: 1;
-  }
-  .settings-liquid-glass > #settings-playback {
-    order: 2;
-  }
-  .settings-liquid-glass > #settings-playback + [data-slot="separator"] {
-    order: 3;
-  }
-  .settings-liquid-glass > #settings-audio {
-    order: 4;
-  }
-  .settings-liquid-glass > #settings-audio + [data-slot="separator"] {
-    order: 5;
-  }
-  .settings-liquid-glass > #settings-appearance {
-    order: 6;
-  }
-  .settings-liquid-glass > #settings-appearance + [data-slot="separator"] {
-    order: 7;
-  }
-  .settings-liquid-glass > #settings-profile {
-    order: 8;
-  }
-  .settings-liquid-glass > #settings-profile + [data-slot="separator"] {
-    order: 9;
-  }
-  .settings-liquid-glass > #settings-personalization {
-    order: 10;
-  }
-  .settings-liquid-glass > #settings-personalization + [data-slot="separator"] {
-    order: 11;
-  }
-  .settings-liquid-glass > section:nth-of-type(6) {
-    order: 12;
-  }
-  .settings-liquid-glass > section:nth-of-type(6) + [data-slot="separator"] {
-    order: 13;
-  }
-  .settings-liquid-glass > .settings-import {
-    order: 14;
-  }
-  .settings-liquid-glass > .settings-import + [data-slot="separator"] {
-    order: 15;
-  }
-  .settings-liquid-glass > section:nth-of-type(8) {
-    order: 16;
-  }
+  /* NO `order:` LADDER HERE. Document order is the single source of truth.
+     Deliberately, and it used to be the opposite.
+
+     This panel used to assign `order:` to each top-level child — half of them
+     keyed by `#id`, half by `section:nth-of-type(N)`. Two things then broke it
+     at once when the PWA work added the App section:
+
+       - `ImportSection` renders a `<section class="settings-import">`, so it
+         occupies an `nth-of-type` slot too. `section:nth-of-type(8)` was the
+         Data section before App existed; after App was inserted it became
+         APP, and Data fell off the end of the ladder entirely.
+       - A child with no matching rule keeps the initial `order: 0`, which ties
+         it with `.settings-header`. Ties break on document order, so Data
+         rendered immediately below the page title — "Your Data is on top".
+
+     The visible symptom was worse than misplaced: `useSettingsNavigation`
+     documents its `ids` as "section ids in DOCUMENT order" and derives both
+     the active chip and the destination from it. With CSS re-ordering the
+     panel behind its back, the rail highlighted Data while the reader was
+     looking at App, and the chips scrolled to the wrong place.
+
+     A positional ladder also renumbers itself on every insertion: adding one
+     section silently reassigns every section after it. Anchors and
+     scroll-tracking must be able to trust document order, so document order
+     now simply is the order. Reordering the settings page means reordering
+     `SETTINGS_SECTIONS` and the JSX together — which `tests/settings-order.test.js`
+     and `tests/settings-scroll-execution.test.js` both enforce. */
   .settings-liquid-glass.settings-glass-still::before {
     animation: none;
     opacity: 0.28;
