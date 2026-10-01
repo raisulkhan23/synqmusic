@@ -680,3 +680,66 @@ describe("the bridge is mounted somewhere it can actually work", () => {
     }
   });
 });
+
+describe("no auth prompt without a deliberate action", () => {
+  const shell = readSource("src/components/layout/AppShell.tsx");
+  const trackLink = readSource("src/pages/TrackLink.tsx");
+
+  test("a click during session resolution is not silently swallowed", () => {
+    // `request()` cannot open the prompt while `authenticated === null`, so it
+    // parks the intent and returns false. If nothing reconciles when the
+    // answer arrives, that click is a DEAD BUTTON: no audio, no dialog, no
+    // explanation — indistinguishable from a broken app.
+    const flat = code(readSource("src/store/authGate.ts"));
+    const body = flat.slice(
+      flat.lastIndexOf("setAuthenticated: (value)"),
+      flat.indexOf("request: (reason", flat.lastIndexOf("setAuthenticated:")),
+    );
+    expect(body.length).toBeGreaterThan(0);
+    // Resolving as a guest with something parked must open the prompt.
+    expect(body).toMatch(/value === false && get\(\)\.pending/);
+    expect(body).toMatch(/open: true/);
+    // Resolving as signed in must close it and let the provider resume.
+    expect(body).toMatch(/if \(value === true\)/);
+  });
+
+  test("a shared track link does not auto-play for a guest", () => {
+    // `/t/:id` resolved its metadata in an effect and played immediately. For
+    // a visitor that fired the auth dialog on page load, triggered by nothing
+    // they did — the single clearest violation of deferred auth.
+    const effect = trackLink.slice(
+      trackLink.indexOf("if (!meta) return;"),
+      trackLink.indexOf("if (!meta) return;") + 400,
+    );
+    expect(effect).toMatch(/if \(!isAuthenticated\) return;/);
+  });
+
+  test("a guest gets a real Play button on the track link instead", () => {
+    // Suppressing autoplay must not leave the page with no way to play. The
+    // button is the deliberate action that earns the prompt.
+    expect(trackLink).toMatch(/isCurrent \|\| !isAuthenticated/);
+    expect(trackLink).toMatch(
+      /isCurrent \? togglePlay\(\) : playTrack\(trackMetaToPlayable\(meta\)\)/,
+    );
+  });
+
+  test("the global Space shortcut does not fire over a focused control", () => {
+    // Space activates a focused button. The global handler also called
+    // `togglePlay()`, which for a guest reaches the auth gate — so tabbing to
+    // a row and pressing Space produced a dialog nobody asked for.
+    const guard = code(shell).slice(
+      code(shell).indexOf("if (typing) return;"),
+      code(shell).indexOf("if (typing) return;") + 700,
+    );
+    expect(guard).toMatch(/BUTTON/);
+    expect(guard).toMatch(/if \(e\.code !== "Enter"\) return;/);
+  });
+
+  test("Space still works as play/pause when nothing is focused", () => {
+    // The guard must not disable the shortcut entirely — that would be a
+    // silent feature removal.
+    const flat = code(shell);
+    const after = flat.slice(flat.indexOf('if (e.code === "Space")'));
+    expect(after.slice(0, 200)).toMatch(/s\.togglePlay\(\)/);
+  });
+});

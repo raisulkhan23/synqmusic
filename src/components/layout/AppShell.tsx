@@ -571,6 +571,27 @@ export function AppShell() {
         target?.tagName === "TEXTAREA" ||
         target?.isContentEditable;
       if (typing) return;
+      // …and when a real control has focus. Space and Enter are how a focused
+      // button is activated, so a global handler that swallows Space both
+      // breaks keyboard activation and fires a second, unintended action.
+      //
+      // For a signed-in listener the second action is harmless (play/pause
+      // toggles twice, net no-op). For a GUEST it is not: the second action
+      // reaches the deferred-auth gate, so tabbing to a shelf row, pressing
+      // Space to activate it, and having the global handler request playback as
+      // well produced an auth dialog the visitor never asked for — triggered by
+      // nothing more deliberate than pressing space on a button.
+      const focus = e.target as HTMLElement | null;
+      if (
+        focus?.tagName === "BUTTON" ||
+        focus?.tagName === "A" ||
+        focus?.tagName === "SUMMARY" ||
+        focus?.isContentEditable
+      ) {
+        // Enter is unambiguous, so it is still ours. Space belongs to the
+        // focused control.
+        if (e.code !== "Enter") return;
+      }
 
       const s = usePlayerStore.getState();
       if (e.code === "Space") {

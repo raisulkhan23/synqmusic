@@ -4,6 +4,7 @@ import { useAction } from "convex/react";
 import { Loader2, Music4, Play } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { copyText } from "@/lib/clipboard";
+import { useAuth } from "@/hooks/use-auth";
 import {
   isTrackId,
   trackMetaToPlayable,
@@ -26,6 +27,7 @@ export default function TrackLink() {
   const { trackId } = useParams();
   const navigate = useNavigate();
   const fetchMeta = useAction(api.youtube.trackMeta);
+  const { isAuthenticated } = useAuth();
   const playTrack = usePlayerStore((s) => s.playTrack);
   const current = usePlayerStore((s) => s.current);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
@@ -64,10 +66,18 @@ export default function TrackLink() {
 
   // Play once the metadata is in. Keyed on the id so navigating between two
   // shared links restarts for the new one, while a re-render does not replay.
+  //
+  // Only for a listener who can actually hear it. A visitor has no session, so
+  // firing this for them opened the deferred-auth dialog the instant the link
+  // resolved — an auth prompt triggered by nothing they did, on page load,
+  // which is precisely what deferred authentication is supposed to never do.
+  // Guests get the track details and an explicit Play button instead, and the
+  // dialog appears only when they press it.
   useEffect(() => {
     if (!meta) return;
+    if (!isAuthenticated) return;
     playTrack(trackMetaToPlayable(meta));
-  }, [meta, playTrack]);
+  }, [meta, playTrack, isAuthenticated]);
 
   // A malformed id (truncated by a chat app, or not an id at all) never gets
   // as far as a lookup; a well-formed one that resolves to nothing is a
@@ -144,10 +154,12 @@ export default function TrackLink() {
           <Play className="size-4 fill-current" />
           Playing now
         </div>
-      ) : isCurrent ? (
+      ) : isCurrent || !isAuthenticated ? (
         <button
           type="button"
-          onClick={() => togglePlay()}
+          onClick={() =>
+            isCurrent ? togglePlay() : playTrack(trackMetaToPlayable(meta))
+          }
           className="flex items-center gap-2 rounded-full bg-[rgb(var(--tint))] px-5 py-2.5 text-sm font-semibold text-black shadow-[0_8px_30px_rgb(var(--tint)/0.35)] transition-transform hover:scale-[1.03]"
         >
           <Play className="size-4 fill-current" />

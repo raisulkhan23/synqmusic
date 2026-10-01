@@ -138,7 +138,34 @@ export const useAuthGate = create<AuthGateState>()((set, get) => ({
   reason: "playback" as AuthReason,
   open: false,
 
-  setAuthenticated: (value) => set({ authenticated: value }),
+  /**
+   * Write the mirrored session, and RECONCILE anything parked while it was
+   * still unknown.
+   *
+   * This reconciliation is not optional. `request()` deliberately does not open
+   * the prompt while `authenticated === null`: it cannot know yet whether this
+   * is a guest who needs asking or a signed-in listener whose session simply
+   * has not resolved. Parking the intent and returning false means the click is
+   * refused either way.
+   *
+   * So the moment the answer arrives, this has to act on it. Without it, a
+   * visitor who clicked Play during that window got a dead button: no audio,
+   * no dialog, and no explanation — which reads exactly like the app being
+   * broken, and is the single most confusing failure this gate can produce.
+   */
+  setAuthenticated: (value) => {
+    const previous = get().authenticated;
+    set({ authenticated: value });
+    if (previous === value) return;
+
+    // Resolved as signed in: the provider's `resume()` will run the intent.
+    if (value === true) {
+      if (get().open) set({ open: false });
+      return;
+    }
+    // Resolved as a guest, and something was waiting on the answer.
+    if (value === false && get().pending) set({ open: true });
+  },
 
   request: (reason, intent) => {
     const { authenticated } = get();
