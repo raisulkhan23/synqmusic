@@ -88,6 +88,7 @@ describe("settings page category tabs", () => {
       "settings-personalization",
       "settings-profile",
       "settings-shortcuts",
+      "settings-app",
       "settings-data",
     ]);
     // Whitespace-tolerant: prettier wraps a section's attributes onto separate

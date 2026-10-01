@@ -91,8 +91,10 @@ describe("the logo is a real, valid image everywhere it is referenced", () => {
     const player = readSource("src/lib/youtubePlayer.ts");
     expect(player).toContain(`logo.src = "/logo.svg?v=${version[1]}"`);
     expect(indexHtml).toContain(`/logo.svg?v=${version[1]}`);
-    // The iOS icon is versioned for the same reason.
-    expect(indexHtml).toMatch(/href="\/product-icon\.png\?v=\d+"/);
+    // The iOS home-screen icon is versioned for the same reason. It is the
+    // full-bleed 180px render (iOS applies its own rounded mask, so a
+    // transparent corner shows as black) rather than the rounded tile.
+    expect(indexHtml).toMatch(/href="\/icons\/apple-180\.png\?v=\d+"/);
   });
 });
 
@@ -137,11 +139,22 @@ describe("the raster icons are valid PNGs, not placeholders", () => {
     }
   });
 
-  test("the manifest icon matches the file that is actually shipped", () => {
-    const icon = manifest.icons[0];
-    expect(icon.src).toBe("/logo.png");
-    expect(icon.type).toBe("image/png");
-    const img = readPng(`public${icon.src}`);
-    expect(img.width).toBeGreaterThanOrEqual(512);
+  test("the manifest icons match the files that are actually shipped", () => {
+    // Every declared icon must exist and be a real PNG at the size it claims.
+    // A manifest pointing at a missing or placeholder file is the classic
+    // reason a site looks installable but never actually installs.
+    expect(manifest.icons.length).toBeGreaterThanOrEqual(2);
+    const big = manifest.icons.find((i) => i.sizes === "512x512");
+    expect(big).toBeDefined();
+    expect(big.type).toBe("image/png");
+    const img = readPng(`public${big.src}`);
+    expect(img.width).toBe(512);
+    expect(img.height).toBe(512);
+    for (const icon of manifest.icons) {
+      expect(icon.type).toBe("image/png");
+      expect(readPng(`public${icon.src}`).width).toBe(
+        Number(icon.sizes.split("x")[0]),
+      );
+    }
   });
 });

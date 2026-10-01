@@ -23,6 +23,7 @@ import { SettingsDialog } from "@/components/settings/SettingsDialog";
 import { Logo } from "@/components/brand/Logo";
 import { SiteFooter } from "@/components/landing/SiteFooter";
 import { VisitTracker } from "@/components/analytics/VisitTracker";
+import { PwaManager } from "@/components/pwa/PwaManager";
 import { BackToTop } from "@/components/core/BackToTop";
 import { CommandPalette } from "@/components/core/CommandPalette";
 import { api } from "@/convex/_generated/api";
@@ -848,6 +849,9 @@ export function AppShell() {
             You're offline — check your connection
           </div>
         )}
+        {/* Install prompt + a new-version notice. Both are app-level concerns,
+            so they sit above the page content rather than inside any route. */}
+        <PwaManager />
         {/* mobile top bar */}
         {/* `env(safe-area-inset-top)` is added to the height AND used as padding:
             the shell is h-dvh, so on a notched phone the logo and settings

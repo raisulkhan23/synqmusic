@@ -17,6 +17,7 @@ import { DEFAULT_CARD_TRANSPARENCY } from "@/lib/cardTransparency";
 import { downloadJson } from "@/lib/download";
 import { useSleepCountdown } from "@/lib/sleepTimer";
 import { CROSSFADE_CHOICES } from "@/lib/transition";
+import { manualInstallHint, usePwaInstall } from "@/lib/pwa";
 import {
   applyEqPreset,
   setAudioFilter,
@@ -135,6 +136,7 @@ const SETTINGS_SECTIONS = [
   ["Personalize", "settings-personalization", Sparkles],
   ["Profile", "settings-profile", UserRound],
   ["Shortcuts", "settings-shortcuts", Keyboard],
+  ["App", "settings-app", Download],
   ["Data", "settings-data", Database],
 ] as const;
 
@@ -2250,6 +2252,18 @@ export function SettingsDialog({
 
         {/* data */}
         <section
+          id="settings-app"
+          ref={registerSection("settings-app")}
+          className="flex flex-col gap-2"
+        >
+          <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
+            <Download className="size-3.5" />
+            App
+          </p>
+          <InstallAppRow />
+        </section>
+
+        <section
           id="settings-data"
           ref={registerSection("settings-data")}
           className="flex flex-col gap-2"
@@ -2308,6 +2322,85 @@ export function SettingsDialog({
  * row for the account, which is not something to run for someone who merely
  * opened Settings.
  */
+/**
+ * Install SYNQ as an app, reachable from Settings even after the in-app
+ * prompt was dismissed.
+ *
+ * Three genuinely different states, not one button relabelled three ways:
+ * an installed app says so and offers nothing to click, browsers with a
+ * captured prompt get the real install call, and iOS — which has no install
+ * API at all — gets the manual Share > Add to Home Screen steps rather than a
+ * button that would silently do nothing.
+ */
+function InstallAppRow() {
+  const { state, install, reset } = usePwaInstall();
+
+  if (state === "installed") {
+    return (
+      <div className="flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
+        <img
+          src="/icons/icon-192.png"
+          alt=""
+          width={36}
+          height={36}
+          className="size-9 shrink-0 rounded-lg"
+        />
+        <div className="min-w-0">
+          <p className="text-sm font-medium">SYNQ is installed</p>
+          <p className="text-xs text-muted-foreground">
+            Running in its own window
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const hint =
+    state === "manual"
+      ? manualInstallHint(true)
+      : state === "ready"
+        ? "Launch it in its own window, with the player intact."
+        : state === "dismissed"
+          ? "You dismissed this earlier."
+          : "This browser hasn't offered installation yet.";
+
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
+      <img
+        src="/icons/icon-192.png"
+        alt=""
+        width={36}
+        height={36}
+        className="size-9 shrink-0 rounded-lg"
+      />
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium">Install SYNQ</p>
+        <p className="text-xs text-muted-foreground">{hint}</p>
+      </div>
+      {state === "ready" && (
+        <button
+          type="button"
+          onClick={() => {
+            void install();
+          }}
+          className="shrink-0 rounded-full bg-[rgb(var(--tint))] px-3 py-1.5 text-xs font-semibold text-black transition-transform hover:scale-105"
+        >
+          Install
+        </button>
+      )}
+      {state === "dismissed" && (
+        <button
+          type="button"
+          onClick={reset}
+          className="shrink-0 rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-white/25 hover:text-foreground"
+        >
+          Show again
+        </button>
+      )}
+    </div>
+  );
+}
+
 function DataExportRow({ onDone }: { onDone: () => void }) {
   const data = useQuery(api.me.exportData);
 
