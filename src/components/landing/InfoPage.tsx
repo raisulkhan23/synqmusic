@@ -50,7 +50,9 @@ export function InfoPage({
         <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground">
           {intro}
         </p>
-        <p className="mt-3 text-xs text-muted-foreground/70">Last updated {updated}</p>
+        <p className="mt-3 text-xs text-muted-foreground/70">
+          Last updated {updated}
+        </p>
 
         <div className="mt-12 grid gap-10 lg:grid-cols-[200px_1fr] lg:gap-14">
           <nav className="lg:sticky lg:top-8 lg:self-start">

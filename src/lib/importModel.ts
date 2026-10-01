@@ -287,19 +287,25 @@ export function dedupeTracks(tracks: NormalizedTrack[]): {
 /**
  * The shape `playlists.saveImported` stores.
  *
- * Only what the playlist rows actually carry today: the library resolves the
- * rest by searching artist + title when the playlist is played. Widening the
- * Convex validator is a separate, additive change.
+ * `artwork` used to be dropped here. Every importer had already normalised a
+ * real cover URL out of the provider payload, and this function threw it away
+ * on the way to the database — which is why every imported playlist rendered
+ * a grid of empty black boxes with no way for the detail screen to tell the
+ * difference between "no artwork available" and "artwork was thrown away".
  */
 export interface StoredTrack {
   title: string;
   artist: string;
+  album?: string;
+  artwork?: string;
   duration?: number;
 }
 
 export function toStoredTracks(tracks: NormalizedTrack[]): StoredTrack[] {
   return tracks.map((track) => {
     const row: StoredTrack = { title: track.title, artist: track.artist };
+    if (track.album !== undefined) row.album = track.album;
+    if (track.artwork !== undefined) row.artwork = track.artwork;
     if (track.duration !== undefined) row.duration = track.duration;
     return row;
   });

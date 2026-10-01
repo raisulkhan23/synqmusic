@@ -36,8 +36,8 @@ export default function Terms() {
               <p>
                 Playback is served by YouTube's embedded player. You are
                 responsible for complying with YouTube's own terms and with
-                applicable copyright law, and SYNQ may remove or block access
-                to any specific item that is unavailable, restricted, or the
+                applicable copyright law, and SYNQ may remove or block access to
+                any specific item that is unavailable, restricted, or the
                 subject of a valid complaint.
               </p>
             </>
@@ -49,9 +49,9 @@ export default function Terms() {
           heading: "Your account",
           body: (
             <p>
-              You're responsible for activity under your account and for
-              keeping access to your sign-in method secure. Accounts are for
-              individuals — don't share credentials.
+              You're responsible for activity under your account and for keeping
+              access to your sign-in method secure. Accounts are for individuals
+              — don't share credentials.
             </p>
           ),
         },
@@ -74,7 +74,9 @@ export default function Terms() {
                   Probe, overload, scrape, or interfere with the service or its
                   infrastructure.
                 </li>
-                <li>Upload content that is unlawful, infringing, or hateful.</li>
+                <li>
+                  Upload content that is unlawful, infringing, or hateful.
+                </li>
               </ul>
             </>
           ),
@@ -85,9 +87,9 @@ export default function Terms() {
           body: (
             <p>
               You keep ownership of the playlist names, notes, and track
-              metadata you add. You give SYNQ the permission needed to store
-              and display that content to you and, where the product requires
-              it, to other users you deliberately share with.
+              metadata you add. You give SYNQ the permission needed to store and
+              display that content to you and, where the product requires it, to
+              other users you deliberately share with.
             </p>
           ),
         },
@@ -108,10 +110,10 @@ export default function Terms() {
           heading: "Limitation of liability",
           body: (
             <p>
-              To the maximum extent permitted by law, SYNQ and its operators
-              are not liable for indirect, incidental, or consequential
-              damages, or for any loss of data or playback, arising from your
-              use of the service.
+              To the maximum extent permitted by law, SYNQ and its operators are
+              not liable for indirect, incidental, or consequential damages, or
+              for any loss of data or playback, arising from your use of the
+              service.
             </p>
           ),
         },
@@ -120,10 +122,10 @@ export default function Terms() {
           heading: "Changes and termination",
           body: (
             <p>
-              These terms may be updated as the service changes; the date at
-              the top of this page always reflects the current version. We may
-              suspend or terminate an account that breaches these terms, and
-              you can stop using SYNQ at any time by deleting your account.
+              These terms may be updated as the service changes; the date at the
+              top of this page always reflects the current version. We may
+              suspend or terminate an account that breaches these terms, and you
+              can stop using SYNQ at any time by deleting your account.
             </p>
           ),
         },

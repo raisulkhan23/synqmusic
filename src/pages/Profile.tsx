@@ -5,7 +5,15 @@ import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/hooks/use-auth";
 import { usePlayerStore } from "@/store/player";
 import { readPlayHistory, subscribePlayHistory } from "@/store/player";
-import { BarChart3, Check, ChevronRight, Heart, ListMusic, Pencil, ShieldCheck } from "lucide-react";
+import {
+  BarChart3,
+  Check,
+  ChevronRight,
+  Heart,
+  ListMusic,
+  Pencil,
+  ShieldCheck,
+} from "lucide-react";
 import { toast } from "sonner";
 
 export default function Profile() {
@@ -55,7 +63,15 @@ export default function Profile() {
     <div className="flex flex-col gap-8">
       <header className="flex flex-wrap items-center gap-5">
         <div className="flex size-20 items-center justify-center overflow-hidden rounded-full bg-[rgb(var(--tint))] font-display text-2xl font-bold text-black ring-2 ring-white/10">
-          {user?.image ? <img src={user.image} alt="Your profile picture" className="size-full object-cover" /> : initials}
+          {user?.image ? (
+            <img
+              src={user.image}
+              alt="Your profile picture"
+              className="size-full object-cover"
+            />
+          ) : (
+            initials
+          )}
         </div>
         <div className="min-w-0">
           {editing ? (
@@ -102,10 +118,30 @@ export default function Profile() {
       </header>
 
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard to="/liked" icon={<Heart className="size-4" />} label="Liked songs" value={likedCount} />
-        <StatCard to="/playlists" icon={<ListMusic className="size-4" />} label="Playlists" value={playlists?.length ?? 0} />
-        <StatCard to="/recent" icon={<BarChart3 className="size-4" />} label="Songs played" value={history.length} />
-        <StatCard to="/stats" icon={<BarChart3 className="size-4" />} label="Listening stats" value="View" />
+        <StatCard
+          to="/liked"
+          icon={<Heart className="size-4" />}
+          label="Liked songs"
+          value={likedCount}
+        />
+        <StatCard
+          to="/playlists"
+          icon={<ListMusic className="size-4" />}
+          label="Playlists"
+          value={playlists?.length ?? 0}
+        />
+        <StatCard
+          to="/recent"
+          icon={<BarChart3 className="size-4" />}
+          label="Songs played"
+          value={history.length}
+        />
+        <StatCard
+          to="/stats"
+          icon={<BarChart3 className="size-4" />}
+          label="Listening stats"
+          value="View"
+        />
       </section>
 
       {/* The sidebar (and its admin link) is `lg:`-only, so without this an

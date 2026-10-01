@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useAction, useMutation, useQuery } from "convex/react";
 import {
   ListMusic,
+  Loader2,
   Play,
   Radio,
   Search as SearchIcon,
@@ -17,6 +18,14 @@ import { RemoteTrackRow } from "@/components/tracks/RemoteTrackRow";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { formatTime } from "@/lib/format";
+import {
+  chunkRepairBatches,
+  needsRepair,
+  REPAIR_EMPTY_STREAK_LIMIT,
+  REPAIR_MAX_PASSES,
+  type ImportedRow,
+  type RepairResult,
+} from "@/lib/importRepair";
 import { toPlayableYoutube, type Playable } from "@/lib/playable";
 import { shuffleList } from "@/lib/queueOrder";
 import { cleanArtistName, type YtItem } from "@/lib/youtube";
@@ -43,6 +52,8 @@ export default function PlaylistDetail() {
   const removeTrack = useMutation(api.playlists.removeTrack);
   const addTrack = useMutation(api.playlists.addTrack);
   const searchYt = useAction(api.youtube.searchYoutube);
+  const resolveImported = useAction(api.playlists.resolveImportedTracks);
+  const applyRepairs = useMutation(api.playlists.applyImportedRepairs);
   const playTrack = usePlayerStore((s) => s.playTrack);
   const playListOrdered = usePlayerStore((s) => s.playListOrdered);
   const startPlaylistRadio = usePlayerStore((s) => s.startPlaylistRadio);
@@ -53,6 +64,155 @@ export default function PlaylistDetail() {
   const [filter, setFilter] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [repairing, setRepairing] = useState(false);
+
+  // Rows straight off the document, before the display mapping below. The
+  // repair pass reads THESE, because it needs to know exactly what is still
+  // missing rather than what the screen chose to render.
+  const storedRows = useMemo<ImportedRow[]>(() => {
+    const snapshots = playlist?.trackSnapshots ?? [];
+    const byId = new Map(snapshots.map((snapshot) => [snapshot.id, snapshot]));
+    return (playlist?.trackIds ?? []).map((trackId) => {
+      const snapshot = byId.get(trackId);
+      return {
+        id: trackId,
+        title: snapshot?.title ?? "",
+        artist: snapshot?.artist ?? "",
+        coverUrl: snapshot?.coverUrl ?? "",
+        duration: snapshot?.duration ?? 0,
+        ...(snapshot?.youtubeId ? { youtubeId: snapshot.youtubeId } : {}),
+      };
+    });
+  }, [playlist]);
+
+  /**
+   * Fill in what an older import never stored: cover art, length, and a real
+   * playable id.
+   *
+   * An imported row arrives as a title and an artist. The importers had
+   * artwork and durations and threw them away on the way to the database, so
+   * those playlists rendered as a grid of empty black boxes reading `0:00`.
+   * New imports carry their own artwork now; this is the pass that repairs
+   * the ones already in the library, and it works because the song itself is
+   * the only honest source for the missing data.
+   *
+   * Reliability notes, because this runs unprompted on page open:
+   *  - Only rows that still need something are sent, so a repaired playlist
+   *    costs nothing.
+   *  - Each row is attempted at most once per visit. A row YouTube cannot
+   *    place keeps its honest placeholder instead of retrying forever.
+   *  - One pass in flight at a time, in bounded parallel batches.
+   *  - Every failure path is swallowed. A repair that cannot run must never
+   *    take the playlist page down with it.
+   */
+  const repairInFlight = useRef(false);
+  const repairAttempted = useRef<Set<string>>(new Set());
+  // The loop below outlives the render that started it, so it reads the rows
+  // through a ref rather than closing over one render's copy. The ref is
+  // synced in an effect (declared first, so it lands before the repair pass
+  // reads it) rather than during render.
+  const storedRowsRef = useRef(storedRows);
+  useEffect(() => {
+    storedRowsRef.current = storedRows;
+  }, [storedRows]);
+  const [repairedCount, setRepairedCount] = useState(0);
+
+  useEffect(() => {
+    if (!playlist || repairInFlight.current) return;
+    let cancelled = false;
+
+    const run = async () => {
+      let passes = 0;
+      let emptyStreak = 0;
+      while (passes < REPAIR_MAX_PASSES && !cancelled) {
+        const pending = storedRowsRef.current.filter(
+          (row) => needsRepair(row) && !repairAttempted.current.has(row.id),
+        );
+        const batches = chunkRepairBatches(pending);
+        if (batches.length === 0) return;
+
+        repairInFlight.current = true;
+        setRepairing(true);
+        let result: {
+          resolved: RepairResult[];
+          answered: string[];
+          empty: number;
+        } | null = null;
+        try {
+          const settled = await Promise.allSettled(
+            batches.map((batch) =>
+              resolveImported({
+                tracks: batch.map((row) => ({
+                  id: row.id,
+                  title: row.title,
+                  artist: row.artist,
+                })),
+              }),
+            ),
+          );
+          result = {
+            resolved: settled.flatMap((outcome) =>
+              outcome.status === "fulfilled"
+                ? (outcome.value?.resolved ?? [])
+                : [],
+            ),
+            // Only rows upstream actually ANSWERED are marked done. A row
+            // whose search came back empty stays retryable, because empty here
+            // means "we are being throttled", not "this song does not exist".
+            answered: settled.flatMap((outcome) =>
+              outcome.status === "fulfilled"
+                ? (outcome.value?.answered ?? [])
+                : [],
+            ),
+            // A rejected batch counts as empty for every row it held: it is
+            // the same "upstream gave us nothing" signal from the caller's
+            // point of view, and it has to trigger the same backoff.
+            empty: settled.reduce(
+              (total, outcome, index) =>
+                total +
+                (outcome.status === "fulfilled"
+                  ? (outcome.value?.empty ?? 0)
+                  : batches[index].length),
+              0,
+            ),
+          };
+        } catch {
+          return;
+        } finally {
+          repairInFlight.current = false;
+        }
+        if (!result || cancelled) return;
+
+        for (const id of result.answered) repairAttempted.current.add(id);
+        if (result.resolved.length > 0) {
+          try {
+            await applyRepairs({
+              playlistId: playlist._id,
+              repairs: result.resolved,
+            });
+            setRepairedCount((count) => count + result!.resolved.length);
+          } catch {
+            return;
+          }
+        }
+
+        passes += 1;
+        // Upstream answered with silence twice running: stop here rather than
+        // keep spending a quota that has already said no. Repaired rows leave
+        // the backlog on their own, so the next visit resumes from here.
+        emptyStreak = result.empty > 0 ? emptyStreak + 1 : 0;
+        if (emptyStreak >= REPAIR_EMPTY_STREAK_LIMIT) return;
+        if (result.resolved.length === 0 && result.empty > 0) return;
+      }
+    };
+
+    void run().finally(() => {
+      if (!cancelled) setRepairing(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [playlist, resolveImported, applyRepairs]);
 
   if (playlist === undefined) {
     return (
@@ -327,9 +487,7 @@ export default function PlaylistDetail() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-5 sm:flex-row sm:items-end">
-        <div className="flex size-40 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-white/[0.09] to-white/[0.03] shadow-2xl ring-1 ring-white/10 sm:size-48">
-          <ListMusic className="size-10 text-muted-foreground/50" />
-        </div>
+        <PlaylistCover urls={rows.map((row) => row.thumbnail)} />
         <div className="min-w-0">
           <p className="text-[11px] font-semibold tracking-[0.2em] text-muted-foreground uppercase">
             Playlist
@@ -346,6 +504,16 @@ export default function PlaylistDetail() {
             {rows.length} {rows.length === 1 ? "song" : "songs"}
             {total > 0 && ` · ${formatTime(total)}`}
           </p>
+          {/* The repair pass is silent by design: it is bookkeeping, not an
+              event. It is only worth mentioning while it is actually running,
+              and only when this playlist is the kind that needed it. */}
+          {repairing && storedRows.some(needsRepair) && (
+            <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Loader2 className="size-3 animate-spin" />
+              Looking up artwork and track lengths
+              {repairedCount > 0 ? ` · ${repairedCount} found` : "…"}
+            </p>
+          )}
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <button
               type="button"
@@ -482,6 +650,61 @@ function toYtItem(track: PlaylistRow): YtItem {
     thumbnail: track.thumbnail,
     duration: track.duration,
   };
+}
+
+/**
+ * The playlist's cover.
+ *
+ * An import has no single playlist image of its own, so this mosaics the
+ * covers of the tracks inside it — which is what the services themselves do
+ * for a playlist nobody art-directed, and it is honest: every tile is a real
+ * song from this playlist.
+ *
+ * Falls back through one image, then the plain icon. A hero that is a
+ * deliberately quiet grey tile reads as "no art yet"; a hero that is a broken
+ * image reads as a bug, which is what the imported playlists looked like.
+ */
+function PlaylistCover({ urls }: { urls: string[] }) {
+  const tiles = urls.filter((url) => url.trim()).slice(0, 4);
+  const frame =
+    "flex size-40 shrink-0 overflow-hidden rounded-2xl bg-gradient-to-br from-white/[0.09] to-white/[0.03] shadow-2xl ring-1 ring-white/10 sm:size-48";
+  if (tiles.length === 0) {
+    return (
+      <div className={`${frame} items-center justify-center`}>
+        <ListMusic className="size-10 text-muted-foreground/50" />
+      </div>
+    );
+  }
+  if (tiles.length === 1) {
+    return (
+      <div className={frame}>
+        <img
+          src={tiles[0]}
+          alt=""
+          className="size-full object-cover"
+          loading="lazy"
+        />
+      </div>
+    );
+  }
+  return (
+    <div className={`${frame} grid grid-cols-2 grid-rows-2 gap-px bg-white/10`}>
+      {/* Two or three covers still fill the grid: the tile set repeats rather
+          than leaving holes, which is what every playlist mosaic does and
+          what a half-empty hero looks like it doesn't. */}
+      {Array.from({ length: 4 }, (_, index) => tiles[index % tiles.length]).map(
+        (url, index) => (
+          <img
+            key={`${url}-${index}`}
+            src={url}
+            alt=""
+            className="size-full object-cover"
+            loading="lazy"
+          />
+        ),
+      )}
+    </div>
+  );
 }
 
 const KIND_LABELS: Record<string, { text: string; className: string }> = {

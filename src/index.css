@@ -65,8 +65,11 @@
   --color-sidebar-ring: var(--sidebar-ring);
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
-    Roboto, "Helvetica Neue", Arial, sans-serif;  --font-display: "Space Grotesk", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans:
+    "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-display:
+    "Space Grotesk", "Inter", ui-sans-serif, system-ui, sans-serif;
   /* Give shared UI controls a softer, more deliberate response than the
      Tailwind default while explicit duration utilities still win. */
   --default-transition-duration: 240ms;
@@ -269,7 +272,11 @@ html,
 
 .focus-study {
   background:
-    radial-gradient(70% 50% at 50% 0%, rgb(var(--tint) / 0.045), transparent 72%),
+    radial-gradient(
+      70% 50% at 50% 0%,
+      rgb(var(--tint) / 0.045),
+      transparent 72%
+    ),
     var(--background);
 }
 .focus-study main {
@@ -278,7 +285,12 @@ html,
 
 .focus-work {
   background:
-    linear-gradient(90deg, transparent calc(50% - 1px), rgb(var(--tint) / 0.018) 50%, transparent calc(50% + 1px)),
+    linear-gradient(
+      90deg,
+      transparent calc(50% - 1px),
+      rgb(var(--tint) / 0.018) 50%,
+      transparent calc(50% + 1px)
+    ),
     var(--background);
 }
 /* Compact mode reduces the canvas and player chrome without hiding controls. */
@@ -325,7 +337,11 @@ html,
   --sidebar: oklch(0.12 0.014 275);
   --muted-foreground: oklch(0.58 0.014 275);
   background:
-    radial-gradient(80% 65% at 50% 0%, rgb(var(--tint) / 0.055), transparent 76%),
+    radial-gradient(
+      80% 65% at 50% 0%,
+      rgb(var(--tint) / 0.055),
+      transparent 76%
+    ),
     var(--background);
 }
 .focus-sleep main > div {
@@ -337,23 +353,23 @@ html,
   filter: saturate(0.75) brightness(0.9);
 }
 
-  html.reduce-motion {
+html.reduce-motion {
+  scroll-behavior: auto;
+}
+html.reduce-motion *,
+html.reduce-motion *::before,
+html.reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+  transition-duration: 0.01ms !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
     scroll-behavior: auto;
   }
-  html.reduce-motion *,
-  html.reduce-motion *::before,
-  html.reduce-motion *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    scroll-behavior: auto !important;
-    transition-duration: 0.01ms !important;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    html {
-      scroll-behavior: auto;
-    }
-    html,
+  html,
   .theme-surface,
   .bg-background,
   .bg-card,
@@ -425,7 +441,11 @@ html,
    */
   .liquid-glass {
     position: relative;
-    background: color-mix(in oklab, var(--card) var(--ui-panel-alpha), transparent);
+    background: color-mix(
+      in oklab,
+      var(--card) var(--ui-panel-alpha),
+      transparent
+    );
     /* Blur radius and the extra `brightness()` pass were both trimmed: a
        backdrop-filter has to read back and blur everything behind the panel on
        every frame it changes, and this class is on the sidebar, both bars, the
@@ -499,7 +519,11 @@ html,
   .settings-liquid-glass {
     position: relative;
     isolation: isolate;
-    background: color-mix(in oklab, var(--card) var(--ui-settings-alpha), transparent) !important;
+    background: color-mix(
+      in oklab,
+      var(--card) var(--ui-settings-alpha),
+      transparent
+    ) !important;
     backdrop-filter: blur(22px) saturate(1.6) !important;
     -webkit-backdrop-filter: blur(22px) saturate(1.6) !important;
     box-shadow:
@@ -534,7 +558,11 @@ html,
     inset: 0;
     border-radius: inherit;
     pointer-events: none;
-    background: radial-gradient(120% 90% at 12% 0%, rgb(var(--tint) / 0.09), transparent 58%);
+    background: radial-gradient(
+      120% 90% at 12% 0%,
+      rgb(var(--tint) / 0.09),
+      transparent 58%
+    );
   }
   /* Lift content above the glass background WITHOUT clobbering children that
      already opt into their own positioning. The :not(.absolute) guard is
@@ -683,7 +711,9 @@ html,
        guard the header would be dragged into column 2 and the rail would sit
        under the page title. */
     .settings-page-grid
-      > *:not(.settings-jump-bar):not(.settings-pointer-glow):not(.settings-header) {
+      > *:not(.settings-jump-bar):not(.settings-pointer-glow):not(
+        .settings-header
+      ) {
       grid-column: 2;
       /* The panel sets `gap: 0 !important` — a shorthand, which would swallow
          both `column-gap` and `row-gap` — so all the breathing room here is
@@ -724,23 +754,57 @@ html,
   /* Put the controls people reach for most first: playback, sound, and
      appearance stay above profile and maintenance tasks. The page remains
      a single scroll surface, so the jump bar and anchors keep working. */
-  .settings-liquid-glass > .settings-header { order: 0; }
-  .settings-liquid-glass > .settings-jump-bar { order: 1; }
-  .settings-liquid-glass > #settings-playback { order: 2; }
-  .settings-liquid-glass > #settings-playback + [data-slot="separator"] { order: 3; }
-  .settings-liquid-glass > #settings-audio { order: 4; }
-  .settings-liquid-glass > #settings-audio + [data-slot="separator"] { order: 5; }
-  .settings-liquid-glass > #settings-appearance { order: 6; }
-  .settings-liquid-glass > #settings-appearance + [data-slot="separator"] { order: 7; }
-  .settings-liquid-glass > #settings-profile { order: 8; }
-  .settings-liquid-glass > #settings-profile + [data-slot="separator"] { order: 9; }
-  .settings-liquid-glass > #settings-personalization { order: 10; }
-  .settings-liquid-glass > #settings-personalization + [data-slot="separator"] { order: 11; }
-  .settings-liquid-glass > section:nth-of-type(6) { order: 12; }
-  .settings-liquid-glass > section:nth-of-type(6) + [data-slot="separator"] { order: 13; }
-  .settings-liquid-glass > .settings-import { order: 14; }
-  .settings-liquid-glass > .settings-import + [data-slot="separator"] { order: 15; }
-  .settings-liquid-glass > section:nth-of-type(8) { order: 16; }
+  .settings-liquid-glass > .settings-header {
+    order: 0;
+  }
+  .settings-liquid-glass > .settings-jump-bar {
+    order: 1;
+  }
+  .settings-liquid-glass > #settings-playback {
+    order: 2;
+  }
+  .settings-liquid-glass > #settings-playback + [data-slot="separator"] {
+    order: 3;
+  }
+  .settings-liquid-glass > #settings-audio {
+    order: 4;
+  }
+  .settings-liquid-glass > #settings-audio + [data-slot="separator"] {
+    order: 5;
+  }
+  .settings-liquid-glass > #settings-appearance {
+    order: 6;
+  }
+  .settings-liquid-glass > #settings-appearance + [data-slot="separator"] {
+    order: 7;
+  }
+  .settings-liquid-glass > #settings-profile {
+    order: 8;
+  }
+  .settings-liquid-glass > #settings-profile + [data-slot="separator"] {
+    order: 9;
+  }
+  .settings-liquid-glass > #settings-personalization {
+    order: 10;
+  }
+  .settings-liquid-glass > #settings-personalization + [data-slot="separator"] {
+    order: 11;
+  }
+  .settings-liquid-glass > section:nth-of-type(6) {
+    order: 12;
+  }
+  .settings-liquid-glass > section:nth-of-type(6) + [data-slot="separator"] {
+    order: 13;
+  }
+  .settings-liquid-glass > .settings-import {
+    order: 14;
+  }
+  .settings-liquid-glass > .settings-import + [data-slot="separator"] {
+    order: 15;
+  }
+  .settings-liquid-glass > section:nth-of-type(8) {
+    order: 16;
+  }
   .settings-liquid-glass.settings-glass-still::before {
     animation: none;
     opacity: 0.28;
@@ -792,7 +856,11 @@ html,
     z-index: 0;
     inset: 0;
     pointer-events: none;
-    background: radial-gradient(110% 150% at 8% 0%, rgb(var(--tint) / 0.12), transparent 62%);
+    background: radial-gradient(
+      110% 150% at 8% 0%,
+      rgb(var(--tint) / 0.12),
+      transparent 62%
+    );
   }
   .settings-jump-glass > * {
     position: relative;
@@ -812,7 +880,11 @@ html,
     content: none !important;
   }
   .aurora-orb {
-    background: radial-gradient(circle, rgb(var(--tint) / 0.13), transparent 68%);
+    background: radial-gradient(
+      circle,
+      rgb(var(--tint) / 0.13),
+      transparent 68%
+    );
     filter: blur(58px);
     opacity: 0.55;
     will-change: transform;
@@ -821,16 +893,28 @@ html,
     animation: aurora-drift-one 18s ease-in-out infinite alternate;
   }
   .aurora-orb-two {
-    background: radial-gradient(circle, rgb(120 160 255 / 0.1), transparent 68%);
+    background: radial-gradient(
+      circle,
+      rgb(120 160 255 / 0.1),
+      transparent 68%
+    );
     animation: aurora-drift-two 22s ease-in-out infinite alternate;
   }
   @keyframes aurora-drift-one {
-    from { transform: translate3d(-2%, -2%, 0) scale(0.92); }
-    to { transform: translate3d(14%, 10%, 0) scale(1.08); }
+    from {
+      transform: translate3d(-2%, -2%, 0) scale(0.92);
+    }
+    to {
+      transform: translate3d(14%, 10%, 0) scale(1.08);
+    }
   }
   @keyframes aurora-drift-two {
-    from { transform: translate3d(4%, 8%, 0) scale(1.05); }
-    to { transform: translate3d(-12%, -6%, 0) scale(0.9); }
+    from {
+      transform: translate3d(4%, 8%, 0) scale(1.05);
+    }
+    to {
+      transform: translate3d(-12%, -6%, 0) scale(0.9);
+    }
   }
 
   /* Smaller glass surfaces used for cards, navigation and profile surfaces. */
@@ -859,7 +943,11 @@ html,
     inset: 0;
     pointer-events: none;
     border-radius: inherit;
-    background: radial-gradient(100% 80% at 12% 0%, rgb(var(--tint) / 0.1), transparent 62%);
+    background: radial-gradient(
+      100% 80% at 12% 0%,
+      rgb(var(--tint) / 0.1),
+      transparent 62%
+    );
     opacity: 0.75;
     transition: opacity 220ms ease;
   }
@@ -880,8 +968,15 @@ html,
     background-image:
       linear-gradient(rgb(255 255 255 / 0.025) 1px, transparent 1px),
       linear-gradient(90deg, rgb(255 255 255 / 0.025) 1px, transparent 1px),
-      radial-gradient(60% 45% at 50% 0%, rgb(var(--tint) / 0.08), transparent 72%);
-    background-size: 56px 56px, 56px 56px, 100% 100%;
+      radial-gradient(
+        60% 45% at 50% 0%,
+        rgb(var(--tint) / 0.08),
+        transparent 72%
+      );
+    background-size:
+      56px 56px,
+      56px 56px,
+      100% 100%;
     mask-image: linear-gradient(to bottom, black, transparent 78%);
     -webkit-mask-image: linear-gradient(to bottom, black, transparent 78%);
   }
@@ -933,8 +1028,16 @@ html,
   }
   @keyframes mobile-art-breathe {
     0%,
-    100% { box-shadow: 0 5px 16px rgb(0 0 0 / 0.3), 0 0 14px rgb(var(--tint) / 0.16); }
-    50% { box-shadow: 0 7px 20px rgb(0 0 0 / 0.34), 0 0 26px rgb(var(--tint) / 0.3); }
+    100% {
+      box-shadow:
+        0 5px 16px rgb(0 0 0 / 0.3),
+        0 0 14px rgb(var(--tint) / 0.16);
+    }
+    50% {
+      box-shadow:
+        0 7px 20px rgb(0 0 0 / 0.34),
+        0 0 26px rgb(var(--tint) / 0.3);
+    }
   }
 
   /* Phone-only island details. The player remains in normal document flow,
@@ -947,7 +1050,11 @@ html,
   @media (max-width: 639px) {
     .mobile-player {
       background:
-        radial-gradient(90% 130% at 8% 0%, rgb(var(--tint) / 0.13), transparent 54%),
+        radial-gradient(
+          90% 130% at 8% 0%,
+          rgb(var(--tint) / 0.13),
+          transparent 54%
+        ),
         linear-gradient(145deg, rgb(255 255 255 / 0.075), transparent 42%),
         color-mix(in oklab, var(--card) 76%, transparent);
       box-shadow:
@@ -965,8 +1072,17 @@ html,
     .mobile-island-aura {
       display: block;
       background:
-        linear-gradient(105deg, transparent 20%, rgb(255 255 255 / 0.075) 48%, transparent 72%),
-        radial-gradient(65% 100% at 100% 100%, rgb(var(--tint) / 0.1), transparent 64%);
+        linear-gradient(
+          105deg,
+          transparent 20%,
+          rgb(255 255 255 / 0.075) 48%,
+          transparent 72%
+        ),
+        radial-gradient(
+          65% 100% at 100% 100%,
+          rgb(var(--tint) / 0.1),
+          transparent 64%
+        );
       transform: translateX(-28%);
       animation: mobile-island-sheen 5.8s ease-in-out infinite;
     }
@@ -1021,7 +1137,11 @@ html,
       width: 100%;
       height: 100%;
       border-radius: inherit;
-      background: linear-gradient(90deg, rgb(var(--tint) / 0.72), rgb(var(--tint)));
+      background: linear-gradient(
+        90deg,
+        rgb(var(--tint) / 0.72),
+        rgb(var(--tint))
+      );
       box-shadow: 0 0 8px rgb(var(--tint) / 0.72);
       transform-origin: left center;
       transition: transform 220ms linear;
@@ -1043,13 +1163,23 @@ html,
   }
   @keyframes mobile-island-sheen {
     0%,
-    18% { transform: translateX(-28%); opacity: 0.45; }
+    18% {
+      transform: translateX(-28%);
+      opacity: 0.45;
+    }
     58%,
-    100% { transform: translateX(28%); opacity: 0.9; }
+    100% {
+      transform: translateX(28%);
+      opacity: 0.9;
+    }
   }
   @keyframes mobile-island-eq {
-    from { transform: scaleY(0.24); }
-    to { transform: scaleY(1); }
+    from {
+      transform: scaleY(0.24);
+    }
+    to {
+      transform: scaleY(1);
+    }
   }
   @media (max-width: 359px) {
     .mobile-live-cue {
@@ -1115,10 +1245,14 @@ html,
       rgb(255 255 255 / 0.045) 62%,
       transparent
     );
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.1), 0 0 18px rgb(var(--tint) / 0.08);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.1),
+      0 0 18px rgb(var(--tint) / 0.08);
     opacity: 0;
     transform: scale(0.76) translateY(3px);
-    transition: opacity 220ms ease, transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+    transition:
+      opacity 220ms ease,
+      transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
   }
   .mobile-nav-item-active::before {
     opacity: 1;
@@ -1236,7 +1370,11 @@ html,
     height: 24px;
     border: 1px solid rgb(var(--tint) / 0.55);
     border-radius: 9999px;
-    background: radial-gradient(circle, rgb(var(--tint) / 0.2), transparent 68%);
+    background: radial-gradient(
+      circle,
+      rgb(var(--tint) / 0.2),
+      transparent 68%
+    );
     box-shadow: 0 0 22px rgb(var(--tint) / 0.16);
     pointer-events: none;
     transform: translate(-50%, -50%) scale(0.35);
@@ -1361,7 +1499,15 @@ html,
   /* Big blur filters: the Tailwind `blur-*` utilities used for decoration
      (every one of them is an aurora blob or a glowing backdrop) plus the
      wallpaper, which carries a full-screen filter. */
-  html.perf-lite :is([class*="blur-sm"], [class*="blur-md"], [class*="blur-lg"], [class*="blur-xl"], [class*="blur-2xl"], [class*="blur-3xl"]),
+  html.perf-lite
+    :is(
+      [class*="blur-sm"],
+      [class*="blur-md"],
+      [class*="blur-lg"],
+      [class*="blur-xl"],
+      [class*="blur-2xl"],
+      [class*="blur-3xl"]
+    ),
   html.perf-lite .perf-wallpaper-blur {
     filter: none !important;
   }
@@ -1406,9 +1552,15 @@ html,
 
   /* One-shot like pulse (heart pop when a song is liked). */
   @keyframes ping-once {
-    0% { transform: scale(0.7); }
-    55% { transform: scale(1.45); }
-    100% { transform: scale(1); }
+    0% {
+      transform: scale(0.7);
+    }
+    55% {
+      transform: scale(1.45);
+    }
+    100% {
+      transform: scale(1);
+    }
   }
   .animate-ping-once {
     animation: ping-once 0.4s ease-out;
@@ -1488,13 +1640,28 @@ html,
   .stagger > * {
     animation: fade-rise 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
   }
-  .stagger > *:nth-child(1) { animation-delay: 0.03s; }
-  .stagger > *:nth-child(2) { animation-delay: 0.06s; }
-  .stagger > *:nth-child(3) { animation-delay: 0.09s; }
-  .stagger > *:nth-child(4) { animation-delay: 0.12s; }
-  .stagger > *:nth-child(5) { animation-delay: 0.15s; }
-  .stagger > *:nth-child(6) { animation-delay: 0.18s; }
-  .stagger > *:nth-child(7) { animation-delay: 0.21s; }  .stagger > *:nth-child(8) {
+  .stagger > *:nth-child(1) {
+    animation-delay: 0.03s;
+  }
+  .stagger > *:nth-child(2) {
+    animation-delay: 0.06s;
+  }
+  .stagger > *:nth-child(3) {
+    animation-delay: 0.09s;
+  }
+  .stagger > *:nth-child(4) {
+    animation-delay: 0.12s;
+  }
+  .stagger > *:nth-child(5) {
+    animation-delay: 0.15s;
+  }
+  .stagger > *:nth-child(6) {
+    animation-delay: 0.18s;
+  }
+  .stagger > *:nth-child(7) {
+    animation-delay: 0.21s;
+  }
+  .stagger > *:nth-child(8) {
     animation-delay: 0.24s;
   }
   /* shimmer for loading skeletons */

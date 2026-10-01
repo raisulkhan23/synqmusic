@@ -37,7 +37,9 @@ export function useAddToPlaylist(track: Playable) {
       toast.success(`Added "${track.title}" to ${name}`);
     } catch (error) {
       const message =
-        error instanceof Error && error.message ? error.message : "Unknown error";
+        error instanceof Error && error.message
+          ? error.message
+          : "Unknown error";
       toast.error(`Couldn't add to ${name}`, { description: message });
     }
   };

@@ -2,7 +2,6 @@
 // Color extraction helpers for artwork-driven theming.
 // ---------------------------------------------------------------------------
 
-
 // ---------------------------------------------------------------------------
 // Dominant-color extraction: sample the rendered cover art and pick the most
 // "alive" color (saturated, mid-tone) to tint the whole interface.
@@ -14,7 +13,8 @@ export interface RGB {
   b: number;
 }
 
-const rgbKey = (r: number, g: number, b: number) => `${r >> 4},${g >> 4},${b >> 4}`;
+const rgbKey = (r: number, g: number, b: number) =>
+  `${r >> 4},${g >> 4},${b >> 4}`;
 
 /** Deterministic accent derived from a string (used for remote/YouTube art). */
 export function accentFromString(input: string): RGB {
@@ -50,10 +50,13 @@ export async function dominantColor(src: string): Promise<RGB | null> {
   try {
     const img = new Image();
     img.src = src;
-    await img.decode().catch(() => new Promise<void>((resolve) => {
-      img.onload = () => resolve();
-      img.onerror = () => resolve();
-    }));
+    await img.decode().catch(
+      () =>
+        new Promise<void>((resolve) => {
+          img.onload = () => resolve();
+          img.onerror = () => resolve();
+        }),
+    );
 
     const size = 96;
     const canvas = document.createElement("canvas");
@@ -64,7 +67,10 @@ export async function dominantColor(src: string): Promise<RGB | null> {
     ctx.drawImage(img, 0, 0, size, size);
     const data = ctx.getImageData(0, 0, size, size).data;
 
-    const buckets = new Map<string, { r: number; g: number; b: number; count: number; vivid: number }>();
+    const buckets = new Map<
+      string,
+      { r: number; g: number; b: number; count: number; vivid: number }
+    >();
     for (let i = 0; i < data.length; i += 4) {
       const r = data[i];
       const g = data[i + 1];

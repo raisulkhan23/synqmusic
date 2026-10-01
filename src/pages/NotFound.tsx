@@ -19,7 +19,8 @@ export default function NotFound() {
           This track doesn&apos;t exist
         </p>
         <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-muted-foreground">
-          The page you&apos;re looking for was skipped, deleted, or never queued.
+          The page you&apos;re looking for was skipped, deleted, or never
+          queued.
         </p>
         <Link
           to="/"

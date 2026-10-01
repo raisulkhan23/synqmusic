@@ -1,5 +1,5 @@
 import type { YtItem } from "@/lib/youtube";
-import { formatTime } from "@/lib/format";
+import { formatDuration } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Link } from "react-router";
 import { artistPath } from "@/lib/artistLinks";
@@ -8,7 +8,7 @@ import {
   useTrackActions,
 } from "@/components/tracks/useTrackActions";
 import { usePlayerStore } from "@/store/player";
-import { Heart, Loader2, Pause, Play, Radio } from "lucide-react";
+import { Heart, Loader2, Music4, Pause, Play, Radio } from "lucide-react";
 import type { ReactNode } from "react";
 
 const isRowActionTarget = (target: EventTarget | null) =>
@@ -114,12 +114,23 @@ export function RemoteTrackRow({
         {/* Artwork stays on every screen size — it's the one non-interactive
             element that earns its space in a touch row. */}
         <div className="relative size-11 shrink-0 overflow-hidden rounded-lg ring-1 ring-white/10 sm:size-10 sm:rounded-md">
-          <img
-            src={item.thumbnail}
-            alt=""
-            className="size-full object-cover"
-            loading="lazy"
-          />
+          {/* A row with no artwork used to render `<img src="">`, which paints
+              an empty transparent box — a grid of black squares that read as a
+              broken app rather than as a track we haven't got art for yet.
+              This is every surface a remote row renders on, so the fallback
+              belongs here and not in each caller. */}
+          {item.thumbnail ? (
+            <img
+              src={item.thumbnail}
+              alt=""
+              className="size-full object-cover"
+              loading="lazy"
+            />
+          ) : (
+            <div className="flex size-full items-center justify-center bg-gradient-to-br from-white/[0.09] to-white/[0.03]">
+              <Music4 className="size-4 text-white/35" />
+            </div>
+          )}
         </div>
 
         <div className="min-w-0 flex-1">
@@ -206,7 +217,7 @@ export function RemoteTrackRow({
             <Heart className={cn("size-4", isLiked && "fill-current")} />
           </button>
           <span className="ml-1 text-xs tabular-nums text-muted-foreground/70 sm:ml-0 sm:text-sm">
-            {formatTime(item.duration)}
+            {formatDuration(item.duration)}
           </span>
         </div>
       </div>

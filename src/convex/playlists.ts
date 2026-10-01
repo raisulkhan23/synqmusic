@@ -1,7 +1,27 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
-import { mutation, query, MutationCtx } from "./_generated/server";
+import {
+  action,
+  mutation,
+  query,
+  type ActionCtx,
+  type MutationCtx,
+} from "./_generated/server";
+import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import {
+  mergeRepairs,
+  pickRepair,
+  repairQuery,
+  REPAIR_BATCH_SIZE,
+  REPAIR_SEARCH_ATTEMPTS,
+  REPAIR_SEARCH_GAP_MS,
+  type RepairCandidate,
+} from "../lib/importRepair";
+
+/** A cancellable pause between two upstream searches. */
+const delay = (ms: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 const trackSnapshotValidator = v.object({
   id: v.string(),
@@ -282,6 +302,10 @@ export const saveImported = mutation({
       v.object({
         title: v.string(),
         artist: v.string(),
+        // Both were normalised by the importer and then discarded on the way
+        // here, so every imported row rendered as an empty black box.
+        album: v.optional(v.string()),
+        artwork: v.optional(v.string()),
         duration: v.optional(v.number()),
       }),
     ),
@@ -313,7 +337,11 @@ export const saveImported = mutation({
         id: importedTrackId(origin, title, track.artist),
         title,
         artist: track.artist.trim(),
-        coverUrl: "",
+        ...(track.album ? { album: track.album } : {}),
+        // The provider's own artwork when it gave us one, and an honest empty
+        // string when it did not. A missing cover is recoverable; a fabricated
+        // one is not.
+        coverUrl: typeof track.artwork === "string" ? track.artwork : "",
         duration:
           typeof track.duration === "number" && Number.isFinite(track.duration)
             ? track.duration
@@ -408,5 +436,160 @@ export const get = query({
       return null;
     }
     return playlist;
+  },
+});
+
+/**
+ * Look up a batch of imported tracks on YouTube and return what is genuinely
+ * the same song.
+ *
+ * This is the repair pass for playlists that were imported before cover art
+ * was persisted. Those rows carry a title and an artist and nothing else, so
+ * the library had no way to show artwork, show a length, or play them without
+ * a search per click. The song itself is the only honest source for all
+ * three, so SYNQ looks it up once and writes the result back.
+ *
+ * Three deliberate properties:
+ *
+ *  - It searches through the EXISTING `youtube.searchYoutube` action rather
+ *    than re-implementing InnerTube parsing, so a repair can never disagree
+ *    with what a search on the same query would have returned.
+ *  - It returns only confident matches. A row it cannot place is simply
+ *    absent from the response and keeps its honest unknown state; the UI
+ *    renders a placeholder rather than a wrong cover.
+ *  - It is capped per call AND runs its searches one at a time. One request
+ *    fanning out into hundreds of YouTube searches gets killed by the
+ *    caller's timeout, and concurrent searches get throttled to empty
+ *    responses. The client walks the playlist in batches instead, and every
+ *    batch that lands is persisted immediately.
+ */
+export const resolveImportedTracks = action({
+  args: {
+    tracks: v.array(
+      v.object({
+        id: v.string(),
+        title: v.string(),
+        artist: v.string(),
+      }),
+    ),
+  },
+  handler: async (
+    ctx: ActionCtx,
+    { tracks },
+  ): Promise<{
+    resolved: Array<{
+      id: string;
+      youtubeId: string;
+      duration: number;
+      thumbnail: string;
+    }>;
+    /**
+     * Rows whose search came back with results, whether or not one of them
+     * matched confidently.
+     *
+     * These are DONE: a result set that had no match is a real answer, and
+     * asking again gets the same answer. Rows missing from this list had a
+     * search that returned NOTHING, which from this deployment's IP means
+     * throttled rather than absent — so the caller must leave those
+     * retryable. Conflating the two is how a playlist ends up permanently
+     * marked finished with nothing to show for it.
+     */
+    answered: string[];
+    /** How many searches came back empty. Drives the caller's backoff. */
+    empty: number;
+  }> => {
+    const bounded = tracks
+      .filter((track) => track.title.trim())
+      .slice(0, REPAIR_BATCH_SIZE);
+    const resolved: Array<{
+      id: string;
+      youtubeId: string;
+      duration: number;
+      thumbnail: string;
+    }> = [];
+    const answered: string[] = [];
+    let empty = 0;
+
+    // SEQUENTIALLY, spaced out, with a single retry — all measured against the
+    // live deployment, not chosen for style.
+    //
+    // Fanning these out with Promise.allSettled looked like the obvious way
+    // to make a 107-track playlist finish quickly. Live, two concurrent
+    // InnerTube searches return `{"items": []}` while the identical two
+    // queries run one after the other return full results. YouTube throttles
+    // the burst and answers with silence rather than with an error, so a
+    // parallel batch resolves nothing and is indistinguishable from "these
+    // songs don't exist".
+    //
+    // Even paced, roughly half of all searches from this IP come back empty,
+    // so one retry after a pause recovers most of them. Anything still empty
+    // is reported through `empty` and the caller backs off.
+    for (const [index, track] of bounded.entries()) {
+      let items: RepairCandidate[] = [];
+      for (let attempt = 0; attempt < REPAIR_SEARCH_ATTEMPTS; attempt++) {
+        if (index > 0 || attempt > 0) await delay(REPAIR_SEARCH_GAP_MS);
+        try {
+          const result = await ctx.runAction(api.youtube.searchYoutube, {
+            query: repairQuery(track),
+          });
+          items = (result?.items ?? []) as RepairCandidate[];
+        } catch {
+          // A thrown upstream failure is not evidence about this song.
+          continue;
+        }
+        if (items.length > 0) break;
+      }
+      if (items.length === 0) {
+        empty++;
+        continue;
+      }
+      answered.push(track.id);
+      const best = pickRepair(track, items);
+      if (!best) continue;
+      resolved.push({
+        id: track.id,
+        youtubeId: best.id,
+        duration: best.duration,
+        thumbnail: best.thumbnail,
+      });
+    }
+    return { resolved, answered, empty };
+  },
+});
+
+/**
+ * Write repair results back onto a playlist's snapshots.
+ *
+ * Additive only — see `mergeRepairs`. A repair never overwrites a field that
+ * already holds a real value, so this is safe to call repeatedly and with
+ * overlapping batches, which is exactly what the client does.
+ */
+export const applyImportedRepairs = mutation({
+  args: {
+    playlistId: v.id("playlists"),
+    repairs: v.array(
+      v.object({
+        id: v.string(),
+        youtubeId: v.string(),
+        duration: v.number(),
+        thumbnail: v.string(),
+      }),
+    ),
+  },
+  handler: async (ctx, { playlistId, repairs }) => {
+    const userId = await requireUser(ctx);
+    const playlist = await ctx.db.get(playlistId);
+    if (playlist === null || playlist.userId !== userId) {
+      throw new ConvexError("Playlist not found");
+    }
+    const snapshots = playlist.trackSnapshots ?? [];
+    if (snapshots.length === 0 || repairs.length === 0) return 0;
+    const merged = mergeRepairs(snapshots, repairs);
+    if (merged === snapshots) return 0;
+    await ctx.db.patch(playlistId, {
+      trackSnapshots: merged,
+      updatedAt: Date.now(),
+    });
+    return repairs.length;
   },
 });

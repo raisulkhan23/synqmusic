@@ -269,6 +269,13 @@ export function ImportSection({
       // YouTube / YouTube Music — the existing InnerTube path, unchanged.
       setPhase({ kind: "working", label: "Reading playlist…" });
       const result = await fetchYouTubePlaylist({ playlistId: detected.id });
+      const service =
+        detected.service === "youtube-music"
+          ? ("youtube-music" as const)
+          : ("youtube" as const);
+      // Every importer goes through the same `toStoredTracks` projection, so
+      // artwork cannot be dropped here even if this branch is the one that
+      // forgets it next time.
       await persist(
         {
           name: result.name,
@@ -279,10 +286,7 @@ export function ImportSection({
             ...(track.duration !== undefined
               ? { duration: track.duration }
               : {}),
-            source:
-              detected.service === "youtube-music"
-                ? ("youtube-music" as const)
-                : ("youtube" as const),
+            source: service,
           })),
           skipped: 0,
           partial: result.partial,

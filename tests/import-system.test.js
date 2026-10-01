@@ -161,13 +161,29 @@ describe("dedupeTracks", () => {
 });
 
 describe("toStoredTracks", () => {
-  test("carries only what the playlist rows actually store", () => {
+  test("carries what the playlist rows actually store", () => {
+    // Album and artwork are stored now. They used to be normalised out of the
+    // provider payload and then dropped here, which is why every imported
+    // playlist rendered as a grid of empty black boxes.
     const stored = toStoredTracks([
-      { title: "a", artist: "b", duration: 200, source: "spotify", album: "X" },
+      {
+        title: "a",
+        artist: "b",
+        duration: 200,
+        source: "spotify",
+        album: "X",
+        artwork: "https://art/x.jpg",
+      },
       { title: "c", artist: "d", source: "apple-music" },
     ]);
     expect(stored).toEqual([
-      { title: "a", artist: "b", duration: 200 },
+      {
+        title: "a",
+        artist: "b",
+        duration: 200,
+        album: "X",
+        artwork: "https://art/x.jpg",
+      },
       { title: "c", artist: "d" },
     ]);
   });

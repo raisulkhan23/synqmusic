@@ -72,7 +72,10 @@ export function LegalDoc({
         </div>
 
         {/* contents */}
-        <nav aria-label="Contents" className="border-t border-white/[0.08] py-8">
+        <nav
+          aria-label="Contents"
+          className="border-t border-white/[0.08] py-8"
+        >
           <p className="text-[10px] font-bold tracking-[0.22em] text-muted-foreground uppercase">
             Contents
           </p>

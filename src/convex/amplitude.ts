@@ -24,8 +24,13 @@ function makeAnonymousId(): string {
 function sanitize(value: unknown): string | number | boolean | null {
   if (value === null) return null;
   const t = typeof value;
-  if (t === "string" || t === "number" || t === "boolean") return value as string | number | boolean;
-  if (Array.isArray(value)) return value.slice(0, 20).map((v) => String(v).slice(0, 200)).join(", ");
+  if (t === "string" || t === "number" || t === "boolean")
+    return value as string | number | boolean;
+  if (Array.isArray(value))
+    return value
+      .slice(0, 20)
+      .map((v) => String(v).slice(0, 200))
+      .join(", ");
   if (t === "object") return JSON.stringify(value).slice(0, 500);
   return String(value).slice(0, 200);
 }
@@ -33,14 +38,26 @@ function sanitize(value: unknown): string | number | boolean | null {
 export const track = action({
   args: {
     event: v.string(),
-    properties: v.optional(v.record(v.string(), v.union(v.string(), v.number(), v.boolean(), v.null()))),
+    properties: v.optional(
+      v.record(
+        v.string(),
+        v.union(v.string(), v.number(), v.boolean(), v.null()),
+      ),
+    ),
     deviceId: v.optional(v.string()),
   },
-  handler: async (ctx, { event, properties, deviceId }): Promise<{ ok: boolean; skipped?: boolean; error?: string }> => {
+  handler: async (
+    ctx,
+    { event, properties, deviceId },
+  ): Promise<{ ok: boolean; skipped?: boolean; error?: string }> => {
     const apiKey = process.env.AMPLITUDE_API_KEY;
     if (!apiKey) {
       // Not configured yet — stay silent so the UI keeps working.
-      return { ok: false, skipped: true, error: "AMPLITUDE_API_KEY not configured" };
+      return {
+        ok: false,
+        skipped: true,
+        error: "AMPLITUDE_API_KEY not configured",
+      };
     }
 
     // Prefer the signed-in user as the identity so events stitch together
@@ -72,7 +89,10 @@ export const track = action({
       }
       return { ok: true };
     } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : "request failed" };
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "request failed",
+      };
     }
   },
 });
@@ -86,12 +106,20 @@ export const trackBatch = action({
     events: v.array(
       v.object({
         event: v.string(),
-        properties: v.optional(v.record(v.string(), v.union(v.string(), v.number(), v.boolean(), v.null()))),
+        properties: v.optional(
+          v.record(
+            v.string(),
+            v.union(v.string(), v.number(), v.boolean(), v.null()),
+          ),
+        ),
       }),
     ),
     deviceId: v.optional(v.string()),
   },
-  handler: async (ctx, { events, deviceId }): Promise<{ ok: boolean; skipped?: boolean; sent: number }> => {
+  handler: async (
+    ctx,
+    { events, deviceId },
+  ): Promise<{ ok: boolean; skipped?: boolean; sent: number }> => {
     const apiKey = process.env.AMPLITUDE_API_KEY;
     if (!apiKey) return { ok: false, skipped: true, sent: 0 };
 
