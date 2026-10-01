@@ -296,6 +296,9 @@ let mediaSourceAttached = false;
  * (effects active / stream rescue).
  */
 export function ensureGraph(): boolean {
+  // Declared out here so the catch can see it: the close/keep decision is
+  // about THIS attempt, not about the sticky page-lifetime flag.
+  let attachedHere = false;
   try {
     if (audioCtx && filterSource) {
       if (audioCtx.state === "suspended") void audioCtx.resume();
@@ -325,30 +328,24 @@ export function ensureGraph(): boolean {
     if (!AudioCtx) return false;
     audioCtx = audioCtx ?? new AudioCtx();
 
-    // Both decks get their own MediaElementSource — the spec allows one per
-    // ELEMENT, so two elements may each have exactly one — and both feed the
-    // SAME downstream chain. That is what makes a crossfade a real audio
+    // Both decks get their own MediaElementSource, and both feed the SAME
+    // downstream chain. That is what makes a crossfade a real audio
     // crossfade: the outgoing and incoming songs are mixed inside the graph
     // while the user's EQ, balance and effects apply to both at once.
-    const d = ensureDecks();
-    for (const slot of ["a", "b"] as const) {
-      if (d[slot].source) continue;
-      try {
-        d[slot].source = audioCtx.createMediaElementSource(d[slot].el);
-        mediaSourceAttached = true;
-      } catch {
-        // A deck whose element is already claimed simply stays out of the
-        // graph; the other deck still works.
-        d[slot].source = null;
-      }
-    }
-    const activeSlot = activeDeck;
-    filterSource = d[activeSlot].source;
-    if (!filterSource) {
-      // Neither deck could be attached. Leave the context alone rather than
-      // closing it: closing is unrecoverable and would cut off playback.
-      return false;
-    }
+    //
+    // It is DELIBERATELY not done yet. `createMediaElementSource` permanently
+    // diverts the element's output into this graph: once it has been called,
+    // the element can never sound on its own again, and its audio only exists
+    // if the chain below actually reaches `destination`. Capturing first and
+    // wiring second means any throw in between — `createStereoPanner` is
+    // missing on older Safari and some WebViews — leaves a captured element
+    // feeding nothing at all. That is silent playback with a running progress
+    // bar, and because `mediaSourceAttached` was already true the catch block
+    // refused to close the context, so every later call rebuilt from scratch
+    // and hit InvalidStateError on the already-claimed element for good.
+    //
+    // Every failure-prone call now happens BEFORE anything is captured, which
+    // is what makes the catch block below safe.
 
     // user EQ stage
     eqBassNode = audioCtx.createBiquadFilter();
@@ -386,6 +383,43 @@ export function ensureGraph(): boolean {
     panner = audioCtx.createStereoPanner();
     gainOut = audioCtx.createGain();
 
+    // Deck wiring happens after the chain is complete — see the capture block
+    // below. Connecting here would need `eqBassNode` to exist first, which it
+    // does, but keeping every element-touching step in one place is what makes
+    // the failure argument above checkable.
+
+    eqBassNode.connect(eqTrebleNode);
+    eqTrebleNode.connect(balanceNode);
+    balanceNode.connect(fxIn);
+    fxIn.connect(bassFilter);
+    bassFilter.connect(vocalFilter);
+    vocalFilter.connect(nightLow);
+    nightLow.connect(panner);
+    panner.connect(gainOut);
+
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    gainOut.connect(analyser);
+    analyser.connect(audioCtx.destination);
+
+    // ---------------------------------------------------------------------
+    // The chain now reaches the speakers, so it is finally safe to capture
+    // the elements. Nothing above this line can throw and orphan them.
+    // ---------------------------------------------------------------------
+    const d = ensureDecks();
+    for (const slot of ["a", "b"] as const) {
+      if (d[slot].source) continue;
+      try {
+        d[slot].source = audioCtx.createMediaElementSource(d[slot].el);
+        mediaSourceAttached = true;
+        attachedHere = true;
+      } catch {
+        // A deck whose element is already claimed simply stays out of the
+        // graph; the other deck still works.
+        d[slot].source = null;
+      }
+    }
+
     // Each deck's transition GainNode sits BEFORE the EQ stage, so the blend
     // volume is multiplied independently of the listener's master volume and
     // their EQ settings. A crossfade therefore never disturbs either.
@@ -404,46 +438,56 @@ export function ensureGraph(): boolean {
       }
     }
 
-    eqBassNode.connect(eqTrebleNode);
-    eqTrebleNode.connect(balanceNode);
-    balanceNode.connect(fxIn);
-    fxIn.connect(bassFilter);
-    bassFilter.connect(vocalFilter);
-    vocalFilter.connect(nightLow);
-    nightLow.connect(panner);
-    panner.connect(gainOut);
-
-    analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 256;
-    gainOut.connect(analyser);
-    analyser.connect(audioCtx.destination);
+    filterSource = d[activeDeck].source;
 
     if (audioCtx.state === "suspended") void audioCtx.resume();
+
+    if (!filterSource) {
+      // The chain is live but the ACTIVE deck could not be captured, so it is
+      // still playing straight to the speakers — audible, just without the EQ
+      // and effects. That is the honest degraded state, and returning false
+      // stops the UI claiming a graph it does not have.
+      return false;
+    }
     return true;
   } catch {
-    // Reset the node references so the next user gesture can rebuild. Only
-    // close the context when the audio element never got a MediaElementSource
-    // — once it has one, closing the context is unrecoverable and cuts the
-    // player's audio out from under it.
-    if (!mediaSourceAttached) {
+    // Everything that can throw now runs BEFORE any element is captured, so by
+    // the time we get here the audio elements are still free to play straight
+    // to the speakers. That is what makes closing the context the correct move
+    // rather than a fatal one.
+    //
+    // It used to be guarded by `!mediaSourceAttached` instead, which was the
+    // wrong question: that flag is sticky for the life of the page, so once ANY
+    // attempt had captured an element the context was never closed again — not
+    // even after a later, cleanly-failing attempt. The orphaned context then
+    // kept owning the element while the module forgot it existed, which is
+    // permanent silence with the progress bar still running.
+    //
+    // `attachedHere` asks the right question: did THIS attempt take an element?
+    if (!attachedHere) {
       try {
         if (audioCtx && audioCtx.state !== "closed") void audioCtx.close();
       } catch {
         /* ignore */
       }
+      audioCtx = null;
+      filterSource = null;
+      eqBassNode = null;
+      eqTrebleNode = null;
+      balanceNode = null;
+      fxIn = null;
+      bassFilter = null;
+      vocalFilter = null;
+      nightLow = null;
+      panner = null;
+      gainOut = null;
+      analyser = null;
+      return false;
     }
-    audioCtx = null;
+    // An element IS captured by this or an earlier attempt: the chain may be
+    // incomplete, so keep the context alive and refuse rather than tear down
+    // audio that is currently reaching the speakers.
     filterSource = null;
-    eqBassNode = null;
-    eqTrebleNode = null;
-    balanceNode = null;
-    fxIn = null;
-    bassFilter = null;
-    vocalFilter = null;
-    nightLow = null;
-    panner = null;
-    gainOut = null;
-    analyser = null;
     return false;
   }
 }

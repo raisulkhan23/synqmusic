@@ -422,7 +422,20 @@ describe("crossfade is built on two real audio decks", () => {
 
   test("both decks feed the same EQ / balance / effects chain", () => {
     expect(audioSource).toMatch(/gainOut\.connect\(analyser\)/);
-    expect(audioSource).toMatch(/filterSource\s*=\s*d\[activeSlot\]\.source/);
+    expect(audioSource).toMatch(/filterSource = d\[activeDeck\]\.source/);
+  });
+
+  test("the chain reaches the speakers BEFORE any element is captured", () => {
+    // `createMediaElementSource` permanently diverts an element's output into
+    // the graph, so capturing before `destination` is wired risks a captured
+    // element feeding nothing — silent playback with the progress bar still
+    // running. `tests/audio-graph-resilience.test.js` proves it by execution;
+    // this pins the ordering in the source so the two agree.
+    const wired = audioSource.indexOf("analyser.connect(audioCtx.destination)");
+    const captured = audioSource.indexOf("createMediaElementSource(");
+    expect(wired).toBeGreaterThan(-1);
+    expect(captured).toBeGreaterThan(-1);
+    expect(wired).toBeLessThan(captured);
   });
 
   test("the fade is scheduled as Web Audio automation, not stepped", () => {
