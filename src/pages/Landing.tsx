@@ -2,6 +2,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router";
 import { Logo } from "@/components/brand/Logo";
+import { InstallAppButton } from "@/components/pwa/InstallAppButton";
 import { SiteFooter } from "@/components/landing/SiteFooter";
 import {
   Activity,
@@ -425,7 +426,7 @@ export default function Landing() {
             Sign in
           </Link>
           <Link
-            to="/auth?returnTo=/home"
+            to="/home"
             className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground shadow-[0_6px_24px_rgb(203_244_143/0.35)] transition-transform hover:scale-105"
           >
             Start listening
@@ -471,12 +472,13 @@ export default function Landing() {
             className="mt-8 flex flex-wrap items-center gap-3"
           >
             <Link
-              to="/auth?returnTo=/home"
+              to="/home"
               className="group flex items-center gap-2 rounded-full bg-brand px-6 py-3 text-sm font-semibold text-brand-foreground shadow-[0_10px_36px_rgb(203_244_143/0.4)] transition-transform hover:scale-105"
             >
               Start listening free{" "}
               <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" />
             </Link>
+            <InstallAppButton />
             <a
               href="#experience"
               className="rounded-full border border-white/10 px-5 py-3 text-sm font-semibold text-muted-foreground transition-colors hover:border-white/20 hover:text-foreground"
@@ -694,16 +696,18 @@ export default function Landing() {
               Ready when you are.
             </h2>
             <p className="mx-auto mt-4 max-w-md text-base leading-7 text-muted-foreground">
-              Sign in, bring your taste, and let the next song find you.
+              Browse first. Sign in when you press play, and let the next song
+              find you.
             </p>
             <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
               <Link
-                to="/auth?returnTo=/home"
+                to="/home"
                 className="group flex items-center gap-2 rounded-full bg-brand px-7 py-3 text-sm font-semibold text-brand-foreground shadow-[0_10px_36px_rgb(203_244_143/0.4)] transition-transform hover:scale-105"
               >
                 Start listening{" "}
                 <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" />
               </Link>
+              <InstallAppButton />
               <a
                 href="#features"
                 className="rounded-full border border-white/10 px-5 py-3 text-sm font-semibold text-muted-foreground transition-colors hover:border-white/20 hover:text-foreground"

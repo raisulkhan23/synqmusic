@@ -743,3 +743,80 @@ describe("no auth prompt without a deliberate action", () => {
     expect(after.slice(0, 200)).toMatch(/s\.togglePlay\(\)/);
   });
 });
+
+describe("the landing page sends people INTO the product, not to a wall", () => {
+  const landing = readSource("src/pages/Landing.tsx");
+
+  test("no primary CTA routes to /auth", () => {
+    // The old CTAs pointed at `/auth?returnTo=/home`, so the very first thing a
+    // visitor clicked was a sign-in form. That is the opposite of deferred
+    // authentication: it asks for an account before showing the product.
+    expect(landing).not.toContain('to="/auth?returnTo=/home"');
+  });
+
+  test("every 'Start listening' CTA enters the app instead", () => {
+    const ctas = [...landing.matchAll(/Start listening[^<]*/g)];
+    expect(ctas.length).toBeGreaterThanOrEqual(3);
+    // Each one must sit inside a Link to /home. Count the links so a CTA left
+    // pointing at auth cannot hide behind a still-correct sibling.
+    const homeLinks = [...landing.matchAll(/to="\/home"/g)];
+    expect(homeLinks.length).toBeGreaterThanOrEqual(3);
+  });
+
+  test("an explicit Sign in link still exists", () => {
+    // Removing the sign-in link entirely would be over-correction. Asking is
+    // wrong; offering is not. A visitor who WANTS an account must still be able
+    // to say so.
+    expect(landing).toMatch(/to="\/auth"/);
+  });
+
+  test("the closing copy no longer promises a sign-in step", () => {
+    // It said "Sign in, bring your taste…" directly above a button that no
+    // longer signs in. The copy has to match the behaviour.
+    expect(landing).not.toMatch(/Sign in, bring your taste/);
+    expect(landing).toMatch(/Browse first/);
+  });
+});
+
+describe("SYNQ can be downloaded from the landing page", () => {
+  const landing = readSource("src/pages/Landing.tsx");
+  const button = readSource("src/components/pwa/InstallAppButton.tsx");
+
+  test("the landing page renders the install button", () => {
+    expect(landing).toMatch(/import \{ InstallAppButton \}/);
+    expect(landing).toMatch(/<InstallAppButton \/>/);
+  });
+
+  test("it appears in more than one spot, not just the footer", () => {
+    // A single instance is easy to miss on a long marketing page.
+    const count = (landing.match(/<InstallAppButton \/>/g) ?? []).length;
+    expect(count).toBeGreaterThanOrEqual(2);
+  });
+
+  test("it reuses the real install hook, not a second implementation", () => {
+    // Three surfaces (landing, in-app strip, settings) must agree on what is
+    // installable and why.
+    expect(button).toMatch(/usePwaInstall\(\)/);
+    expect(button).toMatch(/planInstallBlock\(\{/);
+    expect(button).toMatch(/manualInstallHint\(/);
+  });
+
+  test("it is honest when installation is impossible", () => {
+    // A "Download" button that silently does nothing in a dev preview reads
+    // as a broken app. It must name the real reason.
+    expect(button).toMatch(
+      /toast\.error\("Can't install yet", \{ description: blocked \}\)/,
+    );
+  });
+
+  test("an installed app says so instead of offering a dead download", () => {
+    expect(button).toMatch(/state === "installed" \|\| installed/);
+    expect(button).toMatch(/App installed/);
+  });
+
+  test("the manual-install path explains where to tap", () => {
+    // Browsers without `beforeinstallprompt` (notably iOS Safari) can still be
+    // installed, just not from a page-driven prompt.
+    expect(button).toMatch(/if \(state === "manual"\)/);
+  });
+});
