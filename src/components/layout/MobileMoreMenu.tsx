@@ -6,9 +6,12 @@ import {
   ChevronRight,
   Heart,
   History,
+  Loader2,
+  LogOut,
   Menu,
   Radio,
   ShieldCheck,
+  Users,
 } from "lucide-react";
 
 import {
@@ -20,6 +23,8 @@ import {
 } from "@/components/ui/sheet";
 import { api } from "@/convex/_generated/api";
 import { cn } from "@/lib/utils";
+import { useAccountActions } from "@/hooks/use-account-actions";
+import { useAuth } from "@/hooks/use-auth";
 
 /**
  * Everything the desktop sidebar links to that the 4-item phone bottom bar
@@ -64,6 +69,13 @@ export function MobileMoreMenu() {
   // null = not an admin. Same signal Profile uses, so the admin row appears
   // for exactly the same people on both layouts.
   const adminStatus = useQuery(api.admin.status);
+  // The sidebar that carries the account menu is `lg:`-only, so a phone had
+  // NO way to sign out or switch accounts at all. Same actions, same hook.
+  const { user } = useAuth();
+  const { pending, signOut, switchAccount } = useAccountActions();
+
+  const accountName =
+    user?.name ?? (user?.isAnonymous ? "Guest" : "Signed in as Listener");
 
   const go = (to: string) => {
     setOpen(false);
@@ -159,6 +171,56 @@ export function MobileMoreMenu() {
             </button>
           )}
         </nav>
+
+        {/* Account block. `nav` ends above it so these read as a footer, and
+            the identity is shown above the actions so the sheet never leaves
+            a listener unsure WHO they are about to sign out of. */}
+        <div className="mt-auto border-t border-white/[0.06] px-3 py-3">
+          <p className="px-3 pb-2 text-[10px] tracking-wide text-muted-foreground/60">
+            {accountName}
+            {user?.email ? ` · ${user.email}` : ""}
+          </p>
+          <button
+            type="button"
+            onClick={switchAccount}
+            disabled={pending}
+            className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition-colors hover:bg-white/[0.06] disabled:opacity-50"
+          >
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-white/[0.06]">
+              {pending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Users className="size-4" />
+              )}
+            </span>
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold">
+                Switch account
+              </span>
+              <span className="block truncate text-xs text-muted-foreground">
+                Sign out and sign in as someone else
+              </span>
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={signOut}
+            disabled={pending}
+            className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition-colors hover:bg-red-500/[0.08] disabled:opacity-50"
+          >
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-white/[0.06]">
+              <LogOut className="size-4" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold text-red-400">
+                Sign out
+              </span>
+              <span className="block truncate text-xs text-muted-foreground">
+                Clear this device&apos;s listening session
+              </span>
+            </span>
+          </button>
+        </div>
       </SheetContent>
     </Sheet>
   );

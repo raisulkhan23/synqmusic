@@ -2,7 +2,7 @@ import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Logo } from "@/components/brand/Logo";
 import { PlaylistDialog } from "@/components/playlists/PlaylistDialog";
-import { SettingsDialog } from "@/components/settings/SettingsDialog";
+
 import { CommandPaletteHint } from "@/components/core/CommandPalette";
 import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/hooks/use-auth";
@@ -26,38 +26,25 @@ import {
   UserRound,
 } from "lucide-react";
 import { Link, NavLink, useNavigate } from "react-router";
+import { AccountMenu } from "@/components/layout/AccountMenu";
 
 type Filter = "playlists" | "liked" | "recent";
 
 export function Sidebar() {
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
   const hideEmail = usePlayerStore((s) => s.hideSidebarEmail);
   const collapsed = usePlayerStore((s) => s.sidebarCollapsed);
   const toggleCollapsed = usePlayerStore((s) => s.toggleSidebarCollapsed);
   const navigate = useNavigate();
   const playlists = useQuery(api.playlists.myPlaylists);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [filter, setFilter] = useState<Filter | "all">("all");
-
-  const handleSignOut = async () => {
-    await signOut();
-    navigate("/");
-  };
 
   // The Playlists / Liked / Recent chips are pure navigation, so the playlist
   // list must NOT depend on them. It used to: `filter` of "liked" or "recent"
   // made this `[]`, so clicking either chip made the user's entire playlist
   // list vanish from the sidebar until they clicked again.
   const visiblePlaylists = playlists;
-
-  const initials =
-    user?.name
-      ?.split(/\s+/)
-      .map((w) => w[0])
-      .join("")
-      .slice(0, 2)
-      .toUpperCase() ?? "U";
 
   const linkCls = ({ isActive }: { isActive: boolean }) =>
     cn(
@@ -180,21 +167,9 @@ export function Sidebar() {
           </button>
 
           <div className="mt-2 flex flex-col items-center gap-1 border-t border-white/[0.06] pt-3">
-            <NavLink
-              to="/profile"
-              title="Profile"
-              className="flex size-10 items-center justify-center overflow-hidden rounded-full bg-[rgb(var(--tint))] text-sm font-bold text-black ring-2 ring-white/10"
-            >
-              {user?.image ? (
-                <img
-                  src={user.image}
-                  alt=""
-                  className="size-full object-cover"
-                />
-              ) : (
-                initials
-              )}
-            </NavLink>
+            {/* The avatar is the account control, not just a profile link:
+                this is where sign-out and switching accounts live. */}
+            <AccountMenu variant="collapsed" />
             <button
               type="button"
               aria-label="Settings"
@@ -211,11 +186,10 @@ export function Sidebar() {
           </div>
 
           <PlaylistDialog open={dialogOpen} onOpenChange={setDialogOpen} />
-          <SettingsDialog
-            open={settingsOpen}
-            onOpenChange={setSettingsOpen}
-            onSignOut={handleSignOut}
-          />
+          {/* The SettingsDialog that used to sit here was unreachable
+              (`settingsOpen` was never set to true) and carried its own
+              sign-out that skipped the listening-session reset. Settings is a
+              route now, and account actions come from `useAccountActions`. */}
         </motion.aside>
       ) : (
         <motion.aside
@@ -421,27 +395,11 @@ export function Sidebar() {
           </p>
 
           <div className="flex items-center gap-2.5 border-t border-white/[0.06] px-4 py-3">
-            <div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[rgb(var(--tint))] text-sm font-bold text-black ring-2 ring-white/10">
-              {user?.image ? (
-                <img
-                  src={user.image}
-                  alt=""
-                  className="size-full object-cover"
-                />
-              ) : (
-                initials
-              )}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold">
-                {user?.name ?? (user?.isAnonymous ? "Guest" : "Listener")}
-              </p>
-              {hideEmail ? null : (
-                <p className="truncate text-xs text-muted-foreground">
-                  {user?.email ?? "Anonymous session"}
-                </p>
-              )}
-            </div>
+            <AccountMenu
+              variant="expanded"
+              hideEmail={hideEmail}
+              className="min-w-0 flex-1"
+            />
             <button
               type="button"
               aria-label="Settings"
@@ -480,11 +438,10 @@ export function Sidebar() {
           </div>
 
           <PlaylistDialog open={dialogOpen} onOpenChange={setDialogOpen} />
-          <SettingsDialog
-            open={settingsOpen}
-            onOpenChange={setSettingsOpen}
-            onSignOut={handleSignOut}
-          />
+          {/* The SettingsDialog that used to sit here was unreachable
+              (`settingsOpen` was never set to true) and carried its own
+              sign-out that skipped the listening-session reset. Settings is a
+              route now, and account actions come from `useAccountActions`. */}
         </motion.aside>
       )}
     </AnimatePresence>

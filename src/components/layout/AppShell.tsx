@@ -19,7 +19,6 @@ import { QueuePanel } from "@/components/player/QueuePanel";
 import { useIntroTrim } from "@/components/player/useIntroTrim";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { MobileMoreMenu } from "@/components/layout/MobileMoreMenu";
-import { SettingsDialog } from "@/components/settings/SettingsDialog";
 import { Logo } from "@/components/brand/Logo";
 import { SiteFooter } from "@/components/landing/SiteFooter";
 import { VisitTracker } from "@/components/analytics/VisitTracker";
@@ -29,7 +28,6 @@ import { CommandPalette } from "@/components/core/CommandPalette";
 import { api } from "@/convex/_generated/api";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
-import { useAuth } from "@/hooks/use-auth";
 import {
   BookOpen,
   Briefcase,
@@ -152,8 +150,6 @@ function useAnimatedCssTint(
 export function AppShell() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { signOut } = useAuth();
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [offline, setOffline] = useState(!navigator.onLine);
   const [sceneTheme, setSceneTheme] = useState(
     () => localStorage.getItem("ss.sceneTheme") ?? "studio",
@@ -1007,14 +1003,14 @@ export function AppShell() {
       <FullscreenPlayer />
       <NowPlayingAnnouncer />
       <IntroTrimProbe />
-      <SettingsDialog
-        open={settingsOpen}
-        onOpenChange={setSettingsOpen}
-        onSignOut={async () => {
-          await signOut();
-          navigate("/");
-        }}
-      />
+      {/*
+        No SettingsDialog here on purpose. It was mounted with
+        `open={settingsOpen}` and nothing ever called `setSettingsOpen(true)`,
+        so it was unreachable — and it carried a SECOND, divergent sign-out
+        implementation that skipped the listening-session reset. Settings is a
+        route (`/settings`) rendered by `src/pages/Settings.tsx`, and the
+        account actions live in one place: `useAccountActions`.
+      */}
     </div>
   );
 }

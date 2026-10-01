@@ -592,6 +592,16 @@ interface PlayerStore {
   reorderUpcoming: (upcoming: Playable[], base: Playable[]) => void;
   clearQueue: () => void;
   /**
+   * Wipe the listening session: stop both decks, stop the YouTube engine,
+   * drop the queue, history and the persisted queue.
+   *
+   * Called when signing out or switching accounts. Without it a shared
+   * device hands the next person the previous listener's queue, their
+   * half-played song and their recently-played list — which is exactly the
+   * kind of cross-account leak this app refuses to do anywhere else.
+   */
+  resetForSignOut: () => void;
+  /**
    * Drop every repeat from the queue, keeping the first occurrence. Returns
    * how many entries went, so the UI can say "removed 3 repeats" instead of
    * silently reshuffling a list the user was reading.
@@ -4218,6 +4228,34 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
           unshuffledQueue: null,
           unshuffledIndex: -1,
         };
+      });
+    },
+    resetForSignOut: () => {
+      // A blend targeting a track that is about to be discarded must not
+      // commit after the sign-out and start playing on the new account.
+      cancelTransition("sign-out");
+      // Both decks: a crossfade can have the incoming song audible already,
+      // so pausing only the live one leaves music playing with no session.
+      pauseAllDecks();
+      ytEngine.pause();
+      // The persisted queue is the real leak — it survives the reload that
+      // follows a sign-out, and it is what restores the old queue for whoever
+      // signs in next.
+      removeSetting(QUEUE_KEY);
+      set({
+        queue: [],
+        queueIndex: -1,
+        current: null,
+        isPlaying: false,
+        isBuffering: false,
+        currentTime: 0,
+        duration: 0,
+        bufferedEnd: 0,
+        history: [],
+        unshuffledQueue: null,
+        unshuffledIndex: -1,
+        liked: {},
+        likedLoaded: false,
       });
     },
     setHistoryRecorder: (fn) => {
