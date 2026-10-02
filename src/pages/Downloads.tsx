@@ -34,6 +34,8 @@ import {
   type DownloadMeta,
 } from "@/lib/offlineDownloads";
 import { performYouTubeDownload } from "@/lib/trackDownload";
+import { localEntryToPlayable } from "@/lib/localAudio";
+import type { Playable } from "@/lib/playable";
 import { usePlayerStore } from "@/store/player";
 import { cn } from "@/lib/utils";
 
@@ -168,25 +170,20 @@ export default function Downloads() {
    * Play a stored track. The player looks for this track id's bytes on disk
    * BEFORE it touches the network, so this is genuinely offline playback.
    */
-  const play = useCallback((entry: OfflineEntry) => {
-    if (entry.source === "local") {
-      void import("@/lib/localAudio").then(({ localEntryToPlayable }) => {
-        usePlayerStore.getState().playTrack(localEntryToPlayable(entry));
-      });
-      return;
-    }
-    usePlayerStore.getState().playTrack({
-      id: entry.trackId,
-      title: entry.title,
-      artistName: entry.artistName,
-      albumName: "",
-      coverUrl: entry.coverUrl,
-      audioUrl: "stream",
-      duration: entry.duration,
-      source: "youtube",
-      youtubeId: entry.trackId,
-    });
-  }, []);
+  const play = useCallback(
+    (entry: OfflineEntry) => {
+      const playable = entryToPlayable(entry);
+      if (!playable) return;
+      // Every OTHER stored track becomes the queue, so pressing Next keeps
+      // playing this device's music instead of stopping after one song. The
+      // player matches the clicked track into that list by id.
+      const queue = entries
+        .map(entryToPlayable)
+        .filter((item): item is Playable => item !== null);
+      usePlayerStore.getState().playTrack(playable, queue);
+    },
+    [entries],
+  );
 
   const used = totalDownloadedBytes(entries);
   const hasAnything = inProgress.length + failed.length + entries.length > 0;
@@ -332,6 +329,7 @@ export default function Downloads() {
                   type="button"
                   onClick={() => play(entry)}
                   aria-label={`Play ${entry.title}`}
+                  title={`Play ${entry.title}`}
                   className="shrink-0 rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
                 >
                   <Play className="size-4" />
@@ -380,6 +378,39 @@ export default function Downloads() {
       </div>
     </div>
   );
+}
+
+/**
+ * The player shape for a stored track, or null when one cannot be built.
+ *
+ * `audioUrl: "stream"` is a PLACEHOLDER, not a URL — it is the flag the player
+ * reads as "resolve this". What actually happens is that the player looks up
+ * this track id's bytes on disk FIRST and plays the stored copy, so pressing
+ * Play here is genuinely offline playback and the stream resolver is never
+ * reached. This is the same contract `localEntryToPlayable` uses, and it is
+ * why no real URL is kept on the stored row at all — those expire.
+ *
+ * A YouTube download's track id IS its video id, so reusing it as `youtubeId`
+ * is safe. A download from any other provider is NOT: its id belongs to that
+ * provider, and handing it to the player as a video id would send the resolver
+ * after a video that does not exist.
+ */
+function entryToPlayable(entry: OfflineEntry): Playable | null {
+  if (entry.source === "local") return localEntryToPlayable(entry);
+  if (entry.source !== "youtube") return null;
+  return {
+    id: entry.trackId,
+    title: entry.title,
+    artistName: entry.artistName,
+    // A stored row carries no album. Inventing "Single" would be a fabricated
+    // value — the same one the YouTube path already removed.
+    albumName: "",
+    coverUrl: entry.coverUrl,
+    audioUrl: "stream",
+    duration: entry.duration,
+    source: "youtube",
+    youtubeId: entry.trackId,
+  };
 }
 
 function Section({
