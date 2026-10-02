@@ -10,14 +10,16 @@ import { track as trackEvent } from "@/lib/analytics";
 import { GravitySponsor } from "@/components/ads/GravitySponsor";
 import { useAction } from "convex/react";
 import {
+  BadgeCheck,
+  CreativeCommons,
   Dices,
+  Globe,
   Loader2,
+  Music2,
+  Play,
   RefreshCw,
   Search as SearchIcon,
   SearchX,
-  Globe,
-  Music2,
-  Play,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -404,12 +406,26 @@ export default function Search() {
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
+  /**
+   * The "Creative Commons only" filter.
+   *
+   * A filter rather than a separate page, because the request it answers is
+   * "find music I can actually keep" — the same search, asked with a rights
+   * constraint. Every row it shows has had its licence verified server-side,
+   * so the Download action on those rows is expected to work rather than
+   * mostly refuse.
+   */
+  const [ccOnly, setCcOnly] = useState(false);
+  const [ccResults, setCcResults] = useState<YtItem[] | null>(null);
+  /** True when the deployment has no Data API key, so nothing can be verified. */
+  const [ccUnconfigured, setCcUnconfigured] = useState(false);
 
   // Drop ?q= from the URL after it has been consumed (no setState in effect).
   const startRadio = usePlayerStore((s) => s.startRadio);
   const playTrack = usePlayerStore((s) => s.playTrack);
   const searchYt = useAction(api.youtube.searchYoutube);
   const searchLyricVideos = useAction(api.youtube.searchLyricVideos);
+  const searchCreativeCommons = useAction(api.youtube.searchCreativeCommons);
 
   const debouncedQuery = useDebounced(query, 450);
 
@@ -445,6 +461,61 @@ export default function Search() {
   // Live YouTube search, debounced.
   useEffect(() => {
     const q = debouncedQuery.trim();
+
+    // --- Creative Commons filter -----------------------------------------
+    // Its own request, with a cancellation guard that actually runs. The path
+    // below discards the cleanup `run()` returns, so a slow response can land
+    // on top of a newer query — a bug worth not repeating HERE, because a
+    // stale answer would attach the wrong licences to the wrong songs.
+    if (ccOnly) {
+      if (!q) {
+        setCcResults(null);
+        setCcUnconfigured(false);
+        setYtResults(null);
+        setSearchError(null);
+        setSearching(false);
+        return;
+      }
+      let cancelled = false;
+      setSearching(true);
+      setSearchError(null);
+      setCcResults(null);
+      setCcUnconfigured(false);
+      // The other sections have nothing to say in this mode, and leaving the
+      // previous query's rows underneath would read as stale results.
+      setYtResults(null);
+      setLyricResults(null);
+      setLyricFailed(false);
+      setLyricSearching(false);
+      rememberQuery(q);
+      trackEvent("search_performed", { query: q.slice(0, 120) });
+      searchCreativeCommons({ query: q })
+        .then(({ items, failed, unconfigured }) => {
+          if (cancelled) return;
+          setCcUnconfigured(unconfigured);
+          if (failed) {
+            setCcResults([]);
+            setSearchError(
+              "Couldn't verify Creative Commons tracks right now. Try again in a moment.",
+            );
+          } else {
+            setCcResults(items);
+          }
+          setSearching(false);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setCcResults([]);
+          setSearchError(
+            "Couldn't verify Creative Commons tracks right now. Try again in a moment.",
+          );
+          setSearching(false);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
+
     const run = () => {
       if (!q) {
         setYtResults(null);
@@ -453,6 +524,8 @@ export default function Search() {
         setSearchError(null);
         setSearching(false);
         setLyricSearching(false);
+        setCcResults(null);
+        setCcUnconfigured(false);
         return;
       }
       let cancelled = false;
@@ -527,7 +600,15 @@ export default function Search() {
       };
     };
     run();
-  }, [debouncedQuery, searchYt, searchLyricVideos, retryKey, rememberQuery]);
+  }, [
+    debouncedQuery,
+    ccOnly,
+    searchYt,
+    searchLyricVideos,
+    searchCreativeCommons,
+    retryKey,
+    rememberQuery,
+  ]);
 
   const playRemote = useCallback(
     (item: YtItem) => {
@@ -601,6 +682,9 @@ export default function Search() {
       setSurpriseLoading(false);
     }
   };
+  /** The list the results section renders — the CC-filtered set, or Songs. */
+  const shownResults = ccOnly ? ccResults : ytResults;
+
   return (
     <div className="flex flex-col gap-8">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -653,6 +737,47 @@ export default function Search() {
         )}
       </div>
 
+      {/* Creative Commons filter. A switch rather than one more list on the
+          page, because it changes what the search MEANS rather than adding
+          another thing to scan — and its label states exactly what it
+          guarantees, including when it can guarantee nothing. */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <button
+          type="button"
+          role="switch"
+          aria-checked={ccOnly}
+          onClick={() => setCcOnly((value) => !value)}
+          className={cn(
+            "inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors",
+            ccOnly
+              ? "border-[rgb(var(--tint)_/_0.55)] bg-[rgb(var(--tint)_/_0.14)] text-foreground"
+              : "border-white/15 bg-white/[0.04] text-muted-foreground hover:border-[rgb(var(--tint)_/_0.4)] hover:text-foreground",
+          )}
+        >
+          <CreativeCommons className="size-3.5" />
+          Creative Commons
+          <span
+            className={cn(
+              "flex h-4 w-7 items-center rounded-full p-0.5 transition-colors",
+              ccOnly ? "bg-[rgb(var(--tint))]" : "bg-white/15",
+            )}
+          >
+            <span
+              className={cn(
+                "size-3 rounded-full bg-white transition-transform",
+                ccOnly ? "translate-x-3" : "translate-x-0",
+              )}
+            />
+          </span>
+        </button>
+        {ccOnly && (
+          <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <BadgeCheck className="size-3.5 shrink-0 text-[rgb(var(--tint))]" />
+            Every track here has been licence-checked, and can be downloaded.
+          </span>
+        )}
+      </div>
+
       {!hasQuery ? (
         <>
           {searchHistory.length > 0 && (
@@ -683,16 +808,29 @@ export default function Search() {
               </div>
             </section>
           )}
-          <BrowseView onPick={applyQuery} />
+          <BrowseView
+          onPick={applyQuery}
+          onBrowseCreativeCommons={() => {
+            // The filter on its own would show nothing — the results section
+            // only exists alongside a query — so this seeds one the CC
+            // catalogue actually has music for, then hands over.
+            applyQuery("instrumental music");
+            setCcOnly(true);
+          }}
+        />
         </>
       ) : (
         <div className="flex flex-col gap-10">
           {/* Related results */}
           <section>
             <div className="mb-2 flex items-center gap-2">
-              <Globe className="size-4 text-[rgb(var(--tint))]" />
+              {ccOnly ? (
+                <CreativeCommons className="size-4 text-[rgb(var(--tint))]" />
+              ) : (
+                <Globe className="size-4 text-[rgb(var(--tint))]" />
+              )}
               <h2 className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
-                Related results
+                {ccOnly ? "Creative Commons" : "Related results"}
               </h2>
             </div>
 
@@ -726,17 +864,20 @@ export default function Search() {
                   Try again
                 </button>
               </div>
-            ) : ytResults !== null && ytResults.length === 0 ? (
+            ) : shownResults !== null && shownResults.length === 0 ? (
               <p className="rounded-2xl border border-dashed border-white/10 py-10 text-center text-sm text-muted-foreground">
-                No related results for "{query}". Try a different spelling or an
-                artist name.
+                {ccOnly
+                  ? ccUnconfigured
+                    ? "Creative Commons checks aren't set up on this deployment yet, so no track's licence can be confirmed."
+                    : "No licence-checked Creative Commons tracks matched. That catalogue is genuinely small — try lo-fi, instrumental, classical, piano, or a specific artist."
+                  : `No related results for "${query}". Try a different spelling or an artist name.`}
               </p>
             ) : (
               <div className="flex flex-col gap-0.5">
                 {/* Contextual sponsor slot: one clearly-labelled card, after
                     the third result, so it never crowds the first songs a
                     user is actually looking for. Renders nothing when unset. */}
-                {ytResults?.map((item, i) => (
+                {shownResults?.map((item, i) => (
                   <div key={item.id}>
                     {i === 2 && hasQuery ? (
                       <GravitySponsor
@@ -769,7 +910,7 @@ export default function Search() {
             section with no explanation. Two genuinely different outcomes now
             get two genuinely different messages, and a failure offers a retry.
           */}
-          {!lyricSearching && lyricResults !== null && (
+          {!ccOnly && !lyricSearching && lyricResults !== null && (
             <section aria-labelledby="lyric-video-results-heading">
               <div className="mb-2 flex items-center gap-2">
                 <Music2 className="size-4 text-[rgb(var(--tint))]" />
@@ -845,7 +986,13 @@ function useDebounced<T>(value: T, delay: number): T {
   return debounced;
 }
 
-function BrowseView({ onPick }: { onPick: (q: string) => void }) {
+function BrowseView({
+  onPick,
+  onBrowseCreativeCommons,
+}: {
+  onPick: (q: string) => void;
+  onBrowseCreativeCommons: () => void;
+}) {
   const mixCycle = usePopularMixCycle();
   const popularMixes = useMemo(() => {
     const start = (mixCycle * 3) % POPULAR_MIXES.length;
@@ -860,6 +1007,28 @@ function BrowseView({ onPick }: { onPick: (q: string) => void }) {
 
   return (
     <div className="flex flex-col gap-10">
+      <section>
+        <h2 className="mb-3 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
+          Keep it forever
+        </h2>
+        <button
+          type="button"
+          onClick={onBrowseCreativeCommons}
+          className="flex w-full max-w-xl items-center gap-3 rounded-2xl border border-[rgb(var(--tint)_/_0.3)] bg-[rgb(var(--tint)_/_0.07)] px-4 py-3 text-left transition-colors hover:border-[rgb(var(--tint)_/_0.55)] hover:bg-[rgb(var(--tint)_/_0.12)]"
+        >
+          <CreativeCommons className="size-5 shrink-0 text-[rgb(var(--tint))]" />
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-medium">
+              Browse Creative Commons music
+            </span>
+            <span className="block text-xs text-muted-foreground">
+              Tracks YouTube licenses under Creative Commons. Licence-checked
+              one by one, and free to download for offline listening.
+            </span>
+          </span>
+        </button>
+      </section>
+
       <section>
         <h2 className="mb-3 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
           Popular mixes
