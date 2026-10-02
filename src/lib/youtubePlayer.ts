@@ -320,11 +320,32 @@ export function warmup(): void {
   void ensurePlayer().catch(() => undefined);
 }
 
+/**
+ * What the caller LAST asked for. `play()` is async and `pause()` is not, so a
+ * pause issued while a play is still awaiting the player would otherwise be
+ * undone the instant that play resolved.
+ *
+ * This is the defect behind permanently rough audio: the store starts the
+ * IFrame first and hands playback to the `<audio>` decks as soon as a direct
+ * stream resolves, so it calls `play()` and then `pause()` within the same tick.
+ * If the IFrame API had not finished initialising, `pause()` found nothing to
+ * pause and did nothing at all — and the pending `play()` then started the video
+ * anyway. The deck played the same track through Web Audio while the IFrame
+ * played it dry, microseconds out of phase. Two copies of one signal summed
+ * that far apart is a comb filter: gritty, crackly, and quieter than either copy
+ * on its own. The store recorded positions from both clocks at once.
+ *
+ * Recording the intent means a pause issued at ANY point wins, including before
+ * the player exists.
+ */
+let wantPlaying = false;
+
 /** Load a video and start playing. Safe to call repeatedly (reuses the player). */
 export async function play(
   videoId: string,
   opts: { volume: number; muted: boolean; startSeconds?: number },
 ): Promise<void> {
+  wantPlaying = true;
   const p = await ensurePlayer();
   p.setVolume(Math.round(Math.min(1, Math.max(0, opts.volume)) * 100));
   if (opts.muted) p.mute();
@@ -338,6 +359,15 @@ export async function play(
   loadedVideoId = videoId;
   actualVideoId = videoId;
   p.loadVideoById(videoId, Math.max(0, opts.startSeconds ?? 0));
+  // The pause that arrived while we were waiting for the player: apply it now,
+  // or `loadVideoById` leaves a dry duplicate playing under the <audio> deck.
+  if (!wantPlaying) {
+    try {
+      p.pauseVideo();
+    } catch {
+      /* ignore */
+    }
+  }
   // A fresh load resets the rate — the verified re-apply loop handles it.
   applyRate();
   suppressYtOverlays();
@@ -408,6 +438,7 @@ export function resume(): void {
 }
 
 export function pause(): void {
+  wantPlaying = false;
   try {
     player?.pauseVideo();
   } catch {

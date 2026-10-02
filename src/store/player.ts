@@ -2798,6 +2798,12 @@ function wireYoutubeEngine() {
       // track we pause the engine, and its late "paused" event must not flip
       // isPlaying off while the audio element is already playing.
       if (!usePlayerStore.getState().current?.youtubeId) return;
+      // Once the <audio> decks own the sound, the IFrame is a PAUSED FALLBACK
+      // and nothing more. Letting it keep reporting state made its `autoplay:1`
+      // roll onto a related video and the handler below "snap it back" — which
+      // re-started a DRY copy of the track the deck was already playing. Same
+      // two-copies-out-of-phase signal, permanently.
+      if (audioElementIsSource(usePlayerStore.getState().current)) return;
       if (state === 1) {
         clearYtLoadWatchdog();
         // The IFrame player is created with autoplay:1, so YouTube rolls on to
@@ -2830,6 +2836,11 @@ function wireYoutubeEngine() {
       }
     },
     onTime: (currentTime, duration) => {
+      // Same rule as `onStateChange`: once the deck is the source, the IFrame's
+      // clock is not a second opinion about the position. Accepting it made
+      // `currentTime`/`duration` jump between two sources ~250ms apart, and the
+      // transition scheduler read `remaining` from whichever one landed last.
+      if (audioElementIsSource(usePlayerStore.getState().current)) return;
       usePlayerStore.setState({
         currentTime,
         duration: duration > 0 ? duration : usePlayerStore.getState().duration,

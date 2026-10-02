@@ -226,6 +226,22 @@ SYNQ installs to a device and keeps working without a network.
 
 #### Playback
 
+- **Audio was crackly, gritty and quiet — the same song was playing twice.**
+  Nothing was broken; it was being played _twice_. `ytEngine.play()` awaits the
+  YouTube IFrame API and only then calls `loadVideoById()`, while `pause()` is
+  synchronous. SYNQ starts the IFrame first and hands sound to the `<audio>`
+  decks as soon as a direct stream resolves, so it issued `play()` and `pause()`
+  in the same tick. On a cold IFrame, `pause()` found nothing to pause and did
+  nothing at all — and the pending `play()` then started the video anyway. From
+  there the deck played the track through Web Audio while the IFrame played it
+  dry, microseconds out of phase. Two copies of one signal summed that far apart
+  is a comb filter, which is exactly what it sounded like. The IFrame also kept
+  overwriting `currentTime`/`duration` from its own clock, so the position and
+  the transition scheduler were reading two different sources at once. The
+  engine now records the play/pause intent so a pause issued at any point wins —
+  including before the player exists — and stops reporting state or time once
+  the decks own the sound, using the same predicate the rest of the store
+  already trusts.
 - **Silent playback.** `createMediaElementSource()` permanently diverts an
   `<audio>` element's output into the Web Audio graph. The graph was built with
   the element captured _before_ the chain to `destination` existed, so any
