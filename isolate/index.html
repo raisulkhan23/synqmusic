@@ -1,54 +1,76 @@
 <!doctype html>
 <html lang="en">
-
-<head>
-  <meta charset="UTF-8" />
-  <!-- `?v=2`: a /public asset keeps its URL, so an unversioned href lets the
+  <head>
+    <meta charset="UTF-8" />
+    <!-- `?v=2`: a /public asset keeps its URL, so an unversioned href lets the
        browser keep serving the previous mark from cache. Bump on every change. -->
-  <link rel="icon" type="image/svg+xml" href="/logo.svg?v=2" />
-  <link rel="apple-touch-icon" href="/product-icon.png?v=2" />
-  <!-- Social share card. Regenerate with: python3 scripts/generate-brand-assets.py -->
-  <meta property="og:type" content="website" />
-  <meta property="og:site_name" content="SYNQ" />
-  <meta property="og:title" content="SYNQ — Your music, uninterrupted." />
-  <meta property="og:description" content="Music-only discovery, a queue that moves like you do, and a live visualizer. No ads, no noise." />
-  <meta property="og:image" content="/hero.png" />
-  <meta property="og:image:width" content="1200" />
-  <meta property="og:image:height" content="630" />
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="SYNQ — Your music, uninterrupted." />
-  <meta name="twitter:description" content="Music-only discovery, a queue that moves like you do, and a live visualizer. No ads, no noise." />
-  <meta name="twitter:image" content="/hero.png" />
-  <link rel="manifest" href="/manifest.webmanifest" />
-  <!-- `viewport-fit=cover` is REQUIRED for `env(safe-area-inset-*)` to return
+    <link rel="icon" type="image/svg+xml" href="/logo.svg?v=2" />
+    <link rel="mask-icon" href="/logo.svg" color="#c42ad6" />
+    <!-- Social share card. Regenerate with: python3 scripts/generate-brand-assets.py -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="SYNQ" />
+    <meta property="og:title" content="SYNQ — Your music, uninterrupted." />
+    <meta
+      property="og:description"
+      content="Music-only discovery, a queue that moves like you do, and a live visualizer. No ads, no noise."
+    />
+    <meta property="og:image" content="/hero.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="SYNQ — Your music, uninterrupted." />
+    <meta
+      name="twitter:description"
+      content="Music-only discovery, a queue that moves like you do, and a live visualizer. No ads, no noise."
+    />
+    <meta name="twitter:image" content="/hero.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <!-- iOS ignores the manifest for the home-screen icon and uses this link
+       instead, so it needs the full-bleed 180px render (a transparent corner
+       shows as black on iOS). `?v=1` because /public assets keep their URL. -->
+    <link rel="apple-touch-icon" href="/icons/apple-180.png?v=1" />
+    <!-- Installed-app hints. `mobile-web-app-capable` is the legacy name iOS
+       still reads; `apple-mobile-web-app-*` are what Safari actually uses. -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+    <meta name="apple-mobile-web-app-title" content="SYNQ" />
+    <!-- `viewport-fit=cover` is REQUIRED for `env(safe-area-inset-*)` to return
        anything but 0px on iPhone. Without it the notch/home-indicator insets
        used by the bottom nav, queue sheet and fullscreen player were all
        silently zero on every notched device. -->
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="description" content="SynqMusic is a music streaming app with YouTube-quality playback, smart queues, playlists, lyrics and a listening visualizer — on desktop and mobile." />
-  <meta name="theme-color" content="#12141c" />
-  <link rel="preconnect" href="https://www.youtube.com" />
-  <link rel="preconnect" href="https://www.youtube-nocookie.com" />
-  <link rel="preconnect" href="https://i.ytimg.com" />
-  <link rel="preconnect" href="https://yt3.ggpht.com" />
-  <title>SynqMusic</title>
-  <script type="module" crossorigin src="/assets/index-w_toAUSm.js"></script>
-  <link rel="modulepreload" crossorigin href="/assets/react-vendor-hhHQhPTT.js">
-  <link rel="modulepreload" crossorigin href="/assets/framer-motion-CxFtlxLV.js">
-  <link rel="modulepreload" crossorigin href="/assets/radix-ui-BdCU5BSQ.js">
-  <link rel="modulepreload" crossorigin href="/assets/charts-D-IaJqad.js">
-  <link rel="stylesheet" crossorigin href="/assets/index-BiwcIY69.css">
-<script defer src="/_vercel/insights/script.js"></script>
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <meta
+      name="description"
+      content="SynqMusic is a music streaming app with YouTube-quality playback, smart queues, playlists, lyrics and a listening visualizer — on desktop and mobile."
+    />
+    <meta name="theme-color" content="#12141c" />
+    <link rel="preconnect" href="https://www.youtube.com" />
+    <link rel="preconnect" href="https://www.youtube-nocookie.com" />
+    <link rel="preconnect" href="https://i.ytimg.com" />
+    <link rel="preconnect" href="https://yt3.ggpht.com" />
+    <title>SynqMusic</title>
+    <script type="module" crossorigin src="/assets/index-DgOuRNWg.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/react-vendor-CI0Lyjv1.js">
+    <link rel="modulepreload" crossorigin href="/assets/radix-ui-CDKu5je0.js">
+    <link rel="modulepreload" crossorigin href="/assets/charts-CZbIBTY0.js">
+    <link rel="modulepreload" crossorigin href="/assets/framer-motion-DYMhbPR4.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-CJIB8ip5.css">
+  <script defer src="/_vercel/insights/script.js"></script>
 </head>
 
-
-<body>
-  <div id="root"></div>
-  <!-- Launch badges used to live here as static markup, which meant they were
+  <body>
+    <div id="root"></div>
+    <!-- Launch badges used to live here as static markup, which meant they were
        appended to EVERY route — they showed up under /home, /search, the
        queue, all of it. They now live only in the landing page footer
        (src/components/landing/SiteFooter.tsx), so they appear on the marketing
        page and nowhere else. -->
-</body>
-
+  </body>
 </html>
