@@ -4,7 +4,6 @@ import { create } from "zustand";
 import {
   Compass,
   Disc3,
-  Download,
   Heart,
   House,
   ListMusic,
@@ -55,82 +54,16 @@ const usePalette = create<{ open: boolean; setOpen: (open: boolean) => void }>(
   }),
 );
 
-/**
- * Destinations, paired with the words a listener would actually type.
- *
- * `label` is what the row SHOWS; `keywords` is what it MATCHES on. They are
- * separate because the palette filters on the item's `value`, and making
- * someone type "downloads" to reach the page that holds their offline tracks
- * when what they are looking for is "offline" is not something to be asked of
- * anyone. The same trick the Playback commands below already use ("playback
- * play pause resume"), applied to destinations.
- */
 const PAGES = [
-  {
-    label: "Home",
-    to: "/home",
-    icon: House,
-    keywords: "home start beginning",
-  },
-  {
-    label: "Search",
-    to: "/search",
-    icon: Search,
-    keywords: "search find look up songs tracks",
-  },
-  {
-    label: "Discover",
-    to: "/discover",
-    icon: Compass,
-    keywords: "discover browse explore new music",
-  },
-  {
-    label: "Liked songs",
-    to: "/liked",
-    icon: Heart,
-    keywords: "liked favourites favorites heart love songs",
-  },
-  {
-    label: "Your library",
-    to: "/playlists",
-    icon: ListMusic,
-    keywords: "library playlists playlist collection albums",
-  },
-  {
-    label: "Listening history",
-    to: "/recent",
-    icon: Disc3,
-    keywords: "history recent recently played last played",
-  },
-  {
-    label: "Downloads",
-    to: "/downloads",
-    icon: Download,
-    // "offline" leads deliberately: it is the word people reach for, and it is
-    // what this feature is called everywhere the listener can actually see it.
-    // "import" is NOT here on purpose: importing files lives in Settings, and
-    // claiming the word here would send someone to a page that cannot do it.
-    keywords:
-      "offline downloads downloaded storage saved songs device keep creative commons cc",
-  },
-  {
-    label: "Stats",
-    to: "/stats",
-    icon: ListMusic,
-    keywords: "stats statistics listening habits top charts",
-  },
-  {
-    label: "Profile",
-    to: "/profile",
-    icon: UserRound,
-    keywords: "profile account you avatar",
-  },
-  {
-    label: "Settings",
-    to: "/settings",
-    icon: Settings,
-    keywords: "settings preferences options configuration",
-  },
+  { label: "Home", to: "/home", icon: House },
+  { label: "Search", to: "/search", icon: Search },
+  { label: "Discover", to: "/discover", icon: Compass },
+  { label: "Liked songs", to: "/liked", icon: Heart },
+  { label: "Your library", to: "/playlists", icon: ListMusic },
+  { label: "Listening history", to: "/recent", icon: Disc3 },
+  { label: "Stats", to: "/stats", icon: ListMusic },
+  { label: "Profile", to: "/profile", icon: UserRound },
+  { label: "Settings", to: "/settings", icon: Settings },
 ] as const;
 
 /**
@@ -195,7 +128,7 @@ export function CommandPalette() {
           {PAGES.map((page) => (
             <CommandItem
               key={page.to}
-              value={`go ${page.label} ${page.keywords}`}
+              value={`go ${page.label}`}
               onSelect={() => go(page.to)}
             >
               <page.icon className="size-4 text-muted-foreground" />

@@ -13,7 +13,6 @@ import {
   ArrowRightFromLine,
   ArrowRightToLine,
   BarChart3,
-  Download,
   Heart,
   History,
   House,
@@ -78,7 +77,6 @@ export function Sidebar() {
             { to: "/playlists", label: "Your Library", icon: Library },
             { to: "/liked", label: "Liked Songs", icon: Heart },
             { to: "/recent", label: "Recently Played", icon: History },
-            { to: "/downloads", label: "Downloads", icon: Download },
             { to: "/social", label: "Listening Rooms", icon: Radio },
           ].map(({ to, label, icon: Icon }) => (
             <NavLink
@@ -221,7 +219,6 @@ export function Sidebar() {
             {[
               { to: "/home", label: "Home", icon: House },
               { to: "/search", label: "Search", icon: Search },
-              { to: "/downloads", label: "Downloads", icon: Download },
               { to: "/social", label: "Listening Rooms", icon: Radio },
             ].map(({ to, label, icon: Icon }) => (
               <NavLink key={to + label} to={to} className={linkCls}>

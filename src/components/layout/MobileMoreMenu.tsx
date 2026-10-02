@@ -4,7 +4,6 @@ import { useQuery } from "convex/react";
 import {
   BarChart3,
   ChevronRight,
-  Download,
   Heart,
   History,
   Loader2,
@@ -48,12 +47,6 @@ const EXTRA_DESTINATIONS = [
     label: "Recently Played",
     detail: "Your listening history, newest first",
     icon: History,
-  },
-  {
-    to: "/downloads",
-    label: "Downloads",
-    detail: "Offline tracks saved to this device",
-    icon: Download,
   },
   {
     to: "/social",

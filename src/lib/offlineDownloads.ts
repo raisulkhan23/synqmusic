@@ -43,56 +43,14 @@ import {
 // the writer cannot drift apart.
 import { OFFLINE_INDEX_KEY } from "./offlineStore";
 
-/**
- * Per-track status. `error` carries a listener-facing reason.
- *
- * `checking` is the licence phase — the server is deciding whether this track
- * may be stored at all — and it exists because a downloads view must be able
- * to show the row from the moment the listener taps Download, not only once a
- * transfer has started.
- */
-export type DownloadStatus =
-  | "idle"
-  | "checking"
-  | "downloading"
-  | "done"
-  | "error";
-
-/**
- * What a download with no index entry yet needs in order to be rendered.
- *
- * The downloads INDEX holds only finished downloads, because it is the record
- * of what is actually on disk. A download that is still running, or that
- * failed, has nothing there — so a downloads list would know its status and
- * its message but have nothing to put in the row.
- */
-export interface DownloadMeta {
-  title: string;
-  artistName: string;
-  coverUrl: string;
-  duration: number;
-  source: string;
-  /**
-   * Set only for a YouTube-sourced download, by the path that resolved it.
-   *
-   * Its presence is what makes "Retry" possible from the downloads list.
-   * Retrying re-runs the licence check and resolves a FRESH stream, because
-   * the URL from the failed attempt is signed and short-lived.
-   */
-  youtubeId?: string;
-  /** Epoch ms the attempt started. Orders the in-flight list. */
-  startedAt: number;
-}
+/** Per-track status. `error` carries a listener-facing reason. */
+export type DownloadStatus = "idle" | "downloading" | "done" | "error";
 
 export interface DownloadState {
   /** trackId → status. */
   status: Record<string, DownloadStatus>;
   /** trackId → message, set only alongside `error`. */
   messages: Record<string, string>;
-  /** trackId → 0–1, or null while the total size is still unknown. */
-  progress: Record<string, number | null>;
-  /** trackId → display data for downloads that have no index entry. */
-  tracks: Record<string, DownloadMeta>;
   /**
    * Bumped on EVERY change.
    *
@@ -105,13 +63,7 @@ export interface DownloadState {
   revision: number;
 }
 
-let state: DownloadState = {
-  status: {},
-  messages: {},
-  progress: {},
-  tracks: {},
-  revision: 0,
-};
+let state: DownloadState = { status: {}, messages: {}, revision: 0 };
 const listeners = new Set<() => void>();
 
 function emit(next: Partial<DownloadState>): void {
@@ -130,8 +82,6 @@ const getSnapshot = () => state;
 const getServerSnapshot = (): DownloadState => ({
   status: {},
   messages: {},
-  progress: {},
-  tracks: {},
   revision: 0,
 });
 
@@ -193,107 +143,6 @@ export function useDownloadedTrackIds(): Set<string> {
 export function useDownloadStatus(trackId: string): DownloadStatus | "idle" {
   const downloads = useDownloads();
   return downloads.status[trackId] ?? "idle";
-}
-
-/**
- * The in-flight transfer for each track, so the downloads list can stop a
- * download the listener began somewhere else.
- *
- * A component-scoped `AbortController` is not enough: starting a download from
- * a track menu and then opening the downloads list unmounts the surface that
- * owns the controller, and a Cancel button there would have nothing to abort.
- * The controller therefore lives with the transfer.
- *
- * A controller is registered when a transfer starts and released when it
- * settles, so this map only ever holds live transfers and Cancel can never
- * abort a download that has already finished.
- */
-const inFlight = new Map<string, AbortController>();
-
-/**
- * Stop an in-flight download.
- *
- * `downloadTrack` owns the abort handling, so this only raises the signal; the
- * transition back to `idle` happens there, where the cleanup already lives.
- */
-export function cancelDownload(trackId: string): void {
-  inFlight.get(trackId)?.abort();
-}
-
-/**
- * Forget a download's status WITHOUT touching the file on disk.
- *
- * Removing bytes is `removeDownload` in `offlineAudio.ts`. This clears only the
- * in-memory record, which is what "Dismiss" means on a row that has already
- * resolved one way or the other.
- */
-export function dismissDownload(trackId: string): void {
-  if (
-    !(trackId in state.status) &&
-    !(trackId in state.tracks) &&
-    !(trackId in state.progress)
-  ) {
-    return;
-  }
-  const status = { ...state.status };
-  const messages = { ...state.messages };
-  const progress = { ...state.progress };
-  const tracks = { ...state.tracks };
-  delete status[trackId];
-  delete messages[trackId];
-  delete progress[trackId];
-  delete tracks[trackId];
-  emit({ status, messages, progress, tracks });
-}
-
-/**
- * Record a download attempt BEFORE any network work happens.
- *
- * Two things depend on running first. A downloads view has to show the row the
- * moment the listener taps Download, including during the licence check — a
- * phase the transfer itself never sees. And a retry after the originating
- * surface has unmounted needs the track's display data and its video id, which
- * exist nowhere else once that component is gone.
- */
-export function noteDownloadStart(trackId: string, meta: DownloadMeta): void {
-  emit({
-    status: { ...state.status, [trackId]: "checking" },
-    messages: { ...state.messages, [trackId]: "" },
-    progress: { ...state.progress, [trackId]: null },
-    tracks: { ...state.tracks, [trackId]: meta },
-  });
-}
-
-/** Move an attempt between phases without disturbing its metadata. */
-export function setDownloadStatus(
-  trackId: string,
-  status: DownloadStatus,
-  message = "",
-): void {
-  emit({
-    status: { ...state.status, [trackId]: status },
-    messages: { ...state.messages, [trackId]: message },
-  });
-}
-
-/**
- * Make a running transfer cancellable from anywhere.
- *
- * The controller belongs to the transfer rather than to the component that
- * started it. Starting a download from a track menu and then opening the
- * downloads list unmounts that component, and a Cancel button on the list
- * would otherwise have nothing to abort.
- */
-export function registerDownloadController(
-  trackId: string,
-  controller: AbortController,
-): void {
-  inFlight.set(trackId, controller);
-}
-
-/** Release a settled transfer's controller. Aborting it is then a no-op. */
-export function releaseDownloadController(trackId: string): void {
-  inFlight.delete(trackId);
 }
 
 /** A listener-facing outcome. `ok: false` always carries a reason. */
@@ -395,11 +244,6 @@ export async function downloadTrack(input: {
   downloadAllowed: boolean;
   licenseUrl: string;
   source: string;
-  /**
-   * The YouTube video id, when this is a YouTube download. Recorded so a
-   * downloads view can offer Retry without the surface that started it.
-   */
-  youtubeId?: string;
   /** Existing downloads, so eviction can be planned without a second read. */
   entries: OfflineEntry[];
   appCapBytes?: number;
@@ -425,7 +269,6 @@ export async function downloadTrack(input: {
     downloadAllowed,
     licenseUrl,
     source,
-    youtubeId,
     entries,
     appCapBytes = readDownloadCap(),
     timeoutMs = 60_000,
@@ -469,24 +312,9 @@ export async function downloadTrack(input: {
   const usedBytes = totalDownloadedBytes(existing);
   const remaining = await browserRemainingBytes();
 
-  // The row's display data is recorded alongside the phase so a downloads view
-  // can render this transfer even when nothing about it lives in the index yet.
   emit({
     status: { ...state.status, [trackId]: "downloading" },
     messages: { ...state.messages, [trackId]: "" },
-    progress: { ...state.progress, [trackId]: null },
-    tracks: {
-      ...state.tracks,
-      [trackId]: {
-        title,
-        artistName,
-        coverUrl,
-        duration,
-        source,
-        ...(youtubeId ? { youtubeId } : {}),
-        startedAt: state.tracks[trackId]?.startedAt ?? Date.now(),
-      },
-    },
   });
 
   // A caller-supplied signal (Cancel) and the internal timeout are BOTH
@@ -573,17 +401,7 @@ export async function downloadTrack(input: {
   let bytes = declared;
   let toStore = response;
   try {
-    const buffer = await readWithProgress(response, declared, (received, total) => {
-      // The store is told first so every surface tracking this download — not
-      // only the component that started it — repaints from one source.
-      emit({
-        progress: {
-          ...state.progress,
-          [trackId]: total > 0 ? Math.min(1, received / total) : null,
-        },
-      });
-      onProgress?.(received, total);
-    });
+    const buffer = await readWithProgress(response, declared, onProgress);
     bytes = buffer.byteLength;
     toStore = new Response(buffer, {
       status: 200,
@@ -631,7 +449,6 @@ export async function downloadTrack(input: {
   emit({
     status: { ...state.status, [trackId]: "done" },
     messages: { ...state.messages, [trackId]: "" },
-    progress: { ...state.progress, [trackId]: 1 },
   });
   return { ok: true, entry };
 }
