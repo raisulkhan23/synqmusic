@@ -9,15 +9,8 @@ import {
 } from "@/components/tracks/useTrackActions";
 import { usePlayerStore } from "@/store/player";
 import { useIsCreativeCommons } from "@/lib/creativeCommons";
-import {
-  CreativeCommons,
-  Heart,
-  Loader2,
-  Music4,
-  Pause,
-  Play,
-  Radio,
-} from "lucide-react";
+import { CreativeCommonsBadge } from "@/components/tracks/CreativeCommonsBadge";
+import { Heart, Loader2, Music4, Pause, Play, Radio } from "lucide-react";
 import type { ReactNode } from "react";
 
 const isRowActionTarget = (target: EventTarget | null) =>
@@ -179,20 +172,10 @@ export function RemoteTrackRow({
                 artistName
               )}
             </p>
-            {/* Badged only once the licence is CONFIRMED, and it means exactly
-                what the Download action will do — an unverified row shows
-                nothing rather than a hopeful icon. Deliberately tiny: it marks
-                a track, it must not compete with the row's real controls. */}
-            {isCreativeCommons && (
-              <span
-                title="Creative Commons — this track can be downloaded"
-                aria-label="Creative Commons — available to download"
-                className="inline-flex shrink-0 items-center gap-0.5 rounded-full border border-[rgb(var(--tint)_/_0.35)] bg-[rgb(var(--tint)_/_0.1)] px-1.5 py-px text-[9px] font-semibold tracking-wide text-[rgb(var(--tint))] uppercase"
-              >
-                <CreativeCommons className="size-2.5" aria-hidden />
-                CC
-              </span>
-            )}
+            {/* Badged only once the licence is CONFIRMED. An unverified row
+                shows nothing rather than a hopeful icon, because the badge has
+                to mean precisely what the Download action will do. */}
+            {isCreativeCommons && <CreativeCommonsBadge />}
           </div>
         </div>
 

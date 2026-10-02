@@ -1,5 +1,7 @@
 import { TrackActionsMenu } from "@/components/tracks/useTrackActions";
+import { CreativeCommonsBadge } from "@/components/tracks/CreativeCommonsBadge";
 import { albumPath, artistPath } from "@/lib/artistLinks";
+import { useIsCreativeCommons } from "@/lib/creativeCommons";
 import { cn } from "@/lib/utils";
 import { cleanArtistName, cleanTrackTitle, type YtItem } from "@/lib/youtube";
 import { usePlayerStore } from "@/store/player";
@@ -51,6 +53,14 @@ export function MediaCard({
   const currentId = usePlayerStore((s) => s.current?.id);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const isCurrent = currentId === item.id && onPlay !== undefined;
+
+  // Only a song card is a track, so only a song card can carry a licence
+  // badge — an artist or playlist card has no single video behind it. The
+  // check is batched across the whole shelf, never one request per card.
+  const isCreativeCommons = useIsCreativeCommons(
+    variant === "song" ? item.id : undefined,
+    variant === "song",
+  );
 
   // A track's artist and album have real pages now. Navigating beats dropping
   // the listener on a search box, and it costs nothing for the rows that have
@@ -174,13 +184,16 @@ export function MediaCard({
             >
               {title}
             </p>
-            <p className="mt-0.5 truncate text-xs text-muted-foreground">
-              {artistHref && variant !== "artist" ? (
-                <ArtistLink href={artistHref}>{subtitle}</ArtistLink>
-              ) : (
-                subtitle
-              )}
-            </p>
+            <div className="mt-0.5 flex min-w-0 items-center gap-1.5">
+              <p className="min-w-0 truncate text-xs text-muted-foreground">
+                {artistHref && variant !== "artist" ? (
+                  <ArtistLink href={artistHref}>{subtitle}</ArtistLink>
+                ) : (
+                  subtitle
+                )}
+              </p>
+              {isCreativeCommons ? <CreativeCommonsBadge /> : null}
+            </div>
             {albumHref ? (
               <p className="mt-0.5 truncate text-[11px] text-muted-foreground/80">
                 <ArtistLink href={albumHref}>{item.album}</ArtistLink>
