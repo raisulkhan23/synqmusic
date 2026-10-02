@@ -226,6 +226,24 @@ SYNQ installs to a device and keeps working without a network.
 
 #### Playback
 
+- **Playback depended on a service that had stopped working, with no
+  fallback and no timeout.** Measured live against the deployed backend:
+  `youtube:resolveStream` answered `{"reason": "Sign in to confirm you're not a
+bot", "url": null}` for **8 videos out of 8**, identically across retries —
+  YouTube has escalated against the deployment's datacenter IP. Both hardcoded
+  Piped fallbacks answered HTTP 500 with `SignInConfirmNotBotException`, and
+  every other public instance was shut down, 403 or 526. No direct stream could
+  be resolved for essentially any track.
+  Crossfade and gapless both _require_ a direct stream, because the YouTube
+  IFrame's audio cannot be tapped by Web Audio — and `gapless` ships **on**, so
+  every track took that path. The result was a track that could sit at
+  `buffering=true, playing=false, position 0.0` for ever: both decks holding no
+  source, the YouTube player started only as an afterthought, and that path
+  having **no load watchdog at all**. A spinner that never resolves, with no
+  sound and no message. Stream resolution is now raced against a short deadline
+  so the YouTube player is never gated behind a best-effort lookup, and the
+  fallback arms the same load watchdog every other engine path has, so a track
+  that genuinely cannot start surfaces as an error in seconds.
 - **Every song was downloaded twice, from two CDNs at once.** With a crossfade,
   a gapless hand-off, an EQ preset or an effect — anything that routes playback
   through the `<audio>` decks — SYNQ started the YouTube IFrame "so effects never

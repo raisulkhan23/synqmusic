@@ -202,6 +202,26 @@ const resolveYoutubeStream = async (
   return null;
 };
 
+/**
+ * Resolve, but never wait forever.
+ *
+ * `ytResolve` talks to a Convex action and then to a list of public Piped
+ * instances. Any of those can hang — and while it does, the track sits at
+ * `isBuffering: true` with position 0.0 and no sound, because the IFrame that
+ * could have played it has not been started yet. Resolution therefore loses a
+ * race against a short timer: the YouTube player is the only audio source that
+ * has ever reliably worked, so it must never be gated behind a best-effort
+ * lookup.
+ */
+const RESOLVE_RACE_MS = 1_200;
+
+function resolveWithDeadline(videoId: string): Promise<string | null> {
+  return Promise.race([
+    ytResolve(videoId),
+    new Promise<null>((r) => setTimeout(() => r(null), RESOLVE_RACE_MS)),
+  ]);
+}
+
 const ytResolveCache = new Map<string, Promise<string | null>>();
 
 /** Resolve once per track, then reuse the stream while EQ/effects are adjusted. */
@@ -3255,12 +3275,35 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
         // cache, and `prefetchTrack` already resolves the NEXT track while the
         // current one plays, so that cost is paid off the critical path for
         // every track after the first.
-        void ytResolve(videoId).then((url) => {
+        void resolveWithDeadline(videoId).then((url) => {
           const state = usePlayerStore.getState();
           if (state.current?.youtubeId !== videoId || !state.current) return;
           if (!url) {
             // No direct stream available for this video: the IFrame is a
             // genuine fallback rather than a race it can lose.
+            //
+            // It MUST get the same load watchdog the plain IFrame path arms.
+            // Without one this path had no timeout at all, and while stream
+            // resolution was being refused by YouTube ("Sign in to confirm
+            // you're not a bot") a track could sit at `isBuffering: true`,
+            // `isPlaying: false`, position 0.0 — for ever, with no sound and
+            // no message. The listener's only evidence was a spinner that
+            // never resolved.
+            clearYtLoadWatchdog();
+            ytLoadWatchdog = setTimeout(() => {
+              const s2 = usePlayerStore.getState();
+              if (seq !== loadSeq || !s2.current?.youtubeId || s2.isPlaying)
+                return;
+              clearYtLoadWatchdog();
+              noteTransition(
+                "This song wouldn't start — its stream and its YouTube player both refused.",
+              );
+              usePlayerStore.setState((currentState) => ({
+                isBuffering: false,
+                isPlaying: false,
+                errorNonce: currentState.errorNonce + 1,
+              }));
+            }, 8_000);
             void ytEngine
               .play(videoId, {
                 volume: get().volume,
@@ -3270,6 +3313,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
               .catch(() => undefined);
             return;
           }
+          clearYtLoadWatchdog();
           swapToFilteredStream(state.current, state.currentTime);
         });
         return;

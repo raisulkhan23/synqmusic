@@ -51,8 +51,10 @@ describe("one engine, one download", () => {
     const plays = branch.match(/ytEngine\s*\.\s*play\(/g) ?? [];
     expect(plays).toHaveLength(1);
     // ...and that single call must be inside the `if (!url)` fallback.
+    // ...and that single call must be inside the `if (!url)` fallback. The window
+    // is generous because that branch now also arms a load watchdog.
     expect(branch).toMatch(
-      /if \(!url\) \{[\s\S]{0,400}?ytEngine\s*\.\s*play\(/,
+      /if \(!url\) \{[\s\S]{0,1600}?ytEngine\s*\.\s*play\(/,
     );
   });
 
