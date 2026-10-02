@@ -57,6 +57,30 @@ const GENRE_CHIPS = [
   "Funk",
 ];
 
+/**
+ * Genre shortcuts for the Creative Commons filter.
+ *
+ * Ordered by how often YouTube's Creative Commons catalogue actually contains
+ * MUSIC — lo-fi, classical, ambient and piano are well represented there,
+ * while mainstream pop barely is. The comment on the row says "more common"
+ * rather than "available" on purpose: a chip only seeds a query, and every
+ * result is still licence-verified before it is shown. A genre with little CC
+ * music therefore produces few rows or none rather than a padded list of
+ * tracks that cannot actually be downloaded.
+ */
+const CC_GENRES: { label: string; query: string }[] = [
+  { label: "Lo-fi", query: "lofi study beats" },
+  { label: "Classical", query: "classical music" },
+  { label: "Ambient", query: "ambient music" },
+  { label: "Instrumental", query: "instrumental music" },
+  { label: "Piano", query: "piano music" },
+  { label: "Cinematic", query: "cinematic soundtrack music" },
+  { label: "Jazz", query: "jazz music" },
+  { label: "Electronic", query: "electronic music" },
+  { label: "Meditation", query: "meditation music" },
+  { label: "Acoustic", query: "acoustic guitar music" },
+];
+
 /** Map a mood chip to a search query that surfaces matching music. */
 const MOOD_QUERIES: Record<string, string> = {
   Chill: "chill songs",
@@ -777,6 +801,41 @@ export default function Search() {
           </span>
         )}
       </div>
+
+      {/* Genres where Creative Commons releases are more common. Shown only
+          with the filter on, because outside it they would seed an ordinary
+          search and promise something the chip is not about. */}
+      {ccOnly && (
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {CC_GENRES.map((genre) => {
+              const active =
+                query.trim().toLowerCase() === genre.query.toLowerCase();
+              return (
+                <button
+                  key={genre.label}
+                  type="button"
+                  onClick={() => applyQuery(genre.query)}
+                  aria-pressed={active}
+                  className={cn(
+                    "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                    active
+                      ? "border-[rgb(var(--tint)_/_0.55)] bg-[rgb(var(--tint)_/_0.14)] text-foreground"
+                      : "border-white/15 bg-white/[0.04] text-muted-foreground hover:border-[rgb(var(--tint)_/_0.45)] hover:bg-[rgb(var(--tint)_/_0.1)] hover:text-foreground",
+                  )}
+                >
+                  {genre.label}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-[10px] text-muted-foreground/70">
+            Genres where Creative Commons releases are more common. Every
+            result is still licence-checked, so a thin list here is the honest
+            answer, not a bug.
+          </p>
+        </div>
+      )}
 
       {!hasQuery ? (
         <>
