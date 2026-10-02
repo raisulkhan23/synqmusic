@@ -9,6 +9,70 @@ and semantic versioning.
 
 ## [Unreleased] — Browse-first release
 
+### Fixed
+
+#### Crossfade and gapless playback did not actually work
+
+Audited against the real execution path rather than the settings UI. Six
+defects, two of them fatal. The settings, the toggles and the code that
+*decided* to crossfade were all present and correct the whole time — the
+transitions simply never reached the audio.
+
+1. **A released deck was permanently dead.** Web Audio allows exactly one
+   `createMediaElementSource()` per `<audio>` element, ever, and that call
+   permanently reroutes the element's audio through the returned node.
+   `releaseDeck()` disconnected the node and forgot it, so a deck that had been
+   faded out could never make a sound again — and because `canCrossfadeNow()`
+   requires a gain node on *both* decks, crossfade could run **at most once per
+   page load**. The second crossfade of a session not only failed to fade, it
+   loaded the incoming track onto an element that could not be heard at all.
+   The deck now releases only its *content*; the graph stays wired.
+2. **The crossfade engine was unreachable for almost everyone.** Default
+   YouTube playback runs through the IFrame API, which Web Audio cannot tap,
+   and the switch that chose between the IFrame and the `<audio>` decks only
+   favoured the decks for an EQ or an effect preset. With a flat EQ — i.e. most
+   listeners — playback used the IFrame, every transition plan silently became a
+   cut, and the AudioContext was often never even constructed. Asking for a
+   crossfade now routes playback onto the decks and builds the graph, exactly as
+   an effect preset already did.
+3. **The incoming track was audible at full volume before the fade.** Both deck
+   gains were reset to unity and the incoming element was started *before* the
+   automation was scheduled, so the next song came in at 100% for the length of
+   the `play()` promise, then slammed to zero and faded up. The incoming deck is
+   now parked at zero first.
+4. **A refused blend orphaned a playing element.** If the gain automation
+   declined, the already-playing incoming deck was left running: two songs at
+   once, and the end-of-track handler later advanced to a third.
+5. **Manual Next never faded.** The skip armed its plan with a playhead
+   position of `0`, so the run-down trigger could never be satisfied, and `Next`
+   tore down the current track before any blend could run. It now runs a short
+   bounded blend and then advances.
+6. **Gapless was not implemented at all.** A gapless plan returned from the
+   scheduler immediately and nothing was ever preloaded, so the next stream was
+   not resolved until after `ended` — inside the very gap the setting exists to
+   remove. Gapless is now a real hand-off: the next track is resolved and
+   buffered on the spare deck ahead of the boundary and started at `ended`.
+
+### Changed
+
+- **Gapless preload lead** is 20s, and the incoming track is now prepared for
+  every transition mode rather than only for crossfades.
+- **Transition tracing** (`[SYNQ:transition] …`) in development builds only,
+  covering arming, refusals, the blend itself, completion and skipped hand-offs.
+  Every one of these failures previously looked identical from the UI: no
+  crossfade, no error, no explanation.
+
+### Known limitations
+
+- **Gapless is not sample-accurate.** Two `HTMLAudioElement`s cannot be made to
+  switch with sample precision the way a single `MediaSource` append of two
+  encoded segments can, so a small scheduler-granularity seam remains. What is
+  gone is every gap SYNQ was adding on top of it — stream resolution, first
+  bytes, element creation, re-render.
+- **The YouTube IFrame still cannot be crossfaded.** Audio inside a cross-origin
+  frame is not reachable by Web Audio. When a track is forced onto the IFrame,
+  transitions fall back to gapless rather than pretending to blend.
+
 The headline change: **SYNQ no longer asks you to create an account before
 you've used it.** You land, you browse, and the app asks for a session at the
 moment you do something that genuinely needs one.

@@ -795,25 +795,41 @@ export function spareDeckSlot(): "a" | "b" {
  * True when a real crossfade is possible right now: both decks are attached to
  * a RUNNING audio context. A suspended context means silence, so fading into
  * one would be worse than not fading at all.
+ *
+ * This now ATTEMPTS to attach a deck that is missing rather than simply
+ * reporting false, so one unattached deck no longer disables crossfade for the
+ * rest of the session.
  */
 export function canCrossfadeNow(): boolean {
   const d = decks;
-  return !!(
-    d &&
-    audioCtx &&
-    audioCtx.state === "running" &&
-    d.a.gain &&
-    d.b.gain
-  );
+  if (!d || !audioCtx) return false;
+  if (audioCtx.state !== "running") {
+    if (audioCtx.state === "suspended") void audioCtx.resume();
+    return false;
+  }
+  for (const slot of ["a", "b"] as const) {
+    if (!d[slot].gain && !ensureDeckAttached(slot)) return false;
+  }
+  return !!(d.a.gain && d.b.gain);
 }
 
 /**
  * Tear a deck down after it has been faded out (or a transition was
- * abandoned): stop it, drop the source and free the buffer.
+ * abandoned): stop it and free the buffer.
  *
- * Without this the old element keeps a decoded stream and a network connection
- * alive for the whole session, which is the leak that turns a crossfade into
- * a slow memory climb over an evening's listening.
+ * WITHOUT dropping the graph. `createMediaElementSource(el)` may be called AT
+ * MOST ONCE per HTMLAudioElement for the lifetime of that element, and that
+ * call permanently reroutes the element's audio into the returned node. This
+ * function used to disconnect that node and null both source and gain, so the
+ * released deck was SILENT FOREVER and `canCrossfadeNow()` — which needs a gain
+ * on both decks — became permanently false. Crossfade could therefore run at
+ * most once per page load, and the second crossfade of a session not only
+ * failed to fade, it loaded the incoming track onto an element that could not
+ * make a sound. Release the CONTENT; keep the graph wired. (The line this
+ * replaces used to justify dropping the source as a memory-leak fix: the leak
+ * it described was real, but the cure was permanent silence for a track.)
+ * alive for the whole session — see above for why that reasoning was wrong.
+ *
  */
 export function releaseDeck(slot: "a" | "b"): void {
   const d = decks;
@@ -831,16 +847,41 @@ export function releaseDeck(slot: "a" | "b"): void {
   } catch {
     /* ignore */
   }
+  // Neutralise the transition multiplier WITHOUT unwiring the node, so this
+  // deck is immediately clean if it is ever used for playback again.
+  setDeckGainNow(slot, 1);
+}
+
+/**
+ * Make sure a deck is attached to the shared graph with a live gain node.
+ *
+ * `releaseDeck` no longer orphans a deck, but this is the recovery path: if a
+ * deck was ever left unattached (an element that existed before the graph was
+ * built, or a half-built graph), a crossfade would otherwise be refused for the
+ * rest of the session. Returns false when the deck genuinely cannot blend, so
+ * the caller can fall back to normal playback instead of fading to silence.
+ */
+export function ensureDeckAttached(slot: "a" | "b"): boolean {
+  const d = decks;
+  const ctx = audioCtx;
+  if (!d || !ctx || !eqBassNode) return false;
+  const deck = d[slot];
   try {
-    deck.source?.disconnect();
+    if (!deck.source) {
+      deck.source = ctx.createMediaElementSource(deck.el);
+      mediaSourceAttached = true;
+    }
+    if (!deck.gain) {
+      deck.gain = ctx.createGain();
+      deck.gain.gain.value = 1;
+      deck.source.connect(deck.gain);
+      deck.gain.connect(eqBassNode);
+    }
+    return true;
   } catch {
-    /* ignore */
+    // InvalidStateError means this element was ALREADY captured by an earlier
+    // graph whose nodes are gone. There is no legal way to re-capture it, so
+    // the honest answer is that this deck cannot blend.
+    return !!deck.source;
   }
-  try {
-    deck.gain?.disconnect();
-  } catch {
-    /* ignore */
-  }
-  deck.source = null;
-  deck.gain = null;
 }

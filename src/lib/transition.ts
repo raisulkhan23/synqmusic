@@ -60,6 +60,15 @@ export const MAX_PREP_SECONDS = 20;
 /** How long before the fade begins we start preparing the next track. */
 export const PRELOAD_LEAD_SECONDS = 12;
 
+/**
+ * How long before a gapless boundary the next track is resolved and buffered.
+ *
+ * Generous, because nothing is lost by preparing early: the spare deck is
+ * silent and holds no network cost until it is played. It exists to move the
+ * resolver round-trip and the first bytes of the stream OUT of the gap.
+ */
+export const GAPLESS_PRELOAD_LEAD_SECONDS = 20;
+
 /** Why we are transitioning. Drives the fade length and the guards. */
 export type TransitionReason =
   | "track-ended"
@@ -303,4 +312,38 @@ export function shouldStartFade(
 export function preloadLead(plan: TransitionPlan): number {
   if (plan.mode !== "crossfade") return 0;
   return Math.min(MAX_PREP_SECONDS, plan.leadSeconds + PRELOAD_LEAD_SECONDS);
+}
+
+/**
+ * True when this transition must begin IMMEDIATELY rather than when the
+ * outgoing track runs down to `leadSeconds`.
+ *
+ * Only a manual skip qualifies. The listener has already pressed the button, so
+ * the whole point of the short `MANUAL_SKIP_FADE_SECONDS` blend is that it is
+ * over almost at once. Routing it through `shouldStartFade` instead — which
+ * fires at `remaining <= leadSeconds` — meant a manual Next armed a plan that
+ * could never satisfy its own trigger, because the track had seconds or minutes
+ * left to run. The blend silently never happened.
+ */
+export function shouldStartNow(plan: TransitionPlan): boolean {
+  if (plan.mode !== "crossfade") return false;
+  if (plan.seconds <= 0) return false;
+  return plan.reason === "manual-next";
+}
+
+/**
+ * Earliest moment to begin preparing the next track, in seconds before the
+ * end of the current one.
+ *
+ * Used for BOTH modes. A crossfade needs its fade window plus buffering time; a
+ * gapless hand-off needs only the buffering time, because it does not overlap —
+ * it just needs the stream resolved and buffered so that the `play()` at the
+ * end of the track is instant. Returning 0 for gapless (which it used to do, via
+ * `preloadLead`) is precisely why gapless was not implemented: nothing was ever
+ * prepared before `ended`, so the hand-off had to resolve a stream mid-gap.
+ */
+export function prepareLead(plan: TransitionPlan): number {
+  if (plan.mode === "crossfade") return preloadLead(plan);
+  if (plan.mode === "gapless") return GAPLESS_PRELOAD_LEAD_SECONDS;
+  return 0;
 }

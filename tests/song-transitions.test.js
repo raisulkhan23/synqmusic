@@ -475,9 +475,17 @@ describe("only one transition can run at a time", () => {
   });
 
   test("rapid Next presses abandon the running blend first", () => {
-    // Pressing Next twice must not stack two blends.
+    // Pressing Next twice must not stack two blends: the in-flight one is
+    // cancelled FIRST, then the short manual blend is armed. The advance
+    // itself is deferred behind the blend (see `runManualBlend`) because the
+    // old code called `playIndex` immediately, tearing the current track down
+    // before the blend could run — which is why manual Next never faded.
     expect(playerSource).toMatch(
-      /const next = \(\) => \{[\s\S]{0,400}?cancelTransition\("manual-next"\);[\s\S]{0,200}?requestTransition\("manual-next"\)/,
+      /const next = \(\) => \{[\s\S]{0,1200}?cancelTransition\("manual-next"\);[\s\S]{0,1200}?runManualBlend\(advance\)/,
+    );
+    // The blend is bounded, so a stuck transition can never eat the button.
+    expect(playerSource).toMatch(
+      /async function runManualBlend[\s\S]{0,900}?if \(transition === t\) \{[\s\S]{0,200}?cancelTransition\("manual-budget"\);[\s\S]{0,120}?advance\(\);/,
     );
   });
 
@@ -557,9 +565,19 @@ describe("failure always falls back to normal playback", () => {
   });
 
   test("end of track always advances, armed transition or not", () => {
-    // The fallback path has to remain the original behaviour.
+    // The fallback path has to remain the original behaviour. The window is
+    // generous because the gapless hand-off now runs BEFORE this, and that is
+    // deliberate: a gapless boundary must not first cancel its own preload.
     expect(playerSource).toMatch(
-      /function handleEnded\(\)[\s\S]{0,700}?cancelTransition\("ended"\);/,
+      /function handleEnded\(\)[\s\S]{0,1600}?cancelTransition\("ended"\);/,
+    );
+    // ...and the gapless attempt comes first, and only reports success when the
+    // incoming track is genuinely buffered and ready.
+    expect(playerSource).toMatch(
+      /function handleEnded\(\)[\s\S]{0,400}?if \(tryGaplessHandoff\(\)\) return;/,
+    );
+    expect(playerSource).toMatch(
+      /function tryGaplessHandoff[\s\S]{0,2000}?if \(incoming\.readyState < 2\) \{[\s\S]{0,300}?return false;/,
     );
   });
 });
@@ -570,7 +588,7 @@ describe("queue and playback state stay correct", () => {
     // this guard the listener skips a track and the queue index points at a
     // song they never heard.
     expect(playerSource).toMatch(
-      /function handleEnded\(\)[\s\S]{0,400}?if \(transition\?\.committed\)[\s\S]{0,200}?return;/,
+      /function handleEnded\(\)[\s\S]{0,900}?if \(transition\?\.committed\)[\s\S]{0,300}?return;/,
     );
   });
 
