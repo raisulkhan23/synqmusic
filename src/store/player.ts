@@ -2020,6 +2020,16 @@ function armTransition(reason: TransitionReason, atSeconds: number): void {
     });
     return;
   }
+  // A configured crossfade that plans as gapless is the one case a listener
+  // cannot tell apart from a bug. Say so explicitly rather than leaving it to
+  // be inferred from the absence of a fade.
+  if (plan.mode === "gapless" && s.crossfade > 0) {
+    traceTransition("plan=gapless-despite-crossfade", {
+      because: plan.because,
+      from: s.current?.title,
+      to: next.track.title,
+    });
+  }
 
   traceTransition("armed", {
     mode: plan.mode,

@@ -679,6 +679,10 @@ describe("ACCEPTANCE — settings actually reach the engine", () => {
     });
     expect(crossfading.mode).toBe("crossfade");
 
+    // An EXPLICIT crossfade wins even across an album boundary. It used to
+    // silently return gapless here, which overrode the listener's own setting
+    // with no message, log or UI hint — so crossfade appeared broken on exactly
+    // the tracks most likely to be played together. See PHASE 25.
     const albumBoundary = planTransition({
       crossfadeSeconds: 6,
       gaplessEnabled: true,
@@ -692,7 +696,41 @@ describe("ACCEPTANCE — settings actually reach the engine", () => {
       repeatOne: false,
       paused: false,
     });
-    expect(albumBoundary.mode).toBe("gapless");
+    expect(albumBoundary.mode).toBe("crossfade");
+    expect(albumBoundary.because).toContain("explicit crossfade");
+
+    // ...but with NO crossfade configured, the album seam is still preserved.
+    const noCrossfadeAlbum = planTransition({
+      crossfadeSeconds: 0,
+      gaplessEnabled: true,
+      reason: "track-ended",
+      currentDuration: 240,
+      currentTime: 239,
+      hasNext: true,
+      canCrossfade: true,
+      sameAlbum: true,
+      abRepeatActive: false,
+      repeatOne: false,
+      paused: false,
+    });
+    expect(noCrossfadeAlbum.mode).toBe("gapless");
+
+    // Same album, no gapless either: the tracks simply butt-join.
+    expect(
+      planTransition({
+        crossfadeSeconds: 0,
+        gaplessEnabled: false,
+        reason: "track-ended",
+        currentDuration: 240,
+        currentTime: 239,
+        hasNext: true,
+        canCrossfade: true,
+        sameAlbum: true,
+        abRepeatActive: false,
+        repeatOne: false,
+        paused: false,
+      }).mode,
+    ).toBe("cut");
 
     const tooShort = planTransition({
       crossfadeSeconds: 6,
@@ -734,6 +772,14 @@ describe("ACCEPTANCE — settings actually reach the engine", () => {
 });
 
 describe("the engine is instrumented for diagnosis, dev only", () => {
+  test("a configured crossfade that plans as gapless is never silent", () => {
+    // The one case a listener cannot tell apart from a bug: crossfade is ON and
+    // the engine is deliberately doing something else. It has to be reported.
+    expect(player).toContain('"plan=gapless-despite-crossfade"');
+    expect(playerCode).toMatch(
+      /if \(plan\.mode === "gapless" && s\.crossfade > 0\) \{\s*traceTransition\("plan=gapless-despite-crossfade"/,
+    );
+  });
   test("tracing exists and is gated to development builds", () => {
     // Every one of these failures used to look identical from the UI.
     expect(playerCode).toMatch(

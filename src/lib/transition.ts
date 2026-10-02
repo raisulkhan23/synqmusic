@@ -196,11 +196,38 @@ export function planTransition(req: TransitionRequest): TransitionPlan {
       (Number.isFinite(req.currentTime) ? req.currentTime : 0),
   );
 
+  // Manual skips are a "now" request: blend quickly, never make the listener
+  // wait out their configured crossfade. Resolved up here because the
+  // album-boundary rule below now needs it.
+  const requested =
+    req.reason === "manual-next"
+      ? Math.min(req.crossfadeSeconds, MANUAL_SKIP_FADE_SECONDS)
+      : req.crossfadeSeconds;
+
   // Album boundaries are the artist's own transition. Overlapping two of them
-  // destroys the seam they wrote, so a crossfade is never applied here — not
-  // even when one is configured and technically possible. With gapless on the
-  // boundary is preserved exactly; with it off, the tracks simply butt-join.
+  // destroys the seam they wrote, so gapless is preferred here — but an
+  // EXPLICIT crossfade setting WINS.
+  //
+  // This used to return gapless unconditionally, which silently overrode the
+  // listener: crossfade was switched on in Settings, and for any two
+  // consecutive tracks that shared an album name the app quietly did
+  // something else. No message, no log, no hint in the UI — so it presented as
+  // "crossfade is broken", and it did so on exactly the tracks most likely to
+  // be listened to together (an album, or a playlist imported from one).
+  //
+  // The album-seam reasoning still holds when no crossfade is configured:
+  // then the boundary is preserved rather than blended.
   if (req.sameAlbum) {
+    const explicit = clampFade(requested, req.currentDuration, remaining);
+    if (requested > 0 && req.canCrossfade && explicit > 0) {
+      return {
+        mode: "crossfade",
+        seconds: explicit,
+        leadSeconds: explicit,
+        reason: req.reason,
+        because: "an explicit crossfade overrides the album-boundary rule",
+      };
+    }
     return req.gaplessEnabled
       ? {
           mode: "gapless",
@@ -218,13 +245,6 @@ export function planTransition(req: TransitionRequest): TransitionPlan {
   if (req.reason === "manual-prev") {
     return cut("previous is handled by the player, not the fade path");
   }
-
-  // Manual skips are a "now" request: blend quickly, never make the listener
-  // wait out their configured crossfade.
-  const requested =
-    req.reason === "manual-next"
-      ? Math.min(req.crossfadeSeconds, MANUAL_SKIP_FADE_SECONDS)
-      : req.crossfadeSeconds;
 
   const wantsCrossfade = requested > 0;
   if (wantsCrossfade && req.canCrossfade) {

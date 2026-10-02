@@ -218,29 +218,53 @@ describe("planTransition crossfade", () => {
 });
 
 describe("planTransition gapless", () => {
-  test("an album prefers gapless over a crossfade", () => {
+  test("an album prefers gapless when no crossfade is configured", () => {
     // Albums, live sets and DJ mixes have boundaries the artist recorded.
-    // Overlapping two of them destroys the transition they wrote, so the
-    // configured crossfade must not be applied inside an album.
-    const p = planTransition(base({ sameAlbum: true, gaplessEnabled: true }));
+    // Overlapping two of them destroys the transition they wrote, so with
+    // crossfade OFF the boundary is preserved rather than blended.
+    const p = planTransition(
+      base({ sameAlbum: true, crossfadeSeconds: 0, gaplessEnabled: true }),
+    );
     expect(p.mode).toBe("gapless");
     expect(p.because).toContain("album");
   });
 
-  test("an album is never crossfaded even with gapless switched off", () => {
-    // The album guard outranks the crossfade setting, so the boundary is
-    // preserved either way — gapless off just means a butt-join.
-    const p = planTransition(base({ sameAlbum: true, gaplessEnabled: false }));
+  test("an album butt-joins when gapless is off too", () => {
+    const p = planTransition(
+      base({ sameAlbum: true, crossfadeSeconds: 0, gaplessEnabled: false }),
+    );
     expect(p.mode).toBe("cut");
     expect(p.because).toContain("album");
   });
 
-  test("gapless never overlaps, even mid-album", () => {
+  test("an EXPLICIT crossfade outranks the album boundary", () => {
+    // This used to return gapless unconditionally, silently overriding the
+    // listener's own setting: crossfade was on in Settings and the app quietly
+    // did something else, with no message, log or UI hint. On an album or an
+    // imported playlist — the tracks most likely to be played together — that
+    // presents as "crossfade is broken".
     const p = planTransition(
       base({ sameAlbum: true, crossfadeSeconds: 10, gaplessEnabled: true }),
     );
+    expect(p.mode).toBe("crossfade");
+    expect(p.seconds).toBe(10);
+    expect(p.leadSeconds).toBe(10);
+    expect(p.because).toContain("explicit crossfade");
+  });
+
+  test("the explicit crossfade is still clamped on a short album track", () => {
+    // Honouring the setting must not mean ignoring the safety clamps.
+    const p = planTransition(
+      base({
+        sameAlbum: true,
+        crossfadeSeconds: 10,
+        gaplessEnabled: true,
+        currentDuration: 20,
+        currentTime: 8,
+      }),
+    );
+    expect(p.mode).toBe("gapless");
     expect(p.seconds).toBe(0);
-    expect(p.leadSeconds).toBe(0);
   });
 
   test("autoplay uses the same transition system as a queued track", () => {
