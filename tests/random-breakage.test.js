@@ -17,6 +17,10 @@ const admin = readSource("src/convex/admin.ts");
 
 const tight = (s) => s.replace(/\s+/g, "");
 
+/** The comment explaining a class of bug necessarily names the bug. */
+const stripComments = (s) =>
+  s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+
 describe("the status chips cannot collide with the miniplayer", () => {
   test("the sleep chip is hidden on the mobile bar", () => {
     // The bar is a 68px island with `overflow-hidden`, and the chip is a wide
@@ -45,6 +49,23 @@ describe("the status chips cannot collide with the miniplayer", () => {
       playerBar.indexOf("function ReadingSessionNav()"),
     );
     expect(chip).not.toMatch(/className="flex shrink-0/);
+  });
+
+  test("the trim chip is icon-only, never a text pill", () => {
+    // The bar is the one row with no horizontal slack. "Skip intro" and
+    // "Trimmed 12s" were wide enough to squeeze the transport controls and
+    // jam the layout, so the visible text is gone from the bar. The fullscreen
+    // player keeps its labels — it has the room.
+    const chip = stripComments(
+      playerBar.slice(
+        playerBar.indexOf("function IntroTrimChip()"),
+        playerBar.indexOf("function ReadingSessionNav()"),
+      ),
+    );
+    expect(chip).not.toContain("Skip intro");
+    expect(chip).not.toMatch(/Trimmed \{formatSkipped/);
+    // ...and the affordance is still named for pointer and screen-reader users.
+    expect(chip).toContain('aria-label="Skip ahead past a slow intro"');
   });
 
   test("the fullscreen player keeps both controls, so nothing is lost", () => {

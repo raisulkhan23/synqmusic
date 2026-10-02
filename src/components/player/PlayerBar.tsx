@@ -109,12 +109,19 @@ function IntroTrimChip() {
   const inIntro = hasTrack && currentTime <= 60;
   if (skipped !== null) {
     return (
-      <div className="hidden shrink-0 items-center gap-1 rounded-full bg-white/[0.07] py-1 pr-0.5 pl-2 text-[10px] font-semibold text-muted-foreground sm:flex">
-        <Scissors
-          className="size-3 text-[rgb(var(--tint))]"
-          aria-hidden="true"
-        />
-        <span className="tabular-nums">Trimmed {formatSkipped(skipped)}</span>
+      // Icon-only for the same reason as the skip button below: this chip sits
+      // in the one row that has no slack, and "Trimmed 12s" was wide enough to
+      // squeeze the transport controls. The figure is still reachable, on
+      // hover and to a screen reader, via the label.
+      <div className="hidden shrink-0 items-center rounded-full bg-white/[0.07] p-1 sm:flex">
+        <span
+          className="grid size-6 place-items-center text-[rgb(var(--tint))]"
+          title={`Trimmed ${formatSkipped(skipped)}`}
+          aria-label={`Intro trimmed by ${formatSkipped(skipped)}`}
+          role="img"
+        >
+          <Scissors className="size-3" aria-hidden="true" />
+        </span>
         <button
           type="button"
           aria-label="Undo intro trim"
@@ -123,7 +130,7 @@ function IntroTrimChip() {
             undoIntroTrim();
             toast("Intro restored");
           }}
-          className="rounded-full p-0.5 transition-colors hover:bg-white/10 hover:text-foreground"
+          className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
         >
           <Undo2 className="size-3" />
         </button>
@@ -135,6 +142,7 @@ function IntroTrimChip() {
   return (
     <button
       type="button"
+      aria-label="Skip ahead past a slow intro"
       onClick={() => {
         const applied = skipIntro();
         if (applied > 0)
@@ -143,10 +151,14 @@ function IntroTrimChip() {
           });
       }}
       title="Skip ahead past a slow intro"
-      className="hidden shrink-0 items-center gap-1 rounded-full bg-white/[0.07] px-2 py-1 text-[10px] font-semibold text-muted-foreground transition-colors hover:bg-white/[0.12] hover:text-foreground sm:flex"
+      // ICON ONLY, deliberately. This used to read "Skip intro" in a pill, and
+      // the player bar is the one row with no horizontal slack — the pill
+      // squeezed the transport and could visibly jam the layout. The label
+      // moved to `aria-label`/`title` so nothing is lost, and the footprint
+      // now matches the queue button beside it.
+      className="hidden shrink-0 items-center rounded-full bg-white/[0.07] p-2 text-muted-foreground transition-colors hover:bg-white/[0.12] hover:text-foreground sm:flex lg:p-1.5"
     >
-      <Scissors className="size-3" aria-hidden="true" />
-      Skip intro
+      <Scissors className="size-3.5" aria-hidden="true" />
     </button>
   );
 }

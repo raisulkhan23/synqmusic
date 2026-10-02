@@ -224,7 +224,9 @@ describe("intro trim wiring", () => {
     expect(playerBar).toContain("function IntroTrimChip");
     expect(playerBar).toContain("skipIntro()");
     expect(playerBar).toContain("undoIntroTrim()");
-    expect(playerBar).toContain("Trimmed {formatSkipped(skipped)}");
+    // The chip is icon-only in the bar, so the figure it trimmed is carried by
+    // an accessible label rather than by visible text.
+    expect(playerBar).toContain("Intro trimmed by ${formatSkipped(skipped)}");
   });
 
   test("settings exposes the toggle and builds the audio graph on the click", () => {
