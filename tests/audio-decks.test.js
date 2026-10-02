@@ -27,8 +27,23 @@ beforeAll(async () => {
   // module builds its decks with `new Audio()`.
   globalThis.Audio = win.Audio;
   // The module keeps its decks on the window and memoises the graph, so it has
-  // to be imported only after the DOM exists.
-  audio = await import("../src/lib/audio.ts");
+  // to be imported only after the DOM exists — AND it must be a FRESH module
+  // instance.
+  //
+  // `decks` is module-level state memoised on first use. Any earlier test file
+  // that renders a page importing the player store installs its own happy-dom
+  // document and, on the first track load, causes those decks to be built
+  // against THAT document. Importing the cached module here then hands back
+  // elements belonging to a document that no longer exists, and the assertions
+  // about the two decks being distinct and attached fail with an internal
+  // happy-dom error rather than anything about SYNQ.
+  //
+  // This became reachable once gapless (on by default) started routing
+  // playback through the decks, so `ensureGraph()` — and therefore
+  // `ensureDecks()` — now runs on the first track load instead of only when an
+  // EQ or effect preset was configured. The same `?fresh=` pattern is already
+  // used by `audio-graph-resilience.test.js` for the same reason.
+  audio = await import(`../src/lib/audio.ts?fresh=${Math.random()}`);
 });
 
 describe("two playback decks", () => {
