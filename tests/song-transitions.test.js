@@ -514,7 +514,13 @@ describe("only one transition can run at a time", () => {
     );
     // The blend is bounded, so a stuck transition can never eat the button.
     expect(playerSource).toMatch(
-      /async function runManualBlend[\s\S]{0,900}?if \(transition === t\) \{[\s\S]{0,200}?cancelTransition\("manual-budget"\);[\s\S]{0,120}?advance\(\);/,
+      /async function runManualBlend[\s\S]{0,2000}?if \(transition === t\) \{[\s\S]{0,200}?cancelTransition\("manual-budget"\);[\s\S]{0,120}?advance\(\);/,
+    );
+    // A COMMITTED blend already advanced through `commitCrossfadeAdvance`, so
+    // the trailing `advance()` had to be skipped — otherwise Next faded into
+    // the next song and then skipped straight past it (the queue moved twice).
+    expect(playerSource).toMatch(
+      /async function runManualBlend[\s\S]{0,2000}?if \(t\.committed\) return;[\s\S]{0,300}?advance\(\);/,
     );
   });
 

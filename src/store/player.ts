@@ -597,6 +597,8 @@ interface PlayerStore {
    */
   reorderUpcoming: (upcoming: Playable[], base: Playable[]) => void;
   clearQueue: () => void;
+  /** Restore the queue that the last `clearQueue` removed, if any. */
+  undoClearQueue: () => void;
   /**
    * Wipe the listening session: stop both decks, stop the YouTube engine,
    * drop the queue, history and the persisted queue.
@@ -1997,6 +1999,13 @@ async function runManualBlend(advance: () => void): Promise<void> {
   while (transition === t && Date.now() < deadline) {
     await new Promise<void>((resolve) => setTimeout(resolve, 40));
   }
+  // If the blend COMMITTED, it has ALREADY advanced the queue through
+  // `commitCrossfadeAdvance`, and `t.committed` is the only flag that tells
+  // the two outcomes apart — a commit and an abandon both null `transition`,
+  // so `transition === t` cannot. Calling `advance()` here after a commit moved
+  // the queue a SECOND time, so Next faded into the next song and then skipped
+  // straight past it.
+  if (t.committed) return;
   if (transition === t) {
     // It neither finished nor failed — drop it rather than leaving the decks
     // mid-blend, then move on.
@@ -2753,6 +2762,21 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
   });
 
   let lastRemoved: { item: Playable; index: number } | null = null;
+  /**
+   * The queue as it was immediately before the last `clearQueue`.
+   *
+   * Clearing the queue is destructive and NOT reconstructible: the removed
+   * entries include one-off autoplay picks that cannot be fetched again. The
+   * Undo in the toast is the only way back, so the snapshot is kept here rather
+   * than recomputed. Cleared on use so an Undo can never land on top of a queue
+   * the listener has since rebuilt.
+   */
+  let lastCleared: {
+    queue: Playable[];
+    queueIndex: number;
+    unshuffledQueue: Playable[] | null;
+    unshuffledIndex: number;
+  } | null = null;
   /** Increments on every track load; stale async results are discarded. */
   let loadSeq = 0;
 
@@ -4759,6 +4783,16 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     clearQueue: () => {
       // A blend targeting a track that is being removed must not commit later.
       cancelTransition("queue-cleared");
+      // Snapshot the WHOLE pre-clear state so the toast's Undo can restore it
+      // exactly. Captured before the wipe because the entries removed by a
+      // clear include one-off autoplay picks that cannot be regenerated.
+      const before = get();
+      lastCleared = {
+        queue: before.queue,
+        queueIndex: before.queueIndex,
+        unshuffledQueue: before.unshuffledQueue,
+        unshuffledIndex: before.unshuffledIndex,
+      };
       set((s2) => {
         const queue = s2.current ? [s2.current] : [];
         saveQueue(queue, s2.current ? 0 : -1, s2.current?.id ?? null);
@@ -4773,6 +4807,20 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
           unshuffledIndex: -1,
         };
       });
+    },
+    undoClearQueue: () => {
+      const snap = lastCleared;
+      if (!snap) return;
+      lastCleared = null;
+      set({
+        queue: snap.queue,
+        queueIndex: snap.queueIndex,
+        unshuffledQueue: snap.unshuffledQueue,
+        unshuffledIndex: snap.unshuffledIndex,
+      });
+      // The clear persisted, so the undo has to as well — otherwise the queue
+      // looked restored in the UI but a reload brought back the cleared one.
+      saveQueue(snap.queue, snap.queueIndex, get().current?.id ?? null);
     },
     resetForSignOut: () => {
       // A blend targeting a track that is about to be discarded must not

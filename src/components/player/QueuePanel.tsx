@@ -189,6 +189,7 @@ export function QueuePanel() {
   const undoRemoveFromQueue = usePlayerStore((s) => s.undoRemoveFromQueue);
   const reorderUpcoming = usePlayerStore((s) => s.reorderUpcoming);
   const clearQueue = usePlayerStore((s) => s.clearQueue);
+  const undoClearQueue = usePlayerStore((s) => s.undoClearQueue);
   const shuffle = usePlayerStore((s) => s.shuffle);
   const smartShuffle = usePlayerStore((s) => s.smartShuffle);
   const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
@@ -444,7 +445,17 @@ export function QueuePanel() {
                 type="button"
                 onClick={() => {
                   clearQueue();
-                  toast.success("Queue cleared");
+                  // Clearing the queue is the most destructive control in the
+                  // panel — it drops the listener's whole Up Next in one tap,
+                  // including autoplay picks that cannot be regenerated. The
+                  // Undo restores the exact previous queue (see
+                  // `undoClearQueue`), not a fresh set of recommendations.
+                  toast.success("Queue cleared", {
+                    action: {
+                      label: "Undo",
+                      onClick: () => undoClearQueue(),
+                    },
+                  });
                 }}
                 className="flex items-center gap-1 rounded-full px-2 py-1 text-xs text-red-400/80 transition-colors hover:bg-red-500/10 hover:text-red-400"
               >

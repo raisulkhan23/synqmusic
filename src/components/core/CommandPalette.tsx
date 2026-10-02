@@ -9,6 +9,7 @@ import {
   ListMusic,
   Pause,
   Play,
+  Repeat,
   Search,
   Settings,
   Shuffle,
@@ -97,6 +98,9 @@ export function CommandPalette() {
   const next = usePlayerStore((s) => s.next);
   const prev = usePlayerStore((s) => s.prev);
   const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
+  const cycleRepeat = usePlayerStore((s) => s.cycleRepeat);
+  const setQueueOpen = usePlayerStore((s) => s.setQueueOpen);
+  const toggleLike = usePlayerStore((s) => s.toggleLike);
   const hasTrack = usePlayerStore((s) => Boolean(s.current));
 
   const go = (to: string) => {
@@ -170,6 +174,34 @@ export function CommandPalette() {
           >
             <Shuffle className="size-4 text-muted-foreground" />
             <span>Toggle shuffle</span>
+            <CommandShortcut>S</CommandShortcut>
+          </CommandItem>
+          <CommandItem value="playback repeat loop" onSelect={run(cycleRepeat)}>
+            <Repeat className="size-4 text-muted-foreground" />
+            <span>Toggle repeat</span>
+            <CommandShortcut>R</CommandShortcut>
+          </CommandItem>
+          <CommandItem
+            value="playback like favourite favorite heart save"
+            disabled={!hasTrack}
+            onSelect={run(() => {
+              // Read the CURRENT track at invoke time rather than closing over
+              // render state, so the palette can never like the previous song.
+              const id = usePlayerStore.getState().current?.id;
+              if (id) toggleLike(id);
+            })}
+          >
+            <Heart className="size-4 text-muted-foreground" />
+            <span>Like current track</span>
+            <CommandShortcut>L</CommandShortcut>
+          </CommandItem>
+          <CommandItem
+            value="playback queue up next"
+            onSelect={run(() => setQueueOpen(true))}
+          >
+            <ListMusic className="size-4 text-muted-foreground" />
+            <span>Open queue</span>
+            <CommandShortcut>Q</CommandShortcut>
           </CommandItem>
         </CommandGroup>
       </CommandList>
