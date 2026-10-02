@@ -58,6 +58,15 @@ export interface OfflineEntry {
    * violation. It is stored, shown in the downloads list, and required.
    */
   licenseUrl: string;
+  /**
+   * When true, automatic eviction must never remove this entry.
+   *
+   * Storage management that silently deletes a track the listener deliberately
+   * marked to keep is worse than refusing the new download: the app destroyed
+   * something on purpose. Pinned entries are therefore skipped by eviction and
+   * a download that cannot fit without evicting a pin fails with that stated.
+   */
+  pinned?: boolean;
 }
 
 /**
@@ -168,6 +177,40 @@ export function fitsInQuota(input: {
 /** Default cap on total downloaded audio. Roughly 60 tracks at 5 MB. */
 export const DEFAULT_DOWNLOAD_CAP_BYTES = 300 * 1024 * 1024;
 
+/** Setting key for the listener's chosen cap. */
+export const DOWNLOAD_CAP_KEY = "ss.offlineCapBytes";
+
+/**
+ * The caps the listener may choose, in bytes.
+ *
+ * Deliberately a short ladder rather than a free-text number: a size field
+ * invites a typo that either refuses every download (1 MB) or disables the
+ * limit entirely (10 GB on a phone). `null` means "as much as the browser
+ * allows", which is the only honest way to express "no SYNQ limit".
+ */
+export const DOWNLOAD_CAP_CHOICES: { label: string; bytes: number | null }[] = [
+  { label: "100 MB", bytes: 100 * 1024 * 1024 },
+  { label: "300 MB", bytes: 300 * 1024 * 1024 },
+  { label: "1 GB", bytes: 1024 * 1024 * 1024 },
+  { label: "No limit", bytes: null },
+];
+
+/**
+ * Resolve the stored cap to a byte count.
+ *
+ * Anything unrecognised — a corrupt value, a number from a future version, a
+ * string — falls back to the default rather than to "no limit", because
+ * failing open here would fill a device.
+ */
+export function resolveDownloadCap(raw: string | null): number {
+  if (raw === null) return DEFAULT_DOWNLOAD_CAP_BYTES;
+  if (raw === "unlimited") return Number.POSITIVE_INFINITY;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0)
+    return DEFAULT_DOWNLOAD_CAP_BYTES;
+  return parsed;
+}
+
 /**
  * Decide what to evict so a new download fits.
  *
@@ -182,14 +225,22 @@ export function planEviction(input: {
   appCapBytes: number;
   /** The key being (re)written. It is exempt, and is already counted above. */
   keepKey?: string;
-}): { evict: OfflineEntry[]; freedBytes: number } {
-  const { entries, needBytes, usedBytes, appCapBytes, keepKey } = input;
+  /** Also treat this track id as exempt (a re-download of the same track). */
+  keepTrackId?: string;
+}): { evict: OfflineEntry[]; freedBytes: number; blockedByPins: boolean } {
+  const { entries, needBytes, usedBytes, appCapBytes, keepKey, keepTrackId } =
+    input;
   const evict: OfflineEntry[] = [];
   let freed = 0;
   let projected = usedBytes;
 
   const candidates = entries
     .filter((e) => e.key !== keepKey)
+    .filter((e) => e.trackId !== keepTrackId)
+    // Pins are never eviction candidates. Excluding them here (rather than
+    // stopping the loop when one is reached) means a pinned entry does not
+    // shield the older unpinned entries behind it.
+    .filter((e) => !e.pinned)
     .sort((a, b) => a.savedAt - b.savedAt);
 
   for (const entry of candidates) {
@@ -198,7 +249,13 @@ export function planEviction(input: {
     freed += entry.bytes;
     projected -= entry.bytes;
   }
-  return { evict, freedBytes: freed };
+  return {
+    evict,
+    freedBytes: freed,
+    // True when the space was NOT made, which the caller must report rather
+    // than pressing on and failing at the write.
+    blockedByPins: projected + needBytes > appCapBytes,
+  };
 }
 
 /** Human-readable size for a download row. */
@@ -239,7 +296,7 @@ export function parseOfflineIndex(raw: string | null): OfflineEntry[] {
       continue;
     }
     if (typeof savedAt !== "number" || !Number.isFinite(savedAt)) continue;
-    out.push({
+    const entry: OfflineEntry = {
       key,
       trackId,
       title,
@@ -253,7 +310,12 @@ export function parseOfflineIndex(raw: string | null): OfflineEntry[] {
       savedAt,
       source: typeof row.source === "string" ? row.source : "unknown",
       licenseUrl: typeof row.licenseUrl === "string" ? row.licenseUrl : "",
-    });
+    };
+    // Strictly `=== true`. A pin is a promise that a file will not be deleted,
+    // so an unreadable value must NOT be read as one — failing open here would
+    // quietly protect nothing while telling the listener it was protected.
+    if (row.pinned === true) entry.pinned = true;
+    out.push(entry);
   }
   return out;
 }

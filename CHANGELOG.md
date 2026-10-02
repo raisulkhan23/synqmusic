@@ -63,6 +63,42 @@ shown alongside each download, because attribution is a licence condition
 rather than a courtesy. The result is that Creative Commons search results carry
 **Save offline**, and nothing else does.
 
+**Storage management**
+
+- **Pinned downloads.** Any download can be pinned, and automatic eviction
+  never removes one. When pins are the reason a new download will not fit, the
+  app says so and names it, instead of reporting "storage full" on a device
+  with room — which would send you to look at free space for a problem that is
+  actually a setting.
+- **A configurable download limit** — 100 MB / 300 MB / 1 GB / no limit, set in
+  **Settings → App → Offline**. A ladder rather than a size field, because a
+  typo in a size box either refuses every download or removes the limit
+  entirely. A corrupt stored value falls back to the default, never to
+  unlimited, so one bad byte cannot fill a device.
+- **The browser's real remaining space is shown**, not just SYNQ's cap. They
+  are different numbers and the browser's is the one that actually stops a
+  write.
+
+**Offline-aware queue and library**
+
+- **Queue rows are marked when they will play offline.** An offline listener
+  had no way to tell which rows in a queue were safe to reach for and which
+  would simply refuse. A downloaded track now carries an **Offline** badge,
+  driven by the download index and live — a download finishing while the queue
+  is open shows up without a reload.
+- **Playlists render offline.** The page fell through to skeletons and then
+  nothing, reading as "your playlists are gone". A bounded snapshot of your own
+  playlists is written while online and rendered offline as a read-only card —
+  deliberately not the normal card, which owns rename and delete mutations that
+  would silently fail without a network.
+- **The empty state no longer lies.** "No playlists yet" is now gated on the
+  server actually having answered, so being offline with no snapshot cannot be
+  mistaken for having deleted everything.
+- **Playing a track that is not downloaded while offline says why immediately**
+  rather than leaving a spinner for the full 8-second watchdog. The attempt is
+  still made: `navigator.onLine` is a hint, and it is wrong on captive portals
+  and some VPNs, so refusing on it would break tracks that would have played.
+
 ### Fixed
 
 - **Every app update deleted every downloaded track.** The service worker's

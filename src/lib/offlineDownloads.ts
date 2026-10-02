@@ -20,10 +20,12 @@
 import { useSyncExternalStore } from "react";
 import {
   DEFAULT_DOWNLOAD_CAP_BYTES,
+  DOWNLOAD_CAP_KEY,
   evaluateDownloadEligibility,
   fitsInQuota,
   offlineCacheKey,
   planEviction,
+  resolveDownloadCap,
   type OfflineEntry,
 } from "./offlineStore";
 import {
@@ -31,11 +33,15 @@ import {
   isPersisted,
   offlineSupported,
   readIndex,
+  readMirror,
   removeDownload,
   requestPersistence,
   saveDownload,
   totalDownloadedBytes,
 } from "./offlineAudio";
+// The raw key, compared above. Imported from the store module so this file and
+// the writer cannot drift apart.
+import { OFFLINE_INDEX_KEY } from "./offlineStore";
 
 /** Per-track status. `error` carries a listener-facing reason. */
 export type DownloadStatus = "idle" | "downloading" | "done" | "error";
@@ -45,13 +51,23 @@ export interface DownloadState {
   status: Record<string, DownloadStatus>;
   /** trackId → message, set only alongside `error`. */
   messages: Record<string, string>;
+  /**
+   * Bumped on EVERY change.
+   *
+   * The download index lives in localStorage, which is not reactive. Consumers
+   * that need "which tracks are on this device right now" must re-read it when
+   * the set changes, and this is the value that tells them so — without it the
+   * only change signal would be the object identity of `status`, which does
+   * not change when a download is deleted from elsewhere.
+   */
+  revision: number;
 }
 
-let state: DownloadState = { status: {}, messages: {} };
+let state: DownloadState = { status: {}, messages: {}, revision: 0 };
 const listeners = new Set<() => void>();
 
 function emit(next: Partial<DownloadState>): void {
-  state = { ...state, ...next };
+  state = { ...state, ...next, revision: state.revision + 1 };
   for (const listener of listeners) listener();
 }
 
@@ -66,11 +82,61 @@ const getSnapshot = () => state;
 const getServerSnapshot = (): DownloadState => ({
   status: {},
   messages: {},
+  revision: 0,
 });
 
 /** Status for every in-flight or recently finished download. */
 export function useDownloads(): DownloadState {
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+}
+
+/**
+ * The track ids currently on this device.
+ *
+ * Reads the SYNCHRONOUS localStorage mirror rather than the IndexedDB index,
+ * because this backs a badge in the queue: awaiting a database open to decide
+ * whether to draw a small icon would make every queue row render twice.
+ *
+ * Subscribes to the download store so a track downloaded while the queue is
+ * open starts showing its badge without a reload.
+ */
+let cachedIndexRaw: string | null = null;
+let cachedTrackIds: Set<string> = new Set();
+
+/**
+ * The downloaded track ids, cached by the raw index text.
+ *
+ * Keyed on the RAW localStorage string rather than on the store's revision,
+ * because the index can be changed by code that never touches this store —
+ * the Settings panel's remove and remove-all both do. Comparing the text means
+ * any writer invalidates the cache, with no bookkeeping to keep in sync; and
+ * because an unchanged text returns the SAME Set instance, React sees a stable
+ * value and does not re-render on every pass.
+ */
+function downloadedIdsSnapshot(): Set<string> {
+  let raw: string | null = null;
+  try {
+    raw = localStorage.getItem(OFFLINE_INDEX_KEY);
+  } catch {
+    raw = null;
+  }
+  if (raw !== cachedIndexRaw) {
+    cachedIndexRaw = raw;
+    cachedTrackIds = new Set(readMirror().map((entry) => entry.trackId));
+  }
+  return cachedTrackIds;
+}
+
+export function useDownloadedTrackIds(): Set<string> {
+  // Subscribe purely for the re-render. A download finishing, failing or being
+  // deleted elsewhere must repaint the rows that show its badge.
+  useDownloads();
+  // The cache is refreshed in a plain function rather than inline: mutating
+  // module state from inside a hook is impure under concurrent rendering, and
+  // the React compiler lint rejects it outright. The refresh is idempotent
+  // anyway — identical index text yields the same Set instance — so it is safe
+  // to call during render.
+  return downloadedIdsSnapshot();
 }
 
 /** Current status of one track. */
@@ -83,6 +149,15 @@ export function useDownloadStatus(trackId: string): DownloadStatus | "idle" {
 export type DownloadResult =
   | { ok: true; entry: OfflineEntry }
   | { ok: false; reason: string };
+
+/** The listener's chosen download cap, resolved from storage. */
+export function readDownloadCap(): number {
+  try {
+    return resolveDownloadCap(localStorage.getItem(DOWNLOAD_CAP_KEY));
+  } catch {
+    return DEFAULT_DOWNLOAD_CAP_BYTES;
+  }
+}
 
 /**
  * A safe filename for the bytes SYNQ writes to disk.
@@ -146,7 +221,7 @@ export async function downloadTrack(input: {
     licenseUrl,
     source,
     entries,
-    appCapBytes = DEFAULT_DOWNLOAD_CAP_BYTES,
+    appCapBytes = readDownloadCap(),
     timeoutMs = 60_000,
   } = input;
   const doFetch = input.fetchImpl ?? fetch;
@@ -225,7 +300,7 @@ export async function downloadTrack(input: {
       needBytes: declared,
       usedBytes,
       appCapBytes,
-      keepKey: undefined,
+      keepTrackId: trackId,
     });
     for (const victim of plan.evict) {
       await removeDownload(victim.trackId);
@@ -243,6 +318,16 @@ export async function downloadTrack(input: {
       emit({
         status: { ...state.status, [trackId]: "idle" },
       });
+      // Name the actual cause when pins are what stopped it. "Storage full"
+      // would send the listener to look at free space on a device that has
+      // plenty, when the real answer is that they pinned something.
+      const pinned = existing.filter((e) => e.pinned).length;
+      if (appCapBytes !== Number.POSITIVE_INFINITY && pinned > 0) {
+        return {
+          ok: false,
+          reason: `This needs more room than you have left, and ${pinned === 1 ? "the track you pinned is" : `the ${pinned} tracks you pinned are`} protected from automatic removal. Unpin one, or raise the download limit in Settings.`,
+        };
+      }
       return { ok: false, reason: recheck.reason! };
     }
   }
