@@ -103,6 +103,7 @@ function IntroTrimChip() {
   const hasTrack = usePlayerStore((s) => s.current !== null);
   const skipIntro = usePlayerStore((s) => s.skipIntro);
   const undoIntroTrim = usePlayerStore((s) => s.undoIntroTrim);
+  const toggleIntroTrim = usePlayerStore((s) => s.toggleIntroTrim);
 
   // Once a trim has landed the playhead is past the intro, so the button has
   // nothing left to do — the undo affordance replaces it.
@@ -137,7 +138,56 @@ function IntroTrimChip() {
       </div>
     );
   }
-  if (!introTrim || !inIntro) return null;
+  // The icon is ALWAYS present while a track is loaded.
+  //
+  // It used to render only when smart intro trim was enabled AND the playhead
+  // was inside the first 60s — and smart trim defaults to off. So for anyone
+  // who had not turned it on, there was no control at all, which reads as the
+  // button having been deleted rather than as a setting being unavailable.
+  // The label is gone (as asked); the icon is not.
+  if (!hasTrack) return null;
+
+  // Smart trim off: the same icon turns it on. This mirrors the fullscreen
+  // control, which is a trigger when disabled and a skip when enabled, so the
+  // two surfaces cannot disagree about what the button is for.
+  if (!introTrim) {
+    return (
+      <button
+        type="button"
+        aria-label="Turn on smart intro trim"
+        title="Turn on smart intro trim"
+        onClick={() => {
+          toggleIntroTrim();
+          toast("Smart intro trim on", {
+            description: "SYNQ will skip a silent lead-in automatically.",
+          });
+        }}
+        className="hidden shrink-0 items-center rounded-full p-2 text-muted-foreground/70 transition-colors hover:bg-white/[0.06] hover:text-foreground sm:flex lg:p-1.5"
+      >
+        <Scissors className="size-3.5" aria-hidden="true" />
+      </button>
+    );
+  }
+
+  // On but nothing left to skip on this track: keep the icon visible and
+  // legible as "this is on" rather than making the control appear and vanish
+  // part-way through a song.
+  if (!inIntro) {
+    return (
+      <button
+        type="button"
+        aria-label="Smart intro trim is on"
+        title="Smart intro trim is on"
+        onClick={() => {
+          toggleIntroTrim();
+          toast("Smart intro trim off");
+        }}
+        className="hidden shrink-0 items-center rounded-full p-2 text-[rgb(var(--tint))]/60 transition-colors hover:bg-white/[0.06] sm:flex lg:p-1.5"
+      >
+        <Scissors className="size-3.5" aria-hidden="true" />
+      </button>
+    );
+  }
 
   return (
     <button

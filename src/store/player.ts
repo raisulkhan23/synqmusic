@@ -1746,6 +1746,23 @@ function recoverDeferredAdvance(t: NonNullable<typeof transition>): void {
  * Playback controls MUST follow this, or play/pause/seek address a paused
  * engine while the real audio keeps playing.
  */
+/**
+ * True when the sound the listener is actually hearing comes from our <audio>
+ * deck, rather than from the YouTube IFrame.
+ *
+ * Exported for the smart-intro-trim probe, which reads its level from an
+ * analyser INSIDE the Web Audio graph. A track playing through the IFrame puts
+ * nothing into that graph, so the analyser reads digital silence for as long as
+ * the IFrame owns the sound. The probe then saw that silence as a quiet intro
+ * and, once the stream was swapped onto the deck, treated the first real audio
+ * as the start of the track — seeking the listener ~8-60s into a song that had
+ * been playing all along. Intermittent by nature, because it depends on whether
+ * the swap lands after `minSkipSeconds`.
+ */
+export function soundIsOnAudioElement(): boolean {
+  return audioElementIsSource(usePlayerStore.getState().current);
+}
+
 function audioElementIsSource(t: Playable | null | undefined): boolean {
   if (!t) return false;
   return (

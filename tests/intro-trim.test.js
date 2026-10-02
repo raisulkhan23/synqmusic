@@ -229,6 +229,57 @@ describe("intro trim wiring", () => {
     expect(playerBar).toContain("Intro trimmed by ${formatSkipped(skipped)}");
   });
 
+  test("the icon is present even when smart trim is off", () => {
+    // Removing the pill's TEXT was the request. Removing the control entirely
+    // was not: the chip used to return null unless smart trim was enabled, and
+    // smart trim defaults to OFF, so for most listeners there was no button at
+    // all — which reads as the button having been deleted.
+    const chip = playerBar.slice(
+      playerBar.indexOf("function IntroTrimChip()"),
+      playerBar.indexOf("function ReadingSessionNav()"),
+    );
+    // The only bail-out left is "nothing is playing".
+    expect(chip).toMatch(/if \(!hasTrack\) return null;/);
+    expect(chip).not.toMatch(/if \(!introTrim \|\| !inIntro\) return null;/);
+    // With smart trim off the same icon turns it on, so the control is not a
+    // dead button either.
+    expect(chip).toMatch(/if \(!introTrim\) \{/);
+    expect(chip).toContain('aria-label="Turn on smart intro trim"');
+    expect(chip).toMatch(/toggleIntroTrim\(\);/);
+  });
+
+  test("the probe never samples a track the graph cannot hear", () => {
+    // The analyser lives inside the Web Audio graph. A track playing through
+    // the YouTube IFrame puts nothing into that graph, so it reads digital
+    // silence — indistinguishable from a genuinely quiet intro. The probe
+    // then treated the first real audio (once the stream swapped onto the
+    // deck) as the start of the track and seeked the listener 8s+ into a song
+    // that had been playing all along. That is the "sometimes it bugs out the
+    // player" report.
+    expect(hook).toMatch(/import \{[^}]*soundIsOnAudioElement[^}]*\} from/);
+    expect(hook).toMatch(/if \(!soundIsOnAudioElement\(\)\) return;/);
+    // It must bail BEFORE reading the level, or the false silence is already
+    // in the sample series.
+    const guard = hook.indexOf("if (!soundIsOnAudioElement()) return;");
+    const read = hook.indexOf("const level = getSignalLevel();");
+    expect(guard).toBeGreaterThan(-1);
+    expect(read).toBeGreaterThan(-1);
+    expect(guard).toBeLessThan(read);
+    // ...and the predicate must exist and be exported for the hook to use.
+    expect(store).toMatch(/export function soundIsOnAudioElement\(\)/);
+  });
+
+  test("the icon stays visible once the intro has passed", () => {
+    // Otherwise the control appeared for the first 60s of a song and vanished,
+    // which is indistinguishable from it being broken.
+    const chip = playerBar.slice(
+      playerBar.indexOf("function IntroTrimChip()"),
+      playerBar.indexOf("function ReadingSessionNav()"),
+    );
+    expect(chip).toMatch(/if \(!inIntro\) \{/);
+    expect(chip).toContain('aria-label="Smart intro trim is on"');
+  });
+
   test("settings exposes the toggle and builds the audio graph on the click", () => {
     // An AudioContext can only be created inside a user gesture, and this
     // click is the one the feature gets.

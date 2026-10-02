@@ -33,14 +33,21 @@ describe("the status chips cannot collide with the miniplayer", () => {
     expect(chip).toMatch(/hidden[^\n]*\bsm:flex/);
   });
 
-  test("both trim states are hidden on the mobile bar", () => {
+  test("every trim state is hidden on the mobile bar", () => {
     const chip = playerBar.slice(
       playerBar.indexOf("function IntroTrimChip()"),
       playerBar.indexOf("function ReadingSessionNav()"),
     );
     const hidden = chip.match(/hidden[^\n]*\bsm:flex/g) ?? [];
-    // One for the "trimmed + undo" state, one for the "skip intro" button.
-    expect(hidden.length).toBe(2);
+    // Four states now: trimmed + undo, trim off (icon turns it on), on but
+    // past the intro, and the live skip. The icon is always present so the
+    // control cannot appear to have been deleted, but every one of them still
+    // yields to the 68px mobile island, which has its own home for this in the
+    // fullscreen player.
+    expect(hidden.length).toBe(4);
+    // The point of the assertion: no state may be a bare always-visible pill.
+    const unconditional = chip.match(/className="flex shrink-0/g) ?? [];
+    expect(unconditional).toHaveLength(0);
   });
 
   test("neither chip may be a bare, always-visible pill", () => {

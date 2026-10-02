@@ -8,7 +8,7 @@ import {
   INTRO_SAMPLE_INTERVAL_MS,
   type IntroSample,
 } from "@/lib/introTrim";
-import { usePlayerStore } from "@/store/player";
+import { soundIsOnAudioElement, usePlayerStore } from "@/store/player";
 
 /** How long to keep sampling before admitting the analyser is unavailable. */
 const GRAPH_GRACE_MS = 8000;
@@ -71,6 +71,20 @@ export function useIntroTrim(): void {
         window.clearInterval(timer);
         return;
       }
+
+      // The analyser lives INSIDE the Web Audio graph, so it can only hear a
+      // track that is playing through the <audio> deck. While the YouTube
+      // IFrame owns the sound — which is the whole time the direct stream is
+      // still resolving, and forever if it never resolves — the graph reads
+      // digital silence.
+      //
+      // That silence is indistinguishable from a genuinely quiet intro, so the
+      // probe used to conclude the track opened quietly and, the moment the
+      // stream was swapped onto the deck, treat the first real audio as the
+      // start of the track and seek the listener 8-60s into a song that had
+      // been playing the entire time. Nothing is sampled on those ticks; once
+      // the sound does move to the deck, sampling resumes for the same track.
+      if (!soundIsOnAudioElement()) return;
 
       const level = getSignalLevel();
       if (level < 0) {
