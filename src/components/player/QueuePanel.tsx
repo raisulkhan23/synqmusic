@@ -37,6 +37,8 @@ import { copyText } from "@/lib/clipboard";
 import { buildTrackShareUrl } from "@/lib/shareLink";
 import { moveQueueRow, queueReorderKeys } from "@/lib/queueOrder";
 import { useDownloadedTrackIds } from "@/lib/offlineDownloads";
+import { useIsCreativeCommons } from "@/lib/creativeCommons";
+import { CreativeCommonsBadge } from "@/components/tracks/CreativeCommonsBadge";
 import { HardDrive } from "lucide-react";
 
 type QueueReorderRowProps = {
@@ -67,6 +69,12 @@ function QueueReorderRow({
   // rows independently, so a prop threaded from the parent would go stale as
   // soon as a download finished while the queue was open.
   const downloadedIds = useDownloadedTrackIds();
+  // The same batched licence answer every other surface uses. A local import
+  // has no video id and is never asked about, so it costs no request.
+  const isCreativeCommons = useIsCreativeCommons(
+    track.youtubeId,
+    track.source === "youtube" && Boolean(track.youtubeId),
+  );
 
   return (
     <Reorder.Item
@@ -114,9 +122,12 @@ function QueueReorderRow({
             </span>
           ) : null}
         </p>
-        <p className="truncate text-xs text-muted-foreground">
-          {track.artistName}
-        </p>
+        <div className="flex min-w-0 items-center gap-1.5">
+          <p className="min-w-0 truncate text-xs text-muted-foreground">
+            {track.artistName}
+          </p>
+          {isCreativeCommons ? <CreativeCommonsBadge /> : null}
+        </div>
       </div>
       <span className="shrink-0 text-xs tabular-nums text-muted-foreground/70">
         {formatTime(track.duration)}
