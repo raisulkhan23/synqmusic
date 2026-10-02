@@ -4,6 +4,7 @@ import { create } from "zustand";
 import {
   Compass,
   Disc3,
+  Download,
   Heart,
   House,
   ListMusic,
@@ -61,6 +62,7 @@ const PAGES = [
   { label: "Liked songs", to: "/liked", icon: Heart },
   { label: "Your library", to: "/playlists", icon: ListMusic },
   { label: "Listening history", to: "/recent", icon: Disc3 },
+  { label: "Downloads", to: "/downloads", icon: Download },
   { label: "Stats", to: "/stats", icon: ListMusic },
   { label: "Profile", to: "/profile", icon: UserRound },
   { label: "Settings", to: "/settings", icon: Settings },

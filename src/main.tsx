@@ -89,6 +89,7 @@ import Discover from "./pages/Discover.tsx";
 import Artist from "./pages/Artist.tsx";
 import Album from "./pages/Album.tsx";
 import Liked from "./pages/Liked.tsx";
+import Downloads from "./pages/Downloads.tsx";
 import Playlists from "./pages/Playlists.tsx";
 import PlaylistDetail from "./pages/PlaylistDetail.tsx";
 import Admin from "./pages/Admin.tsx";
@@ -474,6 +475,18 @@ createRoot(document.getElementById("root")!).render(
                           <Recent />
                         </PageBoundary>
                       </RequireAuth>
+                    }
+                  />
+                  {/* NOT behind RequireAuth, deliberately. Downloads live on
+                      this DEVICE, not in an account, and a guest can start one
+                      from the open search page. Gating the list would send
+                      someone to sign in to see a file they just saved. */}
+                  <Route
+                    path="/downloads"
+                    element={
+                      <PageBoundary>
+                        <Downloads />
+                      </PageBoundary>
                     }
                   />
                   <Route

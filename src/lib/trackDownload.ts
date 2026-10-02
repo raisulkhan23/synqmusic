@@ -16,14 +16,25 @@
 // video's own `status.license` from the official Data API. That is a fact about
 // the upload — published under Creative Commons Attribution (CC BY), which
 // permits reuse and download — rather than a guess SYNQ makes from a URL.
+//
+// The flow lives in a plain function rather than inside the hook because TWO
+// surfaces need it: the button the listener just pressed, and the Retry button
+// on the downloads view for a row whose originating surface is long gone. The
+// ordering invariant above must hold on both, so both call THIS.
 // ---------------------------------------------------------------------------
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useAction } from "convex/react";
+import { ConvexHttpClient } from "convex/browser";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import { readIndex } from "./offlineAudio";
-import { downloadTrack } from "./offlineDownloads";
+import {
+  downloadTrack,
+  noteDownloadStart,
+  registerDownloadController,
+  releaseDownloadController,
+  setDownloadStatus,
+} from "./offlineDownloads";
 
 /**
  * The minimum a track must expose to be offered as a download.
@@ -91,16 +102,149 @@ function proxiedStreamUrl(url: string): string {
 }
 
 /**
+ * A one-shot Convex client for the two public YouTube actions.
+ *
+ * These actions read `process.env.YOUTUBE_API_KEY` on the server and need no
+ * session, so they are callable outside React. That is what lets Retry run
+ * from a plain event handler on the downloads view without re-deriving the
+ * eligibility/resolve order in a second place.
+ */
+let client: ConvexHttpClient | null = null;
+function convex(): ConvexHttpClient {
+  client ??= new ConvexHttpClient(import.meta.env.VITE_CONVEX_URL as string);
+  return client;
+}
+
+/** A phase worth showing on the surface that started the download. */
+export type DownloadPhase = "checking" | "downloading";
+
+/** The outcome of one download attempt. `ok: false` always carries a reason. */
+export interface DownloadAttemptOutcome {
+  ok: boolean;
+  /** Listener-facing reason, set when `ok` is false. */
+  reason: string;
+  /**
+   * True when the LISTENER stopped it. A cancel is a choice, not a failure,
+   * and must never be reported with a Retry button.
+   */
+  cancelled: boolean;
+}
+
+/**
+ * Run the full, ordered download flow for one YouTube track.
+ *
+ * Records the attempt in the shared store first (so a downloads view can show
+ * the row and offer Retry even if this component unmounts), registers the
+ * controller so Cancel works from anywhere, then proceeds licence → stream →
+ * fetch. The controller is always released, and a failed attempt is always
+ * left in the store as `error`, so the downloads view never shows a row frozen
+ * mid-phase.
+ */
+export async function performYouTubeDownload(input: {
+  track: DownloadableTrack;
+  /** Aborts the transfer. Cancellation is a listener choice, not a failure. */
+  controller: AbortController;
+  onPhase?: (phase: DownloadPhase) => void;
+  onProgress?: (progress: number | null) => void;
+}): Promise<DownloadAttemptOutcome> {
+  const { track, controller, onPhase, onProgress } = input;
+  const { videoId, title, artistName, coverUrl, duration } = track;
+
+  noteDownloadStart(videoId, {
+    title,
+    artistName,
+    coverUrl,
+    duration,
+    source: "youtube",
+    youtubeId: videoId,
+    startedAt: Date.now(),
+  });
+  registerDownloadController(videoId, controller);
+  onPhase?.("checking");
+
+  // A refusal is recorded in the store as well as returned, so the downloads
+  // view lists the failure rather than a row stuck in `checking`.
+  const fail = (reason: string): DownloadAttemptOutcome => {
+    setDownloadStatus(videoId, "error", reason);
+    return { ok: false, cancelled: false, reason };
+  };
+
+  try {
+    // --- 1. Rights, decided by the server. --------------------------------
+    let verdict: { eligible: boolean; licenseUrl: string; reason?: string };
+    try {
+      verdict = await convex().action(api.youtube.downloadEligibility, {
+        videoId,
+      });
+    } catch {
+      return fail("Couldn't check whether this track can be downloaded.");
+    }
+
+    if (!verdict.eligible) {
+      return fail(verdict.reason ?? "This track isn't available for download.");
+    }
+
+    // --- 2. Resolve the audio, now that storing it is allowed. ------------
+    let url: string | null = null;
+    try {
+      const resolved = await convex().action(api.youtube.resolveStream, {
+        videoId,
+        quality: "high",
+      });
+      url = resolved.url;
+    } catch {
+      url = null;
+    }
+    if (!url) {
+      return fail(
+        "The audio for this track couldn't be fetched. Try again in a moment.",
+      );
+    }
+
+    // --- 3. Fetch and store. ----------------------------------------------
+    onPhase?.("downloading");
+    const result = await downloadTrack({
+      trackId: videoId,
+      title,
+      artistName,
+      coverUrl,
+      duration,
+      audioUrl: proxiedStreamUrl(url),
+      // The server verified the licence. This flag is the client echoing that
+      // verdict, never the source of it.
+      downloadAllowed: true,
+      licenseUrl: verdict.licenseUrl,
+      source: "youtube",
+      youtubeId: videoId,
+      entries: await readIndex(),
+      signal: controller.signal,
+      onProgress: (received, total) => {
+        onProgress?.(total > 0 ? Math.min(1, received / total) : null);
+      },
+    });
+
+    if (result.ok) return { ok: true, cancelled: false, reason: "" };
+    if (controller.signal.aborted) {
+      return { ok: false, cancelled: true, reason: "Download cancelled." };
+    }
+    // `downloadTrack` already recorded some failures; this normalises the rest
+    // (a quota refusal that emitted `idle`) so the downloads view is honest.
+    setDownloadStatus(videoId, "error", result.reason);
+    return { ok: false, cancelled: false, reason: result.reason };
+  } finally {
+    releaseDownloadController(videoId);
+  }
+}
+
+/**
  * Download one track, including the licence check it depends on.
  *
- * Status lives in component state rather than in the shared download store on
- * purpose. That store answers "is this track on the device?" for row badges,
- * which is a different question from "what is happening on the surface I just
- * clicked" — and only the latter needs to be per-interaction.
+ * This hook owns only the per-interaction bits — the spinner on the button
+ * that was pressed and its toasts. The shared store is updated by
+ * {@link performYouTubeDownload}, so a downloads view stays in step without
+ * this component having to exist.
  */
 export function useTrackDownload(track: DownloadableTrack) {
-  const checkEligibility = useAction(api.youtube.downloadEligibility);
-  const resolveStream = useAction(api.youtube.resolveStream);
   const [state, setState] = useState<TrackDownloadState>(IDLE);
   const abortRef = useRef<AbortController | null>(null);
   /**
@@ -112,124 +256,66 @@ export function useTrackDownload(track: DownloadableTrack) {
   const retryRef = useRef<() => void>(() => {});
 
   const start = useCallback(async () => {
-    const { videoId, title, artistName, coverUrl, duration } = track;
-    const toastId = `download-${videoId}`;
-
-    // --- 1. Rights, decided by the server. --------------------------------
-    setState({ status: "checking", progress: null, message: "" });
-    let verdict: { eligible: boolean; licenseUrl: string; reason?: string };
-    try {
-      verdict = await checkEligibility({ videoId });
-    } catch {
-      const message = "Couldn't check whether this track can be downloaded.";
-      setState({ status: "error", progress: null, message });
-      toast.error("Download unavailable", {
-        id: toastId,
-        description: message,
-      });
-      return;
-    }
-
-    if (!verdict.eligible) {
-      const message =
-        verdict.reason ?? "This track isn't available for download.";
-      setState({ status: "error", progress: null, message });
-      // Named, never swallowed. A download that does nothing at all reads as a
-      // broken button rather than as a deliberate refusal.
-      toast.error("Download unavailable", {
-        id: toastId,
-        description: message,
-      });
-      return;
-    }
-
-    // --- 2. Resolve the audio, now that storing it is allowed. ------------
-    let url: string | null = null;
-    try {
-      const resolved = await resolveStream({ videoId, quality: "high" });
-      url = resolved.url;
-    } catch {
-      url = null;
-    }
-    if (!url) {
-      const message =
-        "The audio for this track couldn't be fetched. Try again in a moment.";
-      setState({ status: "error", progress: null, message });
-      toast.error("Download failed", { id: toastId, description: message });
-      return;
-    }
-
-    // --- 3. Fetch and store. ---------------------------------------------
+    const toastId = `download-${track.videoId}`;
     const controller = new AbortController();
     abortRef.current = controller;
-    setState({ status: "downloading", progress: null, message: "" });
-    toast.loading("Downloading…", { id: toastId, duration: Infinity });
+    setState({ status: "checking", progress: null, message: "" });
 
     // Only repaint the toast when the whole percentage moves; a chunk-level
     // update would re-render a hundred times for a 1 GB file.
     let lastPercent = -1;
 
-    try {
-      const result = await downloadTrack({
-        trackId: videoId,
-        title,
-        artistName,
-        coverUrl,
-        duration,
-        audioUrl: proxiedStreamUrl(url),
-        // The server verified the licence. This flag is the client echoing
-        // that verdict, never the source of it.
-        downloadAllowed: true,
-        licenseUrl: verdict.licenseUrl,
-        source: "youtube",
-        entries: await readIndex(),
-        signal: controller.signal,
-        onProgress: (received, total) => {
-          const progress =
-            total > 0 ? Math.min(1, received / total) : null;
-          setState((prev) =>
-            prev.status === "downloading" ? { ...prev, progress } : prev,
+    const outcome = await performYouTubeDownload({
+      track,
+      controller,
+      onPhase: (phase) => {
+        if (phase !== "downloading") return;
+        setState({ status: "downloading", progress: null, message: "" });
+        toast.loading("Downloading…", { id: toastId, duration: Infinity });
+      },
+      onProgress: (progress) => {
+        setState((prev) =>
+          prev.status === "downloading" ? { ...prev, progress } : prev,
+        );
+        const percent = progress === null ? -1 : Math.round(progress * 100);
+        if (percent !== lastPercent) {
+          lastPercent = percent;
+          toast.loading(
+            percent < 0 ? "Downloading…" : `Downloading… ${percent}%`,
+            { id: toastId, duration: Infinity },
           );
-          const percent = progress === null ? -1 : Math.round(progress * 100);
-          if (percent !== lastPercent) {
-            lastPercent = percent;
-            toast.loading(
-              percent < 0 ? "Downloading…" : `Downloading… ${percent}%`,
-              { id: toastId, duration: Infinity },
-            );
-          }
-        },
-      });
+        }
+      },
+    });
 
-      if (result.ok) {
-        setState({ status: "done", progress: 1, message: "" });
-        toast.success("Download complete", {
-          id: toastId,
-          description: `Saved “${title}” for offline listening.`,
-        });
-        return;
-      }
+    abortRef.current = null;
 
-      // A cancel is a choice, not a failure — it does not get a Retry button.
-      if (controller.signal.aborted) {
-        setState(IDLE);
-        toast("Download cancelled", { id: toastId });
-        return;
-      }
-
-      setState({ status: "error", progress: null, message: result.reason });
-      toast.error("Download failed", {
+    if (outcome.ok) {
+      setState({ status: "done", progress: 1, message: "" });
+      toast.success("Download complete", {
         id: toastId,
-        description: result.reason,
-        action: {
-          label: "Retry",
-          onClick: () => retryRef.current(),
-        },
+        description: `Saved “${track.title}” for offline listening.`,
       });
-    } finally {
-      abortRef.current = null;
+      return;
     }
-  }, [track, checkEligibility, resolveStream]);
+
+    // A cancel is a choice, not a failure — it does not get a Retry button.
+    if (outcome.cancelled) {
+      setState(IDLE);
+      toast("Download cancelled", { id: toastId });
+      return;
+    }
+
+    setState({ status: "error", progress: null, message: outcome.reason });
+    toast.error("Download failed", {
+      id: toastId,
+      description: outcome.reason,
+      action: {
+        label: "Retry",
+        onClick: () => retryRef.current(),
+      },
+    });
+  }, [track]);
 
   const cancel = useCallback(() => {
     abortRef.current?.abort();
