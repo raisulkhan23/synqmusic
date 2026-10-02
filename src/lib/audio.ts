@@ -247,17 +247,55 @@ let audioCtx: AudioContext | null = null;
 let filterSource: MediaElementAudioSourceNode | null = null;
 let analyser: AnalyserNode | null = null;
 
+/**
+ * A stereo panner, or the plain GainNode we degrade to.
+ *
+ * `createStereoPanner()` is absent on older Safari and in several WebViews —
+ * this file's own header comment already names it as the API whose absence
+ * once caused silent playback. The problem is not the missing panner, it is
+ * that an UNGUARDED call takes the whole chain down with it: `ensureGraph()`
+ * throws, nulls every node, and the decks are never captured, so they keep
+ * playing directly to the speakers.
+ *
+ * The result is the worst possible failure to diagnose: the listener hears
+ * every song perfectly normally through the un-tapped element, while
+ * `ensureDeckAttached()` sees a null `eqBassNode` and `canCrossfadeNow()`
+ * returns false for the rest of the session — so every transition is refused
+ * and every track ends in a hard cut, with nothing on screen to explain it.
+ *
+ * Balance is a nicety. A crossfade is the feature. A missing panner must cost
+ * the balance control, never the audio graph.
+ */
+type PannerLike = AudioNode & { pan?: AudioParam };
+
+function createPanner(ctx: AudioContext): PannerLike {
+  if (typeof ctx.createStereoPanner === "function") {
+    return ctx.createStereoPanner();
+  }
+  return ctx.createGain();
+}
+
+/** Write the pan, tolerating a node that has no `pan` (the GainNode fallback). */
+function setPan(node: PannerLike | null | undefined, value: number): void {
+  if (!node?.pan) return;
+  try {
+    node.pan.value = value;
+  } catch {
+    /* context not running */
+  }
+}
+
 // --- dedicated USER EQ nodes (always active once the graph exists) ------------
 let eqBassNode: BiquadFilterNode | null = null; // low shelf
 let eqTrebleNode: BiquadFilterNode | null = null; // high shelf
-let balanceNode: StereoPannerNode | null = null;
+let balanceNode: PannerLike | null = null;
 
 // --- effect chain nodes (driven by the active sound effect) -------------------
 let fxIn: GainNode | null = null; // effects tap in here
 let bassFilter: BiquadFilterNode | null = null;
 let vocalFilter: BiquadFilterNode | null = null;
 let nightLow: BiquadFilterNode | null = null;
-let panner: StereoPannerNode | null = null;
+let panner: PannerLike | null = null;
 let gainOut: GainNode | null = null;
 
 // User EQ state (persisted by settings; applied whenever the graph exists)
@@ -279,6 +317,23 @@ let rotateRaf = 0;
  * track.
  */
 let mediaSourceAttached = false;
+
+/**
+ * True once `ensureGraph()` has FAILED to build the chain on this device.
+ *
+ * This is the flag that lets the app say "crossfade cannot run here" instead
+ * of silently doing nothing. Every other reason a blend is refused — a
+ * suspended context, a deck not yet attached — is transient and resolves
+ * itself; a build failure is permanent for the session, and the listener is
+ * left hearing normal music with hard cuts at every track boundary and no
+ * explanation anywhere.
+ */
+let graphBuildFailed = false;
+
+/** True when the Web Audio graph could not be built on this device. */
+export function audioGraphFailed(): boolean {
+  return graphBuildFailed;
+}
 
 /**
  * Lazily create the shared audio graph:
@@ -358,8 +413,8 @@ export function ensureGraph(): boolean {
     eqTrebleNode.frequency.value = 6000;
     eqTrebleNode.gain.value = eqTreble;
 
-    balanceNode = audioCtx.createStereoPanner();
-    balanceNode.pan.value = eqMono ? 0 : eqBalance;
+    balanceNode = createPanner(audioCtx);
+    setPan(balanceNode, eqMono ? 0 : eqBalance);
 
     // effects stage (tapped after the user EQ)
     fxIn = audioCtx.createGain();
@@ -380,7 +435,7 @@ export function ensureGraph(): boolean {
     nightLow.frequency.value = 20000;
     nightLow.Q.value = 0.5;
 
-    panner = audioCtx.createStereoPanner();
+    panner = createPanner(audioCtx);
     gainOut = audioCtx.createGain();
 
     // Deck wiring happens after the chain is complete — see the capture block
@@ -397,10 +452,20 @@ export function ensureGraph(): boolean {
     nightLow.connect(panner);
     panner.connect(gainOut);
 
-    analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 256;
-    gainOut.connect(analyser);
-    analyser.connect(audioCtx.destination);
+    // The analyser is a nicety (visualizer + the level probe the intro-trim
+    // reads). It sits INLINE in the chain, so if it cannot be created the
+    // audio must be wired straight to the destination instead of failing the
+    // whole graph — otherwise the listener loses playback AND crossfading to
+    // lose a spectrum display they cannot see anyway.
+    try {
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      gainOut.connect(analyser);
+      analyser.connect(audioCtx.destination);
+    } catch {
+      analyser = null;
+      gainOut.connect(audioCtx.destination);
+    }
 
     // ---------------------------------------------------------------------
     // The chain now reaches the speakers, so it is finally safe to capture
@@ -449,6 +514,7 @@ export function ensureGraph(): boolean {
       // stops the UI claiming a graph it does not have.
       return false;
     }
+    graphBuildFailed = false;
     return true;
   } catch {
     // Everything that can throw now runs BEFORE any element is captured, so by
@@ -465,6 +531,7 @@ export function ensureGraph(): boolean {
     //
     // `attachedHere` asks the right question: did THIS attempt take an element?
     if (!attachedHere) {
+      graphBuildFailed = true;
       try {
         if (audioCtx && audioCtx.state !== "closed") void audioCtx.close();
       } catch {
@@ -593,7 +660,7 @@ function stopRotation(): void {
     cancelAnimationFrame(rotateRaf);
     rotateRaf = 0;
   }
-  if (panner) panner.pan.value = 0;
+  setPan(panner, 0);
 }
 
 function startRotation(): void {
@@ -605,9 +672,7 @@ function startRotation(): void {
   const tick = () => {
     if (!ctx || !panner) return;
     // Full -1 → +1 sweep every 3.2s — clearly audible "8D" orbit.
-    panner.pan.value = Math.sin(
-      (ctx.currentTime - start) * ((2 * Math.PI) / 3.2),
-    );
+    setPan(panner, Math.sin((ctx.currentTime - start) * ((2 * Math.PI) / 3.2)));
     rotateRaf = requestAnimationFrame(tick);
   };
   rotateRaf = requestAnimationFrame(tick);
@@ -684,13 +749,13 @@ export function setEqTreble(db: number): void {
 
 export function setEqBalance(v: number): void {
   eqBalance = Math.min(1, Math.max(-1, v));
-  if (balanceNode && !eqMono) balanceNode.pan.value = eqBalance;
+  if (!eqMono) setPan(balanceNode, eqBalance);
   notifyEqChange();
 }
 
 export function setEqMono(mono: boolean): void {
   eqMono = mono;
-  if (balanceNode) balanceNode.pan.value = mono ? 0 : eqBalance;
+  setPan(balanceNode, mono ? 0 : eqBalance);
   notifyEqChange();
 }
 

@@ -26,6 +26,7 @@ import {
   swapActiveDeck,
   pauseAllDecks,
   AUDIO_FILTERS,
+  audioGraphFailed,
   type AudioFilterId,
 } from "@/lib/audio";
 import {
@@ -2152,6 +2153,19 @@ async function maybeRunCrossfade(remaining: number): Promise<void> {
     traceTransition("refused:no-running-graph", {
       note: "no AudioContext, or a deck is not attached to the graph",
     });
+    // A suspended context is transient and resolves itself. A FAILED graph
+    // build is permanent for the session, and its symptom is indistinguishable
+    // from "crossfade is broken": the music plays perfectly through the
+    // un-tapped element while every track ends in a hard cut. Say so once, or
+    // the next person to report this has nothing to go on but the absence of
+    // a crossfade.
+    if (audioGraphFailed()) {
+      toast("Crossfade can't run on this browser", {
+        id: "crossfade-graph-failed",
+        description:
+          "Your music plays normally, but the audio effects this browser needs for blending are unavailable, so tracks won't overlap.",
+      });
+    }
     cancelTransition("no-running-graph");
     return;
   }

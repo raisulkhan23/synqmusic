@@ -162,6 +162,29 @@ class FakeAudioContext {
   }
 }
 
+/**
+ * A context missing the OPTIONAL Web Audio APIs.
+ *
+ * This is what older Safari and a number of WebViews actually look like, and
+ * it is the configuration that made crossfade a hard cut on real devices while
+ * every test here stayed green: the shared `FakeAudioContext` implemented
+ * `createStereoPanner`, so no test ever exercised its absence.
+ *
+ * Setting the prototype properties to `undefined` models "the API does not
+ * exist" faithfully — `typeof ctx.createStereoPanner` becomes `"undefined"`,
+ * which is precisely the guard the production code now uses.
+ */
+class BareAudioContext extends FakeAudioContext {
+  createStereoPanner() {
+    return undefined;
+  }
+  createAnalyser() {
+    return undefined;
+  }
+}
+BareAudioContext.prototype.createStereoPanner = undefined;
+BareAudioContext.prototype.createAnalyser = undefined;
+
 // MODULE SCOPE, not beforeAll: `audio.ts` reads `window`/`document` while it is
 // being evaluated, so the DOM globals must exist before the dynamic import.
 const win = new Window({ url: "https://example.test/" });
@@ -182,6 +205,9 @@ win.AudioContext = FakeAudioContext;
 // instance with another test file would hand back elements belonging to a
 // document that no longer exists.
 const audio = await import(`../src/lib/audio.ts?fresh=${Math.random()}`);
+
+/** A SECOND, independent instance, driven by the API-less context above. */
+const audioBare = await import(`../src/lib/audio.ts?fresh=${Math.random()}`);
 
 /**
  * The two per-deck transition GainNodes, found by CREATION ORDER:
@@ -292,6 +318,60 @@ describe("an executed crossfade", () => {
     expect(again).toBe(true);
     expect(deckGainA.gain.curve).not.toBeNull();
     expect(deckGainA.gain.curve.duration).toBeCloseTo(4, 5);
+  });
+});
+
+describe("a browser missing the optional Web Audio APIs", () => {
+  // The regression that shipped a broken crossfade to real devices: an
+  // unguarded `createStereoPanner()` threw, `ensureGraph()` nulled every node,
+  // the decks were never captured (so playback sounded completely normal,
+  // straight to the speakers), and `canCrossfadeNow()` was then false for the
+  // rest of the session — every track ending in a hard cut, silently.
+  test("the graph still builds without createStereoPanner", () => {
+    const previous = win.AudioContext;
+    win.AudioContext = BareAudioContext;
+    try {
+      expect(audioBare.ensureGraph()).toBe(true);
+      expect(audioBare.audioGraphFailed()).toBe(false);
+    } finally {
+      win.AudioContext = previous;
+    }
+  });
+
+  test("and a real crossfade can still be scheduled on it", () => {
+    const previous = win.AudioContext;
+    win.AudioContext = BareAudioContext;
+    try {
+      audioBare.ensureGraph();
+      // The decisive assertion: the fade is scheduled, not refused.
+      expect(audioBare.canCrossfadeNow()).toBe(true);
+      const ok = audioBare.scheduleCrossfade("a", "b", 6, fadeGains);
+      expect(ok).toBe(true);
+      const gains = contexts.at(-1).createdGains;
+      const curve = gains.at(-2).gain.curve;
+      expect(curve).not.toBeNull();
+      expect(curve.values.length).toBeGreaterThan(2);
+      // And it is still the equal-power curve, not a straight line.
+      expect(Math.abs(curve.values[0] - 1)).toBeLessThan(1e-9);
+      expect(Math.abs(curve.values.at(-1))).toBeLessThan(1e-9);
+    } finally {
+      win.AudioContext = previous;
+    }
+  });
+
+  test("balance degrades to neutral instead of taking the graph down", () => {
+    // The fallback node is a plain GainNode with no `pan`. Writing pan to it
+    // must be a no-op, not a throw that kills the chain.
+    const previous = win.AudioContext;
+    win.AudioContext = BareAudioContext;
+    try {
+      audioBare.ensureGraph();
+      expect(() => audioBare.setEqBalance(0.8)).not.toThrow();
+      expect(() => audioBare.setEqMono(true)).not.toThrow();
+      expect(() => audioBare.setEqBass(4)).not.toThrow();
+    } finally {
+      win.AudioContext = previous;
+    }
   });
 });
 

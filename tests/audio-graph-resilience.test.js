@@ -163,11 +163,17 @@ describe("a graph that fails to build", () => {
   // Every failure-prone factory, in the order the graph creates them. For each
   // one the invariant is identical: nothing was captured, so the elements can
   // still play straight to the speakers.
+  //
+  // `analyser` is deliberately NOT here any more. It sits INLINE in the chain
+  // (gainOut → analyser → destination), and a missing/throwing analyser used
+  // to abort the whole build — costing the listener their playback AND their
+  // crossfading over a node that only drives the visualizer and the level
+  // probe. The graph now wires straight to the destination instead; that case
+  // has its own test below.
   const FAILURES = [
     ["biquad"], // the EQ shelves
-    ["panner"], // StereoPanner — genuinely missing on older Safari
+    ["panner"], // a StereoPanner factory that throws
     ["gain"], // effects tap-in and the output stage
-    ["analyser"], // last node before destination
   ];
 
   for (const [kind] of FAILURES) {
@@ -192,12 +198,26 @@ describe("a graph that fails to build", () => {
     expect(audio.isGraphReady()).toBe(true);
   });
 
+  test("an analyser failure no longer costs playback or blending", () => {
+    // The analyser is inline in the chain, so it must degrade rather than abort:
+    // audio still reaches the speakers, the decks are still captured, and a
+    // crossfade is still schedulable. Losing a spectrum display the listener
+    // cannot see must never cost them their music.
+    failOn = "analyser";
+    expect(audio.ensureGraph()).toBe(true);
+    expect(log.destinationWired).toBe(1);
+    expect(log.captured).toBe(2);
+    expect(audio.isGraphReady()).toBe(true);
+    expect(audio.canCrossfadeNow()).toBe(true);
+  });
+
   test("a captured element is never re-captured on retry", () => {
     // The retry that used to make this permanent: a second
     // createMediaElementSource for the same element throws InvalidStateError
     // in a real browser. If a failure left the element captured, every
     // subsequent attempt would fail here and audio could never come back.
-    failOn = "analyser";
+    // Uses `gain`, a factory whose failure genuinely aborts the build.
+    failOn = "gain";
     expect(audio.ensureGraph()).toBe(false);
     expect(log.captured).toBe(0);
 
