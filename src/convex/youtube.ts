@@ -1331,12 +1331,19 @@ export function extractPlaylistBrowse(
       const rawTitle =
         textOf(vr.title) || (get(vr, ["title", "simpleText"]) as string) || "";
       const title = cleanTrackTitle(rawTitle);
-      if (!title) continue;
-
+      if (!title) continue; // `cleanCreatorName` returns "Unknown artist" for anything that is not a
+      // STRING, and a byline is always an OBJECT — `{ runs: [...] }` or
+      // `{ simpleText: "..." }`. Passing the object through therefore
+      // discarded it, and only the third argument (a raw
+      // `runs[0].text`) ever survived. Any row whose byline arrived as
+      // `simpleText` instead of `runs` was dropped SILENTLY, shrinking the
+      // import rather than failing it. `textOf` reads both forms.
+      const byline =
+        get(vr, ["shortBylineText"]) ?? get(vr, ["longBylineText"]);
       const artist = firstCreatorName(
         title,
-        get(vr, ["shortBylineText"]),
-        get(vr, ["longBylineText"]),
+        textOf(byline),
+        textOf(get(vr, ["longBylineText"])),
         get(vr, ["shortBylineText", "runs", 0, "text"]),
       );
       if (artist === "Unknown artist") continue;
