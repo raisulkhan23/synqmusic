@@ -1194,13 +1194,46 @@ function findRenderer(node: unknown, key: string, depth: number): unknown {
  * Rows missing a video id, a title, or a usable artist are dropped: a playlist
  * full of "Watch on YouTube" promos is better imported short than not at all.
  */
+/**
+ * Find a continuation token anywhere in the response.
+ *
+ * Paging a long playlist needs this, and the token's location is not stable:
+ * the legacy list carries a `continuations` array, the music shelf carries a
+ * `continuationItemRenderer`. Depth-bounded for the same reason
+ * `findRenderer` is.
+ */
+function findContinuationToken(node: unknown, depth = 20): string | undefined {
+  if (depth <= 0 || !node || typeof node !== "object") return undefined;
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const hit = findContinuationToken(child, depth - 1);
+      if (hit) return hit;
+    }
+    return undefined;
+  }
+  const direct =
+    get(node, ["continuationEndpoint", "continuationCommand", "token"]) ??
+    get(node, ["continuationCommand", "token"]) ??
+    get(node, ["nextContinuationData", "continuation"]);
+  if (typeof direct === "string" && direct) return direct;
+  for (const child of Object.values(node as Record<string, unknown>)) {
+    const hit = findContinuationToken(child, depth - 1);
+    if (hit) return hit;
+  }
+  return undefined;
+}
+
 export function extractPlaylistBrowse(
   data: Record<string, unknown>,
 ): PlaylistBrowseResult {
+  // YouTube changed the header shape too. `musicResponsiveHeaderRenderer` is
+  // what a WEB_REMIX playlist browse returns now; the older
+  // `playlistHeaderRenderer` is still accepted so a rollback does not break it.
   const header =
     get(data, ["header", "playlistHeaderRenderer"]) ??
     get(data, ["metadata", "playlistMetadataRenderer"]) ??
-    get(data, ["sidebar", "playlistSidebarRenderer"]);
+    get(data, ["sidebar", "playlistSidebarRenderer"]) ??
+    findRenderer(data, "musicResponsiveHeaderRenderer", 16);
   const name =
     textOf(get(header, ["title"])) ||
     textOf(
@@ -1208,13 +1241,86 @@ export function extractPlaylistBrowse(
     ) ||
     "Imported playlist";
 
-  const list = findRenderer(data, "playlistVideoListRenderer", 16);
+  // The row renderer changed too. `playlistVideoListRenderer` is the OLD
+  // YouTube shape and is no longer returned by the music client;
+  // `musicPlaylistShelfRenderer` carrying `musicResponsiveListItemRenderer`
+  // rows is what comes back now. Both are read, because YouTube has moved this
+  // once already and may move it back.
+  const legacyList = findRenderer(data, "playlistVideoListRenderer", 16);
+  const shelf = findRenderer(data, "musicPlaylistShelfRenderer", 16);
+  const list = legacyList ?? shelf;
   const contents = get(list, ["contents"]);
   const tracks: ImportedRow[] = [];
   let tooLong = false;
 
+  /** Read one CURRENT row: `musicResponsiveListItemRenderer`. */
+  const readResponsiveRow = (item: Record<string, unknown>): void => {
+    // flexColumns[0] is the title, [1] the artist line, and the rest are
+    // badges/album chips that are not part of the row we store.
+    const flexColumns = get(item, ["flexColumns"]);
+    const columnRuns = (index: number): Record<string, unknown>[] => {
+      if (!Array.isArray(flexColumns)) return [];
+      const runs = get(flexColumns[index], [
+        "musicResponsiveListItemFlexColumnRenderer",
+        "text",
+        "runs",
+      ]);
+      return Array.isArray(runs) ? (runs as Record<string, unknown>[]) : [];
+    };
+    const columnText = (index: number): string[] =>
+      columnRuns(index).map((r) => (get(r, ["text"]) as string) ?? "");
+
+    const rawTitle = columnText(0).join("").trim();
+    const title = cleanTrackTitle(rawTitle);
+    if (!title) return;
+
+    // The artist column is one run PER ARTIST plus separator runs (" & ",
+    // ", ") of their own, so joining everything produced "ROSÉ, &, Bruno
+    // Mars" — a name that matches no artist on YouTube. A real artist run is
+    // the one carrying a channel browse endpoint; separators carry none. That
+    // is the discriminator, so multi-artist rows keep only genuine artists.
+    const artistParts = columnRuns(1)
+      .filter(
+        (r) =>
+          typeof get(r, [
+            "navigationEndpoint",
+            "browseEndpoint",
+            "browseId",
+          ]) === "string",
+      )
+      .map((r) => ((get(r, ["text"]) as string) ?? "").trim())
+      .filter(Boolean);
+    const artist = cleanTrackTitle(artistParts.join(", "));
+    if (!artist || artist === "Unknown artist") return;
+
+    const fixedColumns = get(item, ["fixedColumns"]);
+    const durationRun = Array.isArray(fixedColumns)
+      ? get(fixedColumns[0], [
+          "musicResponsiveListItemFixedColumnRenderer",
+          "text",
+          "runs",
+          0,
+          "text",
+        ])
+      : undefined;
+    const duration = parseLength((durationRun as string) || undefined);
+
+    tracks.push({ title, artist, duration: duration || undefined });
+    if (tracks.length > MAX_IMPORT_TRACKS) tooLong = true;
+  };
+
   if (Array.isArray(contents)) {
     for (const entry of contents) {
+      // NEW row shape.
+      const responsive = get(entry, ["musicResponsiveListItemRenderer"]) as
+        | Record<string, unknown>
+        | undefined;
+      if (responsive) {
+        readResponsiveRow(responsive);
+        if (tooLong) break;
+        continue;
+      }
+      // OLD row shape, still handled.
       const vr = get(entry, ["playlistVideoRenderer"]) as
         | Record<string, unknown>
         | undefined;
@@ -1271,6 +1377,16 @@ export function extractPlaylistBrowse(
       "reloadContinuationData",
       "continuation",
     ]) as string | undefined) ??
+    // The music shelf pages via a `continuationItemRenderer` sitting in its
+    // own contents, not via a `continuations` array. Without this a playlist
+    // longer than one page silently imported as just its first 100 tracks.
+    (get(contents, [
+      "continuationItemRenderer",
+      "continuationEndpoint",
+      "continuationCommand",
+      "token",
+    ]) as string | undefined) ??
+    findContinuationToken(data) ??
     undefined;
 
   return { name, tracks, continuation: continuation ?? null, tooLong };
