@@ -12,6 +12,7 @@ import {
   setEqMono as setEqMonoLib,
   ensureGraph,
   hasAudioProcessing,
+  describeDecks,
   getSignalLevel,
   resumeGraph,
   onEqChange,
@@ -1920,6 +1921,27 @@ function noteTransition(line: string): void {
 }
 
 /**
+ * The raw playback state, for when "it keeps buffering" needs an answer.
+ *
+ * Deliberately unpolished: it names which engine owns the sound, what the store
+ * believes about buffering, and what both media elements are actually doing.
+ * Every number here comes from the live element, so it cannot drift from what
+ * the app is actually doing the way an inference can.
+ */
+export function playbackSelfTest(): string {
+  const s = usePlayerStore.getState();
+  const cur = s.current;
+  const where = cur
+    ? `"${cur.title}" is playing via ${
+        audioElementIsSource(cur) ? "the audio pipeline" : "the YouTube player"
+      }; store says buffering=${s.isBuffering} playing=${s.isPlaying} ` +
+      `position=${s.currentTime.toFixed(1)}/${s.duration.toFixed(1)}s. ` +
+      `The YouTube player's clock reads ${ytEngine.getEngineTime().toFixed(1)}s.`
+    : "Nothing is loaded.";
+  return `${where} ${describeDecks()}`;
+}
+
+/**
  * Ask, right now, whether the NEXT boundary can really crossfade.
  *
  * Every gate the real path applies is evaluated against live state rather than
@@ -1930,6 +1952,8 @@ function noteTransition(line: string): void {
  */
 export function crossfadeSelfTest(): string {
   const s = usePlayerStore.getState();
+  // The decks' real state first: every explanation for "it keeps buffering"
+  // lives on the media element, and it has never once been surfaced.
   const readiness = crossfadeReadiness();
   if (!readiness.ok) {
     const where = readiness.detail ? ` (${readiness.detail})` : "";

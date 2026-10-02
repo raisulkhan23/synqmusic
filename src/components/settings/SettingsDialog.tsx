@@ -38,6 +38,7 @@ import { useAuth } from "@/hooks/use-auth";
 import {
   clearPlayHistory,
   crossfadeSelfTest,
+  playbackSelfTest,
   prewarmYoutubeStream,
   usePlayerStore,
 } from "@/store/player";
@@ -175,6 +176,8 @@ export function SettingsDialog({
   const transitionNote = usePlayerStore((s) => s.transitionNote);
   /** Live verdict for the boundary that is coming, not a replay of a log. */
   const [blendCheck, setBlendCheck] = useState<string | null>(null);
+  /** Raw media-element state — the only honest answer to "why is it buffering". */
+  const [playbackCheck, setPlaybackCheck] = useState<string | null>(null);
   const gapless = usePlayerStore((s) => s.gapless);
   const toggleGapless = usePlayerStore((s) => s.toggleGapless);
   const setRate = usePlayerStore((s) => s.setRate);
@@ -1185,12 +1188,24 @@ export function SettingsDialog({
                 >
                   Check blending here
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setPlaybackCheck(playbackSelfTest())}
+                  className="shrink-0 rounded-md border border-white/10 px-2 py-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:border-white/25 hover:text-foreground"
+                >
+                  Report playback state
+                </button>
                 {blendCheck && (
                   <p className="min-w-0 text-[11px] leading-relaxed text-foreground/75">
                     {blendCheck}
                   </p>
                 )}
               </div>
+              {playbackCheck && (
+                <p className="text-[11px] leading-relaxed break-words text-foreground/75">
+                  {playbackCheck}
+                </p>
+              )}
             </div>
           </div>
 

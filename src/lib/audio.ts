@@ -876,6 +876,53 @@ export function spareDeckSlot(): "a" | "b" {
 }
 
 /**
+ * A plain-English, live dump of what the `<audio>` decks are actually doing.
+ *
+ * "The song just keeps buffering" has been the least diagnosable report in the
+ * project, because every explanation for it lives inside a media element the
+ * app never reports on: `readyState` says whether bytes arrived, `networkState`
+ * says whether the fetch is still running, `error` says why it gave up, and
+ * `paused` says whether anything asked it to play. None of that reaches the UI,
+ * so the only thing a listener could ever see was the word "buffering" —
+ * identical whether the element had never received a byte, was waiting on a
+ * slow range request, or had hard-failed with `MEDIA_ERR_NETWORK`.
+ *
+ * This turns that into one sentence naming the actual state, so the next
+ * report starts from evidence instead of a fourth guess.
+ */
+export function describeDecks(): string {
+  if (typeof window === "undefined") return "No window (server render).";
+  const d = ensureDecks();
+  const label = (slot: "a" | "b", el: HTMLAudioElement): string => {
+    const live = slot === activeDeck;
+    const where = el.currentSrc || el.src || "(no source)";
+    const short = where.length > 60 ? `${where.slice(0, 57)}...` : where;
+    const buffered = (() => {
+      try {
+        if (el.buffered.length === 0) return "none";
+        return `${el.buffered.end(el.buffered.length - 1).toFixed(1)}s`;
+      } catch {
+        return "?";
+      }
+    })();
+    const err = el.error
+      ? ` ERROR ${el.error.code}: ${el.error.message || "no message"}`
+      : "";
+    return (
+      `${live ? "LIVE" : "spare"} deck ${slot}: ` +
+      `${el.paused ? "paused" : "playing"} at ${el.currentTime.toFixed(1)}s, ` +
+      `readyState ${el.readyState}, networkState ${el.networkState}, ` +
+      `buffered ${buffered}, src ${short}${err}`
+    );
+  };
+  const parts = [label("a", d.a.el), label("b", d.b.el)];
+  const graph = audioCtx
+    ? `audio graph: ${audioCtx.state}, chain built: ${gainOut ? "yes" : "no"}`
+    : "audio graph: not built";
+  return `${parts.join(" · ")} · ${graph}`;
+}
+
+/**
  * True when a real crossfade is possible right now: both decks are attached to
  * a RUNNING audio context. A suspended context means silence, so fading into
  * one would be worse than not fading at all.
