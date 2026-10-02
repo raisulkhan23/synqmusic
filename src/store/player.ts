@@ -92,24 +92,15 @@ const audioProxyBase = `${convexSiteUrl}/audio-proxy`;
 const resolveYoutubeStream = async (
   videoId: string,
 ): Promise<string | null> => {
-  // EQ-only playback uses the same resolver as preset effects. Start the
-  // already-warm YouTube IFrame immediately so the user hears the dry track
-  // while the direct stream is being resolved, then swap to Web Audio only
-  // after that stream is ready. Initial track loads already start this path
-  // in loadTrack, so the current-track guard avoids a duplicate load there.
-  if (
-    hasAudioProcessing() &&
-    usePlayerStore.getState().current?.youtubeId === videoId
-  ) {
-    const state = usePlayerStore.getState();
-    void ytEngine
-      .play(videoId, {
-        volume: state.volume,
-        muted: state.muted,
-        startSeconds: state.currentTime || undefined,
-      })
-      .catch(() => undefined);
-  }
+  // NOTE: this used to start the YouTube IFrame here too — "so the listener
+  // hears the dry track while the direct stream is being resolved". That was
+  // the redundant download described in `loadTrack`: the IFrame and the deck
+  // then pulled the same song from two unrelated CDNs at the same moment, and
+  // the live deck lost the bandwidth and stalled. Whoever resolves the stream
+  // decides which engine plays it, and only ONE engine may ever play it.
+  //
+  // `loadTrack` is now the single place that chooses an engine, so this
+  // resolver is purely a URL lookup and starts no playback at all.
   // NOTE: there used to be a browser-side InnerTube attempt here, spoofing an
   // ANDROID_VR / TVHTML5 client to resolve a direct googlevideo URL from the
   // USER's IP so audio effects would survive YouTube's datacenter bot-check.
@@ -3245,20 +3236,40 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       // element alive when the tab is minimized than a YouTube IFrame. The
       // resolver still falls back to the IFrame if the stream is unavailable.
       if (wantDeckEngine && track.youtubeId) {
-        // Start the dry YouTube engine immediately, then resolve the EQ
-        // stream in the background so effects never delay the first sound.
-        void ytEngine
-          .play(track.youtubeId, {
-            volume: get().volume,
-            muted: get().muted,
-            startSeconds: resumeAt || undefined,
-          })
-          .catch(() => undefined);
-        void ytResolve(track.youtubeId).then((url) => {
-          if (!url) return;
+        const videoId = track.youtubeId;
+        // Resolve the stream FIRST and play it on the decks. Do NOT start the
+        // YouTube IFrame alongside it "so effects never delay the first sound":
+        // that downloaded every song TWICE, from two unrelated CDNs at the same
+        // moment — the IFrame pulling the video from YouTube while the deck
+        // pulled the identical audio through the Convex proxy — and then threw
+        // one of them away a second later. Pausing the IFrame does not stop its
+        // download either; YouTube buffers ahead regardless of play state.
+        //
+        // With the next track preloaded on the spare deck as well, that was
+        // three concurrent audio streams per song on one connection, and the
+        // live deck was the one that lost the bandwidth and stalled — which is
+        // what "keeps buffering" is. Removing the redundant download also
+        // removes the only way the IFrame could end up audible under the deck.
+        //
+        // The cost is one resolver round-trip before the first sound on a cold
+        // cache, and `prefetchTrack` already resolves the NEXT track while the
+        // current one plays, so that cost is paid off the critical path for
+        // every track after the first.
+        void ytResolve(videoId).then((url) => {
           const state = usePlayerStore.getState();
-          if (state.current?.youtubeId !== track.youtubeId || !state.current)
+          if (state.current?.youtubeId !== videoId || !state.current) return;
+          if (!url) {
+            // No direct stream available for this video: the IFrame is a
+            // genuine fallback rather than a race it can lose.
+            void ytEngine
+              .play(videoId, {
+                volume: get().volume,
+                muted: get().muted,
+                startSeconds: resumeAt || undefined,
+              })
+              .catch(() => undefined);
             return;
+          }
           swapToFilteredStream(state.current, state.currentTime);
         });
         return;

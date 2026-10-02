@@ -226,6 +226,23 @@ SYNQ installs to a device and keeps working without a network.
 
 #### Playback
 
+- **Every song was downloaded twice, from two CDNs at once.** With a crossfade,
+  a gapless hand-off, an EQ preset or an effect — anything that routes playback
+  through the `<audio>` decks — SYNQ started the YouTube IFrame "so effects never
+  delay the first sound", then resolved a direct stream and loaded the _same
+  audio_ onto the deck through the Convex proxy, discarding the IFrame a second
+  later. Pausing the IFrame does not cancel its download; YouTube buffers ahead
+  regardless of play state. Meanwhile the next track had already begun
+  preloading on the spare deck, twenty seconds before it was needed. Three
+  concurrent audio streams per song on one connection, with the live deck
+  losing the bandwidth and stalling — which is what "keeps buffering" was, and
+  why it got worse the more features were switched on. Only one engine now plays
+  a track and only one downloads it: the stream is resolved first and started on
+  the decks, and the YouTube player is a genuine fallback for videos that cannot
+  be resolved rather than a race it can lose. The resolver no longer starts any
+  playback at all. The cost is one round-trip before the first sound on a cold
+  cache, and the next track is already being resolved while the current one
+  plays.
 - **A song could sit in "buffering" forever.** The 8-second stall watchdog
   recovered by calling `audio.load()`, which **discards every byte already
   downloaded** and refetches from zero. A buffer that was merely slow to fill
