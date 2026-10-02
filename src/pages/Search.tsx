@@ -568,7 +568,7 @@ export default function Search() {
         // one seed made Funk and several other categories look unrelated.
         const requestQuery = attempt === 1 ? "top songs" : q;
         searchYt({ query: requestQuery })
-          .then(({ items }) => {
+          .then(({ items, failed }) => {
             if (cancelled) return;
             if (items.length === 0 && attempt < 2) {
               retryTimer = window.setTimeout(
@@ -579,10 +579,19 @@ export default function Search() {
             }
             setYtResults(items);
             setSearching(false);
+            // An empty list and an unreachable source are DIFFERENT facts.
+            // Collapsing them meant a total outage told someone their song does
+            // not exist — wrong, and unfalsifiable from where they sat.
+            if (failed) {
+              setSearchError(
+                "We couldn't reach our music sources just now, so this isn't a real answer about your search. Usually temporary — try again in a moment.",
+              );
+            }
             trackEvent("search_results", {
               query: q.slice(0, 120),
               result_count: items.length,
               used_fallback: requestQuery !== q,
+              failed,
             });
           })
           .catch(() => {

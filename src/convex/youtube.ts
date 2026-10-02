@@ -282,7 +282,9 @@ const MUSIC_CLIENT: InnerTubeClient = {
 
 const MUSIC_API = "https://music.youtube.com/youtubei/v1/";
 
-async function musicSearch(query: string): Promise<YtItem[]> {
+async function musicSearch(
+  query: string,
+): Promise<{ items: YtItem[]; ok: boolean }> {
   const res = await fetch(`${MUSIC_API}search?prettyPrint=false`, {
     method: "POST",
     headers: {
@@ -314,7 +316,7 @@ async function musicSearch(query: string): Promise<YtItem[]> {
   if (!res.ok)
     throw new ConvexError(`YouTube Music API returned ${res.status}`);
   const data = (await res.json()) as Record<string, unknown>;
-  return extractMusicResults(data);
+  return { items: extractMusicResults(data), ok: hasMusicResults(data) };
 }
 
 /**
@@ -801,13 +803,67 @@ function parseMusicCardShelf(card: Record<string, unknown>): YtItem | null {
 }
 
 /**
+ * Did this response actually CONTAIN a search-results structure?
+ *
+ * Both extractors return `[]` when the container they walk is missing. That is
+ * also exactly what YouTube returns when it answers with a bot-check
+ * interstitial or an error page: HTTP 200, valid JSON, no results anywhere.
+ * "No such song" and "we were never really answered" then collapse into one
+ * value, and the page tells someone their song does not exist when the truth is
+ * that SYNQ could not ask.
+ *
+ * This is the same distinction `searchLyricVideos` already reports through its
+ * `failed` flag. `searchYoutube` did not have it, and so said "No related
+ * results" during a total outage.
+ */
+function hasMusicResults(data: Record<string, unknown>): boolean {
+  const sections = get(data, [
+    "contents",
+    "tabbedSearchResultsRenderer",
+    "tabs",
+    0,
+    "tabRenderer",
+    "content",
+    "sectionListRenderer",
+    "contents",
+  ]);
+  const flat = Array.isArray(sections)
+    ? sections
+    : get(data, ["contents", "sectionListRenderer", "contents"]);
+  return Array.isArray(flat);
+}
+
+/** The same probe for the plain (non-Music) search response shape. */
+function hasSearchResults(data: Record<string, unknown>): boolean {
+  return Array.isArray(
+    get(data, [
+      "contents",
+      "twoColumnSearchResultsRenderer",
+      "primaryContents",
+      "sectionListRenderer",
+      "contents",
+    ]),
+  );
+}
+
+/**
  * Search YouTube for music. Uses the YouTube Music endpoint so ONLY music
  * tracks are ever returned — no podcasts, vlogs, mixes, or other videos.
+ *
+ * `failed` is the honest version of coming back empty-handed: it is true only
+ * when NO attempt returned a results structure at all, meaning the source never
+ * answered rather than that the query had no matches.
  */
 export const searchYoutube = action({
   args: { query: v.string() },
-  handler: async (_ctx, { query }): Promise<{ items: YtItem[] }> => {
-    if (!query.trim()) return { items: [] };
+  handler: async (
+    _ctx,
+    { query },
+  ): Promise<{ items: YtItem[]; failed: boolean }> => {
+    if (!query.trim()) return { items: [], failed: false };
+
+    // Did anything actually answer with a results structure?
+    let answered = false;
 
     // Category/mood searches are discovery requests, not literal title
     // searches. Prefer concrete artist-backed seeds BEFORE the broad shelf
@@ -824,17 +880,22 @@ export const searchYoutube = action({
         seeds.map((seedQuery) => musicSearch(seedQuery)),
       );
       const seeded = settled.flatMap((result) =>
-        result.status === "fulfilled" ? result.value : [],
+        result.status === "fulfilled" ? result.value.items : [],
       );
+      for (const result of settled) {
+        if (result.status === "fulfilled" && result.value.ok) answered = true;
+      }
       const combined = dedupeMusicItems(seeded).slice(0, 10);
-      if (combined.length > 0) return { items: combined };
+      if (combined.length > 0) return { items: combined, failed: false };
     }
 
     // Preferred: YouTube Music — returns real studio tracks (Songs shelf),
     // never random YouTube videos.
     try {
-      const items = await musicSearch(query);
-      if (items.length > 0) return { items };
+      const attempt = await musicSearch(query);
+      if (attempt.ok) answered = true;
+      if (attempt.items.length > 0)
+        return { items: attempt.items, failed: false };
     } catch {
       // fall through to the video-filter retry below
     }
