@@ -11,6 +11,27 @@ and semantic versioning.
 
 ### Fixed
 
+#### The "Lyric & lo-fi videos" section could silently disappear from search
+
+The section was never removed — it was gated on `lyricResults.length > 0` while
+the backend reported every failure as an empty list. One transient YouTube
+error therefore removed the whole block with no message and no way to retry,
+which is indistinguishable from the feature having been deleted.
+
+The action now reports failure separately from "no matches", and the section
+renders whenever the lookup settles: results, an honest note when the filter
+genuinely matched nothing, or the failure with a working **Try again**.
+
+#### The install button rendered on two lines
+
+Tailwind's preflight sets `svg { display: block }`, so in a plain inline
+`<button>` the Download icon became a block and forced a line break of its own —
+icon stacked above the word "Install", in a tall lozenge. It is now an
+`inline-flex` row with `whitespace-nowrap`, slightly roomier padding, and
+`shrink-0` so the strip's long explanatory text cannot squeeze it.
+
+### Fixed
+
 #### Crossfade and gapless playback did not actually work
 
 Audited against the real execution path rather than the settings UI. Six

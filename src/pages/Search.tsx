@@ -393,6 +393,14 @@ export default function Search() {
   // must never be merged into the first result list or its radio queue.
   const [lyricResults, setLyricResults] = useState<YtItem[] | null>(null);
   const [lyricSearching, setLyricSearching] = useState(false);
+  /**
+   * True when the lyric/lo-fi lookup FAILED, as opposed to genuinely finding
+   * nothing. These were collapsed into one case, and because the section is
+   * hidden when empty, any transient error made the whole Lyric & lo-fi block
+   * vanish with no message and no way to retry — which looks exactly like the
+   * feature having been removed.
+   */
+  const [lyricFailed, setLyricFailed] = useState(false);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
@@ -441,6 +449,7 @@ export default function Search() {
       if (!q) {
         setYtResults(null);
         setLyricResults(null);
+        setLyricFailed(false);
         setSearchError(null);
         setSearching(false);
         setLyricSearching(false);
@@ -450,6 +459,9 @@ export default function Search() {
       let retryTimer: number | undefined;
       setSearching(true);
       setLyricSearching(true);
+      // Cleared up-front so a retry cannot leave the previous run's error
+      // sitting next to fresh results.
+      setLyricFailed(false);
       setSearchError(null);
       rememberQuery(q);
       trackEvent("search_performed", { query: q.slice(0, 120) });
@@ -496,11 +508,15 @@ export default function Search() {
       // The original query is sent unchanged. The backend derives its own
       // narrowly scoped lyric-video query and keeps these results separate.
       searchLyricVideos({ query: q })
-        .then(({ items }) => {
-          if (!cancelled) setLyricResults(items);
+        .then(({ items, failed }) => {
+          if (cancelled) return;
+          setLyricResults(items);
+          setLyricFailed(failed);
         })
         .catch(() => {
-          if (!cancelled) setLyricResults([]);
+          if (cancelled) return;
+          setLyricResults([]);
+          setLyricFailed(true);
         })
         .finally(() => {
           if (!cancelled) setLyricSearching(false);
@@ -745,38 +761,74 @@ export default function Search() {
               the YouTube results above. */}
           <JamendoResults query={debouncedQuery || query} />
 
-          {!lyricSearching &&
-            lyricResults !== null &&
-            lyricResults.length > 0 && (
-              <section aria-labelledby="lyric-video-results-heading">
-                <div className="mb-2 flex items-center gap-2">
-                  <Music2 className="size-4 text-[rgb(var(--tint))]" />
-                  <h2
-                    id="lyric-video-results-heading"
-                    className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase"
-                  >
-                    Lyric & lo-fi videos
-                  </h2>
-                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] text-muted-foreground">
-                    Separate uploads
-                  </span>
-                </div>
-                <p className="mb-2 text-xs text-muted-foreground">
-                  Carefully filtered music and lyric uploads. These are not
-                  mixed into the Songs results above.
-                </p>
-                <div className="flex flex-col gap-0.5">
-                  {lyricResults.map((item, i) => (
-                    <RemoteTrackRow
-                      key={`lyric-${item.id}`}
-                      item={item}
-                      index={i + 1}
-                      onPlay={playRemote}
-                    />
-                  ))}
-                </div>
-              </section>
-            )}
+          {/*
+            Rendered whenever the lookup has SETTLED — not only when it found
+            something. The old condition was
+            `!lyricSearching && lyricResults?.length > 0`, so a failed lookup
+            (which the backend reported as an empty list) removed the entire
+            section with no explanation. Two genuinely different outcomes now
+            get two genuinely different messages, and a failure offers a retry.
+          */}
+          {!lyricSearching && lyricResults !== null && (
+            <section aria-labelledby="lyric-video-results-heading">
+              <div className="mb-2 flex items-center gap-2">
+                <Music2 className="size-4 text-[rgb(var(--tint))]" />
+                <h2
+                  id="lyric-video-results-heading"
+                  className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase"
+                >
+                  Lyric & lo-fi videos
+                </h2>
+                <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] text-muted-foreground">
+                  Separate uploads
+                </span>
+              </div>
+
+              {lyricResults.length === 0 ? (
+                lyricFailed ? (
+                  <div className="flex flex-wrap items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
+                    <p className="min-w-0 flex-1 text-xs text-muted-foreground">
+                      Couldn&apos;t reach YouTube for lyric and lo-fi uploads.
+                      The Songs results above are unaffected.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setRetryKey((k) => k + 1)}
+                      className="shrink-0 rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
+                    >
+                      Try again
+                    </button>
+                  </div>
+                ) : (
+                  // Genuinely nothing matched the filter, which is a real and
+                  // common answer — the filter is deliberately strict so these
+                  // uploads never contaminate the Songs results.
+                  <p className="text-xs text-muted-foreground">
+                    No separate lyric or lo-fi uploads for this search. Only
+                    closely matching uploads are listed here, so an empty result
+                    is normal.
+                  </p>
+                )
+              ) : (
+                <>
+                  <p className="mb-2 text-xs text-muted-foreground">
+                    Carefully filtered music and lyric uploads. These are not
+                    mixed into the Songs results above.
+                  </p>
+                  <div className="flex flex-col gap-0.5">
+                    {lyricResults.map((item, i) => (
+                      <RemoteTrackRow
+                        key={`lyric-${item.id}`}
+                        item={item}
+                        index={i + 1}
+                        onPlay={playRemote}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
+            </section>
+          )}
         </div>
       )}
     </div>

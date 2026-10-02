@@ -862,11 +862,26 @@ export const searchYoutube = action({
  * query internally and then applies a second, strict filter before returning
  * anything. Results are intentionally kept separate from `searchYoutube`.
  */
+/**
+ * Supplemental "lyric & lo-fi video" results, kept strictly separate from the
+ * primary Songs results.
+ *
+ * `failed` exists because this action used to swallow every failure into
+ * `{ items: [] }`. An empty list and an unreachable YouTube were then the same
+ * value, and the page — which hides the section when there is nothing to show —
+ * made the whole Lyric & lo-fi section silently disappear on any transient
+ * error. To a listener that is indistinguishable from the feature having been
+ * deleted, and there was no way to retry. The two cases are now reported
+ * separately so the UI can say which one happened.
+ */
 export const searchLyricVideos = action({
   args: { query: v.string() },
-  handler: async (_ctx, { query }): Promise<{ items: YtItem[] }> => {
+  handler: async (
+    _ctx,
+    { query },
+  ): Promise<{ items: YtItem[]; failed: boolean }> => {
     const rawQuery = query.trim();
-    if (!rawQuery) return { items: [] };
+    if (!rawQuery) return { items: [], failed: false };
 
     // This derived string is used ONLY for this supplemental action. It is
     // never written back to the input, search history, analytics, or the
@@ -883,9 +898,9 @@ export const searchLyricVideos = action({
           isLyricVideoTrack(item, rawQuery),
         ),
       );
-      return { items: items.slice(0, 8) };
+      return { items: items.slice(0, 8), failed: false };
     } catch {
-      return { items: [] };
+      return { items: [], failed: true };
     }
   },
 });

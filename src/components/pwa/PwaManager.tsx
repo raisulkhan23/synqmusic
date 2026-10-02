@@ -167,7 +167,15 @@ export function PwaManager() {
                 onClick={() => {
                   void install();
                 }}
-                className="rounded-full bg-[rgb(var(--tint))] px-2.5 py-1 text-[11px] font-semibold text-black transition-transform hover:scale-[1.03]"
+                // `inline-flex items-center` is load-bearing, not decoration.
+                // Tailwind's preflight sets `svg { display: block }`, so in a
+                // plain inline button the Download icon became a BLOCK and
+                // forced a line break of its own — the icon sat on top of the
+                // word "Install" and the pill grew into a tall two-line
+                // lozenge. `whitespace-nowrap` stops the label breaking on a
+                // narrow strip, and the slightly roomier padding gives it a
+                // comfortable one-line hit target.
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[rgb(var(--tint))] px-3 py-1.5 text-[11px] font-semibold whitespace-nowrap text-black transition-transform hover:scale-[1.03]"
               >
                 <Download className="size-3" />
                 Install
