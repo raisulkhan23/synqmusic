@@ -212,7 +212,10 @@ const get = (obj: unknown, path: (string | number)[]): unknown =>
     return undefined;
   }, obj);
 
-function extractSearchResults(data: Record<string, unknown>): YtItem[] {
+function extractSearchResults(
+  data: Record<string, unknown>,
+  limit = 10,
+): YtItem[] {
   const out: YtItem[] = [];
   const sections = get(data, [
     "contents",
@@ -257,7 +260,7 @@ function extractSearchResults(data: Record<string, unknown>): YtItem[] {
         duration: parseLength(lengthText),
         thumbnail,
       });
-      if (out.length >= 10) return out;
+      if (out.length >= limit) return out;
     }
   }
   return out;
@@ -905,6 +908,147 @@ export const searchLyricVideos = action({
   },
 });
 
+// ---------------------------------------------------------------------------
+// Creative Commons discovery.
+//
+// Search for music YouTube itself licenses under Creative Commons, so the
+// tracks that CAN be stored offline are findable rather than hidden behind a
+// download button that mostly says no.
+//
+// ---------------------------------------------------------------------------
+// WHY EVERY RESULT IS VERIFIED, NOT JUST FILTERED
+// ---------------------------------------------------------------------------
+// YouTube exposes a "Features: Creative Commons" search filter, but a filter
+// is a HINT and not an answer: it can be changed, ignored, or quietly stop
+// applying, and the failure is completely silent — the request still returns
+// results, they are just the wrong ones. Presenting those as Creative Commons
+// would label a copyrighted recording as downloadable, which is precisely the
+// outcome this whole area exists to prevent.
+//
+// So the candidate list is a hint and `status.license` is the answer. Every
+// candidate is confirmed against the official Data API before it is returned,
+// and an unconfirmed candidate is dropped. The filter's only job is RECALL; it
+// can no longer affect CORRECTNESS. That is also why the plain music search is
+// unioned in: if YouTube ever ignores the filter, this returns candidates to
+// verify instead of nothing at all — noise, never a wrong answer.
+//
+// A consequence worth stating: Creative Commons music is a SMALL catalogue, so
+// an empty result is a normal outcome rather than a broken one, and the UI says
+// so. A larger, honest nothing beats a padded list that cannot be downloaded.
+// ---------------------------------------------------------------------------
+
+/**
+ * Search param for YouTube's "Features → Creative Commons" filter.
+ *
+ * Base64 of the feature-filter protobuf (`{ f2: { f14: 4 } }`), the same
+ * encoding the 4K filter uses with `f14: 1`. Deliberately the only magic value
+ * here, and deliberately unable to cause a wrong result — see the header.
+ */
+const CC_FEATURE_FILTER_PARAMS = "EgJwBA==";
+
+/**
+ * Which of these video ids YouTube reports as Creative Commons.
+ *
+ * One `videos.list` call covers up to 50 ids, so verifying a whole page of
+ * candidates costs a single unit of Data API quota. Anything that cannot be
+ * checked — no key, an HTTP error, a malformed body — simply stays out of the
+ * returned set. There is no path here that promotes an unverified video.
+ */
+async function verifiedCreativeCommonsIds(
+  videoIds: string[],
+): Promise<Set<string>> {
+  const verified = new Set<string>();
+  const key = process.env.YOUTUBE_API_KEY;
+  if (!key || videoIds.length === 0) return verified;
+
+  for (let i = 0; i < videoIds.length; i += 50) {
+    const batch = videoIds.slice(i, i + 50);
+    try {
+      const res = await fetch(
+        `https://www.googleapis.com/youtube/v3/videos?part=status&id=${encodeURIComponent(
+          batch.join(","),
+        )}&key=${encodeURIComponent(key)}`,
+        { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) },
+      );
+      if (!res.ok) continue;
+      const data = (await res.json()) as Record<string, unknown>;
+      const items = data.items;
+      if (!Array.isArray(items)) continue;
+      for (const item of items) {
+        const id = get(item, ["id"]);
+        const license = get(item, ["status", "license"]);
+        if (typeof id === "string" && license === CC_LICENSE) {
+          verified.add(id);
+        }
+      }
+    } catch {
+      // An unverified batch stays unverified. Failing open here would hand the
+      // listener a standard-licence track labelled Creative Commons.
+    }
+  }
+  return verified;
+}
+
+/**
+ * Search for Creative Commons music.
+ *
+ * `unconfigured` is separated from `failed` on purpose: "this deployment has
+ * no Data API key" is a setting, not an outage, and telling a listener their
+ * search broke when nothing about it did is its own small lie.
+ */
+export const searchCreativeCommons = action({
+  args: { query: v.string() },
+  handler: async (
+    _ctx,
+    { query },
+  ): Promise<{ items: YtItem[]; failed: boolean; unconfigured: boolean }> => {
+    const q = query.trim();
+    if (!q) return { items: [], failed: false, unconfigured: false };
+
+    if (!process.env.YOUTUBE_API_KEY) {
+      return { items: [], failed: false, unconfigured: true };
+    }
+
+    try {
+      // Both searches are free (InnerTube), so running them together costs
+      // nothing and removes the dependency on the filter being honoured.
+      const [filtered, plain] = await Promise.all([
+        innerTube("search", WEB, {
+          context: clientContext(WEB),
+          query: q,
+          params: CC_FEATURE_FILTER_PARAMS,
+        }).catch(() => null),
+        innerTube("search", WEB, {
+          context: clientContext(WEB),
+          query: q,
+          params: "EgIQAQ%3D%3D",
+        }).catch(() => null),
+      ]);
+
+      const candidates = dedupeMusicItems([
+        ...(filtered ? extractSearchResults(filtered, 20) : []),
+        ...(plain ? extractSearchResults(plain, 20) : []),
+      ]).filter(isMusicTrack);
+
+      if (candidates.length === 0) {
+        return { items: [], failed: false, unconfigured: false };
+      }
+
+      const verified = await verifiedCreativeCommonsIds(
+        candidates.map((candidate) => candidate.id),
+      );
+
+      return {
+        items: candidates.filter((item) => verified.has(item.id)).slice(0, 10),
+        failed: false,
+        unconfigured: false,
+      };
+    } catch {
+      return { items: [], failed: true, unconfigured: false };
+    }
+  },
+});
+
 /**
  * Display metadata for a YouTube video id, used by shared track links.
  *
@@ -1156,6 +1300,15 @@ export interface DownloadEligibilityResult {
 export const CC_BY_LICENSE_NAME = "Creative Commons Attribution (CC BY)";
 
 /**
+ * The only value of `status.license` that permits a download.
+ *
+ * Named once and compared everywhere: a bare "creativeCommon" literal drifting
+ * between the download check and the search check is exactly how two paths
+ * that are supposed to agree about rights quietly stop agreeing.
+ */
+const CC_LICENSE = "creativeCommon";
+
+/**
  * A video's licence never changes from one tap to the next, so one lookup is
  * kept per id for the life of the instance. Bounded so a long-lived process
  * cannot grow it without limit.
@@ -1217,7 +1370,7 @@ export const downloadEligibility = action({
         ? get(items[0], ["status", "license"])
         : undefined;
 
-    if (license !== "creativeCommon") {
+    if (license !== CC_LICENSE) {
       return refuse(
         "This track isn't published under a Creative Commons licence, so SYNQ won't store a copy of it.",
       );
