@@ -841,21 +841,29 @@ export const searchYoutube = action({
 
     // Fallback: regular YouTube search restricted to the "video" result type,
     // with the same non-music heuristics.
-    const data = await innerTube("search", WEB, {
-      context: clientContext(WEB),
-      query,
-      params: "EgIQAQ%3D%3D",
-    });
-    // The fallback is only for a failed/empty YouTube Music response. It must
-    // be stricter than the primary path: no duration-less or marker-less
-    // uploads, otherwise a generic vlog can appear to be a song result.
-    return {
-      items: dedupeMusicItems(
-        extractSearchResults(data).filter((item) =>
-          isPrimaryMusicResult(item, query),
+    try {
+      const data = await innerTube("search", WEB, {
+        context: clientContext(WEB),
+        query,
+        params: "EgIQAQ%3D%3D",
+      });
+      if (hasSearchResults(data)) answered = true;
+      // The fallback is only for a failed/empty YouTube Music response. It must
+      // be stricter than the primary path: no duration-less or marker-less
+      // uploads, otherwise a generic vlog can appear to be a song result.
+      return {
+        items: dedupeMusicItems(
+          extractSearchResults(data).filter((item) =>
+            isPrimaryMusicResult(item, query),
+          ),
         ),
-      ),
-    };
+        // Nothing ever returned a results structure: we were not told "no
+        // matches", we were never really answered.
+        failed: !answered,
+      };
+    } catch {
+      return { items: [], failed: !answered };
+    }
   },
 });
 
