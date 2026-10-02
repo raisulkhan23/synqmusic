@@ -212,10 +212,7 @@ const get = (obj: unknown, path: (string | number)[]): unknown =>
     return undefined;
   }, obj);
 
-function extractSearchResults(
-  data: Record<string, unknown>,
-  limit = 10,
-): YtItem[] {
+function extractSearchResults(data: Record<string, unknown>): YtItem[] {
   const out: YtItem[] = [];
   const sections = get(data, [
     "contents",
@@ -260,7 +257,7 @@ function extractSearchResults(
         duration: parseLength(lengthText),
         thumbnail,
       });
-      if (out.length >= limit) return out;
+      if (out.length >= 10) return out;
     }
   }
   return out;
@@ -282,9 +279,7 @@ const MUSIC_CLIENT: InnerTubeClient = {
 
 const MUSIC_API = "https://music.youtube.com/youtubei/v1/";
 
-async function musicSearch(
-  query: string,
-): Promise<{ items: YtItem[]; ok: boolean }> {
+async function musicSearch(query: string): Promise<YtItem[]> {
   const res = await fetch(`${MUSIC_API}search?prettyPrint=false`, {
     method: "POST",
     headers: {
@@ -316,7 +311,7 @@ async function musicSearch(
   if (!res.ok)
     throw new ConvexError(`YouTube Music API returned ${res.status}`);
   const data = (await res.json()) as Record<string, unknown>;
-  return { items: extractMusicResults(data), ok: hasMusicResults(data) };
+  return extractMusicResults(data);
 }
 
 /**
@@ -803,67 +798,13 @@ function parseMusicCardShelf(card: Record<string, unknown>): YtItem | null {
 }
 
 /**
- * Did this response actually CONTAIN a search-results structure?
- *
- * Both extractors return `[]` when the container they walk is missing. That is
- * also exactly what YouTube returns when it answers with a bot-check
- * interstitial or an error page: HTTP 200, valid JSON, no results anywhere.
- * "No such song" and "we were never really answered" then collapse into one
- * value, and the page tells someone their song does not exist when the truth is
- * that SYNQ could not ask.
- *
- * This is the same distinction `searchLyricVideos` already reports through its
- * `failed` flag. `searchYoutube` did not have it, and so said "No related
- * results" during a total outage.
- */
-function hasMusicResults(data: Record<string, unknown>): boolean {
-  const sections = get(data, [
-    "contents",
-    "tabbedSearchResultsRenderer",
-    "tabs",
-    0,
-    "tabRenderer",
-    "content",
-    "sectionListRenderer",
-    "contents",
-  ]);
-  const flat = Array.isArray(sections)
-    ? sections
-    : get(data, ["contents", "sectionListRenderer", "contents"]);
-  return Array.isArray(flat);
-}
-
-/** The same probe for the plain (non-Music) search response shape. */
-function hasSearchResults(data: Record<string, unknown>): boolean {
-  return Array.isArray(
-    get(data, [
-      "contents",
-      "twoColumnSearchResultsRenderer",
-      "primaryContents",
-      "sectionListRenderer",
-      "contents",
-    ]),
-  );
-}
-
-/**
  * Search YouTube for music. Uses the YouTube Music endpoint so ONLY music
  * tracks are ever returned — no podcasts, vlogs, mixes, or other videos.
- *
- * `failed` is the honest version of coming back empty-handed: it is true only
- * when NO attempt returned a results structure at all, meaning the source never
- * answered rather than that the query had no matches.
  */
 export const searchYoutube = action({
   args: { query: v.string() },
-  handler: async (
-    _ctx,
-    { query },
-  ): Promise<{ items: YtItem[]; failed: boolean }> => {
-    if (!query.trim()) return { items: [], failed: false };
-
-    // Did anything actually answer with a results structure?
-    let answered = false;
+  handler: async (_ctx, { query }): Promise<{ items: YtItem[] }> => {
+    if (!query.trim()) return { items: [] };
 
     // Category/mood searches are discovery requests, not literal title
     // searches. Prefer concrete artist-backed seeds BEFORE the broad shelf
@@ -880,51 +821,38 @@ export const searchYoutube = action({
         seeds.map((seedQuery) => musicSearch(seedQuery)),
       );
       const seeded = settled.flatMap((result) =>
-        result.status === "fulfilled" ? result.value.items : [],
+        result.status === "fulfilled" ? result.value : [],
       );
-      for (const result of settled) {
-        if (result.status === "fulfilled" && result.value.ok) answered = true;
-      }
       const combined = dedupeMusicItems(seeded).slice(0, 10);
-      if (combined.length > 0) return { items: combined, failed: false };
+      if (combined.length > 0) return { items: combined };
     }
 
     // Preferred: YouTube Music — returns real studio tracks (Songs shelf),
     // never random YouTube videos.
     try {
-      const attempt = await musicSearch(query);
-      if (attempt.ok) answered = true;
-      if (attempt.items.length > 0)
-        return { items: attempt.items, failed: false };
+      const items = await musicSearch(query);
+      if (items.length > 0) return { items };
     } catch {
       // fall through to the video-filter retry below
     }
 
     // Fallback: regular YouTube search restricted to the "video" result type,
     // with the same non-music heuristics.
-    try {
-      const data = await innerTube("search", WEB, {
-        context: clientContext(WEB),
-        query,
-        params: "EgIQAQ%3D%3D",
-      });
-      if (hasSearchResults(data)) answered = true;
-      // The fallback is only for a failed/empty YouTube Music response. It must
-      // be stricter than the primary path: no duration-less or marker-less
-      // uploads, otherwise a generic vlog can appear to be a song result.
-      return {
-        items: dedupeMusicItems(
-          extractSearchResults(data).filter((item) =>
-            isPrimaryMusicResult(item, query),
-          ),
+    const data = await innerTube("search", WEB, {
+      context: clientContext(WEB),
+      query,
+      params: "EgIQAQ%3D%3D",
+    });
+    // The fallback is only for a failed/empty YouTube Music response. It must
+    // be stricter than the primary path: no duration-less or marker-less
+    // uploads, otherwise a generic vlog can appear to be a song result.
+    return {
+      items: dedupeMusicItems(
+        extractSearchResults(data).filter((item) =>
+          isPrimaryMusicResult(item, query),
         ),
-        // Nothing ever returned a results structure: we were not told "no
-        // matches", we were never really answered.
-        failed: !answered,
-      };
-    } catch {
-      return { items: [], failed: !answered };
-    }
+      ),
+    };
   },
 });
 
@@ -974,173 +902,6 @@ export const searchLyricVideos = action({
     } catch {
       return { items: [], failed: true };
     }
-  },
-});
-
-// ---------------------------------------------------------------------------
-// Creative Commons discovery.
-//
-// Search for music YouTube itself licenses under Creative Commons, so the
-// tracks that CAN be stored offline are findable rather than hidden behind a
-// download button that mostly says no.
-//
-// ---------------------------------------------------------------------------
-// WHY EVERY RESULT IS VERIFIED, NOT JUST FILTERED
-// ---------------------------------------------------------------------------
-// YouTube exposes a "Features: Creative Commons" search filter, but a filter
-// is a HINT and not an answer: it can be changed, ignored, or quietly stop
-// applying, and the failure is completely silent — the request still returns
-// results, they are just the wrong ones. Presenting those as Creative Commons
-// would label a copyrighted recording as downloadable, which is precisely the
-// outcome this whole area exists to prevent.
-//
-// So the candidate list is a hint and `status.license` is the answer. Every
-// candidate is confirmed against the official Data API before it is returned,
-// and an unconfirmed candidate is dropped. The filter's only job is RECALL; it
-// can no longer affect CORRECTNESS. That is also why the plain music search is
-// unioned in: if YouTube ever ignores the filter, this returns candidates to
-// verify instead of nothing at all — noise, never a wrong answer.
-//
-// A consequence worth stating: Creative Commons music is a SMALL catalogue, so
-// an empty result is a normal outcome rather than a broken one, and the UI says
-// so. A larger, honest nothing beats a padded list that cannot be downloaded.
-// ---------------------------------------------------------------------------
-
-/**
- * Search param for YouTube's "Features → Creative Commons" filter.
- *
- * Base64 of the feature-filter protobuf (`{ f2: { f14: 4 } }`), the same
- * encoding the 4K filter uses with `f14: 1`. Deliberately the only magic value
- * here, and deliberately unable to cause a wrong result — see the header.
- */
-const CC_FEATURE_FILTER_PARAMS = "EgJwBA==";
-
-/**
- * Which of these video ids YouTube reports as Creative Commons.
- *
- * One `videos.list` call covers up to 50 ids, so verifying a whole page of
- * candidates costs a single unit of Data API quota. Anything that cannot be
- * checked — no key, an HTTP error, a malformed body — simply stays out of the
- * returned set. There is no path here that promotes an unverified video.
- */
-async function verifiedCreativeCommonsIds(
-  videoIds: string[],
-): Promise<Set<string>> {
-  const verified = new Set<string>();
-  const key = process.env.YOUTUBE_API_KEY;
-  if (!key || videoIds.length === 0) return verified;
-
-  for (let i = 0; i < videoIds.length; i += 50) {
-    const batch = videoIds.slice(i, i + 50);
-    try {
-      const res = await fetch(
-        `https://www.googleapis.com/youtube/v3/videos?part=status&id=${encodeURIComponent(
-          batch.join(","),
-        )}&key=${encodeURIComponent(key)}`,
-        { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) },
-      );
-      if (!res.ok) continue;
-      const data = (await res.json()) as Record<string, unknown>;
-      const items = data.items;
-      if (!Array.isArray(items)) continue;
-      for (const item of items) {
-        const id = get(item, ["id"]);
-        const license = get(item, ["status", "license"]);
-        if (typeof id === "string" && license === CC_LICENSE) {
-          verified.add(id);
-        }
-      }
-    } catch {
-      // An unverified batch stays unverified. Failing open here would hand the
-      // listener a standard-licence track labelled Creative Commons.
-    }
-  }
-  return verified;
-}
-
-/**
- * Search for Creative Commons music.
- *
- * `unconfigured` is separated from `failed` on purpose: "this deployment has
- * no Data API key" is a setting, not an outage, and telling a listener their
- * search broke when nothing about it did is its own small lie.
- */
-export const searchCreativeCommons = action({
-  args: { query: v.string() },
-  handler: async (
-    _ctx,
-    { query },
-  ): Promise<{ items: YtItem[]; failed: boolean; unconfigured: boolean }> => {
-    const q = query.trim();
-    if (!q) return { items: [], failed: false, unconfigured: false };
-
-    if (!process.env.YOUTUBE_API_KEY) {
-      return { items: [], failed: false, unconfigured: true };
-    }
-
-    try {
-      // Both searches are free (InnerTube), so running them together costs
-      // nothing and removes the dependency on the filter being honoured.
-      const [filtered, plain] = await Promise.all([
-        innerTube("search", WEB, {
-          context: clientContext(WEB),
-          query: q,
-          params: CC_FEATURE_FILTER_PARAMS,
-        }).catch(() => null),
-        innerTube("search", WEB, {
-          context: clientContext(WEB),
-          query: q,
-          params: "EgIQAQ%3D%3D",
-        }).catch(() => null),
-      ]);
-
-      const candidates = dedupeMusicItems([
-        ...(filtered ? extractSearchResults(filtered, 20) : []),
-        ...(plain ? extractSearchResults(plain, 20) : []),
-      ]).filter(isMusicTrack);
-
-      if (candidates.length === 0) {
-        return { items: [], failed: false, unconfigured: false };
-      }
-
-      const verified = await verifiedCreativeCommonsIds(
-        candidates.map((candidate) => candidate.id),
-      );
-
-      return {
-        items: candidates.filter((item) => verified.has(item.id)).slice(0, 10),
-        failed: false,
-        unconfigured: false,
-      };
-    } catch {
-      return { items: [], failed: true, unconfigured: false };
-    }
-  },
-});
-
-/**
- * Which of these videos may be downloaded — a whole page in one call.
- *
- * The row badge has to agree with the Download action, and a row cannot afford
- * its own request: a 200-track playlist would be 200 action calls to answer a
- * question YouTube answers 50 ids at a time. So the client collects the ids on
- * screen and asks once.
- *
- * Returns the ELIGIBLE ids only, and nothing about the rest. "Not Creative
- * Commons" and "could not be checked" are deliberately indistinguishable to
- * the caller, because a badge must never appear on the strength of a check
- * that did not run — a listener who taps Download on a badged row and is
- * refused has been lied to by the badge.
- */
-export const creativeCommonsFlags = action({
-  args: { videoIds: v.array(v.string()) },
-  handler: async (_ctx, { videoIds }): Promise<{ ids: string[] }> => {
-    // Bounded, so one request can never fan out into an unbounded number of
-    // Data API calls. The client chunks anything larger than this.
-    const ids = [...new Set(videoIds)].slice(0, 50);
-    if (ids.length === 0) return { ids: [] };
-    const verified = await verifiedCreativeCommonsIds(ids);
-    return { ids: [...verified] };
   },
 });
 
@@ -1395,15 +1156,6 @@ export interface DownloadEligibilityResult {
 export const CC_BY_LICENSE_NAME = "Creative Commons Attribution (CC BY)";
 
 /**
- * The only value of `status.license` that permits a download.
- *
- * Named once and compared everywhere: a bare "creativeCommon" literal drifting
- * between the download check and the search check is exactly how two paths
- * that are supposed to agree about rights quietly stop agreeing.
- */
-const CC_LICENSE = "creativeCommon";
-
-/**
  * A video's licence never changes from one tap to the next, so one lookup is
  * kept per id for the life of the instance. Bounded so a long-lived process
  * cannot grow it without limit.
@@ -1465,7 +1217,7 @@ export const downloadEligibility = action({
         ? get(items[0], ["status", "license"])
         : undefined;
 
-    if (license !== CC_LICENSE) {
+    if (license !== "creativeCommon") {
       return refuse(
         "This track isn't published under a Creative Commons licence, so SYNQ won't store a copy of it.",
       );
