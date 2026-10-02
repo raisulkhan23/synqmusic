@@ -2614,6 +2614,8 @@ function onTimeUpdate(t: number, duration: number): void {
 
 let wired = false;
 let audioBufferWatchdog: ReturnType<typeof setTimeout> | null = null;
+/** How many times the current stall has been nudged. Reset when audio plays. */
+let bufferRetries = 0;
 /** The deck the store's element listeners are currently attached to. */
 let boundAudio: HTMLAudioElement | null = null;
 let boundAudioHandlers: [string, EventListener][] = [];
@@ -2636,22 +2638,42 @@ function armAudioBufferWatchdog(audio: HTMLAudioElement): void {
       usePlayerStore.setState({ isBuffering: false });
       return;
     }
+    if (bufferRetries >= 2) {
+      // A watchdog with no ceiling is a loop, not a safety net. Two attempts
+      // clear a transient stall; past that the honest outcome is to leave the
+      // track stalled and SAY so, rather than reloading it forever.
+      noteTransition(
+        "This track's stream kept stalling — press play to retry.",
+      );
+      return;
+    }
+    bufferRetries += 1;
 
     // Retry the same source in place. Do not increment errorNonce here: that
     // would trigger PlayerBar's alternate-upload fallback and could replace
     // the user's song just because the network briefly stalled.
     const resumeAt = audio.currentTime;
-    audio.load();
-    if (resumeAt > 0) {
-      const restorePosition = () => {
-        audio.currentTime = resumeAt;
-        usePlayerStore.setState({ currentTime: resumeAt });
-      };
-      if (audio.readyState >= HTMLMediaElement.HAVE_METADATA) restorePosition();
-      else
-        audio.addEventListener("loadedmetadata", restorePosition, {
-          once: true,
-        });
+    // `load()` DISCARDS every byte already downloaded and starts again from
+    // zero. Calling it on an element that was merely SLOW to fill therefore
+    // threw away the very progress it was waiting for, and the next `stalled`
+    // re-armed this watchdog — so the song looped between "buffering" and
+    // "buffering" indefinitely and never recovered. Reload ONLY when nothing
+    // at all has arrived (HAVE_NOTHING); otherwise keep the partial buffer and
+    // simply re-issue `play()`.
+    if (audio.readyState === HTMLMediaElement.HAVE_NOTHING) {
+      audio.load();
+      if (resumeAt > 0) {
+        const restorePosition = () => {
+          audio.currentTime = resumeAt;
+          usePlayerStore.setState({ currentTime: resumeAt });
+        };
+        if (audio.readyState >= HTMLMediaElement.HAVE_METADATA)
+          restorePosition();
+        else
+          audio.addEventListener("loadedmetadata", restorePosition, {
+            once: true,
+          });
+      }
     }
     void audio.play().catch(() => undefined);
   }, 8_000);
@@ -2755,6 +2777,8 @@ function bindAudioDeck(audio: HTMLAudioElement): void {
 
   on("playing", (() => {
     if (!live()) return;
+    // Real sound means the stall is over, so the retry budget starts again.
+    bufferRetries = 0;
     clearAudioBufferWatchdog();
     usePlayerStore.setState({ isBuffering: false, isPlaying: true });
   }) as EventListener);

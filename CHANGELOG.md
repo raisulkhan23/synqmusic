@@ -226,6 +226,15 @@ SYNQ installs to a device and keeps working without a network.
 
 #### Playback
 
+- **A song could sit in "buffering" forever.** The 8-second stall watchdog
+  recovered by calling `audio.load()`, which **discards every byte already
+  downloaded** and refetches from zero. A buffer that was merely slow to fill
+  therefore had its progress thrown away every eight seconds, dropped back to
+  `HAVE_NOTHING`, and the next `stalled` re-armed the watchdog — a retry
+  mechanism that guaranteed the condition it existed to fix. It now reloads only
+  when nothing at all has arrived, keeps the partial buffer otherwise, and has a
+  ceiling: after two attempts it stops and says the stream kept stalling rather
+  than pretending to keep trying.
 - **Audio was crackly, gritty and quiet — the same song was playing twice.**
   Nothing was broken; it was being played _twice_. `ytEngine.play()` awaits the
   YouTube IFrame API and only then calls `loadVideoById()`, while `pause()` is
