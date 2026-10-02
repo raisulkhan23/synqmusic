@@ -17,19 +17,12 @@ import { buildTrackShareUrl } from "@/lib/shareLink";
 import { copyText } from "@/lib/clipboard";
 import { toPlayableYoutube } from "@/lib/playable";
 import { cleanArtistName, cleanTrackTitle, type YtItem } from "@/lib/youtube";
-import {
-  useTrackDownload,
-  type TrackDownloadState,
-} from "@/lib/trackDownload";
 import { usePlayerStore } from "@/store/player";
 import {
-  Check,
-  Download,
   Heart,
   ListEnd,
   ListMusic,
   ListStart,
-  Loader2,
   MoreVertical,
   ThumbsDown,
   UserX,
@@ -66,18 +59,6 @@ export function useTrackActions(
       : { ...playable, youtubeId: undefined };
   }, [item, source]);
   const { addTo } = useAddToPlaylist(track);
-
-  // Download is offered on EVERY track, so the menu never silently lacks the
-  // action — but it only completes for one whose licence the server clears.
-  // The refusal is therefore a named reason on every surface rather than a
-  // button that is absent with no explanation of why.
-  const download = useTrackDownload({
-    videoId: item.id,
-    title,
-    artistName,
-    coverUrl: item.thumbnail,
-    duration: item.duration,
-  });
 
   const markNotInterested = useMutation(api.notInterested.markNotInterested);
   const unmarkNotInterested = useMutation(
@@ -200,8 +181,6 @@ export function useTrackActions(
     likeThis,
     playNext,
     addQueued,
-    download: download.start,
-    downloadState: download.state,
     notInterested,
     notInterestedInArtist,
     playlistDialogOpen,
@@ -214,27 +193,6 @@ export function useTrackActions(
       />
     ),
   };
-}
-
-/**
- * The Download item's label, which doubles as its progress readout.
- *
- * One function so the row menu and any other menu built from the same hook
- * cannot disagree about what "in progress" looks like.
- */
-function downloadLabel(state: TrackDownloadState): string {
-  switch (state.status) {
-    case "checking":
-      return "Checking…";
-    case "downloading":
-      return state.progress === null
-        ? "Downloading…"
-        : `Downloading… ${Math.round(state.progress * 100)}%`;
-    case "done":
-      return "Downloaded";
-    default:
-      return "Download";
-  }
 }
 
 /**
@@ -343,28 +301,6 @@ export function TrackActionsMenu({
           >
             <UserX className="size-4" />
             Not interested in {actions.artistName}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            className="gap-2"
-            disabled={
-              actions.downloadState.status === "checking" ||
-              actions.downloadState.status === "downloading"
-            }
-            onSelect={(event) => {
-              event.stopPropagation();
-              void actions.download();
-            }}
-          >
-            {actions.downloadState.status === "checking" ||
-            actions.downloadState.status === "downloading" ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : actions.downloadState.status === "done" ? (
-              <Check className="size-4 text-[rgb(var(--tint))]" />
-            ) : (
-              <Download className="size-4" />
-            )}
-            {downloadLabel(actions.downloadState)}
           </DropdownMenuItem>
           {extraItems ? (
             <>

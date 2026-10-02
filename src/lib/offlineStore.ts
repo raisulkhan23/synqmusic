@@ -14,23 +14,16 @@
 // copyrighted recording, which is why SYNQ has never offered a download button
 // and why the service worker explicitly refuses to cache audio ranges.
 //
-// Rights-cleared audio is the only audio that may be stored, and "cleared" is
-// never something SYNQ decides for itself. Two sources qualify today:
+// There is exactly one source in this app that IS licensed for offline
+// storage: Jamendo, a Creative Commons platform whose API publishes a
+// per-track `audiodownload_allowed` flag. An artist can withdraw download
+// rights for an individual track, so the flag is checked per track and a
+// track that is not cleared is simply never offered a download.
 //
-//  - A file the listener already owns, imported from their own device. They
-//    hold the copy, so storing it reproduces nothing (see `localAudio.ts`).
-//  - A YouTube upload published under Creative Commons Attribution (CC BY) —
-//    an explicit, public grant from the uploader permitting reuse and
-//    download. The licence is verified per video, SERVER-side, against
-//    YouTube's own `status.license` (see `youtube:downloadEligibility`), never
-//    inferred from the stream URL.
-//
-// Everything else is refused, including the overwhelming majority of YouTube.
-// The consequence is deliberate and worth stating plainly: a standard-licence
-// YouTube track in SYNQ cannot be downloaded, and no amount of local caching
-// changes that. What the offline layer buys is (a) the app opens and is fully
-// browsable with no network, and (b) rights-cleared audio genuinely plays with
-// the network off.
+// The consequence is deliberate and worth stating plainly: a YouTube track in
+// SYNQ cannot be downloaded, and no amount of local caching changes that. What
+// the offline layer buys is (a) the app opens and is fully browsable with no
+// network, and (b) rights-cleared audio genuinely plays with the network off.
 // ---------------------------------------------------------------------------
 
 /** localStorage convention shared by every other SYNQ preference. */
