@@ -38,9 +38,7 @@ import {
 import { usePlayerStore } from "@/store/player";
 import { toast } from "sonner";
 import {
-  Check,
   ChevronDown,
-  Download as DownloadIcon,
   Gauge,
   Heart,
   ListMusic,
@@ -57,8 +55,6 @@ import {
 import { cn } from "@/lib/utils";
 import { copyText } from "@/lib/clipboard";
 import { buildTrackShareUrl } from "@/lib/shareLink";
-import type { Playable } from "@/lib/playable";
-import { useTrackDownload } from "@/lib/trackDownload";
 import { formatRemaining, useSleepCountdown } from "@/lib/sleepTimer";
 import {
   IMAGE_WALLPAPER_MARKER,
@@ -143,54 +139,6 @@ function SleepTimerButton() {
         )}
       </DropdownMenuContent>
     </DropdownMenu>
-  );
-}
-
-/**
- * Compact download action for the fullscreen player.
- *
- * Rendered only for a YouTube-backed track: a local import is already on the
- * device, so there is nothing to fetch and no button to offer. The licence
- * check behind it is the server's, so an ineligible track answers with a named
- * reason rather than doing nothing at all.
- *
- * Deliberately the same size and weight as the like and queue buttons beside
- * it — Download must not compete with Play for attention.
- */
-function DownloadAction({ track }: { track: Playable }) {
-  const { state, start, cancel } = useTrackDownload({
-    videoId: track.youtubeId ?? "",
-    title: track.title,
-    artistName: track.artistName,
-    coverUrl: track.coverUrl,
-    duration: track.duration,
-  });
-  const busy = state.status === "checking" || state.status === "downloading";
-
-  return (
-    <button
-      type="button"
-      aria-label={busy ? "Cancel download" : "Download for offline listening"}
-      title={busy ? "Cancel download" : "Download for offline listening"}
-      onClick={() => {
-        if (busy) cancel();
-        else void start();
-      }}
-      className={cn(
-        "relative rounded-full p-2 transition-colors hover:bg-white/[0.06]",
-        state.status === "done"
-          ? "text-[rgb(var(--tint))]"
-          : "text-muted-foreground hover:text-foreground",
-      )}
-    >
-      {busy ? (
-        <Loader2 className="size-5 animate-spin" />
-      ) : state.status === "done" ? (
-        <Check className="size-5" />
-      ) : (
-        <DownloadIcon className="size-5" />
-      )}
-    </button>
   );
 }
 
@@ -1208,10 +1156,6 @@ export function FullscreenPlayer() {
               >
                 <ListMusic className="size-5" />
               </button>
-              {/* Only a streamed YouTube track has anything to download. */}
-              {current.source === "youtube" && current.youtubeId ? (
-                <DownloadAction track={current} />
-              ) : null}
             </div>
 
             {/* extra playback tools */}
