@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
-import { JamendoResults } from "@/components/search/JamendoResults";
 import { RemoteTrackRow } from "@/components/tracks/RemoteTrackRow";
 import { api } from "@/convex/_generated/api";
 import { toPlayableYoutube } from "@/lib/playable";
@@ -965,10 +964,16 @@ export default function Search() {
             )}
           </section>
 
-          {/* Creative Commons audio — the only results here that play without
-              a YouTube lookup. Self-contained, so it never blocks or delays
-              the YouTube results above. */}
-          <JamendoResults query={debouncedQuery || query} />
+          {/* Jamendo is intentionally NOT searched here.
+              It was the third results block on this page, and it cost more
+              than it returned: a duplicate licence story, a second empty state
+              to design around, and a third thing that can silently show
+              nothing while the listener assumes their search came back empty.
+              Creative Commons discovery now lives behind the one CC filter in
+              the header, which verifies licences before showing anything.
+
+              `JamendoResults` is left on disk rather than deleted so this is
+              reversible. Nothing renders it. */}
 
           {/*
             Rendered whenever the lookup has SETTLED — not only when it found
