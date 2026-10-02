@@ -1,6 +1,7 @@
 import { useAction } from "convex/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Check,
   Disc3,
   Loader2,
   RefreshCw,
@@ -14,6 +15,9 @@ import { usePlayerStore } from "@/store/player";
 import type { JamendoTrack } from "@/lib/jamendo";
 import { matchDiscovery } from "@/lib/jamendoDiscovery";
 import type { ImportFailure } from "@/lib/importModel";
+import { readIndex } from "@/lib/offlineAudio";
+import type { OfflineEntry } from "@/lib/offlineStore";
+import { DownloadTrackButton } from "@/components/settings/OfflineSection";
 
 /**
  * Jamendo search results — a DISCOVERY index, not a playback source.
@@ -263,40 +267,99 @@ function JamendoRow({
   onPlay: (track: JamendoTrack) => void;
 }) {
   return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={() => onPlay(track)}
-      className="group flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors hover:bg-white/[0.05] disabled:cursor-progress disabled:opacity-60"
-    >
-      {track.coverUrl ? (
-        <img
-          src={track.coverUrl}
-          alt=""
-          loading="lazy"
-          className="size-10 shrink-0 rounded-lg object-cover"
-        />
-      ) : (
-        <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-white/[0.05]">
-          <Disc3 className="size-4 text-muted-foreground" />
+    // A wrapper, not a bare button. The download control is a SEPARATE button,
+    // and nesting one inside another is invalid HTML that also makes a click
+    // on the download icon fire "play this song" — which is exactly the kind
+    // of silent wrong-action that makes a row feel broken.
+    <div className="group flex w-full items-center gap-1 rounded-xl px-2 py-2 transition-colors hover:bg-white/[0.05]">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => onPlay(track)}
+        className="flex min-w-0 flex-1 items-center gap-3 text-left disabled:cursor-progress disabled:opacity-60"
+      >
+        {track.coverUrl ? (
+          <img
+            src={track.coverUrl}
+            alt=""
+            loading="lazy"
+            className="size-10 shrink-0 rounded-lg object-cover"
+          />
+        ) : (
+          <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-white/[0.05]">
+            <Disc3 className="size-4 text-muted-foreground" />
+          </span>
+        )}
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium text-foreground">
+            {track.title}
+          </span>
+          <span className="block truncate text-xs text-muted-foreground">
+            {track.artistName}
+            {track.albumName ? ` · ${track.albumName}` : ""}
+          </span>
         </span>
-      )}
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium text-foreground">
-          {track.title}
+        {resolving ? (
+          <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
+        ) : null}
+        <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">
+          {formatDuration(track.duration)}
         </span>
-        <span className="block truncate text-xs text-muted-foreground">
-          {track.artistName}
-          {track.albumName ? ` · ${track.albumName}` : ""}
-        </span>
+      </button>
+      {/* Only rendered when the artist cleared this track for download. A
+          permanently-disabled button would advertise a capability the app
+          deliberately does not have. */}
+      {track.downloadAllowed ? <JamendoDownloadButton track={track} /> : null}
+    </div>
+  );
+}
+
+/**
+ * Save one Creative Commons track to this device.
+ *
+ * Present only on tracks whose `audiodownload_allowed` flag is true, which is
+ * Jamendo's per-track statement that the artist permits it. The licence URL is
+ * passed through because attribution is a licence CONDITION on the stored copy,
+ * not a courtesy — see `offlineStore.ts`.
+ */
+function JamendoDownloadButton({ track }: { track: JamendoTrack }) {
+  const [entries, setEntries] = useState<OfflineEntry[]>([]);
+  const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    void readIndex().then((rows) => {
+      setEntries(rows);
+      // Restored on mount, so a previously downloaded track shows as saved
+      // rather than offering to download a second copy of itself.
+      setDone(rows.some((e) => e.title === track.title));
+    });
+  }, [track.title]);
+
+  if (done) {
+    return (
+      <span
+        aria-label={`${track.title} is saved on this device`}
+        className="shrink-0 p-2 text-[rgb(var(--tint))]"
+      >
+        <Check className="size-3.5" />
       </span>
-      {resolving ? (
-        <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
-      ) : null}
-      <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">
-        {formatDuration(track.duration)}
-      </span>
-    </button>
+    );
+  }
+
+  return (
+    <DownloadTrackButton
+      trackId={`jamendo:${track.jamendoId}`}
+      downloadAllowed={track.downloadAllowed}
+      licenseUrl={track.licenseUrl}
+      title={track.title}
+      artistName={track.artistName}
+      coverUrl={track.coverUrl}
+      duration={track.duration}
+      audioUrl={track.audioUrl}
+      source="jamendo"
+      entries={entries}
+      onChanged={() => setDone(true)}
+    />
   );
 }
 

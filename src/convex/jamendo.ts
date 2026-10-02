@@ -127,8 +127,10 @@ export const searchJamendo = action({
     url.searchParams.set("include", "musicinfo");
     // mp31 is Jamendo's low-bitrate stream, which is the one meant for
     // embedding. `audiodownload` is deliberately never requested: this app
-    // streams, it does not download, and artists can withdraw download rights
-    // per track via `audiodownload_allowed`.
+    // does not ask for a download URL, it streams the `audio` field above —
+    //    and artists can withdraw download rights per track via
+    // `audiodownload_allowed`, which IS requested so the app knows which
+    // tracks (if any) it is permitted to store for offline listening.
     url.searchParams.set("audioformat", "mp31");
 
     /**

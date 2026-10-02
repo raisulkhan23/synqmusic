@@ -13,6 +13,82 @@ The headline change: **SYNQ asks for an account when you do something that
 needs one, not before you've used it.** You land, you browse, and the session
 request arrives at the moment you press play, like or save.
 
+### Added
+
+#### Offline mode, and downloading music to the device
+
+SYNQ now works with the network away, and tracks it has the right to store can
+be saved to the device and played with no connection at all.
+
+**Offline mode** (`Settings → App → Offline`)
+
+- The installed app opens, navigates and stays browsable with no connection.
+  The service worker already cached the shell, the hashed assets and the
+  artwork; what was missing was the app's own data.
+- **Liked Songs renders offline.** With no network the Convex query never
+  resolves, and falling through to an empty list read as "your likes are gone"
+  rather than "you are offline". The app now keeps a bounded snapshot of your
+  own liked songs, written whenever the session is online, and the page falls
+  back to it — labelled, so an offline copy is never mistaken for the live one.
+- The queue snapshot is written on the same path.
+
+**Downloads**
+
+- Real local storage: IndexedDB for the index, Cache Storage for the audio
+  itself, so an 8 MB file is streamed to disk rather than held in memory.
+- **Settings → App → Offline** lists what is on the device, with real measured
+  sizes, per-track removal, and remove-all.
+- **Storage health is reported honestly.** Without persistent storage granted,
+  a browser may evict downloads silently, so the panel says so instead of
+  promising they are safe.
+- Oldest-first eviction makes room for a new download rather than refusing with
+  "storage full" while 300 MB of older downloads sit there.
+- A downloaded track plays from the local file with **no network round trip** —
+  the player checks the device before the stream resolver, before the YouTube
+  player, and before the "no audio source" guard.
+
+**What is deliberately NOT downloadable: YouTube-sourced tracks.**
+
+SYNQ resolves most audio from YouTube, and those streams are not licensed for
+redistribution. Caching one for offline playback is a copy of someone else's
+copyrighted recording, so there is no download button on those rows rather than
+a disabled one — a greyed-out button advertises a capability the app does not
+have.
+
+Downloads are gated on the provider's **own** per-track permission. Jamendo
+publishes `audiodownload_allowed`, which an artist can withdraw for an
+individual release, and that flag is carried through verbatim; a missing flag
+is treated as **not** cleared. The Creative Commons licence URL is stored and
+shown alongside each download, because attribution is a licence condition
+rather than a courtesy. The result is that Creative Commons search results carry
+**Save offline**, and nothing else does.
+
+### Fixed
+
+- **Every app update deleted every downloaded track.** The service worker's
+  `activate` handler removes any `synq-*` cache that is not one of its own —
+  and the downloads cache is named `synq-audio`. It was swept up by that filter,
+  so the first release after downloading anything silently wiped it. The
+  downloads cache is now explicitly protected, and a regression test pins it.
+
+### Known limitations — offline
+
+- **YouTube-sourced tracks cannot be downloaded or played offline.** SYNQ has no
+  offline-audio rights for that content. This is a licensing boundary, not a
+  missing feature; the app says so rather than offering something that would not
+  work. Making offline playback universal requires a licensed audio source.
+- **iOS Safari cannot download.** The platform offers no Cache Storage quota to
+  web apps, so the download path reports that plainly instead of failing at the
+  moment of writing bytes.
+- An offline launch shows the snapshot taken at last sign-in, which may be
+  missing recent likes until the next online session.
+
+---
+
+**SYNQ asks for an account when you do something that
+needs one, not before you've used it.** You land, you browse, and the session
+request arrives at the moment you press play, like or save.
+
 ### Fixed
 
 #### The "Lyric & lo-fi videos" section could silently disappear from search

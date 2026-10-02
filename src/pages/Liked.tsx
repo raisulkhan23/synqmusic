@@ -11,6 +11,7 @@ import { useAction, useQuery } from "convex/react";
 import { Heart, Loader2, Play, Shuffle } from "lucide-react";
 import { shuffleList } from "@/lib/queueOrder";
 import { useState } from "react";
+import { readOfflineLikes } from "@/lib/offlineLibrary";
 
 export default function Liked() {
   const navigate = useNavigate();
@@ -23,7 +24,19 @@ export default function Liked() {
     null,
   );
   const remoteQuery = useQuery(api.likes.myLikedRemote);
-  const remoteLikes = remoteQuery ?? [];
+  // OFFLINE FALLBACK. With no network this query never resolves, and falling
+  // through to `[]` renders an empty Liked page — which reads as "your likes
+  // are gone" rather than "you are offline". The snapshot is the listener's own
+  // data, written whenever the session was online, so showing it is strictly
+  // better than showing nothing.
+  //
+  // The live query wins whenever it answers. The snapshot is read lazily and
+  // synchronously (it is a validated localStorage read, not a fetch), and only
+  // when the query has NOT answered — so an online listener never pays for it
+  // and an offline one gets the list instead of an empty page.
+  const remoteLikes = remoteQuery ?? readOfflineLikes();
+  const showingOfflineCopy =
+    remoteQuery === undefined && remoteLikes.length > 0;
 
   const totalCount = remoteLikes.length;
   const totalSeconds = remoteLikes.reduce((sum, r) => sum + r.duration, 0);
@@ -174,6 +187,16 @@ export default function Liked() {
                   : "Nothing here yet"
                 : "Loading…"}
             </p>
+            {showingOfflineCopy && (
+              // Say what this list is. An offline copy that looks identical to
+              // the live one hides the two things that differ: it may be
+              // missing recent likes, and the rows may not play without a
+              // connection unless the track was downloaded.
+              <p className="mt-2 text-xs text-amber-400/90">
+                Showing the copy saved on this device. Reconnect for your latest
+                likes.
+              </p>
+            )}
           </div>
         </div>
       </div>

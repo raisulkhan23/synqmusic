@@ -42,6 +42,7 @@ import {
 import { usePlayerStore, type RemoteLikeSnapshot } from "@/store/player";
 import { shuffleStateOf, shuffleToastFor } from "@/lib/shuffleState";
 import { track } from "@/lib/analytics";
+import { writeOfflineLikes } from "@/lib/offlineLibrary";
 import {
   getWallpaperKey,
   getWallpaperUrl,
@@ -382,6 +383,8 @@ export function AppShell() {
   }, [fullscreen, isBuffering, performanceMode, wallpaper, wallpaperType]);
 
   const likedQuery = useQuery(api.likes.myLikedTrackIds);
+  // Remote likes carry the display metadata the offline snapshot needs.
+  const likedRemoteQuery = useQuery(api.likes.myLikedRemote);
   const toggleLikeMutation = useMutation(api.likes.toggleLike);
   const recordPlay = useMutation(api.history.recordPlay);
   const recordEngagement = useMutation(api.history.recordEngagement);
@@ -413,6 +416,28 @@ export function AppShell() {
       );
     }
   }, [likedQuery, setLiked]);
+
+  // Mirror the liked songs for offline use.
+  //
+  // Deliberately `myLikedRemote`, NOT `myLikedTrackIds`. That other query
+  // returns ids and timestamps only — it backs the store's `liked` map, which
+  // answers "is this liked?" and nothing else. A snapshot of ids alone would
+  // render a Liked page full of blank rows, which is worse offline than an
+  // empty one because it looks like data corruption.
+  useEffect(() => {
+    if (!likedRemoteQuery) return;
+    writeOfflineLikes(
+      likedRemoteQuery.map((d) => ({
+        trackId: d.trackId,
+        title: d.title,
+        artistName: d.artistName,
+        coverUrl: d.coverUrl,
+        duration: d.duration,
+        ...(d.youtubeId ? { youtubeId: d.youtubeId } : {}),
+        ...(d.source ? { source: d.source } : {}),
+      })),
+    );
+  }, [likedRemoteQuery]);
 
   // Wire the store's optimistic toggle to the Convex mutation.
   // Remote tracks (YouTube/Spotify) aren't in the catalog, so we include a

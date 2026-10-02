@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { CardTransparencySection } from "@/components/settings/CardTransparencySection";
 import { ExplorationSection } from "@/components/settings/ExplorationSection";
 import { ImportSection } from "@/components/settings/ImportSection";
+import { OfflineSection } from "@/components/settings/OfflineSection";
 import { useSettingsNavigation } from "@/components/settings/useSettingsNavigation";
 import {
   Dialog,
@@ -56,6 +57,7 @@ import {
   ImagePlus,
   Keyboard,
   Loader2,
+  HardDrive,
   LogOut,
   Moon,
   Palette,
@@ -2320,6 +2322,12 @@ export function SettingsDialog({
             App
           </p>
           <InstallAppRow />
+          <Separator className="bg-white/[0.07]" />
+          <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
+            <HardDrive className="size-3.5" />
+            Offline
+          </p>
+          <OfflineSection />
         </section>
 
         <Separator className="bg-white/[0.07]" />
