@@ -23,6 +23,7 @@ import {
   SkipForward,
   Sparkles,
   TimerReset,
+  Undo2,
   Volume2,
   Waves,
   Zap,
@@ -64,6 +65,17 @@ const whatsNewCards = [
       "We only ask when you press play, like, or save",
       "Your action resumes automatically after signing in",
       '"Maybe later" puts you back exactly where you were',
+    ],
+  },
+  {
+    icon: Undo2,
+    title: "Undo & quick controls",
+    body: "The actions you take most often are the ones you can take back.",
+    points: [
+      "Clearing the queue is undoable — it comes back exactly as it was",
+      "⌘K opens repeat, like and the queue from anywhere",
+      "Space, N, P, L, Q and / cover the controls you reach for",
+      "The command menu only offers actions you can actually use",
     ],
   },
 ] as const;
@@ -748,10 +760,14 @@ export default function Landing() {
             New in this build.
           </h2>
           <p className="mt-4 text-base leading-7 text-muted-foreground">
-            The three things that changed how SYNQ feels day to day.
+            Crossfade &amp; gapless that actually blend, an installable offline
+            app, browse-first sign-in, and a queue you can take back.
+          </p>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground/80">
+            Four things that changed how SYNQ feels day to day.
           </p>
         </motion.div>
-        <div className="mt-12 grid gap-4 lg:grid-cols-3">
+        <div className="mt-12 grid gap-4 md:grid-cols-2">
           {whatsNewCards.map(({ icon: Icon, title, body, points }, index) => (
             <motion.div
               key={title}

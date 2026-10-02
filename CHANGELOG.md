@@ -9,6 +9,10 @@ and semantic versioning.
 
 ## [Unreleased] — Browse-first release
 
+The headline change: **SYNQ asks for an account when you do something that
+needs one, not before you've used it.** You land, you browse, and the session
+request arrives at the moment you press play, like or save.
+
 ### Fixed
 
 #### The "Lyric & lo-fi videos" section could silently disappear from search
@@ -30,21 +34,21 @@ icon stacked above the word "Install", in a tall lozenge. It is now an
 `inline-flex` row with `whitespace-nowrap`, slightly roomier padding, and
 `shrink-0` so the strip's long explanatory text cannot squeeze it.
 
-### Fixed
+### Fixed — transitions
 
 #### Crossfade and gapless playback did not actually work
 
-*(Second pass. A re-audit of the first pass found four more defects, all at
+_(Second pass. A re-audit of the first pass found four more defects, all at
 the transition BOUNDARY — the ~120ms window where the outgoing track's `ended`
-collides with the blend that is finishing.)*
+collides with the blend that is finishing.)_
 
 7. **The outgoing track's `ended` cancelled the blend that owned it.** A 6s
    crossfade on a 240s track starts at 234s and its automation finishes at
    ~240s — the same instant the element fires `ended`, which arrives ~120ms
-   *before* the blend's completion poll. The handler read that as "the
+   _before_ the blend's completion poll. The handler read that as "the
    transition failed" and so cancelled the blend mid-flight, called
    `resetAllDeckGains()` (forcing the already-playing incoming deck back to
-   gain 1), and advanced the queue onto the track *after* the one fading in.
+   gain 1), and advanced the queue onto the track _after_ the one fading in.
    Every crossfade therefore produced two songs at once with the fading-in one
    orphaned at full volume. A running blend now owns its own boundary: the
    event is deferred, and recovered if the blend is then abandoned.
@@ -52,11 +56,11 @@ collides with the blend that is finishing.)*
    sets both decks to unity, so a transition abandoned after `incoming.play()`
    had resolved left the incoming song audible at full volume beside the
    outgoing one. Every cancel path hit this — seek, Next, clearing the queue,
-   switching repeat mode, changing the crossfade length. Cancel now *stops* the
+   switching repeat mode, changing the crossfade length. Cancel now _stops_ the
    element it started.
 9. **A gapless boundary never recorded the play as completed.** The hand-off
    returned before `settleEngagement` ran, so the outgoing track's engagement
-   session was settled later against the *next* track's position — a wrong
+   session was settled later against the _next_ track's position — a wrong
    completion percentage and a false "skipped" flag in the recommendation
    signals.
 10. **"Stop after this song" lost to the gapless hand-off.** The hand-off ran
@@ -67,7 +71,7 @@ collides with the blend that is finishing.)*
 
 Audited against the real execution path rather than the settings UI. Six
 defects, two of them fatal. The settings, the toggles and the code that
-*decided* to crossfade were all present and correct the whole time — the
+_decided_ to crossfade were all present and correct the whole time — the
 transitions simply never reached the audio.
 
 1. **A released deck was permanently dead.** Web Audio allows exactly one
@@ -75,10 +79,10 @@ transitions simply never reached the audio.
    permanently reroutes the element's audio through the returned node.
    `releaseDeck()` disconnected the node and forgot it, so a deck that had been
    faded out could never make a sound again — and because `canCrossfadeNow()`
-   requires a gain node on *both* decks, crossfade could run **at most once per
+   requires a gain node on _both_ decks, crossfade could run **at most once per
    page load**. The second crossfade of a session not only failed to fade, it
    loaded the incoming track onto an element that could not be heard at all.
-   The deck now releases only its *content*; the graph stays wired.
+   The deck now releases only its _content_; the graph stays wired.
 2. **The crossfade engine was unreachable for almost everyone.** Default
    YouTube playback runs through the IFrame API, which Web Audio cannot tap,
    and the switch that chose between the IFrame and the `<audio>` decks only
@@ -88,7 +92,7 @@ transitions simply never reached the audio.
    crossfade now routes playback onto the decks and builds the graph, exactly as
    an effect preset already did.
 3. **The incoming track was audible at full volume before the fade.** Both deck
-   gains were reset to unity and the incoming element was started *before* the
+   gains were reset to unity and the incoming element was started _before_ the
    automation was scheduled, so the next song came in at 100% for the length of
    the `play()` promise, then slammed to zero and faded up. The incoming deck is
    now parked at zero first.
@@ -114,7 +118,7 @@ transitions simply never reached the audio.
   Every one of these failures previously looked identical from the UI: no
   crossfade, no error, no explanation.
 
-### Known limitations
+### Known limitations — playback
 
 - **Gapless is not sample-accurate.** Two `HTMLAudioElement`s cannot be made to
   switch with sample precision the way a single `MediaSource` append of two
@@ -124,10 +128,6 @@ transitions simply never reached the audio.
 - **The YouTube IFrame still cannot be crossfaded.** Audio inside a cross-origin
   frame is not reachable by Web Audio. When a track is forced onto the IFrame,
   transitions fall back to gapless rather than pretending to blend.
-
-The headline change: **SYNQ no longer asks you to create an account before
-you've used it.** You land, you browse, and the app asks for a session at the
-moment you do something that genuinely needs one.
 
 ### Added
 
@@ -187,16 +187,31 @@ SYNQ installs to a device and keeps working without a network.
 - Signing out **wipes the local listening session** — queue, history and the
   half-played track — so a shared device does not hand the next person the
   previous listener's state.
-- Visitors are labelled **"Browsing as guest"** with a single honest *Sign in*
+- Visitors are labelled **"Browsing as guest"** with a single honest _Sign in_
   action, instead of a profile link and a sign-out button that do nothing.
 
-### Fixed
+#### Undo & quick controls
+
+- **Clearing the queue is undoable.** It is the most destructive control in the
+  panel — it drops the whole of Up Next in one tap, including autoplay picks the
+  recommendation engine cannot regenerate — but the toast offered no way back.
+  The toast now carries a working **Undo** that restores the exact previous
+  queue, playhead index and shuffle snapshot, and re-persists them so a reload
+  cannot undo the undo. The snapshot is single-use, so it can never land on top
+  of a queue the listener has since rebuilt.
+- **The command menu covers repeat, like and the queue.** ⌘K already ran
+  playback and navigation; it now also toggles repeat, likes the current track
+  and opens the queue. Each item calls a store action that already existed, and
+  the like action reads the current track at invoke time rather than closing
+  over render state.
+
+### Fixed — playback, layout & input
 
 #### Playback
 
 - **Silent playback.** `createMediaElementSource()` permanently diverts an
   `<audio>` element's output into the Web Audio graph. The graph was built with
-  the element captured *before* the chain to `destination` existed, so any
+  the element captured _before_ the chain to `destination` existed, so any
   failure in between (notably a missing `createStereoPanner` on older Safari and
   some WebViews) left an element feeding nothing at all — the player advanced,
   the progress bar moved, and there was no sound. The graph is now built and
@@ -208,11 +223,22 @@ SYNQ installs to a device and keeps working without a network.
 - **Manual Next restarted the song.** The next-track press armed a transition
   for the track it was about to play, which then crossfaded into a duplicate of
   itself.
+- **Next skipped a track whenever crossfade was on.** A successful manual blend
+  already advances the queue through `commitCrossfadeAdvance`, and the blend
+  wrapper then advanced a _second_ time — fading into the next song and skipping
+  straight past it. Both outcomes clear `transition`, so only the `committed`
+  flag distinguishes them; the trailing advance now respects it.
+- **The crossfade was a straight line, not equal-power.** `scheduleCrossfade`
+  sampled the sin/cos curve and then scheduled a linear ramp between its first
+  and last samples, so the arrays were discarded and the audible fade sagged
+  ~6dB in the middle — the exact artefact the equal-power curve exists to
+  remove. The sampled curve is now handed to Web Audio with
+  `setValueCurveAtTime`, with an endpoint-ramp fallback for older WebViews.
 
 #### Navigation & layout
 
 - **Settings section chips did nothing.** The scroll resolver picked the nearest
-  *matching* ancestor rather than the nearest *scrollable* one, so clicks wrote
+  _matching_ ancestor rather than the nearest _scrollable_ one, so clicks wrote
   to a container that could never move. It also queried a `data-` attribute
   that exists nowhere in the app.
 - **"Your Data" rendered above "Playback".** A positional CSS ladder re-ordered
@@ -229,7 +255,7 @@ SYNQ installs to a device and keeps working without a network.
   fired two InnerTube searches concurrently, which this deployment's IP is
   rate-limited into answering with empty results. Searches are now sequential,
   paced and retried using the constants already proven by the playlist-repair
-  path, and a throttled request is reported as *throttled* rather than as an
+  path, and a throttled request is reported as _throttled_ rather than as an
   artist with no songs.
 - A genuine empty result and a refused request are now distinct states, and
   only the latter offers a retry.
@@ -253,7 +279,7 @@ session server-side and throws without one; `getAuthUserId` guards are
 untouched, and the recommendation engine still returns no signals for an
 anonymous caller rather than fabricating a listening history.
 
-### Known limitations
+### Known limitations — packaging & access
 
 - The install flow requires a **published build**. It is gated on
   `import.meta.env.PROD` because a service worker in front of a dev server
