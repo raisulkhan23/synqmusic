@@ -15,6 +15,7 @@ import {
   ArrowUpFromLine,
   BarChart3,
   Clock3,
+  Eye,
   Heart,
   ListMusic,
   Loader2,
@@ -101,6 +102,151 @@ function ResultRow({ title, detail }: { title: string; detail: string }) {
 }
 
 /** Two-step destructive action: first click arms, second click confirms. */
+/**
+ * Shape of `api.admin.playlistDetail`, declared structurally so the component
+ * stays a plain function rather than a generic one.
+ */
+type PlaylistDetail = {
+  name: string;
+  description: string | null;
+  ownerName: string | null;
+  ownerEmail: string | null;
+  knownTracks: number;
+  tracks: {
+    trackId: string;
+    title: string | null;
+    artist: string | null;
+    album: string | null;
+    duration: number | null;
+    known: boolean;
+  }[];
+};
+
+function formatTrackDuration(seconds: number | null): string {
+  if (seconds === null || !Number.isFinite(seconds) || seconds <= 0) {
+    return "--:--";
+  }
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+/**
+ * Read-only view of one playlist's contents, for an admin.
+ *
+ * Deliberately NOT a player: it does not resolve streams and does not call
+ * `playIndex`. An admin inspecting a playlist is reading it to judge it — for
+ * a report, a copyright claim, a moderation decision — and pressing play would
+ * write to the listener's own history and queue, which is both a side effect
+ * they did not ask for and a way to disturb whatever they were listening to.
+ */
+function PlaylistInspector({
+  detail,
+  onClose,
+}: {
+  detail: undefined | PlaylistDetail;
+  onClose: () => void;
+}) {
+  if (detail === undefined) return null;
+  const unknown = detail.tracks.length - detail.knownTracks;
+
+  return (
+    <div className="rounded-2xl border border-[rgb(var(--tint)_/_0.35)] bg-white/[0.03] p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="flex items-center gap-2 text-sm font-semibold">
+            <ListMusic className="size-4 text-[rgb(var(--tint))]" />
+            {detail.name}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {detail.ownerName ?? detail.ownerEmail ?? "Unknown owner"} ·{" "}
+            {detail.tracks.length}{" "}
+            {detail.tracks.length === 1 ? "track" : "tracks"}
+            {unknown > 0 ? (
+              // Say so rather than quietly rendering a shorter list: "this
+              // playlist has 40 tracks and we can only identify 32" is the
+              // honest answer, and it is often the interesting part.
+              <span className="text-amber-400/90">
+                {" "}
+                · {unknown} without saved details
+              </span>
+            ) : null}
+          </p>
+          {detail.description ? (
+            <p className="mt-2 max-w-prose text-xs text-muted-foreground">
+              {detail.description}
+            </p>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="shrink-0 rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
+        >
+          Close
+        </button>
+      </div>
+
+      <div className="mt-4 max-h-[26rem] overflow-y-auto rounded-xl border border-white/[0.07]">
+        <table className="w-full text-left text-sm">
+          <thead className="sticky top-0 bg-[#0b0b12] text-[11px] tracking-widest text-muted-foreground uppercase">
+            <tr className="border-b border-white/[0.07]">
+              <th className="w-10 px-3 py-2 text-right font-semibold">#</th>
+              <th className="px-3 py-2 font-semibold">Title</th>
+              <th className="px-3 py-2 font-semibold">Artist</th>
+              <th className="hidden px-3 py-2 font-semibold sm:table-cell">
+                Album
+              </th>
+              <th className="px-3 py-2 text-right font-semibold">Length</th>
+            </tr>
+          </thead>
+          <tbody>
+            {detail.tracks.map((track, i) => (
+              <tr
+                key={`${track.trackId}-${i}`}
+                className="border-b border-white/[0.04] last:border-0"
+              >
+                <td className="px-3 py-2 text-right text-xs tabular-nums text-muted-foreground">
+                  {i + 1}
+                </td>
+                <td className="px-3 py-2">
+                  {track.title ?? (
+                    <span
+                      className="font-mono text-xs text-muted-foreground/70"
+                      title="This playlist entry has no saved title"
+                    >
+                      {track.trackId} · details not saved
+                    </span>
+                  )}
+                </td>
+                <td className="px-3 py-2 text-muted-foreground">
+                  {track.artist ?? "--"}
+                </td>
+                <td className="hidden px-3 py-2 text-muted-foreground sm:table-cell">
+                  {track.album ?? "--"}
+                </td>
+                <td className="px-3 py-2 text-right text-xs tabular-nums text-muted-foreground">
+                  {formatTrackDuration(track.duration)}
+                </td>
+              </tr>
+            ))}
+            {detail.tracks.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={5}
+                  className="px-3 py-8 text-center text-sm text-muted-foreground"
+                >
+                  This playlist is empty.
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function ConfirmButton({
   label,
   confirmLabel = "Confirm?",
@@ -230,6 +376,20 @@ export default function Admin() {
     "newest" | "largest" | "name"
   >("newest");
   const [globalQuery, setGlobalQuery] = useState("");
+
+  /**
+   * Which playlist an admin has open for inspection, if any.
+   *
+   * The playlists table showed a row per playlist with a track COUNT, but
+   * there was no way to see the contents. Handling a report or a copyright
+   * complaint needs the actual tracks, and the only way to get them was to ask
+   * the user to screenshot their playlist.
+   */
+  const [inspecting, setInspecting] = useState<Id<"playlists"> | null>(null);
+  const inspected = useQuery(
+    api.admin.playlistDetail,
+    inspecting ? { playlistId: inspecting } : "skip",
+  );
 
   const filteredUsers = useMemo(() => {
     const q = userQuery.trim().toLowerCase();
@@ -1047,7 +1207,28 @@ export default function Admin() {
                   <span className="w-6 text-right text-xs tabular-nums text-muted-foreground">
                     {i + 1}
                   </span>
-                  <span className="min-w-0 flex-1 truncate">{t.trackId}</span>
+                  {/* The song's TITLE, not its id. This list used to render the
+                      raw trackId, which told an admin nothing they could act
+                      on. */}
+                  <span className="min-w-0 flex-1 truncate">
+                    {t.title ?? (
+                      // No snapshot on any of this track's rows — an older
+                      // play, recorded before titles were stored. Showing the
+                      // id in muted type is honest; inventing a name is not.
+                      <span
+                        className="font-mono text-xs text-muted-foreground/70"
+                        title="No title was recorded for this track"
+                      >
+                        {t.trackId} · title not recorded
+                      </span>
+                    )}
+                    {t.title && t.artistName ? (
+                      <span className="text-muted-foreground">
+                        {" — "}
+                        {t.artistName}
+                      </span>
+                    ) : null}
+                  </span>
                   <span className="text-xs tabular-nums text-muted-foreground">
                     {t.plays} plays · {t.listeners} listener
                     {t.listeners === 1 ? "" : "s"}
@@ -1174,6 +1355,17 @@ export default function Admin() {
                           <>
                             <button
                               type="button"
+                              aria-label={`Inspect the tracks in ${playlist.name}`}
+                              title="See what's in this playlist"
+                              onClick={() => setInspecting(playlist._id)}
+                              className="flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
+                            >
+                              <Eye className="size-3.5" />
+                              Inspect
+                            </button>
+
+                            <button
+                              type="button"
                               aria-label={`Rename ${playlist.name}`}
                               title="Rename"
                               onClick={() =>
@@ -1213,6 +1405,11 @@ export default function Admin() {
               </tbody>
             </table>
           </div>
+
+          <PlaylistInspector
+            detail={inspected}
+            onClose={() => setInspecting(null)}
+          />
         </TabsContent>
 
         <TabsContent value="insights" className="mt-6 flex flex-col gap-6">

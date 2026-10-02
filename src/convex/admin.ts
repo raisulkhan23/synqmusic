@@ -276,6 +276,59 @@ export const listAllPlaylists = query({
   },
 });
 
+/**
+ * One playlist's full contents, with its owner (admin only).
+ *
+ * `listAllPlaylists` gives an admin a row per playlist — name, owner, track
+ * COUNT — but there was no way to see WHAT is in one. An admin handling a
+ * report or a copyright complaint needs the actual tracks; a track count alone
+ * cannot answer that, and the admin had to ask the user to screenshot it.
+ *
+ * Track metadata comes from the playlist's own `trackSnapshots` when present.
+ * That snapshot is optional and is missing on older playlists, and a playlist
+ * can also contain ids added before snapshots existed, so each row is reported
+ * honestly: `known: false` with a null title means "there is a track here and we
+ * do not know what it is", which is itself the answer an admin needs. Nothing
+ * is invented to fill the gap.
+ */
+export const playlistDetail = query({
+  args: { playlistId: v.id("playlists") },
+  handler: async (ctx, { playlistId }) => {
+    await getAdminUser(ctx);
+    const playlist = await ctx.db.get(playlistId);
+    if (playlist === null) {
+      throw new ConvexError("Playlist not found");
+    }
+    const owner = await ctx.db.get(playlist.userId);
+    // Snapshots are positional against `trackIds` on well-formed playlists, but
+    // a mismatch is possible (a playlist edited by an older client), so index
+    // defensively rather than assuming the arrays line up.
+    const snapshots = playlist.trackSnapshots ?? [];
+    const tracks = playlist.trackIds.map((trackId, i) => {
+      const snap = snapshots[i];
+      return {
+        trackId,
+        title: snap?.title ?? null,
+        artist: snap?.artist ?? null,
+        album: snap?.album ?? null,
+        coverUrl: snap?.coverUrl ?? null,
+        duration: snap?.duration ?? null,
+        youtubeId: snap?.youtubeId ?? null,
+        known: snap !== undefined,
+      };
+    });
+    return {
+      _id: playlist._id,
+      _creationTime: playlist._creationTime,
+      name: playlist.name,
+      description: playlist.description ?? null,
+      ownerName: owner?.name ?? null,
+      ownerEmail: owner?.email ?? null,
+      tracks,
+      knownTracks: tracks.filter((t) => t.known).length,
+    };
+  },
+});
 /** Delete any playlist on the deployment (admin only). */
 export const deletePlaylist = mutation({
   args: { playlistId: v.id("playlists") },
@@ -508,6 +561,17 @@ export const clearUserHistory = mutation({
 /**
  * Global listening stats: most played tracks across the whole deployment
  * (admin only).
+ *
+ * Returns the song's TITLE, not its id. `playHistory` has carried optional
+ * `title` / `artistName` / `coverUrl` snapshots since remote playback was
+ * added, but this query only ever tallied `trackId` — so the deployment's
+ * most-played chart was a wall of opaque ids like `wpKqN3Ny_P0`, which is
+ * useless to an admin: it cannot be acted on, searched for, or recognised.
+ *
+ * The snapshot is taken from the most recent row that has one, so a track first
+ * played before titles were recorded still resolves once anyone replays it.
+ * `title` stays nullable: older rows genuinely have no title, and inventing
+ * one would be worse than admitting the gap.
  */
 export const globalTopTracks = query({
   args: {},
@@ -516,22 +580,45 @@ export const globalTopTracks = query({
     const history = await scanAll(ctx.db.query("playHistory"));
     const byTrack = new Map<
       string,
-      { plays: number; listeners: Set<string> }
+      {
+        plays: number;
+        listeners: Set<string>;
+        title: string | null;
+        artistName: string | null;
+        coverUrl: string | null;
+        lastPlayedAt: number;
+      }
     >();
     for (const h of history) {
       const entry = byTrack.get(h.trackId) ?? {
         plays: 0,
         listeners: new Set<string>(),
+        title: null,
+        artistName: null,
+        coverUrl: null,
+        lastPlayedAt: 0,
       };
       entry.plays += h.playCount;
       entry.listeners.add(h.userId);
+      // A later row carrying a snapshot always wins, so a track recorded
+      // before titles existed fills in as soon as it is played again.
+      if (h.title) {
+        entry.title = h.title;
+        entry.artistName = h.artistName ?? entry.artistName;
+        entry.coverUrl = h.coverUrl ?? entry.coverUrl;
+      }
+      if (h.playedAt > entry.lastPlayedAt) entry.lastPlayedAt = h.playedAt;
       byTrack.set(h.trackId, entry);
     }
     return [...byTrack.entries()]
       .map(([trackId, v]) => ({
         trackId,
+        title: v.title,
+        artistName: v.artistName,
+        coverUrl: v.coverUrl,
         plays: v.plays,
         listeners: v.listeners.size,
+        lastPlayedAt: v.lastPlayedAt,
       }))
       .sort((a, b) => b.plays - a.plays)
       .slice(0, 25);
