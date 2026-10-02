@@ -649,22 +649,35 @@ describe("existing playback is untouched", () => {
 
   test("only one service worker and one manifest exist", () => {
     // A duplicate worker is the classic cause of an app that updates forever.
+    //
+    // Scan the SOURCE tree only. `dist/` and any other copy of the built output
+    // legitimately contain the very same `sw.js` that `public/` ships, so
+    // walking the whole repo root counted build artifacts as a second worker
+    // and failed for a build having happened, not for a real duplicate.
     const swFiles = [];
     const walk = (dir) => {
       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
         if (entry.name === "node_modules" || entry.name === ".git") continue;
         const full = path.join(dir, entry.name);
-        if (entry.isDirectory()) walk(full);
-        else if (/^sw\.js$|service-worker/.test(entry.name)) swFiles.push(full);
+        if (entry.isDirectory()) {
+          // Never descend into generated output.
+          if (["dist", "build", "isolate", ".freebuff"].includes(entry.name)) {
+            continue;
+          }
+          walk(full);
+        } else if (/^sw\.js$|service-worker/.test(entry.name)) {
+          swFiles.push(path.relative(root, full));
+        }
       }
     };
-    walk(root);
-    expect(swFiles.length).toBe(1);
+    walk(path.join(root, "src"));
+    walk(path.join(root, "public"));
+    expect(swFiles).toEqual([path.join("public", "sw.js")]);
 
     const manifests = fs
       .readdirSync(path.join(root, "public"))
       .filter((f) => /manifest.*\.webmanifest$/.test(f));
-    expect(manifests.length).toBe(1);
+    expect(manifests).toEqual(["manifest.webmanifest"]);
   });
 });
 
