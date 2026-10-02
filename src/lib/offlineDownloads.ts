@@ -386,6 +386,129 @@ export async function downloadTrack(input: {
   return { ok: true, entry };
 }
 
+/**
+ * Import an audio file the listener picked from their own device.
+ *
+ * Deliberately NOT routed through {@link downloadTrack}. That path gates on a
+ * provider's per-track download permission, and there is no provider here to
+ * ask: the listener already holds the copy, and storing it is not a new
+ * reproduction of anyone's work. Applying a licence gate would reject every
+ * file for lacking a licence URL that does not exist.
+ *
+ * The entry is written ALREADY PINNED. This is not a nicety — a local import
+ * cannot be re-downloaded, so evicting one destroys the listener's only copy
+ * inside the app and the fix is "pick the file again". Automatic eviction must
+ * never be able to do that.
+ */
+export async function importLocalAudioFile(
+  file: File,
+): Promise<DownloadResult> {
+  const { evaluateLocalFile, deriveLocalMetadata, localTrackId } =
+    await import("./localAudio");
+
+  const fail = (reason: string, trackId: string): DownloadResult => {
+    emit({
+      status: { ...state.status, [trackId]: "error" },
+      messages: { ...state.messages, [trackId]: reason },
+    });
+    return { ok: false, reason };
+  };
+
+  const trackId = localTrackId({
+    name: file.name,
+    size: file.size,
+    lastModified: (file as { lastModified?: number }).lastModified,
+  });
+
+  if (!offlineSupported()) {
+    return fail(
+      "This browser can't store music offline. Safari on iPhone has no support for it.",
+      trackId,
+    );
+  }
+
+  const verdict = evaluateLocalFile({
+    name: file.name,
+    size: file.size,
+    type: file.type,
+  });
+  if (!verdict.ok) return fail(verdict.reason!, trackId);
+
+  emit({
+    status: { ...state.status, [trackId]: "downloading" },
+    messages: { ...state.messages, [trackId]: "" },
+  });
+
+  // Read the bytes and measure them, rather than trusting `file.size`. The
+  // reported size is what the browser thinks it has, and the quota arithmetic
+  // has to match what actually lands in storage.
+  let bytes: ArrayBuffer;
+  try {
+    bytes = await file.arrayBuffer();
+  } catch {
+    return fail(`Couldn't read "${file.name}" from this device.`, trackId);
+  }
+
+  const entries = await readIndex();
+  const capped = readDownloadCap();
+  const existing = entries.filter((e) => e.trackId !== trackId);
+  const usedBytes = totalDownloadedBytes(existing);
+
+  const room = fitsInQuota({
+    bytes: bytes.byteLength,
+    usedBytes,
+    browserRemaining: await browserRemainingBytes(),
+    appCapBytes: capped,
+  });
+  if (!room.fits) {
+    // Eviction is NOT attempted here, unlike the download path. Every local
+    // import is pinned, so there is nothing evictable that would help, and
+    // silently deleting the listener's other imports to fit a new one would
+    // be the app discarding files it cannot get back.
+    emit({ status: { ...state.status, [trackId]: "idle" } });
+    return {
+      ok: false,
+      reason: `${room.reason} Imports are kept until you remove them yourself, so nothing was deleted to make room.`,
+    };
+  }
+
+  const meta = deriveLocalMetadata(file.name);
+  const entry: OfflineEntry = {
+    key: offlineCacheKey(trackId),
+    trackId,
+    title: meta.title,
+    artistName: meta.artistName,
+    coverUrl: "",
+    duration: 0,
+    bytes: bytes.byteLength,
+    savedAt: Date.now(),
+    source: "local",
+    // No licence to cite, and none needed: this is the listener's own file.
+    licenseUrl: "",
+    pinned: true,
+  };
+
+  try {
+    await saveDownload(
+      entry,
+      new Response(bytes, {
+        status: 200,
+        headers: {
+          "Content-Type": file.type || "audio/mpeg",
+        },
+      }),
+    );
+  } catch {
+    return fail(`Couldn't save "${file.name}" to this device.`, trackId);
+  }
+
+  emit({
+    status: { ...state.status, [trackId]: "done" },
+    messages: { ...state.messages, [trackId]: "" },
+  });
+  return { ok: true, entry };
+}
+
 /** Whether this origin's downloads are protected from automatic eviction. */
 export async function downloadsArePersistent(): Promise<boolean> {
   return isPersisted();

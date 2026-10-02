@@ -1070,12 +1070,13 @@ export interface LastPlayedSnapshot {
   coverUrl: string;
   duration: number;
   /**
-   * The durable "recently played" record. Only `"youtube"` is possible now
-   * that Jamendo is a discovery index rather than a playback source, so
-   * restoring history can no longer mislabel a track as one that plays
-   * through the `<audio>` element.
+   * The durable "recently played" record. Mirrors `Playable["source"]`:
+   * `"youtube"` for anything resolved against a video id, `"local"` for a file
+   * the listener imported from their own device. Restoring history must keep
+   * that distinction, or an imported file would be sent to a resolver that has
+   * no video id to resolve.
    */
-  source: "youtube";
+  source: "youtube" | "local";
   youtubeId?: string;
   audioUrl: string;
   at: number;

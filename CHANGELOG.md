@@ -63,6 +63,33 @@ shown alongside each download, because attribution is a licence condition
 rather than a courtesy. The result is that Creative Commons search results carry
 **Save offline**, and nothing else does.
 
+**Import your own audio**
+
+SYNQ now plays music you already own, offline, with no connection.
+
+- **Settings → App → Offline → Import your own audio.** Pick MP3 / M4A /
+  FLAC / WAV / OGG files from your device and they are stored in the same
+  offline layer as everything else: instant start, no resolver, no buffering,
+  no region gate, no bot block.
+- Title and artist are read from the filename (`Artist - Title.mp3`), with
+  track-number prefixes and underscores handled. A file that does not follow
+  the convention keeps its whole name as the title rather than being split
+  into a fabricated artist.
+- **Imports are pinned automatically.** A local import cannot be re-downloaded,
+  so eviction is never allowed to remove one — the fix would be "pick the file
+  again". A new import will also never delete your existing files to make room;
+  it fails and says so.
+- Files the browser cannot decode are refused at pick time, with the reason
+  naming the file, instead of being stored as something that never makes a
+  sound.
+
+**Why this and not the catalogue:** SYNQ streams from YouTube, and those
+recordings are not licensed for redistribution — the app has no offline-audio
+rights for them, and that does not change with a signed-in account or a
+third-party downloader in between. Downloaded audio remains limited to what the
+provider explicitly clears (Creative Commons tracks, per-track
+`audiodownload_allowed`) plus files the listener already owns.
+
 **Storage management**
 
 - **Pinned downloads.** Any download can be pinned, and automatic eviction
