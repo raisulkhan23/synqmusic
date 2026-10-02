@@ -1114,6 +1114,130 @@ export const resolveStream = action({
 });
 
 // ---------------------------------------------------------------------------
+// Offline download permission (Creative Commons uploads only).
+//
+// SYNQ will not store a recording the provider has not cleared for it, and it
+// will not take the CLIENT's word for that. This action asks YouTube directly,
+// per video, through the official Data API v3: a video's `status.license` is
+// either "youtube" (the standard licence — streaming only) or
+// "creativeCommon".
+//
+// A CC BY upload is an explicit, public grant from the uploader permitting
+// reuse and download, so an offline copy of one is legitimate; the standard
+// licence grants nothing of the sort. Everything except "creativeCommon" is
+// refused, and CC BY requires attribution, which is why the source video URL
+// is returned as the licence to cite.
+//
+// FAIL-SAFE BY CONSTRUCTION. A missing API key, an HTTP error, a malformed
+// response and a missing field all resolve to "not eligible". There is no path
+// here that turns "we could not verify the licence" into "download allowed" —
+// a rights check that fails open is worse than no check at all.
+//
+// This mirrors the licence gate the client already applies in
+// `evaluateDownloadEligibility`; the difference is that this one is decided by
+// the rights holder rather than by the caller.
+// ---------------------------------------------------------------------------
+
+export interface DownloadEligibilityResult {
+  eligible: boolean;
+  /**
+   * The page to cite for attribution. Empty when not eligible.
+   *
+   * CC BY makes attribution a CONDITION of the grant, not a courtesy, so a
+   * stored copy without this recorded against it would be a licence breach.
+   */
+  licenseUrl: string;
+  licenseName?: string;
+  /** Listener-facing why-not, when `eligible` is false. */
+  reason?: string;
+}
+
+/** The name shown for the one licence SYNQ stores audio under. */
+export const CC_BY_LICENSE_NAME = "Creative Commons Attribution (CC BY)";
+
+/**
+ * A video's licence never changes from one tap to the next, so one lookup is
+ * kept per id for the life of the instance. Bounded so a long-lived process
+ * cannot grow it without limit.
+ */
+const licenseCache = new Map<string, DownloadEligibilityResult>();
+const LICENSE_CACHE_LIMIT = 500;
+
+/**
+ * Whether a YouTube video may be downloaded, decided by YouTube itself.
+ *
+ * Requires a Data API key in `YOUTUBE_API_KEY`. Without one SYNQ cannot verify
+ * anything, so it refuses — see the header.
+ */
+export const downloadEligibility = action({
+  args: { videoId: v.string() },
+  handler: async (_ctx, { videoId }): Promise<DownloadEligibilityResult> => {
+    const cached = licenseCache.get(videoId);
+    if (cached) return cached;
+
+    const refuse = (reason: string): DownloadEligibilityResult => ({
+      eligible: false,
+      licenseUrl: "",
+      reason,
+    });
+
+    const key = process.env.YOUTUBE_API_KEY;
+    if (!key) {
+      return refuse(
+        "Download checks aren't set up yet, so SYNQ can't confirm this track is cleared for offline storage.",
+      );
+    }
+
+    let data: Record<string, unknown>;
+    try {
+      const res = await fetch(
+        `https://www.googleapis.com/youtube/v3/videos?part=status&id=${encodeURIComponent(
+          videoId,
+        )}&key=${encodeURIComponent(key)}`,
+        { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) },
+      );
+      if (!res.ok) {
+        // A 403 here is almost always an exhausted or invalid key, which is a
+        // configuration problem rather than a statement about the track — but
+        // it is still not a green light.
+        return refuse(
+          "Couldn't check this track's licence right now. Try again in a moment.",
+        );
+      }
+      data = (await res.json()) as Record<string, unknown>;
+    } catch {
+      return refuse(
+        "Couldn't reach YouTube to check this track's licence. Check your connection and retry.",
+      );
+    }
+
+    const items = data.items;
+    const license =
+      Array.isArray(items) && items[0]
+        ? get(items[0], ["status", "license"])
+        : undefined;
+
+    if (license !== "creativeCommon") {
+      return refuse(
+        "This track isn't published under a Creative Commons licence, so SYNQ won't store a copy of it.",
+      );
+    }
+
+    const result: DownloadEligibilityResult = {
+      eligible: true,
+      licenseUrl: `https://www.youtube.com/watch?v=${videoId}`,
+      licenseName: CC_BY_LICENSE_NAME,
+    };
+    if (licenseCache.size >= LICENSE_CACHE_LIMIT) {
+      const oldest = licenseCache.keys().next().value;
+      if (oldest !== undefined) licenseCache.delete(oldest);
+    }
+    licenseCache.set(videoId, result);
+    return result;
+  },
+});
+
+// ---------------------------------------------------------------------------
 // Playlist import (YouTube / YouTube Music).
 //
 // The importer used to be CSV-only, which made a two-click YouTube playlist
