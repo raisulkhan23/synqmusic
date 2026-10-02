@@ -296,13 +296,17 @@ describe("RC6 — gapless is a hand-off, not a zero-length crossfade", () => {
     expect(arm).not.toMatch(/plan\.mode === "crossfade" && preloadLead/);
   });
 
-  test("the hand-off refuses to start an unbuffered track", () => {
-    // Starting a track with nothing decoded would stall mid-note, which is
-    // worse than the gap it was meant to remove.
+  test("the hand-off delegates the readiness gate to the executed predicate", () => {
+    // The three conditions (prepared, resolved, buffered) now live in
+    // `canHandOffGapless` in `lib/transition`, which
+    // `tests/transition-execution.test.js` EXECUTES across every case. Here we
+    // only pin that the store actually calls it — a source-text assertion can
+    // see that, and cannot see whether the values that reach the audio graph
+    // are correct, which is what the executed test is for.
     const handoff = bodyOf(playerCode, "tryGaplessHandoff");
     expect(handoff.length).toBeGreaterThan(200);
-    expect(handoff).toMatch(/if \(incoming\.readyState < 2\)/);
-    expect(handoff).toMatch(/t\.preparedFor !== t\.track\.id/);
+    expect(handoff).toMatch(/canHandOffGapless\(\{/);
+    expect(handoff).toMatch(/if \(!readiness\.ready\)/);
     expect(handoff).toMatch(/incoming\.play\(\)/);
   });
 

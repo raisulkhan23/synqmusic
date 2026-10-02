@@ -33,6 +33,7 @@ import {
   DEFAULT_GAPLESS,
   GAPLESS_PRELOAD_LEAD_SECONDS,
   MANUAL_SKIP_FADE_SECONDS,
+  canHandOffGapless,
   shouldStartNow,
   fadeGains,
   normalizeCrossfade,
@@ -2358,20 +2359,20 @@ function finishTransition(
 function tryGaplessHandoff(): boolean {
   const t = transition;
   if (!t || t.plan.mode !== "gapless" || t.running || t.committed) return false;
-  if (t.preparedFor !== t.track.id) {
-    traceTransition("gapless:skipped", { why: "nothing preloaded" });
-    return false;
-  }
   const incoming = getSpareAudio();
-  if (!incoming.currentSrc || !incoming.currentSrc.startsWith("http")) {
-    traceTransition("gapless:skipped", { why: "no resolved src" });
-    return false;
-  }
-  // HAVE_CURRENT_DATA or better. Below that there is nothing decoded to play
-  // and starting now would stall mid-note — worse than the gap.
-  if (incoming.readyState < 2) {
+  // Whether the next song can start with no gap is decided by a pure function
+  // in `lib/transition`, so the tests EXECUTE it rather than asserting this
+  // text. Each rejection names itself, so the dev trace says which condition
+  // failed instead of a single opaque "skipped".
+  const readiness = canHandOffGapless({
+    preparedFor: t.preparedFor,
+    trackId: t.track.id,
+    currentSrc: incoming.currentSrc || null,
+    readyState: incoming.readyState,
+  });
+  if (!readiness.ready) {
     traceTransition("gapless:skipped", {
-      why: "not buffered",
+      why: readiness.because,
       readyState: incoming.readyState,
     });
     return false;

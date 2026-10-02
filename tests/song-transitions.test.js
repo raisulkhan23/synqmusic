@@ -465,7 +465,12 @@ describe("crossfade is built on two real audio decks", () => {
   test("the fade is scheduled as Web Audio automation, not stepped", () => {
     // Stepping gain once per timeupdate is what produces clicks and zipper
     // noise; scheduled automation moves the gain every sample.
-    expect(audioSource).toMatch(/linearRampToValueAtTime/);
+    // The SAMPLED curve is what must reach the graph: between the curve's
+    // endpoints `linearRampToValueAtTime` is a straight line — the very blend
+    // the equal-power curve exists to replace. `transition-execution.test.js`
+    // executes `scheduleCrossfade` and asserts the curve is applied, so this
+    // only pins that no regression swaps it back for a plain ramp.
+    expect(audioSource).toMatch(/setValueCurveAtTime\(outCurve/);
     expect(audioSource).toMatch(/gain\.cancelScheduledValues/);
   });
 
@@ -600,8 +605,10 @@ describe("failure always falls back to normal playback", () => {
     expect(playerSource).toMatch(
       /function completeEndedTrack\(\)[\s\S]{0,2500}?if \(tryGaplessHandoff\(\)\) return;/,
     );
+    // The gate itself is executed in `transition-execution.test.js`; here we
+    // only pin that the hand-off consults it and bails when it says no.
     expect(playerSource).toMatch(
-      /function tryGaplessHandoff[\s\S]{0,2000}?if \(incoming\.readyState < 2\) \{[\s\S]{0,300}?return false;/,
+      /function tryGaplessHandoff[\s\S]{0,2000}?canHandOffGapless\(\{[\s\S]{0,600}?if \(!readiness\.ready\) \{[\s\S]{0,300}?return false;/,
     );
   });
 });

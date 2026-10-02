@@ -367,3 +367,59 @@ export function prepareLead(plan: TransitionPlan): number {
   if (plan.mode === "gapless") return GAPLESS_PRELOAD_LEAD_SECONDS;
   return 0;
 }
+
+// --- gapless hand-off readiness ---------------------------------------------
+
+/**
+ * `HTMLMediaElement.HAVE_CURRENT_DATA`.
+ *
+ * A hand-off below this has nothing decoded to start, so `play()` would stall
+ * mid-note — audible as a stutter, and worse than the gap gapless exists to
+ * remove. Kept as a named constant because the gate below is executed by tests
+ * and a bare `2` at the call site reads as a magic number.
+ */
+export const GAPLESS_MIN_READY_STATE = 2;
+
+export interface GaplessReadinessRequest {
+  /** The track the spare deck was prepared for, if any. */
+  preparedFor: string | null;
+  /** The track the hand-off intends to start. */
+  trackId: string;
+  /** The spare element's resolved source, if any. */
+  currentSrc: string | null;
+  /** The spare element's `readyState`. */
+  readyState: number;
+}
+
+export type GaplessReadiness =
+  | { ready: true }
+  | { ready: false; because: string };
+
+/**
+ * Can the buffered spare deck be started INSTANTLY, with no gap?
+ *
+ * This is the whole decision a gapless hand-off rests on, lifted out of the
+ * store so it can be executed directly instead of asserted as source text. It
+ * used to be three nested `if`s inside `tryGaplessHandoff`, and every one of
+ * them could regress without any test noticing: a track that was never
+ * resolved, a resolver that answered with a non-http marker, or a buffer that
+ * had not reached HAVE_CURRENT_DATA would all start the next song from a stall
+ * — which sounds *worse* than the plain gap the setting was meant to remove.
+ *
+ * Each rejection carries its own reason so the dev trace can say WHICH of the
+ * three failed rather than the old single "skipped".
+ */
+export function canHandOffGapless(
+  req: GaplessReadinessRequest,
+): GaplessReadiness {
+  if (req.preparedFor !== req.trackId) {
+    return { ready: false, because: "nothing preloaded" };
+  }
+  if (!req.currentSrc || !req.currentSrc.startsWith("http")) {
+    return { ready: false, because: "no resolved src" };
+  }
+  if (!(req.readyState >= GAPLESS_MIN_READY_STATE)) {
+    return { ready: false, because: "not buffered" };
+  }
+  return { ready: true };
+}

@@ -769,10 +769,29 @@ export function scheduleCrossfade(
   try {
     out.gain.cancelScheduledValues(now);
     inc.gain.cancelScheduledValues(now);
-    out.gain.setValueAtTime(outCurve[0], now);
-    inc.gain.setValueAtTime(inCurve[0], now);
-    out.gain.linearRampToValueAtTime(outCurve[steps - 1], now + duration);
-    inc.gain.linearRampToValueAtTime(inCurve[steps - 1], now + duration);
+    try {
+      // Hand the SAMPLED equal-power curve to Web Audio.
+      //
+      // This used to be a pair of `linearRampToValueAtTime` calls between the
+      // curve's first and last samples, with the arrays above computed and
+      // then discarded — so the actual fade was a straight line. That is
+      // exactly the linear blend the equal-power curve exists to replace, and
+      // it audibly sags ~6dB at the midpoint even though `fadeGains()` (the
+      // only thing the unit tests looked at) is a correct sin/cos pair. The
+      // sampled curve is what reaches the graph now.
+      out.gain.setValueCurveAtTime(outCurve, now, duration);
+      inc.gain.setValueCurveAtTime(inCurve, now, duration);
+    } catch {
+      // A WebView without `setValueCurveAtTime`. Degrade to the endpoint ramp
+      // rather than refusing to fade at all; cancel again first in case the
+      // curve landed on one deck before the second call threw.
+      out.gain.cancelScheduledValues(now);
+      inc.gain.cancelScheduledValues(now);
+      out.gain.setValueAtTime(outCurve[0], now);
+      inc.gain.setValueAtTime(inCurve[0], now);
+      out.gain.linearRampToValueAtTime(outCurve[steps - 1], now + duration);
+      inc.gain.linearRampToValueAtTime(inCurve[steps - 1], now + duration);
+    }
   } catch {
     return false;
   }
