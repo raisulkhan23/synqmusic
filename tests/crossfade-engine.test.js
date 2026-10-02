@@ -780,8 +780,11 @@ describe("the engine is instrumented for diagnosis, dev only", () => {
     // The one case a listener cannot tell apart from a bug: crossfade is ON and
     // the engine is deliberately doing something else. It has to be reported.
     expect(player).toContain('"plan=gapless-despite-crossfade"');
+    // The window allows the listener-facing note that now runs first, so this
+    // pins the BEHAVIOUR (the branch still traces) rather than the exact
+    // statement that happens to follow the `if`.
     expect(playerCode).toMatch(
-      /if \(plan\.mode === "gapless" && s\.crossfade > 0\) \{\s*traceTransition\("plan=gapless-despite-crossfade"/,
+      /if \(plan\.mode === "gapless" && s\.crossfade > 0\) \{[\s\S]{0,400}?traceTransition\("plan=gapless-despite-crossfade"/,
     );
   });
   test("tracing exists and is gated to development builds", () => {

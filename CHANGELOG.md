@@ -34,6 +34,23 @@ icon stacked above the word "Install", in a tall lozenge. It is now an
 `inline-flex` row with `whitespace-nowrap`, slightly roomier padding, and
 `shrink-0` so the strip's long explanatory text cannot squeeze it.
 
+#### Crossfade diagnostics
+
+A crossfade that does not run is invisible: there is no overlap, no error and no
+message, so the only symptom is the absence of a fade — which looks identical
+whether the planner said no, the browser could not build the audio graph, or
+nothing was queued next. Every cause reported the same thing, so three rounds of
+fixes were three rounds of guessing.
+
+Settings → Audio now says which:
+
+- **Last change** — a plain-English account of what the most recent track
+  boundary actually did: the blend that ran, the gapless hand-off, the hand-off
+  that was skipped and _why_, the planner's cut, or the refusal reason.
+- **Check blending here** — evaluates every gate the real path applies against
+  live state and answers whether the _next_ boundary can crossfade, naming the
+  blocker if it cannot.
+
 ### Fixed — transitions
 
 #### Crossfade and gapless playback did not actually work

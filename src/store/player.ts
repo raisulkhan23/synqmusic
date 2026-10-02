@@ -18,6 +18,7 @@ import {
   onActiveDeckChange,
   scheduleCrossfade,
   canCrossfadeNow,
+  crossfadeReadiness,
   releaseDeck,
   resetAllDeckGains,
   setDeckGainNow,
@@ -26,7 +27,6 @@ import {
   swapActiveDeck,
   pauseAllDecks,
   AUDIO_FILTERS,
-  audioGraphFailed,
   type AudioFilterId,
 } from "@/lib/audio";
 import {
@@ -408,6 +408,19 @@ interface PlayerStore {
    */
   crossfade: number;
   setCrossfade: (seconds: number) => void;
+  /**
+   * A plain-English account of what the LAST track boundary actually did,
+   * shown under Settings → Audio.
+   *
+   * Every way a crossfade can fail — the planner chose a cut, the AudioContext
+   * was never built, a deck never attached, the stream swap lost a race — used
+   * to present identically: the song ends, there is a beat of silence, the next
+   * song starts. That is indistinguishable from "crossfade is broken", which is
+   * why it was reported as broken three times. Naming the decision at the point
+   * it is made turns an unauditable symptom into something a listener can read
+   * off the screen in five seconds.
+   */
+  transitionNote: string | null;
   /**
    * Gapless playback: start the next track the moment the current one stops
    * instead of leaving a beat of silence while the next track loads.
@@ -1852,6 +1865,96 @@ function prefetchTrack(track: Playable | undefined): void {
   : (): void => {};
 
 /**
+ * How many times each crossfade refusal has been seen this session.
+ *
+ * `context-suspended` is transient — a context still waking up resolves itself
+ * — so it is only reported once it has happened more than once. The others are
+ * structural and worth saying immediately.
+ */
+const crossfadeRefusals = new Map<string, number>();
+
+/** Refusal reasons already shown, so the listener is told once, not per track. */
+const crossfadeNotified = new Set<string>();
+
+function noteCrossfadeRefusal(reason: string): number {
+  const seen = (crossfadeRefusals.get(reason) ?? 0) + 1;
+  crossfadeRefusals.set(reason, seen);
+  return seen;
+}
+
+/**
+ * Say ONCE why a configured crossfade is not happening.
+ *
+ * Until now the only signal was the ABSENCE of something: no overlap, no
+ * message, no error. Every distinct cause — a browser that cannot build the
+ * graph, a suspended context, a track playing through the YouTube IFrame — was
+ * reported identically, which is why "crossfade is broken" kept arriving as a
+ * report with nothing underneath it.
+ */
+function notifyCrossfadeUnavailable(
+  key: string,
+  title: string,
+  description: string,
+): void {
+  if (crossfadeNotified.has(key)) return;
+  crossfadeNotified.add(key);
+  toast(title, { id: `crossfade-${key}`, description });
+}
+
+/**
+ * Record what the transition engine just decided, in words.
+ *
+ * Written at every branch that can end a track — armed, refused, blending,
+ * handed off — so the note under Settings → Audio always describes the most
+ * recent real boundary rather than a guess. Deliberately NOT deduplicated:
+ * the toast above is the once-per-session alarm, this is the running status
+ * line, and a listener watching two boundaries needs to see both.
+ */
+function noteTransition(line: string): void {
+  try {
+    if (usePlayerStore.getState().transitionNote === line) return;
+    usePlayerStore.setState({ transitionNote: line });
+  } catch {
+    /* the store may not exist yet while it is being constructed */
+  }
+}
+
+/**
+ * Ask, right now, whether the NEXT boundary can really crossfade.
+ *
+ * Every gate the real path applies is evaluated against live state rather than
+ * replayed from a log, so the answer is the same one `armTransition` will reach
+ * seconds from now. Surfaced in Settings → Audio as a plain sentence, because
+ * "it isn't working" has been reported repeatedly and this is the question whose
+ * answer is otherwise invisible.
+ */
+export function crossfadeSelfTest(): string {
+  const s = usePlayerStore.getState();
+  const readiness = crossfadeReadiness();
+  if (!readiness.ok) {
+    const where = readiness.detail ? ` (${readiness.detail})` : "";
+    if (readiness.reason === "no-graph") {
+      return `This browser cannot build the audio graph blending needs${where}. Music still plays normally.`;
+    }
+    if (readiness.reason === "deck-detached") {
+      return `The audio engine is not attached to the player yet${where}. Press play once and check again.`;
+    }
+    return `This browser has suspended its audio engine${where}. Press play once to wake it, then check again.`;
+  }
+  if (!s.current) return "Ready — but nothing is playing yet.";
+  if (!audioElementIsSource(s.current)) {
+    return `Ready — but this song is playing through the YouTube player, whose audio cannot be blended.`;
+  }
+  const next = peekNextTrack();
+  if (!next) return "Ready — but there is no next song queued.";
+  if (s.crossfade === 0) return "Ready, but crossfade is switched off.";
+  if (!crossfadePossible(s.current, next.track)) {
+    return `Ready — but the next song cannot be blended either.`;
+  }
+  return `Ready — "${s.current.title}" will blend into "${next.track.title}".`;
+}
+
+/**
  * The transition currently in flight, if any.
  *
  * `armed` is set once the next track has been decided and its stream is being
@@ -2024,7 +2127,10 @@ function armTransition(reason: TransitionReason, atSeconds: number): void {
   const s = usePlayerStore.getState();
   if (transition?.armed || transition?.running) return;
   const next = peekNextTrack();
-  if (!next) return;
+  if (!next) {
+    noteTransition("No next song queued, so this track just ends.");
+    return;
+  }
 
   const plan = planTransition({
     crossfadeSeconds: s.crossfade,
@@ -2046,12 +2152,25 @@ function armTransition(reason: TransitionReason, atSeconds: number): void {
       crossfade: s.crossfade,
       gapless: s.gapless,
     });
+    noteTransition(`Played one after another — ${plan.because}.`);
+    // Crossfade is switched ON and the planner still decided these two tracks
+    // must not overlap. That is the single most common reason a listener sees
+    // no fade, and `plan.because` names it exactly — so name it out loud rather
+    // than letting the setting look broken.
+    if (s.crossfade > 0) {
+      notifyCrossfadeUnavailable(
+        "plan-cut",
+        "Crossfade isn't applying here",
+        `These tracks play one after another: ${plan.because}.`,
+      );
+    }
     return;
   }
   // A configured crossfade that plans as gapless is the one case a listener
   // cannot tell apart from a bug. Say so explicitly rather than leaving it to
   // be inferred from the absence of a fade.
   if (plan.mode === "gapless" && s.crossfade > 0) {
+    noteTransition(`Started the next song with no gap — ${plan.because}.`);
     traceTransition("plan=gapless-despite-crossfade", {
       because: plan.because,
       from: s.current?.title,
@@ -2059,6 +2178,11 @@ function armTransition(reason: TransitionReason, atSeconds: number): void {
     });
   }
 
+  noteTransition(
+    plan.mode === "crossfade"
+      ? `Blending over ${plan.seconds}s — ${plan.because}.`
+      : `Next song prepared to start with no gap.`,
+  );
   traceTransition("armed", {
     mode: plan.mode,
     seconds: plan.seconds,
@@ -2149,22 +2273,40 @@ async function maybeRunCrossfade(remaining: number): Promise<void> {
   const s = usePlayerStore.getState();
   // The audio context must be RUNNING. A suspended one turns a fade into
   // silence, which is the exact failure this whole feature exists to remove.
-  if (!canCrossfadeNow()) {
+  const readiness = crossfadeReadiness();
+  if (!readiness.ok) {
+    noteTransition(`Blend refused — ${readiness.reason}.`);
     traceTransition("refused:no-running-graph", {
-      note: "no AudioContext, or a deck is not attached to the graph",
+      note: readiness.reason,
+      detail: readiness.detail,
     });
-    // A suspended context is transient and resolves itself. A FAILED graph
-    // build is permanent for the session, and its symptom is indistinguishable
-    // from "crossfade is broken": the music plays perfectly through the
-    // un-tapped element while every track ends in a hard cut. Say so once, or
-    // the next person to report this has nothing to go on but the absence of
-    // a crossfade.
-    if (audioGraphFailed()) {
-      toast("Crossfade can't run on this browser", {
-        id: "crossfade-graph-failed",
-        description:
-          "Your music plays normally, but the audio effects this browser needs for blending are unavailable, so tracks won't overlap.",
-      });
+    // Every refusal used to look identical from the outside: the song plays,
+    // the track ends, and the next one starts a beat late. That is
+    // indistinguishable from "crossfade is broken" and leaves a bug report
+    // with nothing to go on, so the reason is said out loud — once.
+    //
+    // `context-suspended` is only reported after it happens twice, because a
+    // context that is still waking up on the very first transition resolves
+    // itself, and a toast for that would be a false alarm.
+    const seen = noteCrossfadeRefusal(readiness.reason);
+    if (readiness.reason === "no-graph") {
+      notifyCrossfadeUnavailable(
+        "graph",
+        "Crossfade can't run on this browser",
+        "Your music plays normally, but the audio this browser needs for blending is unavailable, so tracks won't overlap.",
+      );
+    } else if (readiness.reason === "deck-detached") {
+      notifyCrossfadeUnavailable(
+        "deck",
+        "Crossfade couldn't start",
+        "The audio engine didn't finish connecting to the player, so tracks play one after another.",
+      );
+    } else if (seen >= 2) {
+      notifyCrossfadeUnavailable(
+        "suspended",
+        "Crossfade is paused",
+        "This browser suspended its audio engine. Press play once to wake it, and blending resumes.",
+      );
     }
     cancelTransition("no-running-graph");
     return;
@@ -2241,6 +2383,9 @@ async function maybeRunCrossfade(remaining: number): Promise<void> {
     incomingSlot,
     t.plan.seconds,
     fadeGains,
+  );
+  noteTransition(
+    `Blending "${s.current?.title ?? "this track"}" into "${t.track.title}" over ${t.plan.seconds}s.`,
   );
   traceTransition("blend", {
     outgoing: outgoingSlot,
@@ -2394,6 +2539,7 @@ function tryGaplessHandoff(): boolean {
     readyState: incoming.readyState,
   });
   if (!readiness.ready) {
+    noteTransition(`Gapless hand-off skipped — ${readiness.because}.`);
     traceTransition("gapless:skipped", {
       why: readiness.because,
       readyState: incoming.readyState,
@@ -2411,6 +2557,7 @@ function tryGaplessHandoff(): boolean {
     });
   }
   commitTransition(t, outgoingSlot);
+  noteTransition(`Started "${t.track.title}" with no gap.`);
   traceTransition("gapless:handoff", { to: t.track.title, index: t.index });
   return true;
 }
@@ -4332,6 +4479,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     introTrim: initialIntroTrim,
     introTrimSkipped: null,
     crossfade: initialCrossfade,
+    transitionNote: null,
     setCrossfade: (seconds: number) => {
       const next = normalizeCrossfade(seconds);
       writeSetting("ss.crossfade", String(next));

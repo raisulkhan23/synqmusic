@@ -37,6 +37,7 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import {
   clearPlayHistory,
+  crossfadeSelfTest,
   prewarmYoutubeStream,
   usePlayerStore,
 } from "@/store/player";
@@ -171,6 +172,9 @@ export function SettingsDialog({
   const rate = usePlayerStore((s) => s.rate);
   const crossfade = usePlayerStore((s) => s.crossfade);
   const setCrossfade = usePlayerStore((s) => s.setCrossfade);
+  const transitionNote = usePlayerStore((s) => s.transitionNote);
+  /** Live verdict for the boundary that is coming, not a replay of a log. */
+  const [blendCheck, setBlendCheck] = useState<string | null>(null);
   const gapless = usePlayerStore((s) => s.gapless);
   const toggleGapless = usePlayerStore((s) => s.toggleGapless);
   const setRate = usePlayerStore((s) => s.setRate);
@@ -1157,6 +1161,37 @@ export function SettingsDialog({
               Songs served by the YouTube player keep their gapless boundary
               instead.
             </p>
+
+            {/*
+              Why this control exists: a crossfade that does not run is
+              invisible. There is no overlap, no error and no message, so the
+              only observable is the absence of a fade — which looks identical
+              whether the planner said no, the browser could not build the audio
+              graph, or nothing was queued. These two lines name both: what the
+              last boundary actually did, and whether the NEXT one can blend.
+            */}
+            <div className="mt-2.5 flex flex-col gap-2 rounded-lg border border-white/[0.06] bg-black/20 px-2.5 py-2">
+              <p className="text-[11px] leading-relaxed text-muted-foreground/90">
+                <span className="font-semibold text-foreground/80">
+                  Last change:
+                </span>{" "}
+                {transitionNote ?? "Nothing yet — let a track finish first."}
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setBlendCheck(crossfadeSelfTest())}
+                  className="shrink-0 rounded-md border border-white/10 px-2 py-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:border-white/25 hover:text-foreground"
+                >
+                  Check blending here
+                </button>
+                {blendCheck && (
+                  <p className="min-w-0 text-[11px] leading-relaxed text-foreground/75">
+                    {blendCheck}
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
 
           <ToggleRow

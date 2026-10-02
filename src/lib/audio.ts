@@ -885,16 +885,47 @@ export function spareDeckSlot(): "a" | "b" {
  * rest of the session.
  */
 export function canCrossfadeNow(): boolean {
+  return crossfadeReadiness().ok;
+}
+
+export type CrossfadeRefusal =
+  /** The graph was never built (and may never build on this device). */
+  | "no-graph"
+  /** A context exists but is not running, so fading would fade to silence. */
+  | "context-suspended"
+  /** A deck is missing its gain/source and could not be re-attached. */
+  | "deck-detached";
+
+export type CrossfadeReadiness =
+  | { ok: true }
+  | { ok: false; reason: CrossfadeRefusal; detail?: string };
+
+/**
+ * WHY a crossfade is impossible right now.
+ *
+ * `canCrossfadeNow()` collapsed three very different failures into `false`, and
+ * every one of them presented identically: normal audio, a hard cut, and a
+ * couple of seconds of silence while the next stream resolved. There was
+ * nothing on screen and nothing to tell a bug report apart from a browser that
+ * simply cannot do it.
+ *
+ * Splitting the reasons is what makes this debuggable at all.
+ */
+export function crossfadeReadiness(): CrossfadeReadiness {
   const d = decks;
-  if (!d || !audioCtx) return false;
+  if (!d || !audioCtx) return { ok: false, reason: "no-graph" };
   if (audioCtx.state !== "running") {
     if (audioCtx.state === "suspended") void audioCtx.resume();
-    return false;
+    return { ok: false, reason: "context-suspended", detail: audioCtx.state };
   }
   for (const slot of ["a", "b"] as const) {
-    if (!d[slot].gain && !ensureDeckAttached(slot)) return false;
+    if (!d[slot].gain && !ensureDeckAttached(slot)) {
+      return { ok: false, reason: "deck-detached", detail: slot };
+    }
   }
-  return !!(d.a.gain && d.b.gain);
+  return d.a.gain && d.b.gain
+    ? { ok: true }
+    : { ok: false, reason: "deck-detached" };
 }
 
 /**

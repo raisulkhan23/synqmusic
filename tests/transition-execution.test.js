@@ -209,6 +209,9 @@ const audio = await import(`../src/lib/audio.ts?fresh=${Math.random()}`);
 /** A SECOND, independent instance, driven by the API-less context above. */
 const audioBare = await import(`../src/lib/audio.ts?fresh=${Math.random()}`);
 
+/** A THIRD instance that never builds a graph, to observe the "no graph" reason. */
+const audioNoGraph = await import(`../src/lib/audio.ts?fresh=${Math.random()}`);
+
 /**
  * The two per-deck transition GainNodes, found by CREATION ORDER:
  * `ensureGraph()` creates `fxIn` and `gainOut` first, then one gain per deck in
@@ -318,6 +321,22 @@ describe("an executed crossfade", () => {
     expect(again).toBe(true);
     expect(deckGainA.gain.curve).not.toBeNull();
     expect(deckGainA.gain.curve.duration).toBeCloseTo(4, 5);
+  });
+});
+
+describe("refusals name themselves", () => {
+  test("a running graph reports itself as ready", () => {
+    expect(audio.crossfadeReadiness()).toEqual({ ok: true });
+  });
+
+  test("a module with no graph says so, instead of returning a bare false", () => {
+    // `canCrossfadeNow()` collapses "never built", "suspended" and "deck
+    // detached" into one `false`. The UI now has to name which one it is.
+    const readiness = audioNoGraph.crossfadeReadiness();
+    expect(readiness.ok).toBe(false);
+    expect(readiness).toEqual({ ok: false, reason: "no-graph" });
+    // And the boolean wrapper still agrees with it.
+    expect(audioNoGraph.canCrossfadeNow()).toBe(false);
   });
 });
 
