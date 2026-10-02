@@ -8,16 +8,7 @@ import {
   useTrackActions,
 } from "@/components/tracks/useTrackActions";
 import { usePlayerStore } from "@/store/player";
-import { useIsCreativeCommons } from "@/lib/creativeCommons";
-import {
-  CreativeCommons,
-  Heart,
-  Loader2,
-  Music4,
-  Pause,
-  Play,
-  Radio,
-} from "lucide-react";
+import { Heart, Loader2, Music4, Pause, Play, Radio } from "lucide-react";
 import type { ReactNode } from "react";
 
 const isRowActionTarget = (target: EventTarget | null) =>
@@ -59,14 +50,6 @@ export function RemoteTrackRow({
     renderPlaylistDialog,
   } = useTrackActions(item, source);
   const artistHref = artistPath(artistName);
-
-  // Verified server-side against YouTube's own licence field, and batched
-  // across every row on the page rather than asked per row — see
-  // `lib/creativeCommons.ts`. Only YouTube rows can be checked at all.
-  const isCreativeCommons = useIsCreativeCommons(
-    source === "youtube" ? item.id : undefined,
-    source === "youtube",
-  );
 
   return (
     <>
@@ -159,41 +142,25 @@ export function RemoteTrackRow({
           >
             {displayTitle}
           </p>
-          <div className="mt-0.5 flex min-w-0 items-center gap-1.5">
-            <p className="min-w-0 truncate text-xs text-muted-foreground">
-              {/* A row's artist has a real page, so it is a link rather than
-                  dead text. This is the surface most people meet an artist on —
-                  search results and the queue — and until now the artist name
-                  here was the one place they could not click through from.
-                  `artistPath` returns null for an unusable name, in which case
-                  this stays plain text. */}
-              {artistHref ? (
-                <Link
-                  to={artistHref}
-                  onClick={(event) => event.stopPropagation()}
-                  className="underline-offset-2 transition-colors hover:text-foreground hover:underline"
-                >
-                  {artistName}
-                </Link>
-              ) : (
-                artistName
-              )}
-            </p>
-            {/* Badged only once the licence is CONFIRMED, and it means exactly
-                what the Download action will do — an unverified row shows
-                nothing rather than a hopeful icon. Deliberately tiny: it marks
-                a track, it must not compete with the row's real controls. */}
-            {isCreativeCommons && (
-              <span
-                title="Creative Commons — this track can be downloaded"
-                aria-label="Creative Commons — available to download"
-                className="inline-flex shrink-0 items-center gap-0.5 rounded-full border border-[rgb(var(--tint)_/_0.35)] bg-[rgb(var(--tint)_/_0.1)] px-1.5 py-px text-[9px] font-semibold tracking-wide text-[rgb(var(--tint))] uppercase"
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+            {/* A row's artist has a real page, so it is a link rather than
+                dead text. This is the surface most people meet an artist on —
+                search results and the queue — and until now the artist name
+                here was the one place they could not click through from.
+                `artistPath` returns null for an unusable name, in which case
+                this stays plain text. */}
+            {artistHref ? (
+              <Link
+                to={artistHref}
+                onClick={(event) => event.stopPropagation()}
+                className="underline-offset-2 transition-colors hover:text-foreground hover:underline"
               >
-                <CreativeCommons className="size-2.5" aria-hidden />
-                CC
-              </span>
+                {artistName}
+              </Link>
+            ) : (
+              artistName
             )}
-          </div>
+          </p>
         </div>
 
         <div className="flex shrink-0 items-center gap-1 sm:ml-auto sm:gap-2">

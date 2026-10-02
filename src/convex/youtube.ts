@@ -1050,32 +1050,6 @@ export const searchCreativeCommons = action({
 });
 
 /**
- * Which of these videos may be downloaded — a whole page in one call.
- *
- * The row badge has to agree with the Download action, and a row cannot afford
- * its own request: a 200-track playlist would be 200 action calls to answer a
- * question YouTube answers 50 ids at a time. So the client collects the ids on
- * screen and asks once.
- *
- * Returns the ELIGIBLE ids only, and nothing about the rest. "Not Creative
- * Commons" and "could not be checked" are deliberately indistinguishable to
- * the caller, because a badge must never appear on the strength of a check
- * that did not run — a listener who taps Download on a badged row and is
- * refused has been lied to by the badge.
- */
-export const creativeCommonsFlags = action({
-  args: { videoIds: v.array(v.string()) },
-  handler: async (_ctx, { videoIds }): Promise<{ ids: string[] }> => {
-    // Bounded, so one request can never fan out into an unbounded number of
-    // Data API calls. The client chunks anything larger than this.
-    const ids = [...new Set(videoIds)].slice(0, 50);
-    if (ids.length === 0) return { ids: [] };
-    const verified = await verifiedCreativeCommonsIds(ids);
-    return { ids: [...verified] };
-  },
-});
-
-/**
  * Display metadata for a YouTube video id, used by shared track links.
  *
  * A share link is just `/t/<videoId>` — the id alone identifies the song, so
