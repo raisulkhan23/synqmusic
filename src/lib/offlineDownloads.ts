@@ -180,6 +180,47 @@ export function safeFileName(title: string, artistName: string): string {
 }
 
 /**
+ * Read a response body, reporting progress as it arrives.
+ *
+ * Falls back to `arrayBuffer()` when the caller does not want progress or the
+ * body is not streamable. `total` is the declared length, which a server may
+ * under-report; `received` is always measured, so it is never a guess.
+ *
+ * The chunks are concatenated by hand rather than through a `Blob`: the stored
+ * size must be the byte count actually transferred, and `Blob` would add an
+ * async hop to a number this path depends on being exact.
+ */
+async function readWithProgress(
+  response: Response,
+  declared: number,
+  onProgress?: (received: number, total: number) => void,
+): Promise<ArrayBuffer> {
+  const body = response.body;
+  if (!onProgress || !body) return response.arrayBuffer();
+
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let received = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value) {
+      chunks.push(value);
+      received += value.byteLength;
+      onProgress(received, declared);
+    }
+  }
+
+  const merged = new Uint8Array(received);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return merged.buffer;
+}
+
+/**
  * Download one track to local storage.
  *
  * Refuses early and specifically, in this order, because each refusal needs
@@ -209,6 +250,14 @@ export async function downloadTrack(input: {
   fetchImpl?: typeof fetch;
   /** Milliseconds before the fetch is abandoned. */
   timeoutMs?: number;
+  /**
+   * Aborts the transfer mid-flight. This is what the Cancel action uses, so a
+   * download the listener abandons stops consuming bandwidth immediately
+   * instead of running to completion in the background.
+   */
+  signal?: AbortSignal;
+  /** Called as bytes arrive, so the UI can show a real percentage. */
+  onProgress?: (received: number, total: number) => void;
 }): Promise<DownloadResult> {
   const {
     trackId,
@@ -223,6 +272,8 @@ export async function downloadTrack(input: {
     entries,
     appCapBytes = readDownloadCap(),
     timeoutMs = 60_000,
+    signal: callerSignal,
+    onProgress,
   } = input;
   const doFetch = input.fetchImpl ?? fetch;
 
@@ -266,12 +317,24 @@ export async function downloadTrack(input: {
     messages: { ...state.messages, [trackId]: "" },
   });
 
+  // A caller-supplied signal (Cancel) and the internal timeout are BOTH
+  // reasons to stop, so they are combined rather than one silently winning.
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+  const signal =
+    callerSignal && typeof AbortSignal.any === "function"
+      ? AbortSignal.any([callerSignal, timeoutSignal])
+      : (callerSignal ?? timeoutSignal);
+
   let response: Response;
   try {
-    response = await doFetch(audioUrl, {
-      signal: AbortSignal.timeout(timeoutMs),
-    });
+    response = await doFetch(audioUrl, { signal });
   } catch {
+    // A deliberate cancellation is not a network problem, and telling someone
+    // who just pressed Cancel to "check your connection" is wrong advice.
+    if (callerSignal?.aborted) {
+      emit({ status: { ...state.status, [trackId]: "idle" } });
+      return { ok: false, reason: "Download cancelled." };
+    }
     return fail("Couldn't reach the audio. Check your connection and retry.");
   }
 
@@ -338,7 +401,7 @@ export async function downloadTrack(input: {
   let bytes = declared;
   let toStore = response;
   try {
-    const buffer = await response.arrayBuffer();
+    const buffer = await readWithProgress(response, declared, onProgress);
     bytes = buffer.byteLength;
     toStore = new Response(buffer, {
       status: 200,
@@ -357,6 +420,10 @@ export async function downloadTrack(input: {
       return { ok: false, reason: final.reason! };
     }
   } catch {
+    if (callerSignal?.aborted) {
+      emit({ status: { ...state.status, [trackId]: "idle" } });
+      return { ok: false, reason: "Download cancelled." };
+    }
     return fail("Couldn't save that file. Your device may be out of space.");
   }
 
