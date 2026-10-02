@@ -838,10 +838,19 @@ describe("the What's New section tells the truth", () => {
     expect(landing).toMatch(/whatsNewCards\.map\(/);
   });
 
-  test("it covers the three features from this cycle", () => {
+  test("it covers the four features from this cycle", () => {
     expect(landing).toMatch(/Crossfade & gapless/);
     expect(landing).toMatch(/Installable app/);
     expect(landing).toMatch(/Browse first, sign in when you're ready/);
+    // Added alongside the queue Undo and the palette commands. The count is
+    // asserted so a card cannot be quietly dropped from the section while the
+    // three originals keep the test green.
+    expect(landing).toMatch(/Undo &amp; quick controls|Undo & quick controls/);
+    const cards = landing.slice(
+      landing.indexOf("const whatsNewCards = ["),
+      landing.indexOf("const fadeUp = {"),
+    );
+    expect(cards.match(/\n    icon: /g) ?? []).toHaveLength(4);
   });
 
   test("it sells features, not bug fixes", () => {

@@ -159,6 +159,7 @@ export function CommandPalette() {
           >
             <SkipForward className="size-4 text-muted-foreground" />
             <span>Next track</span>
+            <CommandShortcut>N</CommandShortcut>
           </CommandItem>
           <CommandItem
             value="playback previous track"
@@ -167,6 +168,7 @@ export function CommandPalette() {
           >
             <SkipBack className="size-4 text-muted-foreground" />
             <span>Previous track</span>
+            <CommandShortcut>P</CommandShortcut>
           </CommandItem>
           <CommandItem
             value="playback shuffle random"
