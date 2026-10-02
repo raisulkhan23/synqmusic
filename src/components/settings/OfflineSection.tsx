@@ -6,30 +6,18 @@ import {
   Download,
   HardDrive,
   Loader2,
-  Pin,
-  PinOff,
-  Play,
   Trash2,
-  Upload,
   WifiOff,
 } from "lucide-react";
+import { OFFLINE_ENABLED_KEY, type OfflineEntry } from "@/lib/offlineStore";
 import {
-  DEFAULT_DOWNLOAD_CAP_BYTES,
-  DOWNLOAD_CAP_CHOICES,
-  DOWNLOAD_CAP_KEY,
-  OFFLINE_ENABLED_KEY,
-  formatBytes,
-  type OfflineEntry,
-} from "@/lib/offlineStore";
-import {
-  browserRemainingBytes,
   clearDownloads,
   isPersisted,
   readIndex,
   removeDownload,
-  setPinned,
   totalDownloadedBytes,
 } from "@/lib/offlineAudio";
+import { formatBytes } from "@/lib/offlineStore";
 import { cn } from "@/lib/utils";
 
 /**
@@ -67,33 +55,10 @@ function writeOfflineMode(value: boolean): void {
   }
 }
 
-/** The raw stored cap, kept as the string that round-trips "unlimited". */
-function readCapRaw(): string {
-  try {
-    return (
-      localStorage.getItem(DOWNLOAD_CAP_KEY) ??
-      String(DEFAULT_DOWNLOAD_CAP_BYTES)
-    );
-  } catch {
-    return String(DEFAULT_DOWNLOAD_CAP_BYTES);
-  }
-}
-
-function writeCapRaw(value: string): void {
-  try {
-    localStorage.setItem(DOWNLOAD_CAP_KEY, value);
-  } catch {
-    /* storage unavailable */
-  }
-}
-
 export function OfflineSection() {
   const [enabled, setEnabled] = useState(readOfflineMode);
   const [entries, setEntries] = useState<OfflineEntry[]>([]);
   const [persisted, setPersisted] = useState<boolean | null>(null);
-  const [cap, setCap] = useState(readCapRaw);
-  const [browserFree, setBrowserFree] = useState<number | null>(null);
-  const [importing, setImporting] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(() => {
@@ -102,11 +67,6 @@ export function OfflineSection() {
       setLoading(false);
     });
     void isPersisted().then(setPersisted);
-    // The BROWSER's remaining space, which is a different number from SYNQ's
-    // own cap and the one that actually stops a write. Showing only the cap
-    // would let a listener fill their device while the panel said there was
-    // room to spare.
-    void browserRemainingBytes().then(setBrowserFree);
   }, []);
 
   useEffect(refresh, [refresh]);
@@ -133,61 +93,6 @@ export function OfflineSection() {
     toast("All downloads removed", { id: "offline-clear" });
     refresh();
   }, [refresh]);
-
-  const onTogglePin = useCallback(
-    async (entry: OfflineEntry) => {
-      const next = !entry.pinned;
-      await setPinned(entry.trackId, next);
-      toast(
-        next
-          ? `Pinned "${entry.title}" — it won't be removed automatically`
-          : `Unpinned "${entry.title}"`,
-        { id: "offline-pin" },
-      );
-      refresh();
-    },
-    [refresh],
-  );
-
-  const onImport = useCallback(
-    async (files: File[]) => {
-      if (files.length === 0) return;
-      setImporting(true);
-      const { importLocalAudioFile } = await import("@/lib/offlineDownloads");
-      let saved = 0;
-      const problems: string[] = [];
-      for (const file of files) {
-        const result = await importLocalAudioFile(file);
-        if (result.ok) saved += 1;
-        else problems.push(result.reason);
-      }
-      setImporting(false);
-      refresh();
-      if (saved > 0) {
-        toast.success(
-          saved === 1 ? "Imported 1 track" : `Imported ${saved} tracks`,
-        );
-      }
-      // Reported one per file rather than as a count: a listener who picked
-      // four files and got three needs to know WHICH one failed and why.
-      for (const problem of problems.slice(0, 3)) {
-        toast.error(problem);
-      }
-      if (problems.length > 3) {
-        toast.error(`${problems.length - 3} more files couldn't be imported.`);
-      }
-    },
-    [refresh],
-  );
-
-  // Play an imported file. The store finds the bytes on disk by track id, so
-  // this never touches the network — which is the entire point of importing.
-  const onPlayLocal = useCallback((entry: OfflineEntry) => {
-    void import("@/lib/localAudio").then(async ({ localEntryToPlayable }) => {
-      const { usePlayerStore } = await import("@/store/player");
-      usePlayerStore.getState().playTrack(localEntryToPlayable(entry));
-    });
-  }, []);
 
   const used = totalDownloadedBytes(entries);
 
@@ -253,7 +158,7 @@ export function OfflineSection() {
           <span className="block text-xs text-muted-foreground">
             {entries.length === 0
               ? "Creative Commons tracks can be saved for offline listening."
-              : `${formatBytes(used)} used${browserFree !== null ? ` · ${formatBytes(browserFree)} free on this device` : ""}`}
+              : `${formatBytes(used)} used`}
           </span>
         </span>
         {entries.length > 0 && (
@@ -292,38 +197,6 @@ export function OfflineSection() {
               {entry.artistName} · {formatBytes(entry.bytes)}
             </p>
           </div>
-          {entry.source === "local" && (
-            <button
-              type="button"
-              onClick={() => onPlayLocal(entry)}
-              aria-label={`Play ${entry.title}`}
-              className="shrink-0 rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
-            >
-              <Play className="size-4" />
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => void onTogglePin(entry)}
-            aria-pressed={entry.pinned === true}
-            aria-label={
-              entry.pinned
-                ? `Unpin ${entry.title}`
-                : `Pin ${entry.title} so it is never removed automatically`
-            }
-            className={cn(
-              "shrink-0 rounded-full p-1.5 transition-colors",
-              entry.pinned
-                ? "text-[rgb(var(--tint))] hover:bg-white/[0.06]"
-                : "text-muted-foreground hover:bg-white/[0.06] hover:text-foreground",
-            )}
-          >
-            {entry.pinned ? (
-              <Pin className="size-4 fill-current" />
-            ) : (
-              <PinOff className="size-4" />
-            )}
-          </button>
           <button
             type="button"
             onClick={() => void onRemove(entry)}
@@ -334,75 +207,6 @@ export function OfflineSection() {
           </button>
         </div>
       ))}
-
-      {/* Import the listener's own files. This is the one download path SYNQ
-          can honestly offer for music: the file is already theirs, so storing
-          it reproduces nothing and needs no provider's permission. */}
-      <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-white/[0.14] bg-white/[0.02] px-3 py-2.5 transition-colors hover:border-[rgb(var(--tint)_/_0.4)] hover:bg-white/[0.04]">
-        {importing ? (
-          <Loader2 className="size-4 shrink-0 animate-spin text-[rgb(var(--tint))]" />
-        ) : (
-          <Upload className="size-4 shrink-0 text-[rgb(var(--tint))]" />
-        )}
-        <span className="min-w-0 flex-1">
-          <span className="block text-sm font-medium">
-            {importing ? "Importing…" : "Import your own audio"}
-          </span>
-          <span className="block text-xs text-muted-foreground">
-            MP3, M4A, FLAC, WAV, OGG. Files you own play offline, with no
-            connection and no buffering.
-          </span>
-        </span>
-        <input
-          type="file"
-          accept="audio/*,.mp3,.m4a,.flac,.wav,.ogg,.opus"
-          multiple
-          disabled={importing}
-          aria-label="Import audio files from this device"
-          className="sr-only"
-          onChange={(event) => {
-            const files = Array.from(event.target.files ?? []);
-            // Cleared immediately so re-picking the SAME file still fires a
-            // change event — otherwise fixing a rejected file appears to do
-            // nothing at all.
-            event.target.value = "";
-            void onImport(files);
-          }}
-        />
-      </label>
-
-      {/* The download limit. A ladder of sizes rather than a free-text field:
-          a typo in a size box either refuses every download (1 MB) or removes
-          the limit altogether (10 GB on a phone), and neither is recoverable
-          by reading the UI. */}
-      <div className="flex items-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
-        <HardDrive className="size-4 shrink-0 text-muted-foreground" />
-        <span className="min-w-0 flex-1">
-          <span className="block text-sm font-medium">Download limit</span>
-          <span className="block text-xs text-muted-foreground">
-            Oldest unpinned downloads are removed first to stay inside it.
-          </span>
-        </span>
-        <select
-          value={cap}
-          onChange={(event) => {
-            const value = event.target.value;
-            setCap(value);
-            writeCapRaw(value);
-          }}
-          aria-label="Download limit"
-          className="shrink-0 rounded-lg border border-white/[0.12] bg-[#191c26] px-2 py-1 text-xs text-foreground"
-        >
-          {DOWNLOAD_CAP_CHOICES.map((choice) => (
-            <option
-              key={choice.label}
-              value={choice.bytes === null ? "unlimited" : String(choice.bytes)}
-            >
-              {choice.label}
-            </option>
-          ))}
-        </select>
-      </div>
     </div>
   );
 }

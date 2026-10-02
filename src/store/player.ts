@@ -88,15 +88,6 @@ import { writeOfflineQueue } from "@/lib/offlineLibrary";
  */
 let offlineObjectUrl: string | null = null;
 
-/** True when `track` is the one currently sounding from a local file. */
-function offlineObjectUrlServes(track: Playable): boolean {
-  return (
-    offlineObjectUrl !== null &&
-    typeof track.audioUrl === "string" &&
-    track.audioUrl.startsWith("blob:")
-  );
-}
-
 function revokeOfflineUrl(): void {
   if (offlineObjectUrl) {
     try {
@@ -1070,13 +1061,12 @@ export interface LastPlayedSnapshot {
   coverUrl: string;
   duration: number;
   /**
-   * The durable "recently played" record. Mirrors `Playable["source"]`:
-   * `"youtube"` for anything resolved against a video id, `"local"` for a file
-   * the listener imported from their own device. Restoring history must keep
-   * that distinction, or an imported file would be sent to a resolver that has
-   * no video id to resolve.
+   * The durable "recently played" record. Only `"youtube"` is possible now
+   * that Jamendo is a discovery index rather than a playback source, so
+   * restoring history can no longer mislabel a track as one that plays
+   * through the `<audio>` element.
    */
-  source: "youtube" | "local";
+  source: "youtube";
   youtubeId?: string;
   audioUrl: string;
   at: number;
@@ -3334,24 +3324,6 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       prefetchTrack(get().queue[get().queueIndex + 1]);
       maybeAutofillQueue();
       return;
-    }
-
-    // Not downloaded, and the browser says there is no network.
-    //
-    // Playback is still ATTEMPTED below rather than refused: `navigator.onLine`
-    // is a hint, not a fact — it is false on a captive portal that would work, on
-    // some VPNs, and while a connection is coming back up. Refusing on it would
-    // break tracks that would have played. What this buys is the MESSAGE: the
-    // listener is told why in a second instead of watching a spinner for the
-    // full 8-second watchdog before being told the same thing.
-    if (
-      typeof navigator !== "undefined" &&
-      navigator.onLine === false &&
-      !offlineObjectUrlServes(track)
-    ) {
-      noteTransition(
-        "You're offline and this song isn't saved to this device.",
-      );
     }
 
     // A track with NO video id and no stream URL cannot play at all. This

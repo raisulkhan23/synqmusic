@@ -36,8 +36,6 @@ import { cn } from "@/lib/utils";
 import { copyText } from "@/lib/clipboard";
 import { buildTrackShareUrl } from "@/lib/shareLink";
 import { moveQueueRow, queueReorderKeys } from "@/lib/queueOrder";
-import { useDownloadedTrackIds } from "@/lib/offlineDownloads";
-import { HardDrive } from "lucide-react";
 
 type QueueReorderRowProps = {
   track: Playable;
@@ -63,10 +61,6 @@ function QueueReorderRow({
   reorderKey,
 }: QueueReorderRowProps) {
   const controls = useDragControls();
-  // Read here rather than passed down from the panel: `Reorder.Item` re-renders
-  // rows independently, so a prop threaded from the parent would go stale as
-  // soon as a download finished while the queue was open.
-  const downloadedIds = useDownloadedTrackIds();
 
   return (
     <Reorder.Item
@@ -99,21 +93,7 @@ function QueueReorderRow({
         onPointerDown={(event) => event.stopPropagation()}
         onClick={() => playIndex(queueIndex + 1 + rowIndex)}
       >
-        <p className="truncate text-sm font-medium">
-          {track.title}
-          {/* Marks what will still play with no connection. Without it an
-              offline listener has no way to tell which rows in a queue are
-              safe to reach for and which will simply refuse. */}
-          {downloadedIds.has(track.id) ? (
-            <span
-              title="Saved on this device — plays offline"
-              className="ml-1.5 inline-flex translate-y-px items-center gap-0.5 rounded-full bg-[rgb(var(--tint)_/_0.16)] px-1.5 py-0.5 text-[10px] font-semibold text-[rgb(var(--tint))] align-middle"
-            >
-              <HardDrive className="size-2.5" />
-              Offline
-            </span>
-          ) : null}
-        </p>
+        <p className="truncate text-sm font-medium">{track.title}</p>
         <p className="truncate text-xs text-muted-foreground">
           {track.artistName}
         </p>

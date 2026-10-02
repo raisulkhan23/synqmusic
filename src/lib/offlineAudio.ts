@@ -240,34 +240,6 @@ export async function offlineAudioUrl(trackId: string): Promise<string | null> {
 }
 
 /**
- * Toggle whether a download is protected from automatic eviction.
- *
- * Rewrites the index row in place rather than re-downloading anything: a pin is
- * bookkeeping, and re-fetching the audio just to flip a flag would be absurd.
- */
-export async function setPinned(
-  trackId: string,
-  pinned: boolean,
-): Promise<void> {
-  const rows = readMirror();
-  const row = rows.find((e) => e.trackId === trackId);
-  if (!row) return;
-  const next: OfflineEntry = { ...row };
-  if (pinned) next.pinned = true;
-  else delete next.pinned;
-  writeMirror(rows.map((e) => (e.trackId === trackId ? next : e)));
-  if (offlineSupported()) {
-    try {
-      // IndexedDB is the source of truth; the mirror above is the fast path.
-      await putEntry(next);
-    } catch {
-      // A failed pin write must not throw into a click handler. The listener
-      // sees the toggle not stick rather than an unhandled rejection.
-    }
-  }
-}
-
-/**
  * Remove one download.
  *
  * Both halves are deleted: the cache entry AND the index row. Deleting only

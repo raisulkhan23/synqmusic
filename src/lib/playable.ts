@@ -17,18 +17,21 @@ export interface Playable {
   audioUrl: string;
   duration: number;
   /**
-   * Where this track's audio came from.
+   * Which engine owns this track.
    *
-   * `"youtube"` is everything resolved against a video id. `"local"` is a file
-   * the listener imported from their own device — it needs no resolver, no
-   * network and no provider permission, and the player finds its bytes on disk
-   * exactly the same way it finds a downloaded track's.
+   * Only `"youtube"` remains, and that is deliberate. Jamendo used to be a
+   * second playable source — a direct Creative Commons stream fed to the
+   * `<audio>` element — and every track came back silent, because that stream
+   * never made a sound for the listeners it was built for. A second source
+   * that cannot play is not a fallback, it is a second way to be silent, so
+   * the branch was removed rather than left to fail quietly.
    *
-   * (Jamendo is NOT a playable source, and that is deliberate: it was once a
-   * second `<audio>`-fed provider and every track came back silent. It remains
-   * a DISCOVERY index — see `src/lib/jamendoDiscovery.ts`.)
+   * Jamendo itself is not gone: it is a DISCOVERY index. It names independent
+   * releases for search and recommendations, and each one is resolved to a
+   * real YouTube upload before it can be played. See
+   * `src/lib/jamendoDiscovery.ts`.
    */
-  source: "youtube" | "local";
+  source: "youtube";
   /** Set when this track plays through the YouTube IFrame engine (by video id). */
   youtubeId?: string;
   /** Present for YouTube tracks, used for manual source switching. */

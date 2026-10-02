@@ -20,12 +20,10 @@
 import { useSyncExternalStore } from "react";
 import {
   DEFAULT_DOWNLOAD_CAP_BYTES,
-  DOWNLOAD_CAP_KEY,
   evaluateDownloadEligibility,
   fitsInQuota,
   offlineCacheKey,
   planEviction,
-  resolveDownloadCap,
   type OfflineEntry,
 } from "./offlineStore";
 import {
@@ -33,15 +31,11 @@ import {
   isPersisted,
   offlineSupported,
   readIndex,
-  readMirror,
   removeDownload,
   requestPersistence,
   saveDownload,
   totalDownloadedBytes,
 } from "./offlineAudio";
-// The raw key, compared above. Imported from the store module so this file and
-// the writer cannot drift apart.
-import { OFFLINE_INDEX_KEY } from "./offlineStore";
 
 /** Per-track status. `error` carries a listener-facing reason. */
 export type DownloadStatus = "idle" | "downloading" | "done" | "error";
@@ -51,23 +45,13 @@ export interface DownloadState {
   status: Record<string, DownloadStatus>;
   /** trackId → message, set only alongside `error`. */
   messages: Record<string, string>;
-  /**
-   * Bumped on EVERY change.
-   *
-   * The download index lives in localStorage, which is not reactive. Consumers
-   * that need "which tracks are on this device right now" must re-read it when
-   * the set changes, and this is the value that tells them so — without it the
-   * only change signal would be the object identity of `status`, which does
-   * not change when a download is deleted from elsewhere.
-   */
-  revision: number;
 }
 
-let state: DownloadState = { status: {}, messages: {}, revision: 0 };
+let state: DownloadState = { status: {}, messages: {} };
 const listeners = new Set<() => void>();
 
 function emit(next: Partial<DownloadState>): void {
-  state = { ...state, ...next, revision: state.revision + 1 };
+  state = { ...state, ...next };
   for (const listener of listeners) listener();
 }
 
@@ -82,61 +66,11 @@ const getSnapshot = () => state;
 const getServerSnapshot = (): DownloadState => ({
   status: {},
   messages: {},
-  revision: 0,
 });
 
 /** Status for every in-flight or recently finished download. */
 export function useDownloads(): DownloadState {
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
-}
-
-/**
- * The track ids currently on this device.
- *
- * Reads the SYNCHRONOUS localStorage mirror rather than the IndexedDB index,
- * because this backs a badge in the queue: awaiting a database open to decide
- * whether to draw a small icon would make every queue row render twice.
- *
- * Subscribes to the download store so a track downloaded while the queue is
- * open starts showing its badge without a reload.
- */
-let cachedIndexRaw: string | null = null;
-let cachedTrackIds: Set<string> = new Set();
-
-/**
- * The downloaded track ids, cached by the raw index text.
- *
- * Keyed on the RAW localStorage string rather than on the store's revision,
- * because the index can be changed by code that never touches this store —
- * the Settings panel's remove and remove-all both do. Comparing the text means
- * any writer invalidates the cache, with no bookkeeping to keep in sync; and
- * because an unchanged text returns the SAME Set instance, React sees a stable
- * value and does not re-render on every pass.
- */
-function downloadedIdsSnapshot(): Set<string> {
-  let raw: string | null = null;
-  try {
-    raw = localStorage.getItem(OFFLINE_INDEX_KEY);
-  } catch {
-    raw = null;
-  }
-  if (raw !== cachedIndexRaw) {
-    cachedIndexRaw = raw;
-    cachedTrackIds = new Set(readMirror().map((entry) => entry.trackId));
-  }
-  return cachedTrackIds;
-}
-
-export function useDownloadedTrackIds(): Set<string> {
-  // Subscribe purely for the re-render. A download finishing, failing or being
-  // deleted elsewhere must repaint the rows that show its badge.
-  useDownloads();
-  // The cache is refreshed in a plain function rather than inline: mutating
-  // module state from inside a hook is impure under concurrent rendering, and
-  // the React compiler lint rejects it outright. The refresh is idempotent
-  // anyway — identical index text yields the same Set instance — so it is safe
-  // to call during render.
-  return downloadedIdsSnapshot();
 }
 
 /** Current status of one track. */
@@ -149,15 +83,6 @@ export function useDownloadStatus(trackId: string): DownloadStatus | "idle" {
 export type DownloadResult =
   | { ok: true; entry: OfflineEntry }
   | { ok: false; reason: string };
-
-/** The listener's chosen download cap, resolved from storage. */
-export function readDownloadCap(): number {
-  try {
-    return resolveDownloadCap(localStorage.getItem(DOWNLOAD_CAP_KEY));
-  } catch {
-    return DEFAULT_DOWNLOAD_CAP_BYTES;
-  }
-}
 
 /**
  * A safe filename for the bytes SYNQ writes to disk.
@@ -221,7 +146,7 @@ export async function downloadTrack(input: {
     licenseUrl,
     source,
     entries,
-    appCapBytes = readDownloadCap(),
+    appCapBytes = DEFAULT_DOWNLOAD_CAP_BYTES,
     timeoutMs = 60_000,
   } = input;
   const doFetch = input.fetchImpl ?? fetch;
@@ -300,7 +225,7 @@ export async function downloadTrack(input: {
       needBytes: declared,
       usedBytes,
       appCapBytes,
-      keepTrackId: trackId,
+      keepKey: undefined,
     });
     for (const victim of plan.evict) {
       await removeDownload(victim.trackId);
@@ -318,16 +243,6 @@ export async function downloadTrack(input: {
       emit({
         status: { ...state.status, [trackId]: "idle" },
       });
-      // Name the actual cause when pins are what stopped it. "Storage full"
-      // would send the listener to look at free space on a device that has
-      // plenty, when the real answer is that they pinned something.
-      const pinned = existing.filter((e) => e.pinned).length;
-      if (appCapBytes !== Number.POSITIVE_INFINITY && pinned > 0) {
-        return {
-          ok: false,
-          reason: `This needs more room than you have left, and ${pinned === 1 ? "the track you pinned is" : `the ${pinned} tracks you pinned are`} protected from automatic removal. Unpin one, or raise the download limit in Settings.`,
-        };
-      }
       return { ok: false, reason: recheck.reason! };
     }
   }
@@ -377,129 +292,6 @@ export async function downloadTrack(input: {
     await saveDownload(entry, toStore);
   } catch {
     return fail("Couldn't save that file to this device.");
-  }
-
-  emit({
-    status: { ...state.status, [trackId]: "done" },
-    messages: { ...state.messages, [trackId]: "" },
-  });
-  return { ok: true, entry };
-}
-
-/**
- * Import an audio file the listener picked from their own device.
- *
- * Deliberately NOT routed through {@link downloadTrack}. That path gates on a
- * provider's per-track download permission, and there is no provider here to
- * ask: the listener already holds the copy, and storing it is not a new
- * reproduction of anyone's work. Applying a licence gate would reject every
- * file for lacking a licence URL that does not exist.
- *
- * The entry is written ALREADY PINNED. This is not a nicety — a local import
- * cannot be re-downloaded, so evicting one destroys the listener's only copy
- * inside the app and the fix is "pick the file again". Automatic eviction must
- * never be able to do that.
- */
-export async function importLocalAudioFile(
-  file: File,
-): Promise<DownloadResult> {
-  const { evaluateLocalFile, deriveLocalMetadata, localTrackId } =
-    await import("./localAudio");
-
-  const fail = (reason: string, trackId: string): DownloadResult => {
-    emit({
-      status: { ...state.status, [trackId]: "error" },
-      messages: { ...state.messages, [trackId]: reason },
-    });
-    return { ok: false, reason };
-  };
-
-  const trackId = localTrackId({
-    name: file.name,
-    size: file.size,
-    lastModified: (file as { lastModified?: number }).lastModified,
-  });
-
-  if (!offlineSupported()) {
-    return fail(
-      "This browser can't store music offline. Safari on iPhone has no support for it.",
-      trackId,
-    );
-  }
-
-  const verdict = evaluateLocalFile({
-    name: file.name,
-    size: file.size,
-    type: file.type,
-  });
-  if (!verdict.ok) return fail(verdict.reason!, trackId);
-
-  emit({
-    status: { ...state.status, [trackId]: "downloading" },
-    messages: { ...state.messages, [trackId]: "" },
-  });
-
-  // Read the bytes and measure them, rather than trusting `file.size`. The
-  // reported size is what the browser thinks it has, and the quota arithmetic
-  // has to match what actually lands in storage.
-  let bytes: ArrayBuffer;
-  try {
-    bytes = await file.arrayBuffer();
-  } catch {
-    return fail(`Couldn't read "${file.name}" from this device.`, trackId);
-  }
-
-  const entries = await readIndex();
-  const capped = readDownloadCap();
-  const existing = entries.filter((e) => e.trackId !== trackId);
-  const usedBytes = totalDownloadedBytes(existing);
-
-  const room = fitsInQuota({
-    bytes: bytes.byteLength,
-    usedBytes,
-    browserRemaining: await browserRemainingBytes(),
-    appCapBytes: capped,
-  });
-  if (!room.fits) {
-    // Eviction is NOT attempted here, unlike the download path. Every local
-    // import is pinned, so there is nothing evictable that would help, and
-    // silently deleting the listener's other imports to fit a new one would
-    // be the app discarding files it cannot get back.
-    emit({ status: { ...state.status, [trackId]: "idle" } });
-    return {
-      ok: false,
-      reason: `${room.reason} Imports are kept until you remove them yourself, so nothing was deleted to make room.`,
-    };
-  }
-
-  const meta = deriveLocalMetadata(file.name);
-  const entry: OfflineEntry = {
-    key: offlineCacheKey(trackId),
-    trackId,
-    title: meta.title,
-    artistName: meta.artistName,
-    coverUrl: "",
-    duration: 0,
-    bytes: bytes.byteLength,
-    savedAt: Date.now(),
-    source: "local",
-    // No licence to cite, and none needed: this is the listener's own file.
-    licenseUrl: "",
-    pinned: true,
-  };
-
-  try {
-    await saveDownload(
-      entry,
-      new Response(bytes, {
-        status: 200,
-        headers: {
-          "Content-Type": file.type || "audio/mpeg",
-        },
-      }),
-    );
-  } catch {
-    return fail(`Couldn't save "${file.name}" to this device.`, trackId);
   }
 
   emit({

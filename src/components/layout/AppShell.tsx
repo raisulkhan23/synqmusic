@@ -42,7 +42,7 @@ import {
 import { usePlayerStore, type RemoteLikeSnapshot } from "@/store/player";
 import { shuffleStateOf, shuffleToastFor } from "@/lib/shuffleState";
 import { track } from "@/lib/analytics";
-import { writeOfflineLikes, writeOfflinePlaylists } from "@/lib/offlineLibrary";
+import { writeOfflineLikes } from "@/lib/offlineLibrary";
 import {
   getWallpaperKey,
   getWallpaperUrl,
@@ -385,8 +385,6 @@ export function AppShell() {
   const likedQuery = useQuery(api.likes.myLikedTrackIds);
   // Remote likes carry the display metadata the offline snapshot needs.
   const likedRemoteQuery = useQuery(api.likes.myLikedRemote);
-  // Playlists are mirrored for offline use too; see the effect below.
-  const playlistsQuery = useQuery(api.playlists.myPlaylists);
   const toggleLikeMutation = useMutation(api.likes.toggleLike);
   const recordPlay = useMutation(api.history.recordPlay);
   const recordEngagement = useMutation(api.history.recordEngagement);
@@ -440,32 +438,6 @@ export function AppShell() {
       })),
     );
   }, [likedRemoteQuery]);
-
-  // Mirror the playlists for offline use, for the same reason as the likes
-  // above: with no network the playlists query never resolves, and the page
-  // showed "no playlists" rather than "you are offline".
-  useEffect(() => {
-    if (!playlistsQuery) return;
-    writeOfflinePlaylists(
-      playlistsQuery.map((p) => ({
-        id: p._id,
-        name: p.name,
-        ...(p.description ? { description: p.description } : {}),
-        trackIds: p.trackIds ?? [],
-        ...(p.trackSnapshots
-          ? {
-              trackSnapshots: p.trackSnapshots.map((s) => ({
-                trackId: s.id,
-                title: s.title,
-                artistName: s.artist,
-                coverUrl: s.coverUrl,
-                duration: s.duration,
-              })),
-            }
-          : {}),
-      })),
-    );
-  }, [playlistsQuery]);
 
   // Wire the store's optimistic toggle to the Convex mutation.
   // Remote tracks (YouTube/Spotify) aren't in the catalog, so we include a
