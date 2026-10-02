@@ -116,7 +116,7 @@ describe("autoplay and Home run on the same engine", () => {
   });
 
   test("autoplay falls back to the existing related mix instead of stopping", () => {
-    const start = store.indexOf("function handleEnded");
+    const start = store.indexOf("function completeEndedTrack");
     const body = store.slice(start, start + 4000);
     expect(body).toContain("fetchPersonalNext");
     expect(body).toContain("fetchRelatedMix");
@@ -133,7 +133,7 @@ describe("autoplay and Home run on the same engine", () => {
   });
 
   test("recommendations are only requested when the queue is exhausted", () => {
-    const start = store.indexOf("function handleEnded");
+    const start = store.indexOf("function completeEndedTrack");
     const body = store.slice(start, start + 4000);
     // Manual queue actions run first and return; the engine is reached only
     // after every queued track has been consumed. `autoAdvanceToIndex` is the

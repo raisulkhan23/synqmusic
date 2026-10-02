@@ -565,16 +565,16 @@ describe("failure always falls back to normal playback", () => {
   });
 
   test("end of track always advances, armed transition or not", () => {
-    // The fallback path has to remain the original behaviour. The window is
-    // generous because the gapless hand-off now runs BEFORE this, and that is
-    // deliberate: a gapless boundary must not first cancel its own preload.
+    // The fallback path has to remain the original behaviour. It now lives in
+    // `completeEndedTrack`, which `handleEnded` delegates to and which a
+    // deferred-then-abandoned blend calls back into.
     expect(playerSource).toMatch(
-      /function handleEnded\(\)[\s\S]{0,1600}?cancelTransition\("ended"\);/,
+      /function completeEndedTrack\(\)[\s\S]{0,2500}?cancelTransition\("ended"\);/,
     );
-    // ...and the gapless attempt comes first, and only reports success when the
-    // incoming track is genuinely buffered and ready.
+    // ...and the gapless attempt runs before that cancel, and only reports
+    // success when the incoming track is genuinely buffered and ready.
     expect(playerSource).toMatch(
-      /function handleEnded\(\)[\s\S]{0,400}?if \(tryGaplessHandoff\(\)\) return;/,
+      /function completeEndedTrack\(\)[\s\S]{0,2500}?if \(tryGaplessHandoff\(\)\) return;/,
     );
     expect(playerSource).toMatch(
       /function tryGaplessHandoff[\s\S]{0,2000}?if \(incoming\.readyState < 2\) \{[\s\S]{0,300}?return false;/,
@@ -588,7 +588,7 @@ describe("queue and playback state stay correct", () => {
     // this guard the listener skips a track and the queue index points at a
     // song they never heard.
     expect(playerSource).toMatch(
-      /function handleEnded\(\)[\s\S]{0,900}?if \(transition\?\.committed\)[\s\S]{0,300}?return;/,
+      /function handleEnded\(\)[\s\S]{0,900}?if \(t\?\.committed\)[\s\S]{0,300}?return;/,
     );
   });
 

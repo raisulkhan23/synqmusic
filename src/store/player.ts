@@ -1545,30 +1545,20 @@ function playlistMixContext(tracks: Playable[]): string | null {
 }
 
 /** Shared auto-advance logic for both engines. */
-function handleEnded(): void {
+/**
+ * The part of end-of-track handling that actually moves the queue on.
+ *
+ * Split out of `handleEnded` so a blend that deferred the outgoing track's
+ * `ended` can hand the boundary back here if it is abandoned — otherwise that
+ * swallowed event has no owner and the listener is left in silence.
+ */
+function completeEndedTrack(): void {
   const s = usePlayerStore.getState();
-
-  // Gapless first: if the next track is already resolved and buffered on the
-  // spare deck, start it HERE rather than tearing the advance down and letting
-  // the loader resolve the stream from scratch inside the gap.
-  if (tryGaplessHandoff()) return;
-
-  // A crossfade has already advanced the queue while this song was still
-  // fading out. Advancing again here would skip a track and leave the queue
-  // index pointing at a song nobody heard.
-  if (transition?.committed) {
-    transition = null;
-    resetAllDeckGains();
-    return;
-  }
-  // A transition was armed but never completed (the incoming track would not
-  // load, the listener skipped, the graph went away). Discard it and advance
-  // normally — the failure path must still play the next song.
-  cancelTransition("ended");
 
   // sleep timer "stop after this song"
   if (s.sleepAtSongEnd) {
     // Both decks: a blend may have the incoming song audible already.
+    cancelTransition("sleep-end");
     pauseAllDecks();
     ytEngine.pause();
     usePlayerStore.setState({ isPlaying: false, sleepAtSongEnd: false });
@@ -1576,12 +1566,26 @@ function handleEnded(): void {
   }
 
   if (s.repeat === "one") {
+    cancelTransition("repeat-one");
     restartCurrent();
     return;
   }
   // The track reached its end, so this is a completion, not a skip. Recorded
-  // before anything else can swap `current` out from under the measurement.
+  // BEFORE the gapless hand-off, which swaps `current` out from under the
+  // measurement — doing it afterwards recorded the finished track against the
+  // NEXT track's position, which is both the wrong completion percentage and a
+  // false "skipped" flag in the recommendation signals.
   settleEngagement("ended");
+
+  // Gapless: if the next track is already resolved and buffered on the spare
+  // deck, start it HERE rather than tearing the advance down and letting the
+  // loader resolve the stream from scratch inside the gap.
+  if (tryGaplessHandoff()) return;
+
+  // A transition was armed but never completed (the incoming track would not
+  // load, the listener skipped, the graph went away). Discard it and advance
+  // normally — the failure path must still play the next song.
+  cancelTransition("ended");
   if (s.queue.length > 0) {
     // Shuffle ON: jump to a RANDOM upcoming track, not the next in line.
     // Ungated, for the same reason as the ordered advance below.
@@ -1678,6 +1682,62 @@ function handleEnded(): void {
   ytEngine.pause();
   s.seek(0);
   usePlayerStore.setState({ isPlaying: false, currentTime: 0 });
+}
+
+/**
+ * The outgoing element reached its natural end while a blend owned that
+ * boundary. Do nothing here — the blend is finishing right now, and
+ * `finishTransition` commits the advance.
+ *
+ * THIS IS THE FIX FOR THE RACE THAT MADE CROSSFADE INAUDIBLE.
+ *
+ * A 6s crossfade on a 240s track starts at 234s and its automation finishes at
+ * ~240s — the same instant the outgoing element fires `ended`. `ended` arrives
+ * first (the blend's own completion is polled ~120ms later), and treating it as
+ * "a transition failed" made the old handler:
+ *
+ *   1. cancel the transition mid-flight,
+ *   2. call `resetAllDeckGains()`, which forces the INCOMING deck — already
+ *      playing, mid-fade — back to gain 1, and
+ *   3. advance the queue onto the track AFTER the one that had been fading in.
+ *
+ * The result on every single crossfade was two songs at once, the fading-in one
+ * orphaned at full volume, and the store pointing at a track nobody had heard.
+ * Deferring the event is what makes the blend the authority on its own
+ * boundary; `recoverDeferredAdvance` is the safety net if it then fails.
+ */
+function handleEnded(): void {
+  const t = transition;
+
+  if (t?.running) {
+    t.endedSeen = true;
+    traceTransition("ended-deferred", { mode: t.plan.mode, to: t.track.title });
+    return;
+  }
+  // A crossfade that already committed advanced the queue itself.
+  if (t?.committed) {
+    transition = null;
+    resetAllDeckGains();
+    return;
+  }
+  completeEndedTrack();
+}
+
+/**
+ * Re-run the end-of-track advance that `handleEnded` deferred, when the blend
+ * it was deferred for has been abandoned.
+ *
+ * Guarded twice over: once per transition, and once against the store, because
+ * a manual Next pressed in the meantime may already have advanced normally and
+ * two advances would skip a track.
+ */
+function recoverDeferredAdvance(t: NonNullable<typeof transition>): void {
+  if (t.advanceRecovered) return;
+  t.advanceRecovered = true;
+  const s = usePlayerStore.getState();
+  if (t.outgoingId && s.current && s.current.id !== t.outgoingId) return;
+  traceTransition("recover-deferred-advance", { outgoing: t.outgoingId });
+  completeEndedTrack();
 }
 
 /**
@@ -1791,15 +1851,53 @@ let transition: {
   lastRemaining: number | null;
   /** Set once the incoming element is confirmed audible. */
   committed: boolean;
+  /** True once the incoming element has actually been asked to play. */
+  incomingStarted: boolean;
   /** Track id currently loaded onto the spare deck, if any. */
   preparedFor: string | null;
+  /**
+   * The outgoing track reached its natural end WHILE this blend was running.
+   *
+   * A crossfade ends exactly when the outgoing track does, so `ended` and
+   * "blend finished" land within milliseconds of each other. `ended` arrives
+   * first, and acting on it there cancelled the blend mid-flight. See
+   * `handleEnded`.
+   */
+  endedSeen: boolean;
+  /** The track that was playing when this transition was armed. */
+  outgoingId: string | null;
+  /** The element a blend has already started playing, if any. */
+  incomingEl: HTMLAudioElement | null;
+  incomingSlot: "a" | "b" | null;
+  /** Set once an abandoned blend has recovered its deferred advance. */
+  advanceRecovered: boolean;
 } | null = null;
 
-/** Cancel a pending or running transition and put the decks back to normal. */
+/**
+ * Cancel a pending or running transition and put the decks back to normal.
+ *
+ * If a blend had already started the incoming element, that element is
+ * STOPPED here rather than merely un-faded.
+ *
+ * This matters more than it looks. `resetAllDeckGains()` on its own sets BOTH
+ * decks to unity, so a transition abandoned after `incoming.play()` had already
+ * resolved left the incoming song playing at FULL VOLUME alongside the outgoing
+ * one. Every path that cancels mid-blend — seek, Next, clearing the queue,
+ * switching repeat mode, changing the crossfade length — hit that: the listener
+ * got two songs at once and no way to stop the second one.
+ */
 function cancelTransition(why: string): void {
   if (!transition) return;
-  if (why) transition.armed = false;
+  const t = transition;
+  if (why) t.armed = false;
   transition = null;
+  if (t.incomingStarted) {
+    try {
+      t.incomingEl?.pause();
+    } catch {
+      /* ignore */
+    }
+  }
   resetAllDeckGains();
 }
 
@@ -1940,7 +2038,13 @@ function armTransition(reason: TransitionReason, atSeconds: number): void {
     running: false,
     lastRemaining: null,
     committed: false,
+    incomingStarted: false,
     preparedFor: null,
+    endedSeen: false,
+    outgoingId: s.current?.id ?? null,
+    incomingEl: null,
+    incomingSlot: null,
+    advanceRecovered: false,
   };
   // Start buffering the incoming track now if there is time for it to land.
   //
@@ -2032,6 +2136,11 @@ async function maybeRunCrossfade(remaining: number): Promise<void> {
   }
 
   t.running = true;
+  // Recorded BEFORE `play()` so that any cancel from this moment on — seek,
+  // Next, queue clear, repeat change, a settings change — can stop this
+  // element. Once it is audible, "cancel" has to mean "stop", not "un-fade".
+  t.incomingEl = incoming;
+  t.incomingSlot = incomingSlot;
   resetAllDeckGains();
   // Park the INCOMING deck at zero BEFORE asking it to play.
   //
@@ -2068,6 +2177,7 @@ async function maybeRunCrossfade(remaining: number): Promise<void> {
       .catch(() => done(false));
   });
 
+  t.incomingStarted = true;
   if (!started || !transition || transition !== t) {
     // Could not start the incoming track. Put everything back exactly as it
     // was: the current song is still playing and will advance normally.
@@ -2120,7 +2230,14 @@ async function maybeRunCrossfade(remaining: number): Promise<void> {
 
   // The listener may have skipped again mid-fade. Only finish the transition
   // we started if it is still the current one.
-  if (transition !== t || t.committed) return;
+  if (transition !== t || t.committed) {
+    // ...but if the outgoing track's `ended` was DEFERRED for this blend and
+    // the blend is now being abandoned, nobody is left to advance the queue:
+    // that event was swallowed and the outgoing element is already spent.
+    // Without this the listener is left in silence at the end of a track.
+    if (t.endedSeen) recoverDeferredAdvance(t);
+    return;
+  }
   t.committed = true;
   traceTransition("complete", { to: t.track.title, index: t.index });
   finishTransition(t, outgoingSlot);

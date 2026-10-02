@@ -22,7 +22,9 @@ function factoryFn(name) {
 
 const restartCurrent = fn("restartCurrent");
 const togglePlay = factoryFn("togglePlay");
-const handleEnded = fn("handleEnded");
+// The end-of-track advance lives in `completeEndedTrack`; `handleEnded`
+// delegates to it and a deferred blend calls it back.
+const handleEnded = fn("completeEndedTrack");
 const scheduleEffectRetry = factoryFn("scheduleEffectRetry");
 
 describe("repeat one restarts the source that is actually making sound", () => {

@@ -249,9 +249,11 @@ describe("autoplay never surprises a guest with a dialog", () => {
   });
 
   test("handleEnded uses the ungated advance, not the gated one", () => {
-    const at = store.indexOf("function handleEnded");
+    // The advance lives in `completeEndedTrack`, which handleEnded delegates
+    // to; a blend that deferred the boundary calls the same function back.
+    const at = store.indexOf("function completeEndedTrack");
     const body = code(store.slice(at, at + 4000));
-    // The manual advance inside handleEnded must be the ungated one.
+    // The manual advance must be the ungated one.
     expect(body).toMatch(/autoAdvanceToIndex\?\.\(s\.queueIndex \+ 1\)/);
     expect(body).toMatch(/autoAdvanceToIndex\?\.\(0\)/);
     // And it must NOT call the gated playIndex at all.

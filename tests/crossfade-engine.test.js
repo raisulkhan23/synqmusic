@@ -306,10 +306,10 @@ describe("RC6 — gapless is a hand-off, not a zero-length crossfade", () => {
     expect(handoff).toMatch(/incoming\.play\(\)/);
   });
 
-  test("the hand-off runs before handleEnded cancels its own preload", () => {
+  test("the hand-off runs before the end-of-track cancel", () => {
     const ended = playerCode.slice(
-      playerCode.indexOf("function handleEnded"),
-      playerCode.indexOf("function handleEnded") + 700,
+      playerCode.indexOf("function completeEndedTrack"),
+      playerCode.indexOf("function completeEndedTrack") + 2500,
     );
     const handoff = ended.indexOf("tryGaplessHandoff()");
     const cancel = ended.indexOf('cancelTransition("ended")');
@@ -532,7 +532,11 @@ describe("ACCEPTANCE 7 — rapid Next leaves exactly one stream playing", () => 
     expect(run).toMatch(
       /if \(!prepared \|\| !transition \|\| transition !== t\) return;/,
     );
-    expect(run).toMatch(/if \(transition !== t \|\| t\.committed\) return;/);
+    // An abandoned blend that had also swallowed the outgoing track's `ended`
+    // has to hand that boundary back, or the listener is left in silence.
+    expect(run).toMatch(
+      /if \(transition !== t \|\| t\.committed\) \{[\s\S]{0,300}?if \(t\.endedSeen\) recoverDeferredAdvance\(t\);[\s\S]{0,80}?return;/,
+    );
   });
 });
 
@@ -600,10 +604,7 @@ describe("ACCEPTANCE 9 — a next track that will not load", () => {
 
   test("end of track still advances when a transition could not run", () => {
     // The failure path must never be the reason a listener hears nothing.
-    const ended = playerCode.slice(
-      playerCode.indexOf("function handleEnded"),
-      playerCode.indexOf("function handleEnded") + 1200,
-    );
+    const ended = bodyOf(playerCode, "completeEndedTrack");
     expect(ended).toMatch(/cancelTransition\("ended"\);/);
   });
 

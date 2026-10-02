@@ -34,6 +34,37 @@ icon stacked above the word "Install", in a tall lozenge. It is now an
 
 #### Crossfade and gapless playback did not actually work
 
+*(Second pass. A re-audit of the first pass found four more defects, all at
+the transition BOUNDARY — the ~120ms window where the outgoing track's `ended`
+collides with the blend that is finishing.)*
+
+7. **The outgoing track's `ended` cancelled the blend that owned it.** A 6s
+   crossfade on a 240s track starts at 234s and its automation finishes at
+   ~240s — the same instant the element fires `ended`, which arrives ~120ms
+   *before* the blend's completion poll. The handler read that as "the
+   transition failed" and so cancelled the blend mid-flight, called
+   `resetAllDeckGains()` (forcing the already-playing incoming deck back to
+   gain 1), and advanced the queue onto the track *after* the one fading in.
+   Every crossfade therefore produced two songs at once with the fading-in one
+   orphaned at full volume. A running blend now owns its own boundary: the
+   event is deferred, and recovered if the blend is then abandoned.
+8. **Cancelling a blend left the incoming deck playing.** `resetAllDeckGains()`
+   sets both decks to unity, so a transition abandoned after `incoming.play()`
+   had resolved left the incoming song audible at full volume beside the
+   outgoing one. Every cancel path hit this — seek, Next, clearing the queue,
+   switching repeat mode, changing the crossfade length. Cancel now *stops* the
+   element it started.
+9. **A gapless boundary never recorded the play as completed.** The hand-off
+   returned before `settleEngagement` ran, so the outgoing track's engagement
+   session was settled later against the *next* track's position — a wrong
+   completion percentage and a false "skipped" flag in the recommendation
+   signals.
+10. **"Stop after this song" lost to the gapless hand-off.** The hand-off ran
+    first, so arming the sleep timer with gapless on started the next track
+    instead of stopping.
+
+#### (First pass, for the record)
+
 Audited against the real execution path rather than the settings UI. Six
 defects, two of them fatal. The settings, the toggles and the code that
 *decided* to crossfade were all present and correct the whole time — the

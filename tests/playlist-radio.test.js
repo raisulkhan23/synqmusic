@@ -30,7 +30,9 @@ const playIndex = factoryFn("playIndex");
 const maybeAutofillQueue = factoryFn("maybeAutofillQueue");
 const playlistMixContext = fn("playlistMixContext");
 const saveQueue = fn("saveQueue");
-const handleEnded = fn("handleEnded");
+// The end-of-track advance lives in `completeEndedTrack`; `handleEnded`
+// delegates to it and a deferred blend calls it back.
+const handleEnded = fn("completeEndedTrack");
 
 describe("the store exposes a radio mode", () => {
   test("radio state and actions are part of the public surface", () => {
