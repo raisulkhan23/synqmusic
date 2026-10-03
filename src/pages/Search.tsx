@@ -8,6 +8,7 @@ import { cleanArtistName, type YtItem } from "@/lib/youtube";
 import { usePlayerStore } from "@/store/player";
 import { track as trackEvent } from "@/lib/analytics";
 import { GravitySponsor } from "@/components/ads/GravitySponsor";
+import { detectVersions, versionLabel, buildSuggestions } from "@/lib/searchRelevance";
 import { useAction } from "convex/react";
 import {
   Dices,
@@ -466,35 +467,44 @@ export default function Search() {
       rememberQuery(q);
       trackEvent("search_performed", { query: q.slice(0, 120) });
       const requestPrimary = (attempt: number) => {
-        // Keep the user's category visible in the input, but let the backend
-        // choose multiple relevant artist-backed seeds. Mapping every chip to
-        // one seed made Funk and several other categories look unrelated.
-        const requestQuery = attempt === 1 ? "top songs" : q;
-        searchYt({ query: requestQuery })
-          .then(({ items }) => {
+        // The user's query goes to the backend VERBATIM, always. An earlier
+        // version silently retried with the generic query "top songs" whenever
+        // a specific search came back empty — which is exactly how unrelated
+        // popular tracks ended up on screen for a precise query like "we dont
+        // talk anymore". The fallback is now a genuine relaxation of THIS
+        // query, never a different one.
+        searchYt({ query: q })
+          .then(({ items, failed }) => {
             if (cancelled) return;
-            if (items.length === 0 && attempt < 2) {
-              retryTimer = window.setTimeout(
-                () => requestPrimary(attempt + 1),
-                attempt === 0 ? 300 : 500,
-              );
+            if (items.length > 0) {
+              finish(items, false);
               return;
             }
-            setYtResults(items);
-            setSearching(false);
-            trackEvent("search_results", {
-              query: q.slice(0, 120),
-              result_count: items.length,
-              used_fallback: requestQuery !== q,
-            });
+            // The backend could not reach its sources. Saying "no results"
+            // here would be a lie: nothing was actually searched.
+            if (failed) {
+              setYtResults([]);
+              setSearching(false);
+              setSearchError(
+                "We couldn't reach our music sources just now, so this isn't a real answer about your search. Usually temporary — try again in a moment.",
+              );
+              trackEvent("search_results", {
+                query: q.slice(0, 120),
+                result_count: 0,
+                failed: true,
+              });
+              return;
+            }
+            // Answered, and genuinely nothing matched. The backend has already
+            // relaxed progressively over the pool it fetched, so there is
+            // nothing further to try here — show the honest empty state
+            // rather than substituting unrelated content.
+            finish([], false);
           })
           .catch(() => {
             if (cancelled) return;
-            if (attempt < 2) {
-              retryTimer = window.setTimeout(
-                () => requestPrimary(attempt + 1),
-                attempt === 0 ? 300 : 500,
-              );
+            if (attempt < 1) {
+              retryTimer = window.setTimeout(() => requestPrimary(attempt + 1), 400);
               return;
             }
             setYtResults([]);
@@ -503,6 +513,16 @@ export default function Search() {
               "Couldn't reach our music sources right now. Try again in a moment.",
             );
           });
+      };
+      const finish = (items: YtItem[], usedRelaxed: boolean) => {
+        if (cancelled) return;
+        setYtResults(items);
+        setSearching(false);
+        trackEvent("search_results", {
+          query: q.slice(0, 120),
+          result_count: items.length,
+          used_fallback: usedRelaxed,
+        });
       };
       requestPrimary(0);
       // The original query is sent unchanged. The backend derives its own
@@ -527,7 +547,13 @@ export default function Search() {
       };
     };
     run();
-  }, [debouncedQuery, searchYt, searchLyricVideos, retryKey, rememberQuery]);
+  }, [
+    debouncedQuery,
+    searchYt,
+    searchLyricVideos,
+    retryKey,
+    rememberQuery,
+  ]);
 
   const playRemote = useCallback(
     (item: YtItem) => {
@@ -549,6 +575,26 @@ export default function Search() {
   );
 
   const hasQuery = query.trim().length > 0;
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const [activeSuggestion, setActiveSuggestion] = useState(-1);
+  /**
+   * Type-ahead suggestions drawn from metadata already in memory — loaded
+   * result titles/artists plus this device's search history. Deliberately no
+   * extra request per keystroke: the debounced search below already returns
+   * exactly this metadata a moment later.
+   */
+  const suggestions = useMemo(() => {
+    const typed = query.trim();
+    if (typed.length < 2) return [] as string[];
+    const candidates: string[] = [];
+    for (const item of ytResults ?? []) {
+      candidates.push(item.title);
+      if (item.artist) candidates.push(item.artist);
+    }
+    for (const item of lyricResults ?? []) candidates.push(item.title);
+    for (const entry of searchHistory) candidates.push(entry);
+    return buildSuggestions(typed, candidates, 6);
+  }, [query, ytResults, lyricResults, searchHistory]);
   const [surpriseLoading, setSurpriseLoading] = useState(false);
   const surpriseMe = async () => {
     if (surpriseLoading) return;
@@ -634,7 +680,37 @@ export default function Search() {
         <input
           autoFocus
           value={query}
-          onChange={(e) => applyQuery(e.target.value)}
+          role="combobox"
+          aria-expanded={suggestOpen}
+          aria-controls="synq-search-suggestions"
+          aria-autocomplete="list"
+          onChange={(e) => {
+            setActiveSuggestion(-1);
+            applyQuery(e.target.value);
+          }}
+          onFocus={() => setSuggestOpen(true)}
+          onBlur={() => setSuggestOpen(false)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              setSuggestOpen(false);
+              return;
+            }
+            if (!suggestions.length || !suggestOpen) return;
+            if (e.key === "ArrowDown") {
+              e.preventDefault();
+              setActiveSuggestion((i) => (i + 1) % suggestions.length);
+            } else if (e.key === "ArrowUp") {
+              e.preventDefault();
+              setActiveSuggestion((i) =>
+                i <= 0 ? suggestions.length - 1 : i - 1,
+              );
+            } else if (e.key === "Enter" && activeSuggestion >= 0) {
+              e.preventDefault();
+              const pick = suggestions[activeSuggestion];
+              setSuggestOpen(false);
+              if (pick) applyQuery(pick);
+            }
+          }}
           placeholder="Search a song, artist or album…"
           className="h-12 w-full rounded-full border border-white/10 bg-white/[0.05] pr-12 pl-12 text-[15px] text-foreground placeholder:text-muted-foreground/70 focus:border-[rgb(var(--tint)_/_0.6)] focus:ring-2 focus:ring-[rgb(var(--tint)_/_0.25)] focus:outline-none"
         />
@@ -650,6 +726,39 @@ export default function Search() {
           >
             <X className="size-3.5" />
           </button>
+        )}
+        {/* Suggestions are built from titles/artists already in memory, so
+            they cost no extra request. `onMouseDown` prevents the default so
+            the input does not blur before the click lands. */}
+        {suggestOpen && suggestions.length > 0 && (
+          <ul
+            id="synq-search-suggestions"
+            role="listbox"
+            className="absolute top-full right-0 left-0 z-30 mt-1.5 overflow-hidden rounded-2xl border border-white/10 bg-[rgb(var(--panel))] py-1 shadow-xl backdrop-blur"
+          >
+            {suggestions.map((suggestion, i) => (
+              <li key={suggestion} role="option" aria-selected={i === activeSuggestion}>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    setSuggestOpen(false);
+                    applyQuery(suggestion);
+                  }}
+                  onMouseEnter={() => setActiveSuggestion(i)}
+                  className={cn(
+                    "flex w-full items-center gap-2.5 px-4 py-2 text-left text-sm transition-colors",
+                    i === activeSuggestion
+                      ? "bg-white/[0.08] text-foreground"
+                      : "text-muted-foreground hover:bg-white/[0.05]",
+                  )}
+                >
+                  <SearchIcon className="size-3.5 shrink-0 opacity-60" />
+                  <span className="truncate">{suggestion}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
         )}
       </div>
 
@@ -687,12 +796,16 @@ export default function Search() {
         </>
       ) : (
         <div className="flex flex-col gap-10">
-          {/* Related results */}
           <section>
+            {/* Ranked matches, not "related" content. The old heading told the
+                user these were loosely related when the list is in fact the
+                ordered answer to their exact query. */}
             <div className="mb-2 flex items-center gap-2">
               <Globe className="size-4 text-[rgb(var(--tint))]" />
               <h2 className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
-                Related results
+                {ytResults && ytResults.length > 0
+                  ? `Top matches (${ytResults.length})`
+                  : "Top matches"}
               </h2>
             </div>
 
@@ -727,10 +840,30 @@ export default function Search() {
                 </button>
               </div>
             ) : ytResults !== null && ytResults.length === 0 ? (
-              <p className="rounded-2xl border border-dashed border-white/10 py-10 text-center text-sm text-muted-foreground">
-                No related results for "{query}". Try a different spelling or an
-                artist name.
-              </p>
+              /* An honest empty state. The old one asserted a single cause
+                 ("try a different spelling") for what can be four different
+                 problems, and gave the user no next action. */
+              <div className="flex flex-col items-center gap-4 rounded-2xl border border-dashed border-white/10 px-6 py-12 text-center">
+                <SearchX className="size-8 text-muted-foreground/40" />
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-foreground">
+                    No results for “{query.trim()}”
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    We searched our music catalogue. Try:
+                  </p>
+                </div>
+                <ul className="space-y-1 text-left text-sm text-muted-foreground">
+                  <li>· Check the spelling</li>
+                  <li>· Search the song title on its own</li>
+                  <li>· Try the artist name instead</li>
+                  <li>· Try fewer words</li>
+                  <li>
+                    · Add a version — “live”, “remix”, “cover”, “slowed” or
+                    “lyrics”
+                  </li>
+                </ul>
+              </div>
             ) : (
               <div className="flex flex-col gap-0.5">
                 {/* Contextual sponsor slot: one clearly-labelled card, after
@@ -749,6 +882,14 @@ export default function Search() {
                       item={item}
                       index={i + 1}
                       onPlay={playRemote}
+                      badge={
+                        (() => {
+                          const versions = detectVersions(item.title);
+                          return versions.length > 0
+                            ? versionLabel(versions[0])
+                            : undefined;
+                        })()
+                      }
                     />
                   </div>
                 ))}

@@ -25,6 +25,8 @@ export function RemoteTrackRow({
   trailing,
   /** Optional extra entries rendered inside the overflow menu (e.g. remove from playlist). */
   menuItems,
+  /** Short label shown after the title (e.g. "Live", "Remix", "Lyrics"). */
+  badge,
 }: {
   item: YtItem;
   index: number;
@@ -34,6 +36,8 @@ export function RemoteTrackRow({
   source?: "youtube" | "spotify";
   trailing?: ReactNode;
   menuItems?: ReactNode;
+  /** Short label shown after the title (e.g. "Live", "Remix", "Lyrics"). */
+  badge?: ReactNode;
 }) {
   const currentId = usePlayerStore((s) => s.current?.id);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
@@ -141,6 +145,15 @@ export function RemoteTrackRow({
             )}
           >
             {displayTitle}
+            {/* Version marker ("Live", "Remix", "Lyrics", "Slowed"). Without
+                it every upload of a song reads as the same track, which is
+                precisely why users could not tell the canonical song from a
+                lyric video or a slowed upload. */}
+            {badge ? (
+              <span className="ml-2 align-middle rounded border border-white/10 bg-white/[0.05] px-1.5 py-px text-[10px] font-medium tracking-wide text-muted-foreground">
+                {badge}
+              </span>
+            ) : null}
           </p>
           <p className="mt-0.5 truncate text-xs text-muted-foreground">
             {/* A row's artist has a real page, so it is a link rather than

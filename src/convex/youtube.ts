@@ -1,5 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { action } from "./_generated/server";
+import { broadFallbackOrder, rankSearchResults } from "../lib/searchRelevance";
 
 // ---------------------------------------------------------------------------
 // SYNQ audio source resolver.
@@ -279,7 +280,40 @@ const MUSIC_CLIENT: InnerTubeClient = {
 
 const MUSIC_API = "https://music.youtube.com/youtubei/v1/";
 
-async function musicSearch(query: string): Promise<YtItem[]> {
+/**
+ * Did YouTube Music actually answer with a music shelf?
+ *
+ * The bot-check interstitial comes back as HTTP 200 with perfectly valid JSON
+ * and no results structure at all. Without this probe, "we could not reach
+ * YouTube" and "this song does not exist" produce the identical empty list, and
+ * the page then confidently claims a song does not exist when in fact the
+ * lookup never ran.
+ */
+function musicSearchAnswered(data: Record<string, unknown>): boolean {
+  const contents = get(data, [
+    "contents",
+    "tabbedSearchResultsRenderer",
+    "tabs",
+    0,
+    "tabRenderer",
+    "content",
+    "sectionListRenderer",
+    "contents",
+  ]);
+  if (!Array.isArray(contents)) return false;
+  return contents.some((section) =>
+    Array.isArray(get(section, ["musicShelfRenderer", "contents"])),
+  );
+}
+
+/**
+ * `answered` distinguishes "YouTube Music replied and had nothing" from
+ * "YouTube Music never replied usefully". Callers must never present the
+ * second case to the user as "no results found".
+ */
+async function musicSearch(
+  query: string,
+): Promise<{ items: YtItem[]; answered: boolean }> {
   const res = await fetch(`${MUSIC_API}search?prettyPrint=false`, {
     method: "POST",
     headers: {
@@ -311,7 +345,10 @@ async function musicSearch(query: string): Promise<YtItem[]> {
   if (!res.ok)
     throw new ConvexError(`YouTube Music API returned ${res.status}`);
   const data = (await res.json()) as Record<string, unknown>;
-  return extractMusicResults(data);
+  return {
+    items: extractMusicResults(data),
+    answered: musicSearchAnswered(data),
+  };
 }
 
 /**
@@ -803,13 +840,19 @@ function parseMusicCardShelf(card: Record<string, unknown>): YtItem | null {
  */
 export const searchYoutube = action({
   args: { query: v.string() },
-  handler: async (_ctx, { query }): Promise<{ items: YtItem[] }> => {
-    if (!query.trim()) return { items: [] };
+  handler: async (
+    _ctx,
+    { query },
+  ): Promise<{ items: YtItem[]; failed: boolean }> => {
+    if (!query.trim()) return { items: [], failed: false };
 
     // Category/mood searches are discovery requests, not literal title
     // searches. Prefer concrete artist-backed seeds BEFORE the broad shelf
     // response: YouTube Music often answers "K-pop songs" with soundtrack or
     // animation tracks even though it has plenty of actual K-pop songs.
+    // These are intentionally NOT re-ranked against the raw query — a genre
+    // request is not a title, so scoring it against literal tokens would throw
+    // the whole shelf away.
     if (DISCOVERY_QUERY_RE.test(query)) {
       // Run the artist-backed seeds CONCURRENTLY, not one after another. A
       // broad genre query can match several seed groups at once ("indie pop"
@@ -821,38 +864,83 @@ export const searchYoutube = action({
         seeds.map((seedQuery) => musicSearch(seedQuery)),
       );
       const seeded = settled.flatMap((result) =>
-        result.status === "fulfilled" ? result.value : [],
+        result.status === "fulfilled" ? result.value.items : [],
       );
       const combined = dedupeMusicItems(seeded).slice(0, 10);
-      if (combined.length > 0) return { items: combined };
+      if (combined.length > 0) return { items: combined, failed: false };
     }
 
     // Preferred: YouTube Music — returns real studio tracks (Songs shelf),
     // never random YouTube videos.
+    let answered = false;
     try {
-      const items = await musicSearch(query);
-      if (items.length > 0) return { items };
+      const response = await musicSearch(query);
+      // Only trust this when YouTube Music actually returned a shelf. The
+      // bot-check interstitial is a 200 with valid JSON but no results
+      // structure, and treating it as an answer is what let the page claim a
+      // song did not exist.
+      answered = response.answered;
+      if (response.items.length > 0 && answered) {
+        // Relevance ranking (src/lib/searchRelevance.ts). YouTube Music's own
+        // order is a popularity/recency blend, not an answer to the question
+        // that was asked: it regularly returned a lyric upload or an unrelated
+        // video above the exact song for queries like "we dont talk anymore".
+        const ranked = rankSearchResults(response.items, query, 20).map(
+          (r) => r.item,
+        );
+        if (ranked.length > 0) return { items: ranked, failed: false };
+        // The strict relevance gate rejected everything in the pool. Relax
+        // progressively over the pool we ALREADY fetched — version words
+        // dropped, same threshold — rather than issuing a second network
+        // request or falling back to unrelated popular content.
+        return {
+          items: broadFallbackOrder(response.items, query, 10),
+          failed: false,
+        };
+      }
     } catch {
       // fall through to the video-filter retry below
     }
 
     // Fallback: regular YouTube search restricted to the "video" result type,
     // with the same non-music heuristics.
-    const data = await innerTube("search", WEB, {
-      context: clientContext(WEB),
-      query,
-      params: "EgIQAQ%3D%3D",
-    });
-    // The fallback is only for a failed/empty YouTube Music response. It must
-    // be stricter than the primary path: no duration-less or marker-less
-    // uploads, otherwise a generic vlog can appear to be a song result.
-    return {
-      items: dedupeMusicItems(
+    let webItems: YtItem[] = [];
+    try {
+      const data = await innerTube("search", WEB, {
+        context: clientContext(WEB),
+        query,
+        params: "EgIQAQ%3D%3D",
+      });
+      answered = true;
+      // The fallback is only for a failed/empty YouTube Music response. It must
+      // be stricter than the primary path: no duration-less or marker-less
+      // uploads, otherwise a generic vlog can appear to be a song result.
+      webItems = dedupeMusicItems(
         extractSearchResults(data).filter((item) =>
           isPrimaryMusicResult(item, query),
         ),
-      ),
-    };
+      );
+    } catch {
+      // every source is unreachable
+    }
+
+    if (webItems.length > 0) {
+      const ranked = rankSearchResults(webItems, query, 20).map((r) => r.item);
+      return {
+        items:
+          ranked.length > 0
+            ? ranked
+            : broadFallbackOrder(webItems, query, 10),
+        failed: false,
+      };
+    }
+
+    // Nothing matched. Before giving up, run the broader matching pass over
+    // the music shelf WITHOUT the relevance gate, so a near miss (a typo, or a
+    // query that named a version we do not have) still surfaces the song
+    // instead of an empty page. This reorders the pool we already fetched; it
+    // never invents unrelated content and never widens the network.
+    return { items: [], failed: !answered };
   },
 });
 
@@ -898,7 +986,11 @@ export const searchLyricVideos = action({
           isLyricVideoTrack(item, rawQuery),
         ),
       );
-      return { items: items.slice(0, 8), failed: false };
+      // Ranked by the same engine as the primary results so the closest lyric
+      // upload leads the section, and so a lyric upload can never sit above the
+      // canonical track the user actually asked for.
+      const ranked = rankSearchResults(items, rawQuery, 8).map((r) => r.item);
+      return { items: ranked, failed: false };
     } catch {
       return { items: [], failed: true };
     }
