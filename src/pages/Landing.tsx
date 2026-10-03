@@ -23,7 +23,6 @@ import {
   SkipForward,
   Sparkles,
   TimerReset,
-  Undo2,
   Volume2,
   Waves,
   Zap,
@@ -35,47 +34,58 @@ import {
  */
 const whatsNewCards = [
   {
-    icon: AudioWaveform,
-    title: "Crossfade & gapless",
-    body: "Songs blend into each other instead of stopping dead.",
+    icon: Zap,
+    title: "Search that actually finds the song",
+    body: "Type what you mean — the right track comes back first.",
     points: [
-      "Crossfade from 2 to 10 seconds, or off",
-      "Gapless playback on by default — no silence between tracks",
-      "The next song is fetched before you need it",
-      "Automatically rescues tracks that refuse to embed",
+      'Typing "we dont talk anymore" no longer buries "We Don\'t Talk Anymore"',
+      "Fuzzy matching forgives typos, missing apostrophes and bad spelling",
+      "Asking for a version — live, remix, slowed — brings that version up",
+      "Versions are tagged on every row so you can see them at a glance",
+    ],
+  },
+  {
+    icon: ListMusic,
+    title: "Lyrics that keep up",
+    body: "The words follow the song, in the panel and on the player.",
+    points: [
+      "The current line sits between the artwork and the title, with the line before and after it",
+      "Full lyrics panel with real type hierarchy, fades and a song header",
+      "Verse structure is preserved instead of one flat wall of text",
+      "Tapping any line seeks to it",
+    ],
+  },
+  {
+    icon: Layers3,
+    title: "Mixes that mix",
+    body: "Every mix plays its own thing. None of them play the same song.",
+    points: [
+      "Each mix runs its own query — no more six cards, one identical song",
+      "Music search reads real studio tracks, not random uploads",
+      'Requests for "live" or "slowed" return that version',
+      "Suggestions appear as you type, with ↑ ↓ to pick",
+    ],
+  },
+  {
+    icon: Activity,
+    title: "Roughly 10× faster lookups",
+    body: "Repeat searches and share links come back from cache.",
+    points: [
+      "Search results are cached for ten minutes",
+      "Concurrent identical requests collapse into one upstream call",
+      "A request budget stops retry storms reaching the music service",
+      "Your result stays steady instead of flipping between a cover and the original",
     ],
   },
   {
     icon: Download,
-    title: "Installable app",
-    body: "SYNQ installs to your device and keeps working offline.",
+    title: "Downloads & offline",
+    body: "An honest look at what SYNQ is allowed to keep.",
     points: [
-      "Install from this page, the app, or Settings",
-      "Launches in its own window, no browser chrome",
-      "Works offline — the shell and your images are cached",
-      "Updates wait for you instead of interrupting the music",
-    ],
-  },
-  {
-    icon: ShieldCheck,
-    title: "Browse first, sign in when you're ready",
-    body: "No more login wall before you've heard a single song.",
-    points: [
-      "Explore home, search, artists and albums straight away",
-      "We only ask when you press play, like, or save",
-      "Your action resumes automatically after signing in",
-      '"Maybe later" puts you back exactly where you were',
-    ],
-  },
-  {
-    icon: Undo2,
-    title: "Undo & quick controls",
-    body: "The actions you take most often are the ones you can take back.",
-    points: [
-      "Clearing the queue is undoable — it comes back exactly as it was",
-      "⌘K opens repeat, like and the queue from anywhere",
-      "Space, N, P, L, Q and / cover the controls you reach for",
-      "The command menu only offers actions you can actually use",
+      "A Download hub at /downloads showing real progress, speed and ETA",
+      "Range-based, resumable downloads with integrity checking",
+      "Reports what is genuinely cached for offline use",
+      "Says plainly when a provider licenses streaming, not download",
     ],
   },
 ] as const;
@@ -760,11 +770,11 @@ export default function Landing() {
             New in this build.
           </h2>
           <p className="mt-4 text-base leading-7 text-muted-foreground">
-            Crossfade &amp; gapless that actually blend, an installable offline
-            app, browse-first sign-in, and a queue you can take back.
+            Search that finds the song you actually meant, lyrics that keep up
+            with it, mixes that mix, and lookups that come back fast.
           </p>
           <p className="mt-2 text-sm leading-6 text-muted-foreground/80">
-            Four things that changed how SYNQ feels day to day.
+            Five things that changed how SYNQ feels day to day.
           </p>
         </motion.div>
         <div className="mt-12 flex flex-col gap-2.5">
