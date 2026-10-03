@@ -1,4 +1,3 @@
-import type { AdapterFactory } from "@/lib/downloads";
 import { OpfsSink, opfsSupported } from "@/lib/opfsSink";
 import type {
   DownloadAdapter,
@@ -31,6 +30,28 @@ export class StreamUnavailableError extends Error {
   }
 }
 
+/**
+ * The app's CORS proxy for stream hosts.
+ *
+ * WHY A DOWNLOAD NEEDS THIS AND A NAIVE `fetch` DOES NOT WORK. `resolveStream`
+ * hands back a signed `googlevideo.com` URL, and that host sends NO CORS
+ * headers. The `<audio>` element gets away with it because the player routes
+ * playback through `/audio-proxy` (see `store/player.ts`, `audioProxyBase`).
+ * A `fetch()` from the page is a different matter: the browser blocks the
+ * response before the adapter's probe can even read `Content-Range`, so every
+ * download would fail at the probe with an opaque CORS error and no useful
+ * message. Going through the same proxy the player uses is what makes ranged
+ * GETs possible at all.
+ */
+const audioProxyBase = `${(
+  (import.meta.env.VITE_CONVEX_URL as string) ?? ""
+).replace(".cloud", ".site")}/audio-proxy`;
+
+/** Wrap a raw stream URL in the CORS proxy, as the player does. */
+export function viaAudioProxy(rawUrl: string): string {
+  return `${audioProxyBase}?u=${encodeURIComponent(rawUrl)}`;
+}
+
 /** Resolve a track's stream URL. Returns null when the provider refuses. */
 export async function resolveStreamUrl(
   resolveStream: (args: {
@@ -49,7 +70,7 @@ export async function resolveStreamUrl(
       result.reason ?? "This track can't be streamed right now",
     );
   }
-  return { url: result.url, title: result.title };
+  return { url: viaAudioProxy(result.url), title: result.title };
 }
 
 /**
@@ -152,30 +173,4 @@ function numberHeader(res: Response, name: string): number | null {
   if (!raw) return null;
   const n = Number(raw);
   return Number.isFinite(n) ? n : null;
-}
-
-/**
- * The adapter factory registered with the shared manager.
- *
- * This is the seam that decides whether a download can happen at all. The
- * manager may be constructed on any page; the factory is only bound while a
- * track with a resolvable stream is being downloaded.
- */
-export function bindResolver(
-  resolveStream: (args: {
-    videoId: string;
-    quality?: "high" | "low";
-  }) => Promise<{ url: string | null; title: string; reason?: string }>,
-  track: YtItem,
-  quality: "high" | "low" = "high",
-): AdapterFactory {
-  return async (download: {
-    id: string;
-    filename: string;
-    trackId: string;
-  }) => {
-    const { url, title } = await resolveStreamUrl(resolveStream, track, quality);
-    const filename = download.filename || `${track.artist} - ${title}`;
-    return createTrackAdapter(url, filename, download.id);
-  };
 }
