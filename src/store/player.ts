@@ -72,32 +72,6 @@ import { ConvexClient } from "convex/browser";
 import { toast } from "sonner";
 import { track as trackEvent } from "@/lib/analytics";
 import { useAuthGate, type AuthIntent } from "@/store/authGate";
-import {
-  offlineAudioUrl,
-  removeDownload as forgetDownload,
-} from "@/lib/offlineAudio";
-import { writeOfflineQueue } from "@/lib/offlineLibrary";
-
-/**
- * The object URL currently backing an offline play, and its revoke.
- *
- * An object URL pins its Blob in memory for as long as it exists, so holding
- * one per track without revoking is a slow leak that eventually takes the tab
- * down on a phone. Exactly one is ever live: the previous one is revoked when
- * the next downloaded track takes over.
- */
-let offlineObjectUrl: string | null = null;
-
-function revokeOfflineUrl(): void {
-  if (offlineObjectUrl) {
-    try {
-      URL.revokeObjectURL(offlineObjectUrl);
-    } catch {
-      /* already revoked */
-    }
-    offlineObjectUrl = null;
-  }
-}
 
 /**
  * Resolve a direct audio stream URL for a YouTube video via the Convex
@@ -772,11 +746,6 @@ function saveQueue(
   queueIndex: number,
   currentId: string | null,
 ): void {
-  // Mirror for offline use. `ss.queue` is the app's own restore format; this is
-  // a second, independent copy written so an offline launch has the queue
-  // without depending on that format surviving a schema change. It is written
-  // FIRST because it is the one that must not be lost to the quota write below.
-  writeOfflineQueue(queue);
   try {
     // Keep the CURRENT track plus what follows rather than the head of the
     // list. A radio session appends for as long as it runs, so the head is
@@ -1833,12 +1802,7 @@ function audioElementIsSource(t: Playable | null | undefined): boolean {
     t.audioUrl.includes("piped") ||
     t.audioUrl.includes("odycdn") ||
     // A non-YouTube direct URL (catalog tracks) also plays via the element.
-    (!t.youtubeId && /^https?:\/\//.test(t.audioUrl)) ||
-    // A downloaded track is currently sounding from a blob: object URL, which
-    // is neither http nor "stream". Without this the element would be judged
-    // NOT the active source, and every `onStateChange` / `onTime` handler that
-    // guards on it would ignore the song that is actually playing.
-    t.audioUrl.startsWith("blob:")
+    (!t.youtubeId && /^https?:\/\//.test(t.audioUrl))
   );
 }
 
@@ -3119,7 +3083,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
   };
 
   /** Route loading/playback to the right engine for the given track. */
-  const loadTrack = async (
+  const loadTrack = (
     track: Playable,
     startSeconds?: number,
     /**
@@ -3241,86 +3205,6 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       const audio = getAudio();
       audio.playbackRate = get().rate;
       syncMediaSession(track, true);
-      prefetchTrack(get().queue[get().queueIndex + 1]);
-      maybeAutofillQueue();
-      return;
-    }
-
-    // OFFLINE FIRST. If this track's audio is already on this device, play the
-    // local file and never touch the network — not the stream resolver, not the
-    // YouTube IFrame.
-    //
-    // This has to sit ABOVE every other branch, including the "no audio source"
-    // check below. A downloaded track legitimately has `audioUrl: "stream"`
-    // and would otherwise be sent to the resolver, which needs a network that
-    // is precisely what is missing. Playing the local copy first is also what
-    // makes downloads instant instead of merely possible.
-    //
-    // Deliberately NOT awaited into a race against the network path: a local
-    // read either succeeds or does not exist, and holding up playback to find
-    // out would add latency to every single track change to save it on the
-    // handful that are downloaded.
-    const localUrl = await offlineAudioUrl(track.id);
-    if (localUrl) {
-      revokeOfflineUrl();
-      offlineObjectUrl = localUrl;
-      const localAudio = getAudio();
-      ytEngine.pause();
-      localAudio.pause();
-      // `current` carries the blob: URL so every later decision about WHICH
-      // engine owns the sound (time updates, state changes, the EQ hot swap,
-      // seeking) sees the truth: this song is on the <audio> element.
-      const localTrack: Playable = { ...track, audioUrl: localUrl };
-      set({
-        current: localTrack,
-        currentTime: resumeAt,
-        duration: track.duration,
-        bufferedEnd: 0,
-        isBuffering: false,
-        isPlaying: false,
-        abA: null,
-        abB: null,
-        introTrimSkipped: null,
-      });
-      syncMediaSession(track, true);
-      localAudio.src = localUrl;
-      localAudio.playbackRate = get().rate;
-      watchAudioErrors(localAudio, seq, track.id);
-      localAudio.load();
-      if (resumeAt > 0) {
-        const applyLocalResume = () => {
-          localAudio.currentTime = resumeAt;
-          usePlayerStore.setState({ currentTime: resumeAt });
-        };
-        if (localAudio.readyState >= 1) applyLocalResume();
-        else
-          localAudio.addEventListener("loadedmetadata", applyLocalResume, {
-            once: true,
-          });
-      }
-      void localAudio
-        .play()
-        .then(() => {
-          if (seq !== loadSeq) return;
-          set({ isPlaying: true, isBuffering: false });
-        })
-        .catch((err: unknown) => {
-          if (seq !== loadSeq) return;
-          const name = (err as { name?: string })?.name;
-          if (name === "NotAllowedError" || name === "AbortError") return;
-          // The stored bytes exist but will not play — a truncated download,
-          // or a file the browser cannot decode. Say so instead of leaving a
-          // track that silently never starts.
-          noteTransition(
-            "The saved copy of this song wouldn't play. Removing it and streaming instead.",
-          );
-          void forgetDownload(track.id);
-          usePlayerStore.setState((s) => ({
-            isBuffering: false,
-            isPlaying: false,
-            errorNonce: s.errorNonce + 1,
-          }));
-        });
       prefetchTrack(get().queue[get().queueIndex + 1]);
       maybeAutofillQueue();
       return;
@@ -4320,13 +4204,6 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
   const swapToFilteredStream = (track: Playable, at: number) => {
     const videoId = track.youtubeId;
     if (!videoId) return;
-    // A DOWNLOADED track is already on the <audio> element as a blob: URL, so
-    // there is nothing to swap and nothing to resolve. Reaching the network
-    // here would be the worst possible outcome for an offline listener: they
-    // turn a bass slider, and the song stops and re-resolves from a source
-    // that is not there. The EQ is applied by the graph watching this same
-    // element, so it takes effect on its own.
-    if (offlineObjectUrl && track.audioUrl.startsWith("blob:")) return;
     const seq = ++loadSeq;
     const myFilterSeq = ++filterLoadSeq;
     // Invalidate any other filtered-load in flight so we never end up with two

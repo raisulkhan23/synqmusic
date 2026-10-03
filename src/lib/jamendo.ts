@@ -42,15 +42,6 @@ export interface JamendoTrack {
   /** Direct link to the track on Jamendo — where a listener goes to support
    *  the artist. */
   shareUrl: string;
-  /**
-   * Whether the ARTIST has cleared this track for download.
-   *
-   * Jamendo publishes this per track and an artist can set it to false for any
-   * individual release, so it is carried verbatim rather than assumed from the
-   * fact that the platform is Creative Commons. Defaulting it to true would
-   * store copies an artist did not agree to; see `offlineStore.ts`.
-   */
-  downloadAllowed: boolean;
 }
 
 /** The shape Jamendo actually returns, after the envelope is unwrapped. */
@@ -110,11 +101,6 @@ export function normalizeTrack(raw: RawTrack): JamendoTrack | null {
     licenseUrl: (raw.license_ccurl ?? "").trim(),
     tags,
     shareUrl: (raw.shareurl || raw.shorturl || "").trim(),
-    // Strictly `=== true`. Jamendo sends the string "true"/"false" on some
-    // endpoints and a boolean on others, and anything else — absent, null,
-    // "yes" — is treated as NOT cleared. Failing closed is the only safe
-    // default for a permission flag.
-    downloadAllowed: raw.audiodownload_allowed === true,
   };
 }
 

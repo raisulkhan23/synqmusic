@@ -3,29 +3,10 @@
  * SYNQ service worker.
  *
  * Purpose: make the installed app OPEN and NAVIGATE with no network, and make
- * repeat launches fast.
- *
- * ---------------------------------------------------------------------------
- * OFFLINE AUDIO LIVES SOMEWHERE ELSE, AND THAT IS DELIBERATE
- * ---------------------------------------------------------------------------
- * Downloads are stored by the page, not by this worker — see
- * `src/lib/offlineAudio.ts`. Two reasons, both load-bearing:
- *
- *  1. RIGHTS. SYNQ resolves most audio from YouTube, and those streams are not
- *     licensed for redistribution. Caching one for offline playback would be
- *     making a copy of someone else's copyrighted recording, so the worker
- *     never touches a stream URL. Only audio whose provider explicitly cleared
- *     it for download (Creative Commons tracks, per-track
- *     `audiodownload_allowed`) is ever written to disk.
- *  2. RANGE SEMANTICS. Streaming uses `Range`, and a cached PARTIAL response
- *     replayed as a complete one produces broken playback. Rather than
- *     reimplement partial-response handling here, a download is fetched whole
- *     and stored as one complete response; the <audio> element then seeks
- *     inside it using its own buffered ranges and never issues a Range request
- *     against the cache.
- *
- * So this worker's job is the SHELL: the code, the styles and the artwork that
- * make the app usable while the network is away. The music is the page's job.
+ * repeat launches fast. It deliberately does NOT try to make music work
+ * offline — SYNQ streams from YouTube and has no offline-audio rights or
+ * mechanism, so pretending otherwise would be the exact "fake feature" this
+ * project avoids.
  *
  * ---------------------------------------------------------------------------
  * What is NEVER cached (and why)
@@ -37,11 +18,10 @@
  *    playlists, history, likes or recommendations to user B on a shared
  *    device. Every non-GET and every cross-origin request is passed straight
  *    through, untouched.
- *  - Range requests. See above.
+ *  - Range requests. Audio/video streaming uses `Range`; a cached partial
+ *    response replayed as a full one produces broken playback, so any request
+ *    carrying a Range header bypasses the cache entirely.
  *  - /audio-proxy and anything under an API path.
- *  - The downloads cache. `synq-audio` is written and read by the page under a
- *    `/__offline__/track/` prefix; this worker deliberately does not manage it,
- *    so an old worker version can never evict or overwrite a stored track.
  *
  * ---------------------------------------------------------------------------
  * Cache strategies
@@ -63,17 +43,6 @@ const SHELL_CACHE = `synq-shell-${VERSION}`;
 const ASSET_CACHE = `synq-assets-${VERSION}`;
 const IMAGE_CACHE = `synq-images-${VERSION}`;
 const CACHE_NAMES = [SHELL_CACHE, ASSET_CACHE, IMAGE_CACHE];
-
-/**
- * Caches this worker must NEVER delete, whatever their name.
- *
- * `synq-audio` holds the listener's downloads. It was previously swept up by
- * the `synq-` prefix filter below, which meant every app update silently
- * deleted every downloaded track — the worst possible outcome for a feature
- * whose entire purpose is surviving being away, and one that looked like it
- * worked perfectly until it did not.
- */
-const PROTECTED_CACHES = ["synq-audio"];
 
 /**
  * The precache list is deliberately tiny. SYNQ's JS bundle is large, and
@@ -104,16 +73,7 @@ const BYPASS_HOSTS = [
 ];
 
 /** Path fragments that must never be cached, even on our own origin. */
-const BYPASS_PATHS = [
-  "/api/",
-  "/audio-proxy",
-  "/.convex",
-  "/socket",
-  // Downloaded audio. Written and read by the page, never by this worker — see
-  // the header. Keeping it out of the fetch handler guarantees that no worker
-  // version can serve, evict or corrupt a stored track.
-  "/__offline__/",
-];
+const BYPASS_PATHS = ["/api/", "/audio-proxy", "/.convex", "/socket"];
 
 /** Cap the image cache so long sessions cannot grow it without bound. */
 const MAX_IMAGE_ENTRIES = 220;
@@ -226,12 +186,7 @@ self.addEventListener("activate", (event) => {
       const names = await caches.keys();
       await Promise.all(
         names
-          .filter(
-            (n) =>
-              n.startsWith("synq-") &&
-              !CACHE_NAMES.includes(n) &&
-              !PROTECTED_CACHES.includes(n),
-          )
+          .filter((n) => n.startsWith("synq-") && !CACHE_NAMES.includes(n))
           .map((n) => caches.delete(n)),
       );
       await self.clients.claim();
