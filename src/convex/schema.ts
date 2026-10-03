@@ -381,6 +381,25 @@ const schema = defineSchema(
       missing: v.boolean(),
       fetchedAt: v.number(),
     }).index("byKey", ["key"]),
+
+    // Provider metadata cache. YouTube/InnerTube lookups were previously made
+    // on every single request — two searches for the same query in a row, or a
+    // re-render that re-resolves a stream, each cost a full network round trip
+    // against a rate-limited upstream. `key` is an opaque hash of
+    // (provider, endpoint, normalised args) so no credential ever reaches a
+    // row, and `expiresAt` is enforced on read.
+    providerCache: defineTable({
+      key: v.string(),
+      /** Opaque normalised payload. Never a token or a long-lived stream URL. */
+      value: v.any(),
+      /** Which provider produced this — kept for debugging and fallback logs. */
+      provider: v.string(),
+      fetchedAt: v.number(),
+      expiresAt: v.number(),
+    })
+      .index("byKey", ["key"])
+      // Lets `cachePrune` delete expired rows without scanning the whole table.
+      .index("byExpiry", ["expiresAt"]),
   },
   {
     schemaValidation: false,

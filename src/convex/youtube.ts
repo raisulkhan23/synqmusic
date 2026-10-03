@@ -1,5 +1,12 @@
 import { ConvexError, v } from "convex/values";
 import { action } from "./_generated/server";
+import { api, internal } from "./_generated/api";
+import {
+  TTL,
+  cacheKey,
+  dedupeRequest,
+  takeRateSlot,
+} from "./providerCache";
 import {
   MIN_POOL_COVERAGE,
   bestPoolCoverage,
@@ -899,7 +906,66 @@ function parseMusicCardShelf(card: Record<string, unknown>): YtItem | null {
  * Search YouTube for music. Uses the YouTube Music endpoint so ONLY music
  * tracks are ever returned — no podcasts, vlogs, mixes, or other videos.
  */
+/**
+ * Cached, deduplicated, rate-limited entry point for music search. Callers use
+ * this; `searchYoutubeDirect` below is the worker it wraps.
+ *
+ *  - CACHE: two searches for one query, a re-render, or backing into a result
+ *    already seen each cost a full InnerTube round trip against an upstream
+ *    that rate limits by datacenter IP.
+ *  - DEDUPE: concurrent identical queries collapse to one upstream call, so
+ *    strict-mode double effects and double taps cannot double the load.
+ *  - RATE BUDGET: a retry storm is refused locally, not forwarded.
+ *
+ * The cache returns exactly the value that was returned when the row was
+ * written — it does not recompute. InnerTube's own response is not
+ * deterministic between identical calls (shelves come back with different
+ * contents), so a cached result can differ from a fresh one. That is the
+ * accepted trade for a ten-minute metadata cache, and it is why the TTL is
+ * short.
+ *
+ * `failed` is cached alongside `items` so a caller can never read a stale
+ * empty list as a real "no results"; failures are cached for a minute, long
+ * enough to stop a dead upstream being hammered, short enough that the error
+ * clears promptly.
+ */
 export const searchYoutube = action({
+  args: { query: v.string() },
+  handler: async (
+    ctx,
+    { query },
+  ): Promise<{ items: YtItem[]; failed: boolean }> => {
+    const q = query.trim();
+    if (!q) return { items: [], failed: false };
+
+    const key = cacheKey("youtube", "search", { query: q.toLowerCase() });
+
+    const cached = await ctx.runQuery(api.providerCache.cacheGet, { key });
+    if (cached) return cached.value as { items: YtItem[]; failed: boolean };
+
+    const slot = takeRateSlot("youtube:search");
+    if (!slot.allowed) {
+      // A genuine "we could not answer", so it reports `failed`. Returning
+      // empty items with failed:false would read as "no such song exists".
+      return { items: [], failed: true };
+    }
+
+    const result = await dedupeRequest(key, () =>
+      ctx.runAction(api.youtube.searchYoutubeDirect, { query: q }),
+    );
+
+    await ctx.runMutation(internal.providerCache.cachePut, {
+      key,
+      value: result,
+      provider: "youtube",
+      ttlSeconds: result.failed ? 60 : TTL.search,
+    });
+
+    return result;
+  },
+});
+
+export const searchYoutubeDirect = action({
   args: { query: v.string() },
   handler: async (
     _ctx,
