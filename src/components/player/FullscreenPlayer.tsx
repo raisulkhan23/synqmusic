@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { useAction } from "convex/react";
+
 import { useNavigate } from "react-router";
 import { SeekBar } from "@/components/player/SeekBar";
 import { TransportControls } from "@/components/player/TransportControls";
+import { useTrackLyrics } from "@/components/player/useTrackLyrics";
 import { VisualizerCanvas } from "@/components/player/VisualizerCanvas";
 import { VolumeControl } from "@/components/player/VolumeControl";
 import {
@@ -14,7 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { api } from "@/convex/_generated/api";
+
 import { formatTime } from "@/lib/format";
 import {
   createCursorTrail,
@@ -144,127 +145,31 @@ function SleepTimerButton() {
 
 const RATES = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
-/**
- * YouTube titles/channel names don't match lyrics databases directly — strip
- * the noise ("(Official Video)", "- Topic", "VEVO", ...) before lookup.
- */
-function cleanLyricsQuery(raw: string): string {
-  return raw
-    .replace(/\s*[-–]\s*(Topic|VEVO|Official)\s*$/i, "")
-    .replace(
-      /\s*\([^)]*(official|video|audio|lyrics|hd|hq|mv|visualizer|remaster|lyric)[^)]*\)/gi,
-      "",
-    )
-    .replace(
-      /\s*\[[^\]]*(official|video|audio|lyrics|hd|hq|mv|visualizer|remaster|lyric)[^\]]*\]/gi,
-      "",
-    )
-    .replace(/\s*【[^】]*】/g, "")
-    .replace(/\s{2,}/g, " ")
-    .trim();
-}
-
 // ---------------------------------------------------------------------------
 
 /** Synced-lyrics panel with auto-scroll + click-to-seek. */
-function LyricsPanel({ onClose }: { onClose: () => void }) {
+function LyricsPanel({
+  onClose,
+  lines,
+  synced,
+  loading,
+  activeIndex,
+  containerRef,
+}: {
+  onClose: () => void;
+  lines: { t: number; text: string; blank?: boolean }[] | null;
+  synced: boolean;
+  loading: boolean;
+  activeIndex: number;
+  containerRef: React.RefObject<HTMLDivElement | null>;
+}) {
   const current = usePlayerStore((s) => s.current);
-  const currentTime = usePlayerStore((s) => s.currentTime);
   const seek = usePlayerStore((s) => s.seek);
-  const fetchLyrics = useAction(api.lyrics.fetchLyrics);
-  // `blank` marks a section break (see LyricLine in convex/lyrics.ts). It has
-  // to be part of the local type or the panel cannot render the verse gaps.
-  const [lines, setLines] = useState<
-    { t: number; text: string; blank?: boolean }[] | null
-  >(null);
-  /** False when the lines are guesses spread over the track rather than real
-   *  timings, so the panel can say so instead of pretending to follow along. */
-  const [synced, setSynced] = useState(true);
-  const [loading, setLoading] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
 
-  const key = current
-    ? `${current.title}|${current.artistName}|${current.albumName}`
-    : "";
-
-  // Reset dirty state whenever the tracked key changes — purely derived from
-  // React dependencies, so it's safe to keep this sequence out of the fetch
-  // effect (avoids set-state-inside-effect warnings).
-  useEffect(() => {
-    if (!key) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset when a new track loads
-    setLines(null);
-    // The timings flag belongs to the previous track's result; leaving it
-    // behind would make the next track claim to be unsynced before it loads.
-    setSynced(true);
-    setLoading(true);
-  }, [key]);
-
-  // Fetch lyrics for the tracked track. Re-runs whenever key or the action
-  // changes; cancellations and result overwrites are handled below.
-  useEffect(() => {
-    if (!current) return;
-    let cancelled = false;
-    fetchLyrics({
-      title: cleanLyricsQuery(current.title),
-      artist: cleanLyricsQuery(current.artistName),
-      album: current.albumName
-        ? cleanLyricsQuery(current.albumName)
-        : undefined,
-      duration: current.duration,
-    })
-      .then((res) => {
-        if (!cancelled) {
-          // A cached miss comes back as an empty result rather than null.
-          setLines(res && res.lines.length > 0 ? res.lines : null);
-          setSynced(res?.synced ?? true);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setLines(null);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-    // `key` is the track identity (title|artist|album) and is what makes this
-    // run per song. It was missing from the dependency list, which meant the
-    // panel cleared itself on a track change and then never fetched again:
-    // every song after the first sat on "loading" forever.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetchLyrics, key]);
-
-  // current line index (last line whose t <= currentTime)
-  const activeIndex = useMemo(() => {
-    if (!lines) return -1;
-    let idx = -1;
-    for (let i = 0; i < lines.length; i++) {
-      // A section break is not a lyric: it must never be the highlighted
-      // line, or the panel flashes an empty gap between two words.
-      if (lines[i].blank) continue;
-      if (lines[i].t <= currentTime + 0.2) idx = i;
-      else break;
-    }
-    return idx;
-  }, [lines, currentTime]);
-
-  // auto-scroll active line into view. Skipped for unsynced lyrics: their
-  // timings are guesses spread across the track, so following them would drift
-  // a line at a time through the song and read as broken.
-  useEffect(() => {
-    if (!synced) return;
-    const el = containerRef.current?.querySelector<HTMLElement>(
-      "[data-active='true']",
-    );
-    // Respect the OS motion setting — a smooth scroll every line is exactly
-    // the kind of thing that makes motion-sensitive users ill.
-    const smooth =
-      typeof window === "undefined" ||
-      !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    el?.scrollIntoView({ block: "center", behavior: smooth ? "smooth" : "auto" });
-  }, [activeIndex, synced]);
+  // Fetching, the active-line calculation and the auto-scroll all moved into
+  // `useTrackLyrics`. They used to be private to this panel, which meant the
+  // fullscreen player's now-lyric line would have needed its own copy — two
+  // fetches per track and two answers to "which line is playing".
 
   return (
     <motion.div
@@ -576,6 +481,11 @@ export function FullscreenPlayer() {
   const a = accent ?? { r: 196, g: 246, b: 152 };
 
   const [lyricsOpen, setLyricsOpen] = useState(false);
+  // One lyrics fetch shared by the now-lyric line and the panel. Gated on
+  // `fullscreen` because this component stays mounted at the shell level and
+  // merely renders nothing when closed — ungated, every track change would
+  // fire a lookup for people who never open the player.
+  const lyrics = useTrackLyrics(fullscreen);
   // Tap-to-expand the clamped song title (touch devices have no hover). Storing
   // the track id instead of a boolean means a new track is collapsed for free —
   // no effect needed to reset it.
@@ -1133,6 +1043,47 @@ export function FullscreenPlayer() {
             )}
           </div>
 
+          {/* The line being sung right now, in the dead space between the
+              artwork and the title.
+
+              That gap was ~80px of nothing, and it is the one place on this
+              screen with room to breathe. It is deliberately NOT rendered
+              when there is no line yet (before the first lyric, or a track
+              with no lyrics at all) — an empty placeholder there would just
+              reintroduce the gap it is meant to fill, and a pulsing skeleton
+              would be noise for the many songs that have no lyrics. It is
+              also hidden while the panel is open on a phone, where the panel
+              covers the whole screen anyway and two copies of the same line
+              would be showing at once. */}
+          <div
+            aria-live="off"
+            className={cn(
+              "flex w-full items-start justify-center overflow-hidden",
+              lyricsOpen && "hidden lg:flex",
+            )}
+          >
+            <AnimatePresence mode="wait" initial={false}>
+              {lyrics.activeLine ? (
+                <motion.p
+                  key={lyrics.activeLine}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.28, ease: "easeOut" }}
+                  className={cn(
+                    "line-clamp-2 max-w-[34rem] text-center text-sm leading-snug font-medium text-balance text-foreground/70 sm:text-base",
+                    // Only real timings can be followed; on time-distributed
+                    // guesses the line would jump a phrase at a time and read
+                    // as broken, so those tracks show nothing here.
+                    lyrics.synced && "text-foreground/85",
+                  )}
+                >
+                  {lyrics.activeLine}
+                </motion.p>
+              ) : null}
+            </AnimatePresence>
+          </div>
+
           {/* metadata + controls — slide left alongside the video when the
               lyrics panel is open on desktop */}
           <div
@@ -1371,7 +1322,16 @@ export function FullscreenPlayer() {
         </div>
 
         <AnimatePresence>
-          {lyricsOpen && <LyricsPanel onClose={() => setLyricsOpen(false)} />}
+          {lyricsOpen && (
+            <LyricsPanel
+              onClose={() => setLyricsOpen(false)}
+              lines={lyrics.lines}
+              synced={lyrics.synced}
+              loading={lyrics.loading}
+              activeIndex={lyrics.activeIndex}
+              containerRef={lyrics.containerRef}
+            />
+          )}
         </AnimatePresence>
       </motion.div>
     </AnimatePresence>
