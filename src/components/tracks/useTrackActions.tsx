@@ -18,6 +18,8 @@ import { buildTrackShareUrl } from "@/lib/shareLink";
 import { copyText } from "@/lib/clipboard";
 import { toPlayableYoutube } from "@/lib/playable";
 import { requestTrackDownload } from "@/lib/downloads";
+import { resolveStreamUrl } from "@/lib/trackSource";
+import { useAction } from "convex/react";
 import { cleanArtistName, cleanTrackTitle, type YtItem } from "@/lib/youtube";
 import { usePlayerStore } from "@/store/player";
 import {
@@ -218,6 +220,8 @@ export function TrackActionsMenu({
 }) {
   const actions = useTrackActions(item, source);
   const navigate = useNavigate();
+  const resolveStream = useAction(api.youtube.resolveStream);
+  const trackItem = item;
   const { title } = actions;
 
   return (
@@ -283,15 +287,21 @@ export function TrackActionsMenu({
           <DropdownMenuItem
             className="gap-2"
             onSelect={() => {
-              const result = requestTrackDownload(actions.track);
-              if (result.started) {
-                toast.success("Download started");
-              } else {
-                toast.info(
-                  "This provider licenses streaming, not download — see what's available offline",
+              void (async () => {
+                const result = await requestTrackDownload(actions.track, () =>
+                  resolveStreamUrl(resolveStream, trackItem, "high"),
                 );
-              }
-              navigate("/downloads");
+                if (result.started) {
+                  toast.success("Download started");
+                } else if (result.reason === "unresolved") {
+                  toast.error(
+                    result.detail ?? "Couldn't get a stream for this track",
+                  );
+                } else {
+                  toast.error("This track can't be downloaded right now");
+                }
+                navigate("/downloads");
+              })();
             }}
           >
             <Download className="size-4" />

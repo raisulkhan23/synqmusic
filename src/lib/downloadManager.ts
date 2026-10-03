@@ -294,8 +294,16 @@ export class ResumableDownload {
    * `openStream` is the no-Range fallback. `sink` is the only thing that
    * touches storage.
    */
-  async run(adapter: DownloadAdapter): Promise<void> {
+  async run(adapterSpec: DownloadAdapter | Promise<DownloadAdapter>): Promise<void> {
+    // Claim the slot BEFORE awaiting the adapter. Resolving a stream URL is a
+    // network round trip, and a download left in `queued` across that await
+    // would be picked up a second time by the manager's pump — two runs
+    // writing to one sink.
     this.status = "downloading";
+    // The adapter may be async. Awaiting here means a resolution failure
+    // surfaces as a download failure with a real reason, rather than a
+    // half-started file.
+    const adapter = await adapterSpec;
     try {
       const resumeFrom = await adapter.sink.bytesWritten();
       this.downloadedBytes = resumeFrom;
@@ -612,13 +620,15 @@ export class DownloadManager {
   private running = 0;
   private seq = 0;
   private readonly config: Partial<DownloadConfig>;
-  private readonly adapterFor: (d: ResumableDownload) => DownloadAdapter;
+  private readonly adapterFor: (d: ResumableDownload) => DownloadAdapter | Promise<DownloadAdapter>;
 
   // Parameter properties are not used here: this project compiles with
   // `erasableSyntaxOnly`, which forbids them.
   constructor(
     config: Partial<DownloadConfig> = {},
-    adapterFor: (d: ResumableDownload) => DownloadAdapter,
+    adapterFor: (
+      d: ResumableDownload,
+    ) => DownloadAdapter | Promise<DownloadAdapter>,
   ) {
     this.config = config;
     this.adapterFor = adapterFor;
@@ -685,7 +695,8 @@ export class DownloadManager {
     if (!d) return false;
     d.cancel();
     try {
-      await this.adapterFor(d).sink.discardIncomplete();
+      const adapter = await this.adapterFor(d);
+      await adapter.sink.discardIncomplete();
     } catch {
       // A file that is already gone is the outcome we wanted anyway.
     }

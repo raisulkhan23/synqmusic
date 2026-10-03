@@ -29,7 +29,11 @@ export const DOWNLOAD_CONFIG: Partial<DownloadConfig> = {
   maxFileSize: 512 * 1_048_576,
 };
 
-type AdapterFactory = (download: unknown) => DownloadAdapter;
+export type AdapterFactory = (download: {
+  id: string;
+  filename: string;
+  trackId: string;
+}) => DownloadAdapter | Promise<DownloadAdapter>;
 
 let manager: DownloadManager | null = null;
 let adapterFactory: AdapterFactory | null = null;
@@ -72,34 +76,83 @@ export function downloadsAvailable(): boolean {
 export interface DownloadRequestResult {
   started: boolean;
   /** Why not, when `started` is false. Safe to show to a user. */
-  reason?: "no-source" | "not-downloadable";
+  reason?: "no-source" | "not-downloadable" | "unresolved";
+  /** The provider's own reason, when it gave one. */
+  detail?: string;
+}
+
+/**
+ * Resolved streams, keyed by track id.
+ *
+ * The manager holds ONE adapter factory for the whole app, but each download
+ * needs its own stream URL. Resolving up front and storing it here is what
+ * lets the shared factory hand each download the right one — and it means a
+ * provider refusal surfaces to the user immediately, at press time, instead of
+ * buried in a background transfer failure.
+ */
+const resolved = new Map<string, { url: string; filename: string }>();
+
+/** Called by the registered factory to claim a download's resolved stream. */
+export function takeResolved(trackId: string) {
+  return resolved.get(trackId) ?? null;
+}
+
+/** Forget a resolved stream so a signed URL is not kept around. */
+export function forgetResolved(trackId: string): void {
+  resolved.delete(trackId);
 }
 
 /**
  * Ask for `track` to be downloaded.
  *
- * Returns whether a transfer actually started. Never throws and never fakes
- * success: `started: false` means the caller must tell the user the truth
- * rather than reporting a download that did not begin.
+ * `resolve` performs the provider lookup and returns the stream URL. It is
+ * required because there is no other way to know whether a transfer can
+ * actually start — and returning `started: false` on refusal is the whole
+ * point of this function being honest.
  */
-export function requestTrackDownload(
+export async function requestTrackDownload(
   track: Pick<Playable, "id" | "title" | "artistName">,
+  resolve: () => Promise<{ url: string; filename?: string }>,
   opts: { force?: boolean } = {},
-): DownloadRequestResult {
-  if (!downloadsAvailable()) return { started: false, reason: "no-source" };
+): Promise<DownloadRequestResult> {
+  const existing = getDownloadManager()
+    .list()
+    .find((r) => r.trackId === track.id && r.status !== "failed");
+  if (existing && !opts.force) {
+    // Already queued or downloading: the manager's own guard makes a repeat
+    // press idempotent, so there is nothing to resolve again.
+    return { started: true };
+  }
+
+  let stream: { url: string; filename?: string };
   try {
-    // The manager returns the existing record when the track is already
-    // queued, so a duplicate press is idempotent.
-    const filename = `${track.artistName} - ${track.title}`
-      .replace(/[\\/:*?"<>|]/g, "-")
-      .slice(0, 120);
+    stream = await resolve();
+  } catch (err) {
+    return {
+      started: false,
+      reason: "unresolved",
+      detail: err instanceof Error ? err.message : String(err),
+    };
+  }
+
+  const filename = (stream.filename ?? `${track.artistName} - ${track.title}`)
+    .replace(/[\\/:*?"<>|]/g, "-")
+    .slice(0, 120);
+  resolved.set(track.id, { url: stream.url, filename });
+
+  try {
     getDownloadManager().enqueue({
       trackId: track.id,
       filename,
       force: opts.force,
     });
     return { started: true };
-  } catch {
-    return { started: false, reason: "not-downloadable" };
+  } catch (err) {
+    resolved.delete(track.id);
+    return {
+      started: false,
+      reason: "not-downloadable",
+      detail: err instanceof Error ? err.message : String(err),
+    };
   }
 }

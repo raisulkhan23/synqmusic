@@ -1,7 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePlayerStore } from "@/store/player";
-import { registerDownloadAdapter, getDownloadManager } from "@/lib/downloads";
-import type { DownloadRecord, DownloadAdapter } from "@/lib/downloadManager";
+import {
+  registerDownloadAdapter,
+  getDownloadManager,
+  takeResolved,
+  requestTrackDownload,
+} from "@/lib/downloads";
+import { createTrackAdapter, resolveStreamUrl } from "@/lib/trackSource";
+import { opfsSupported } from "@/lib/opfsSink";
+import { useAction } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { toast } from "sonner";
+import type { DownloadRecord } from "@/lib/downloadManager";
 import { cn } from "@/lib/utils";
 import {
   AlertTriangle,
@@ -25,10 +35,12 @@ import {
  * button calls the real manager. There is no simulated progress and no button
  * that pretends to do something.
  *
- * WHY IT IS CURRENTLY EMPTY, STATED PLAINLY. SYNQ streams its music. Every
- * track it plays comes from a provider that licenses streaming, not bulk
- * download — YouTube's terms do not grant it, and the app has never been given
- * a source that grants it either. The engine underneath is complete (range
+ * HOW IT WORKS. A download resolves the track's stream through the same
+ * resolver the player uses, then pulls it in ranged chunks straight to disk
+ * via the Origin Private File System. Ranges mean a dropped connection
+ * resumes rather than restarts, and writing to disk rather than memory is what
+ * stops a long transfer taking the tab down. The engine underneath is
+ * complete (range
  * requests, resume, integrity validation, pause/cancel/retry — see
  * `lib/downloadManager.ts` and its 77-assertion suite), but an engine with no
  * authorised source behind it has nothing to download.
@@ -82,6 +94,39 @@ export default function DownloadHub() {
   const [online, setOnline] = useState(
     typeof navigator === "undefined" ? true : navigator.onLine,
   );
+  const [starting, setStarting] = useState(false);
+  const resolveStream = useAction(api.youtube.resolveStream);
+
+  /**
+   * Download whatever is playing, resolving its stream first.
+   *
+   * `requestTrackDownload` resolves before it enqueues, so a provider refusal
+   * surfaces here as a real error rather than a download that quietly fails
+   * half a second later.
+   */
+  const downloadCurrent = async () => {
+    if (!current || starting) return;
+    setStarting(true);
+    try {
+      const result = await requestTrackDownload(current, () =>
+        resolveStreamUrl(resolveStream, {
+          id: current.youtubeId ?? current.id,
+          title: current.title,
+          artist: current.artistName,
+          duration: current.duration,
+          thumbnail: current.coverUrl,
+        }),
+      );
+      if (result.started) toast.success("Download started");
+      else if (result.reason === "unresolved")
+        toast.error(result.detail ?? "Couldn't get a stream for this track");
+      else toast.error("This track can't be downloaded right now");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Download failed");
+    } finally {
+      setStarting(false);
+    }
+  };
 
   // One manager for the whole app, not this page. It lives in `lib/downloads`
   // so a track's context menu — which is used on pages where this hub is not
@@ -89,16 +134,21 @@ export default function DownloadHub() {
   const manager = getDownloadManager();
 
   useEffect(() => {
-    // Register the adapter with the shared manager. There is deliberately no
-    // cleanup: the manager outlives this page, and clearing it on unmount
-    // would take downloads away from every other surface.
-    registerDownloadAdapter(
-      // No authorised source is wired in yet. Refusing is the honest answer
-      // and cannot be mistaken for a finished download.
-      (): DownloadAdapter => {
-        throw new Error("No download source is configured");
-      },
-    );
+    // The shared adapter factory. There is deliberately no cleanup: the
+    // manager outlives this page, and clearing it on unmount would take
+    // downloads away from every other surface.
+    //
+    // Each download carries its own resolved stream URL, claimed by track id.
+    // A download with no resolved URL means it was enqueued without going
+    // through `requestTrackDownload`, so refusing is correct — it prevents a
+    // queued record from silently producing an empty file.
+    registerDownloadAdapter((download) => {
+      const stream = takeResolved(download.trackId);
+      if (!stream) {
+        throw new Error("This download has no resolved stream");
+      }
+      return createTrackAdapter(stream.url, stream.filename, download.id);
+    });
   }, []);
 
   useEffect(() => {
@@ -187,12 +237,26 @@ export default function DownloadHub() {
             </div>
             <button
               type="button"
-              disabled
-              title="This provider licenses streaming only, not download"
-              className="flex shrink-0 cursor-not-allowed items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-muted-foreground/60"
+              onClick={() => void downloadCurrent()}
+              disabled={!opfsSupported() || starting}
+              title={
+                opfsSupported()
+                  ? "Save this track to this device"
+                  : "This browser has no filesystem for downloads"
+              }
+              className={cn(
+                "flex shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors",
+                opfsSupported()
+                  ? "border-white/15 bg-white/[0.06] hover:border-[rgb(var(--tint)_/_0.6)] hover:bg-[rgb(var(--tint)_/_0.12)] hover:text-[rgb(var(--tint))]"
+                  : "cursor-not-allowed border-white/10 bg-white/[0.04] text-muted-foreground/50",
+              )}
             >
-              <Download className="size-3.5" />
-              Not available
+              {starting ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Download className="size-3.5" />
+              )}
+              {opfsSupported() ? (starting ? "Starting…" : "Download") : "Unavailable"}
             </button>
           </div>
         ) : (
@@ -220,12 +284,12 @@ export default function DownloadHub() {
             <HardDriveDownload className="size-7 text-muted-foreground/40" />
             <p className="text-sm font-medium">No downloads yet</p>
             <p className="max-w-prose text-sm text-muted-foreground">
-              SYNQ streams music from providers that license streaming, not
-              bulk download. Nothing here is available to save offline, so
-              there is nothing to list. The download engine itself is ready —
-              range requests, resume, and integrity checks are all in place —
-              and starts working the moment a source that grants download
-              rights is connected.
+              Nothing saved yet. Open a track&rsquo;s menu and choose{" "}
+              <span className="text-foreground">Download</span>, or use the
+              button above while something is playing. Transfers use ranged
+              requests, so they resume after an interruption instead of
+              starting over, and they write straight to disk rather than
+              sitting in memory.
             </p>
           </div>
         ) : (
