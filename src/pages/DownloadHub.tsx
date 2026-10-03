@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePlayerStore } from "@/store/player";
+import { noteTrackDownloaded, noteTrackRemoved } from "@/store/player";
 import {
   getDownloadManager,
   requestTrackDownload,
@@ -160,8 +161,22 @@ export default function DownloadHub() {
 
   // Poll the manager rather than holding React state inside it, so the
   // download engine stays a plain, testable object.
+  const announced = useRef(new Set<string>());
+
   useEffect(() => {
-    const tick = () => setRecords(manager.list());
+    const tick = () => {
+      const rows = manager.list();
+      setRecords(rows);
+      // A finished download invalidates the player's cached network URL for
+      // that track. Announcing it here (rather than only on the next play)
+      // means the very next listen reads from disk.
+      for (const r of rows) {
+        if (r.status === "completed" && !announced.current.has(r.trackId)) {
+          announced.current.add(r.trackId);
+          noteTrackDownloaded(r.trackId);
+        }
+      }
+    };
     tick();
     const id = window.setInterval(tick, 500);
     return () => window.clearInterval(id);
@@ -421,6 +436,9 @@ function DownloadButton({
 function StoredDownloads() {
   const [files, setFiles] = useState<StoredFile[]>([]);
   const [ready, setReady] = useState(false);
+  // Ids already handed to the player, so a deleted-then-re-downloaded track
+  // announces itself again rather than being swallowed as a duplicate.
+  const announced = useRef(new Set<string>());
 
   const refresh = useCallback(() => {
     void listStoredDownloads().then((rows) => {
@@ -484,7 +502,15 @@ function StoredDownloads() {
                   type="button"
                   aria-label={`Delete ${filename}`}
                   onClick={() => {
-                    void deleteStoredDownload(file.name).then(refresh);
+                    const { id: trackId } = parseStoredName(file.name);
+                    void deleteStoredDownload(file.name).then(() => {
+                      // Without this the player keeps serving a blob URL for a
+                      // file that no longer exists: silent audio on the next
+                      // play instead of a stream.
+                      noteTrackRemoved(trackId);
+                      announced.current.delete(trackId);
+                      refresh();
+                    });
                   }}
                   className="shrink-0 rounded-full p-2 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
                 >

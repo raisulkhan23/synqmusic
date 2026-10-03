@@ -36,6 +36,11 @@ export function installDownloadAdapter(): void {
       // from quietly producing an empty file reported as a finished download.
       throw new Error("This download has no resolved stream");
     }
-    return createTrackAdapter(stream.url, stream.filename, download.id);
+    // Keyed by TRACK id, not `download.id`. `download.id` is unique per
+    // transfer (`dl_<time>_<seq>`), so a file stored under it could never be
+    // found again by anything looking up "the copy of this track" — which is
+    // exactly what offline playback does. Keying by track id also means
+    // re-downloading overwrites its own copy instead of piling up duplicates.
+    return createTrackAdapter(stream.url, stream.filename, download.trackId);
   });
 }

@@ -57,6 +57,7 @@ import {
   readCardTransparency,
 } from "@/lib/cardTransparency";
 import { toPlayableYoutube, type Playable } from "@/lib/playable";
+import { localAudioUrl } from "@/lib/opfsSink";
 import type { RecoCandidate } from "@/lib/recommend";
 import { DEFAULT_EXPLORATION } from "@/lib/recommend";
 import * as ytEngine from "@/lib/youtubePlayer";
@@ -224,20 +225,98 @@ function resolveWithDeadline(videoId: string): Promise<string | null> {
 
 const ytResolveCache = new Map<string, Promise<string | null>>();
 
+/**
+ * Which tracks have a usable local copy: videoId -> `blob:` url, or `null`
+ * once we have looked and found none.
+ *
+ * `undefined` means "not looked yet". That third state matters: without it,
+ * every play of an undownloaded track would re-stat the OPFS directory, and
+ * the directory grows with every download.
+ */
+const localAudioUrls = new Map<string, string | null>();
+
+/**
+ * Look up a downloaded copy, remember the answer, and resolve to it.
+ *
+ * Returns the `blob:` url when the track is on disk and `null` when it is not,
+ * so `ytResolve` can await the answer instead of guessing. It also de-duplicates
+ * concurrent lookups for the same track, so a prewarm and a play landing at the
+ * same moment do not both stat the directory.
+ */
+const localAudioPending = new Map<string, Promise<string | null>>();
+
+function primeLocalAudio(videoId: string): Promise<string | null> {
+  const existing = localAudioPending.get(videoId);
+  if (existing) return existing;
+  const pending = localAudioUrl(videoId)
+    .then((url) => {
+      localAudioUrls.set(videoId, url);
+      return url;
+    })
+    .catch(() => {
+      localAudioUrls.set(videoId, null);
+      return null;
+    })
+    .finally(() => {
+      localAudioPending.delete(videoId);
+    });
+  localAudioPending.set(videoId, pending);
+  return pending;
+}
+
+/**
+ * Called when a download finishes so the next play of that track goes straight
+ * to disk instead of resolving a stream it already has.
+ */
+export function noteTrackDownloaded(videoId: string): void {
+  localAudioUrls.delete(videoId);
+  // The cached network URL, if any, is now wrong to prefer.
+  ytResolveCache.delete(videoId);
+  void primeLocalAudio(videoId);
+}
+
+/** Called when a download is deleted, so the track streams again. */
+export function noteTrackRemoved(videoId: string): void {
+  localAudioUrls.set(videoId, null);
+  ytResolveCache.delete(videoId);
+}
+
 /** Resolve once per track, then reuse the stream while EQ/effects are adjusted. */
 const ytResolve = (videoId: string): Promise<string | null> => {
-  const cached = getCachedStream(videoId);
-  if (cached) return Promise.resolve(cached);
-  const existing = ytResolveCache.get(videoId);
-  if (existing) return existing;
-
-  const pending = resolveYoutubeStream(videoId).then((url) => {
-    if (url) cacheStream(videoId, url);
-    else ytResolveCache.delete(videoId);
-    return url;
+  // A downloaded copy wins, always.
+  //
+  // This check comes BEFORE the network on purpose. `resolveYoutubeStream`
+  // talks to Convex and can take seconds; when the track is already on disk
+  // that is pure dead time, and offline it fails outright. Checking here —
+  // rather than in `loadTrack` — means every caller benefits at once:
+  // `prepareIncoming` (gapless/crossfade), the EQ re-resolve path, and the
+  // rescue path all route through `ytResolve`.
+  const local = localAudioUrls.get(videoId);
+  if (local !== undefined) {
+    // `null` records "we looked and there is nothing", so a track that is not
+    // downloaded does not re-hit OPFS on every single play.
+    return Promise.resolve(local);
+  }
+  // Never primed yet. This is the NORMAL case on a first play, because
+  // `primeLocalAudio` is fire-and-forget and the OPFS stat has not necessarily
+  // landed by the time we get here. Falling through to the network here meant a
+  // downloaded track ignored its own copy on first play and failed outright
+  // offline. So the lookup is awaited rather than assumed.
+  return primeLocalAudio(videoId).then((url) => {
+    if (url) return url;
+    // Genuinely not on disk: continue down the normal resolution path.
+    const cached = getCachedStream(videoId);
+    if (cached) return cached;
+    const existing = ytResolveCache.get(videoId);
+    if (existing) return existing;
+    const pending = resolveYoutubeStream(videoId).then((resolved) => {
+      if (resolved) cacheStream(videoId, resolved);
+      else ytResolveCache.delete(videoId);
+      return resolved;
+    });
+    ytResolveCache.set(videoId, pending);
+    return pending;
   });
-  ytResolveCache.set(videoId, pending);
-  return pending;
 };
 
 /** Start EQ stream resolution before the user changes a slider. */
@@ -1838,6 +1917,8 @@ function prefetchTrack(track: Playable | undefined): void {
     // the EQ / effect / rescue paths can start the <audio> element on their
     // first frame instead of waiting a network round trip for the resolver.
     // Fire-and-forget: a failure just means the next load resolves normally.
+    // `void`: the lookup is a warm-up, deliberately not awaited here.
+    void primeLocalAudio(track.youtubeId);
     void ytResolve(track.youtubeId).catch(() => undefined);
   }
   if (!track.youtubeId && /^https?:/.test(track.audioUrl)) {
@@ -2263,7 +2344,9 @@ function prepareIncoming(track: Playable): Promise<HTMLAudioElement | null> {
       if (!track.youtubeId) return null;
       url = (await ytResolve(track.youtubeId)) ?? "";
     }
-    if (!url || !/^https?:/.test(url)) return null;
+    // `blob:` is the object URL for a downloaded copy on disk. It is as
+    // playable as any network URL, so the guard has to accept it.
+    if (!url || !/^(https?:|blob:)/.test(url)) return null;
     // The listener may have skipped while this was resolving; do not load a
     // track the queue has moved on from.
     if (transition !== t && t) return null;

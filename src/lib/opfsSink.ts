@@ -244,3 +244,78 @@ export class OpfsSink implements FileSink {
     }
   }
 }
+/**
+ * The stored file for a track, or null when it is not downloaded.
+ *
+ * WHY THE FILE IS NAMED BY TRACK ID. Entries used to be keyed by the manager's
+ * `download.id` (`dl_<time>_<seq>`), which is unique per transfer and therefore
+ * useless for finding "the copy of THIS track". An offline player looks a track
+ * up by its own id, so the storage key has to be the track id. That also makes
+ * re-downloading the same track overwrite its own copy instead of accumulating
+ * near-duplicates under a fresh key.
+ */
+export async function openStoredTrack(trackId: string): Promise<File | null> {
+  if (!opfsSupported() || !trackId) return null;
+  try {
+    const directory = await dir();
+    const names: string[] = [];
+    const iterable = directory as unknown as {
+      entries?: () => AsyncIterableIterator<[string, FileSystemHandle]>;
+    };
+    if (typeof iterable.entries === "function") {
+      for await (const [name] of iterable.entries()) names.push(name);
+    }
+    // The filename half varies (it is the human-readable title), so the track
+    // id prefix is what identifies the file.
+    const match = names.find(
+      (n) => !n.endsWith(".part") && parseName(n).id === trackId,
+    );
+    if (!match) return null;
+    const handle = await directory.getFileHandle(match);
+    const file = await handle.getFile();
+    return file.size > 0 ? file : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A playable `blob:` URL for a downloaded track, or null when there isn't one.
+ *
+ * WHY AN OBJECT URL AND NOT A FILE PATH. The `<audio>` element cannot read an
+ * OPFS path; it needs a URL it can fetch. `URL.createObjectURL(file)` hands it
+ * one that the browser resolves from the file it already holds, with no copy
+ * into JavaScript memory — the audio is streamed from disk by the media engine,
+ * not buffered as an ArrayBuffer.
+ *
+ * Object URLs pin their blob in memory until revoked, so they are cached per
+ * track and revoked when evicted. Without that, every play of a downloaded
+ * track would leak a blob for the life of the tab.
+ */
+const objectUrlCache = new Map<string, string>();
+
+export async function localAudioUrl(trackId: string): Promise<string | null> {
+  if (!opfsSupported() || !trackId) return null;
+  const cached = objectUrlCache.get(trackId);
+  if (cached) return cached;
+  const file = await openStoredTrack(trackId);
+  if (!file) return null;
+  const url = URL.createObjectURL(file);
+  // One cached URL per track keeps seeking and gapless cheap; anything past a
+  // small handful is revoked rather than held, so a long session cannot
+  // accumulate blobs for every track ever played.
+  if (objectUrlCache.size >= 8) {
+    const oldest = objectUrlCache.keys().next().value;
+    if (oldest !== undefined) {
+      URL.revokeObjectURL(objectUrlCache.get(oldest) as string);
+      objectUrlCache.delete(oldest);
+    }
+  }
+  objectUrlCache.set(trackId, url);
+  return url;
+}
+
+/** True when this track has a complete copy on the device. */
+export async function isDownloaded(trackId: string): Promise<boolean> {
+  return (await openStoredTrack(trackId)) !== null;
+}
