@@ -415,6 +415,20 @@ export const fetchLyrics = action({
     const dur = duration && duration > 0 ? duration : 210; // reasonable default
     const candidates = buildCandidates(title, artist);
 
+    // `buildCandidates` drops every candidate with no usable title, so a
+    // blank/whitespace title yields an EMPTY list. The miss path below ended
+    // with `store(candidates[0]!, null)`, which on that empty list
+    // dereferenced `undefined` and threw a TypeError — a hard action failure
+    // instead of the honest "no lyrics" answer. The non-null assertion is
+    // what hid it from the compiler.
+    //
+    // There is also nothing to cache: the key is derived from the title, and
+    // there is no title. So returning here is both correct and cheaper than
+    // spending four provider passes to discover there was never a query.
+    if (candidates.length === 0) {
+      return { lines: [], synced: false, source: "none", missing: true };
+    }
+
     // Cached hits and cached misses both come back immediately.
     for (const candidate of candidates) {
       const cached = await ctx.runQuery(api.lyrics.cacheGet, {
@@ -513,7 +527,11 @@ export const fetchLyrics = action({
       }
     }
 
-    await store(candidates[0]!, null);
+    // `candidates` is guaranteed non-empty by the guard above, but read it
+    // defensively rather than asserting: a crash here would lose the real
+    // miss result the caller is about to receive.
+    const missKey = candidates[0];
+    if (missKey) await store(missKey, null);
     return null;
   },
 });

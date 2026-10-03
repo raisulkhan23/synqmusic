@@ -10,16 +10,33 @@ import { cleanArtistName, type YtItem } from "@/lib/youtube";
  * here invents an identifier: if a name is missing, there is no link.
  */
 
-/** Fold an album title to something two spellings of the same album match on. */
+/**
+ * Fold an album title to something two spellings of the same album match on.
+ *
+ * The descriptor words ("Album", "EP", "Explicit", "Single") are stripped so
+ * "Thriller (Deluxe Edition)" and "Thriller" land on one key — but ONLY while
+ * something survives. An album genuinely titled "EP" or "Album" used to
+ * normalise to the empty string, and the empty string is a perfectly good map
+ * key: every such album by one artist collapsed into a single group, so a
+ * track from "Album" was filed under the EP and an album page served a track
+ * list that was simply wrong. Falling back to the un-stripped form keeps those
+ * albums distinct while still folding the deluxe/remaster variants together.
+ */
 export function normaliseAlbumName(raw: string | null | undefined): string {
   if (!raw) return "";
-  return raw
-    .toLowerCase()
-    .replace(/\((?:deluxe|expanded|remastered)[^)]*\)/g, " ")
-    .replace(/\[[^\]]*\]/g, " ")
-    .replace(/\b(album|ep|explicit|single)\b/g, " ")
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
-    .trim();
+  const squash = (s: string) =>
+    s
+      .replace(/\((?:deluxe|expanded|remastered)[^)]*\)/g, " ")
+      .replace(/\[[^\]]*\]/g, " ")
+      .replace(/[^\p{L}\p{N}]+/gu, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  const base = squash(raw.toLowerCase());
+  if (!base) return "";
+  const withoutDescriptors = squash(
+    base.replace(/\b(album|ep|explicit|single)\b/g, " "),
+  );
+  return withoutDescriptors || base;
 }
 
 /** `/artist/Rick Astley` — a real name or nothing. */
