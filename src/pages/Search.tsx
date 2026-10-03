@@ -307,24 +307,29 @@ function MixCard({ mix }: { mix: (typeof POPULAR_MIXES)[number] }) {
     if (loading) return;
     setLoading(true);
     try {
-      const runSearch = async (candidate: string): Promise<YtItem[]> => {
+      const runSearch = async (candidate: string) => {
         try {
-          return (await searchYt({ query: candidate })).items;
+          return await searchYt({ query: candidate });
         } catch {
-          return [];
+          return { items: [] as YtItem[], failed: true };
         }
       };
-      // Let the backend choose several artist-backed seeds for broad mixes.
-      // Sending only the first seed made every Funk/Rock/etc. card look like
-      // the same single artist instead of a real category mix.
-      const candidates = [...new Set([mix.query, "top songs"])];
-      let items: YtItem[] = [];
-      for (const candidate of candidates) {
-        items = await runSearch(candidate);
-        if (items.length > 0) break;
-      }
+      // Each mix plays ITS OWN query and nothing else.
+      //
+      // This used to retry with the generic query "top songs" whenever the
+      // mix's own query came back empty. That made every broken card converge
+      // on one identical result — which is why unrelated mixes all started
+      // "playing the same song" — and it hid the real reason a mix failed.
+      // The backend already expands a broad mix query into several
+      // artist-backed seeds, so the single query below is the whole request.
+      const response = await runSearch(mix.query);
+      const items = response.items;
       if (items.length === 0) {
-        toast.error("Couldn't load this mix — try again");
+        toast.error(
+          response.failed
+            ? "Couldn't reach our music sources — try again in a moment"
+            : "Couldn't load this mix — try another one",
+        );
         return;
       }
       const queue = items
@@ -613,20 +618,17 @@ export default function Search() {
     try {
       let items: YtItem[] = [];
       let playedQuery = surpriseQuery;
-      // Keep the first search specific to the mood, but fall back to a broad
-      // catalog query so a temporary empty response never leaves the button
-      // appearing to do nothing.
-      for (const candidate of [surpriseQuery, "top songs"]) {
-        try {
-          const result = await searchYt({ query: candidate });
-          if (result.items.length > 0) {
-            items = result.items;
-            playedQuery = candidate;
-            break;
-          }
-        } catch {
-          // Try the next candidate.
+      // Search the chosen mood only. This used to fall back to the generic
+      // query "top songs", which meant "Surprise me" kept picking the same
+      // song and only claimed to be random.
+      try {
+        const result = await searchYt({ query: surpriseQuery });
+        if (result.items.length > 0) {
+          items = result.items;
+          playedQuery = surpriseQuery;
         }
+      } catch {
+        // Fall through to the "no playable results" error below.
       }
       if (items.length === 0) throw new Error("No playable results");
 
