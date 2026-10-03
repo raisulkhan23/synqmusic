@@ -485,7 +485,11 @@ export function FullscreenPlayer() {
   // `fullscreen` because this component stays mounted at the shell level and
   // merely renders nothing when closed — ungated, every track change would
   // fire a lookup for people who never open the player.
-  const lyrics = useTrackLyrics(fullscreen);
+  // `lyricsOpen` is passed so the hook re-centres the panel the moment it
+  // mounts. The panel's scroll container only exists once it is opened, so
+  // without this the open landed at the top of the song and then lurched down
+  // to the current line whenever the next lyric arrived.
+  const lyrics = useTrackLyrics(fullscreen, lyricsOpen);
   // Tap-to-expand the clamped song title (touch devices have no hover). Storing
   // the track id instead of a boolean means a new track is collapsed for free —
   // no effect needed to reset it.
@@ -1046,42 +1050,78 @@ export function FullscreenPlayer() {
           {/* The line being sung right now, in the dead space between the
               artwork and the title.
 
-              That gap was ~80px of nothing, and it is the one place on this
-              screen with room to breathe. It is deliberately NOT rendered
-              when there is no line yet (before the first lyric, or a track
-              with no lyrics at all) — an empty placeholder there would just
-              reintroduce the gap it is meant to fill, and a pulsing skeleton
-              would be noise for the many songs that have no lyrics. It is
-              also hidden while the panel is open on a phone, where the panel
-              covers the whole screen anyway and two copies of the same line
-              would be showing at once. */}
+              Three lines: the one before, the one now, the one after. The
+              neighbours are what make it read as a lyric rather than a
+              caption — and they cost nothing, because the hook already knows
+              which line comes next.
+
+              Spacing is the other half of this. The block sits on its own
+              `my-4` / `my-5` air inside a column that already has `gap-3`,
+              because the first version of this sat directly on top of the
+              song title and the two read as one collided block of text.
+
+              The whole stack is NOT rendered when there is no line yet (before
+              the first lyric, or a track with no lyrics at all) — an empty
+              placeholder would reintroduce the gap it is meant to fill, and a
+              skeleton would be noise on the many songs that have no lyrics.
+              It is also hidden while the panel is open on a phone, where the
+              panel covers the screen and two copies of the same line would
+              be showing at once. */}
           <div
             aria-live="off"
             className={cn(
-              "flex w-full items-start justify-center overflow-hidden",
-              lyricsOpen && "hidden lg:flex",
+              "w-full flex-col items-center overflow-hidden",
+              // One branch, no contradictory utilities fighting each other:
+              // nothing at all without a line; hidden on a phone while the
+              // panel covers the screen; visible everywhere else.
+              !lyrics.activeLine
+                ? "hidden"
+                : lyricsOpen
+                  ? "hidden lg:flex"
+                  : "flex",
+              // Real air above and below, on top of the column's own gap-3.
+              lyrics.activeLine && "my-4 sm:my-5",
             )}
           >
+            {/* Neighbouring lines fade out toward the edges of the stack. */}
+            <p
+              className={cn(
+                "line-clamp-1 w-full max-w-[32rem] text-center text-xs leading-tight text-balance text-foreground/25 sm:text-[13px]",
+                !lyrics.prevLine && "invisible",
+              )}
+            >
+              {lyrics.prevLine}
+            </p>
+
             <AnimatePresence mode="wait" initial={false}>
-              {lyrics.activeLine ? (
-                <motion.p
-                  key={lyrics.activeLine}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.28, ease: "easeOut" }}
-                  className={cn(
-                    "line-clamp-2 max-w-[34rem] text-center text-sm leading-snug font-medium text-balance text-foreground/70 sm:text-base",
-                    // Only real timings can be followed; on time-distributed
-                    // guesses the line would jump a phrase at a time and read
-                    // as broken, so those tracks show nothing here.
-                    lyrics.synced && "text-foreground/85",
-                  )}
-                >
-                  {lyrics.activeLine}
-                </motion.p>
-              ) : null}
+              <motion.p
+                key={lyrics.activeLine}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.28, ease: "easeOut" }}
+                className={cn(
+                  // `my-2` is what separates this from the title below it and
+                  // from its own neighbours above.
+                  "my-2 line-clamp-2 w-full max-w-[34rem] text-center text-[0.95rem] leading-snug font-semibold text-balance sm:text-lg",
+                  // Only real timings can be followed; on time-distributed
+                  // guesses the line jumps a phrase at a time and reads as
+                  // broken, so those tracks never animate here.
+                  lyrics.synced ? "text-foreground/90" : "text-foreground/55",
+                )}
+              >
+                {lyrics.activeLine}
+              </motion.p>
             </AnimatePresence>
+
+            <p
+              className={cn(
+                "line-clamp-1 w-full max-w-[32rem] text-center text-xs leading-tight text-balance text-foreground/25 sm:text-[13px]",
+                !lyrics.nextLine && "invisible",
+              )}
+            >
+              {lyrics.nextLine}
+            </p>
           </div>
 
           {/* metadata + controls — slide left alongside the video when the

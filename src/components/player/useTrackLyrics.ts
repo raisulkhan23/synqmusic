@@ -19,6 +19,9 @@ export interface UseTrackLyrics {
   activeIndex: number;
   /** The text of that line, or "" before the first line is reached. */
   activeLine: string;
+  /** The line before / after it, skipping section breaks. "" at the edges. */
+  prevLine: string;
+  nextLine: string;
   /** Attach to the scrolling panel so the active line can follow along. */
   containerRef: React.RefObject<HTMLDivElement | null>;
 }
@@ -62,7 +65,20 @@ function cleanLyricsQuery(raw: string | null | undefined): string {
  * level and simply renders nothing when closed. Without the gate, every track
  * change would fire a lyrics lookup for users who never open the player at all.
  */
-export function useTrackLyrics(enabled: boolean): UseTrackLyrics {
+export function useTrackLyrics(
+  enabled: boolean,
+  /**
+   * Whether the scrolling panel is currently mounted.
+   *
+   * Needed because the panel only renders once it is opened, so the ref
+   * attaches AFTER the hook's effects for this track already ran. Without
+   * this signal the panel opened scrolled to the top of the song no matter
+   * where playback actually was, and then lurched down to the current line a
+   * few seconds later when the next lyric arrived. That jump-on-open is what
+   * read as the panel "bugging out".
+   */
+  panelOpen = false,
+): UseTrackLyrics {
   const current = usePlayerStore((s) => s.current);
   const currentTime = usePlayerStore((s) => s.currentTime);
   const fetchLyrics = useAction(api.lyrics.fetchLyrics);
@@ -71,6 +87,8 @@ export function useTrackLyrics(enabled: boolean): UseTrackLyrics {
   const [synced, setSynced] = useState(true);
   const [loading, setLoading] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  /** True once the panel has been centred on the active line for this open. */
+  const hasCentredRef = useRef(false);
 
   const key = current
     ? `${current.title}|${current.artistName}|${current.albumName}`
@@ -135,20 +153,61 @@ export function useTrackLyrics(enabled: boolean): UseTrackLyrics {
   const activeLine =
     activeIndex >= 0 && lines ? (lines[activeIndex]?.text ?? "") : "";
 
+  // The lines either side of the current one, for the player's three-line
+  // stack. Section breaks are skipped in both directions: showing an empty
+  // gap where a word should be is worse than showing nothing.
+  const { prevLine, nextLine } = useMemo(() => {
+    if (!lines || activeIndex < 0) return { prevLine: "", nextLine: "" };
+    let p = activeIndex - 1;
+    while (p >= 0 && lines[p]?.blank) p--;
+    let n = activeIndex + 1;
+    while (n < lines.length && lines[n]?.blank) n++;
+    return {
+      prevLine: p >= 0 ? (lines[p]?.text ?? "") : "",
+      nextLine: n < lines.length ? (lines[n]?.text ?? "") : "",
+    };
+  }, [lines, activeIndex]);
+
   // Follow the active line in the scrolling panel. Skipped for unsynced
   // lyrics: their timings are guesses spread across the track, so following
   // them drifts a line at a time through the song and reads as broken.
+  //
+  // The FIRST scroll after the panel opens is instant, not smooth. Opening
+  // the panel mid-song means jumping from the top of the lyrics to the middle
+  // of the song; animating that move is a visible fly-through of a dozen
+  // lines, which is exactly the "it bugged out" lurch. Only the subsequent
+  // line-to-line follow is animated, where a short glide is the point.
   useEffect(() => {
+    if (!panelOpen) {
+      // Re-arm for the next time the panel is opened.
+      hasCentredRef.current = false;
+      return;
+    }
     if (!enabled || !synced) return;
     const el = containerRef.current?.querySelector<HTMLElement>(
       "[data-active='true']",
     );
     if (!el) return;
+    const first = !hasCentredRef.current;
+    hasCentredRef.current = true;
+    if (first) {
+      el.scrollIntoView({ block: "center", behavior: "auto" });
+      return;
+    }
     const smooth =
       typeof window === "undefined" ||
       !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     el.scrollIntoView({ block: "center", behavior: smooth ? "smooth" : "auto" });
-  }, [enabled, activeIndex, synced]);
+  }, [enabled, panelOpen, activeIndex, synced]);
 
-  return { lines, synced, loading, activeIndex, activeLine, containerRef };
+  return {
+    lines,
+    synced,
+    loading,
+    activeIndex,
+    activeLine,
+    prevLine,
+    nextLine,
+    containerRef,
+  };
 }
