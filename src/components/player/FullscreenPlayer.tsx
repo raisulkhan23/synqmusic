@@ -172,9 +172,11 @@ function LyricsPanel({ onClose }: { onClose: () => void }) {
   const currentTime = usePlayerStore((s) => s.currentTime);
   const seek = usePlayerStore((s) => s.seek);
   const fetchLyrics = useAction(api.lyrics.fetchLyrics);
-  const [lines, setLines] = useState<{ t: number; text: string }[] | null>(
-    null,
-  );
+  // `blank` marks a section break (see LyricLine in convex/lyrics.ts). It has
+  // to be part of the local type or the panel cannot render the verse gaps.
+  const [lines, setLines] = useState<
+    { t: number; text: string; blank?: boolean }[] | null
+  >(null);
   /** False when the lines are guesses spread over the track rather than real
    *  timings, so the panel can say so instead of pretending to follow along. */
   const [synced, setSynced] = useState(true);
@@ -239,6 +241,9 @@ function LyricsPanel({ onClose }: { onClose: () => void }) {
     if (!lines) return -1;
     let idx = -1;
     for (let i = 0; i < lines.length; i++) {
+      // A section break is not a lyric: it must never be the highlighted
+      // line, or the panel flashes an empty gap between two words.
+      if (lines[i].blank) continue;
       if (lines[i].t <= currentTime + 0.2) idx = i;
       else break;
     }
@@ -253,7 +258,12 @@ function LyricsPanel({ onClose }: { onClose: () => void }) {
     const el = containerRef.current?.querySelector<HTMLElement>(
       "[data-active='true']",
     );
-    el?.scrollIntoView({ block: "center", behavior: "smooth" });
+    // Respect the OS motion setting — a smooth scroll every line is exactly
+    // the kind of thing that makes motion-sensitive users ill.
+    const smooth =
+      typeof window === "undefined" ||
+      !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    el?.scrollIntoView({ block: "center", behavior: smooth ? "smooth" : "auto" });
   }, [activeIndex, synced]);
 
   return (
@@ -264,30 +274,62 @@ function LyricsPanel({ onClose }: { onClose: () => void }) {
       transition={{ duration: 0.22 }}
       className="fixed inset-y-0 right-0 z-20 flex w-full max-w-md flex-col border-l border-white/[0.07] bg-[#0b0c11]/95 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] backdrop-blur-xl"
     >
-      <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4">
-        <p className="flex items-center gap-2 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
-          <MicVocal className="size-4" />
-          Lyrics
-        </p>
-        {!synced && (
-          <span className="rounded-full border border-white/10 bg-white/[0.05] px-2 py-0.5 text-[10px] text-muted-foreground">
-            No timings — plain lyrics
-          </span>
+      {/* Header carries the song it belongs to. Without it the panel was a
+          column of words with no anchor, and on a queue with a dozen tracks
+          there was no way to tell which song you were reading. */}
+      <div className="relative z-10 shrink-0 border-b border-white/[0.06] bg-[#0b0c11]/85 px-5 pt-4 pb-3.5 backdrop-blur-xl">
+        <div className="flex items-center justify-between gap-3">
+          <p className="flex items-center gap-2 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
+            <MicVocal className="size-4" />
+            Lyrics
+          </p>
+          <div className="flex items-center gap-1.5">
+            {!synced && (
+              <span className="rounded-full border border-white/10 bg-white/[0.05] px-2 py-0.5 text-[10px] whitespace-nowrap text-muted-foreground">
+                No timings
+              </span>
+            )}
+            <button
+              type="button"
+              aria-label="Close lyrics"
+              onClick={onClose}
+              className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+        </div>
+        {current && (
+          <div className="mt-2.5 flex min-w-0 items-center gap-2.5">
+            {current.coverUrl && (
+              <img
+                src={current.coverUrl}
+                alt=""
+                className="size-9 shrink-0 rounded-md object-cover ring-1 ring-white/10"
+              />
+            )}
+            <div className="min-w-0">
+              <p className="truncate text-[13px] leading-tight font-semibold">
+                {current.title}
+              </p>
+              <p className="truncate text-[11px] leading-tight text-muted-foreground">
+                {current.artistName}
+              </p>
+            </div>
+          </div>
         )}
-        <button
-          type="button"
-          aria-label="Close lyrics"
-          onClick={onClose}
-          className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
-        >
-          <X className="size-4" />
-        </button>
       </div>
 
-      <div
-        ref={containerRef}
-        className="min-h-0 flex-1 overflow-y-auto px-6 py-8"
-      >
+      {/* Fade masks: without them lines were guillotined by the panel edges,
+          which is most of what made the column look broken rather than
+          scrollable. */}
+      <div className="relative min-h-0 flex-1">
+        <div
+          ref={containerRef}
+          // `pb-24` clears the 64px bottom fade so the last line can always scroll
+          // fully into view instead of sitting permanently half-dimmed.
+          className="h-full overflow-y-auto px-5 pt-8 pb-24 [scrollbar-width:thin] [scrollbar-color:rgb(255_255_255_/_0.18)_transparent] sm:px-7"
+        >
         {loading ? (
           <div className="flex h-full items-center justify-center">
             <Loader2 className="size-6 animate-spin text-muted-foreground" />
@@ -300,25 +342,69 @@ function LyricsPanel({ onClose }: { onClose: () => void }) {
             </p>
           </div>
         ) : (
-          <div className="flex flex-col gap-3">
-            {lines.map((line, i) => (
-              <button
-                key={`${line.t}-${i}`}
-                type="button"
-                data-active={i === activeIndex}
-                onClick={() => seek(line.t)}
-                className={cn(
-                  "text-left text-lg leading-snug font-semibold transition-all duration-300",
-                  i === activeIndex && synced
-                    ? "scale-[1.02] text-[rgb(var(--tint))]"
-                    : "text-muted-foreground/50 hover:text-foreground",
-                )}
-              >
-                {line.text}
-              </button>
-            ))}
+          <div className="mx-auto w-full max-w-[30rem]">
+            {lines.map((line, i) =>
+              line.blank ? (
+                /* Section break — the verse rhythm the parsers used to throw
+                   away. Not focusable and not seekable: there is nothing there
+                   to play.
+
+                   Only the provider's OWN markers are used. Do not infer breaks
+                   from timing gaps: on real synced lyrics a 3-4s gap is the
+                   ordinary mid-verse cadence (median 2.5s), so a threshold
+                   heuristic cuts holes through the middle of verses. Verified
+                   against "We Don't Talk Anymore" — 19 gaps over 3s, all but two
+                   of them inside a verse, against exactly 2 real markers. */
+                <div
+                  key={`blank-${line.t}-${i}`}
+                  aria-hidden="true"
+                  className="h-5 sm:h-6"
+                />
+              ) : (
+                <button
+                  key={`${line.t}-${i}`}
+                  type="button"
+                  data-active={i === activeIndex}
+                  onClick={() => seek(line.t)}
+                  className={cn(
+                    // A capped measure keeps a long line from running the full
+                    // width of the panel, and the left gutter is where the
+                    // active marker lives so the text never shifts sideways
+                    // when a line becomes active.
+                    "group relative block w-full rounded-r-lg py-[3px] pr-2 pl-5 text-left transition-[color,opacity,transform] duration-500 ease-out",
+                    i === activeIndex && synced
+                      ? "text-[1.15rem] leading-relaxed font-bold text-[rgb(var(--tint))]"
+                      : "text-[0.95rem] leading-relaxed font-medium text-foreground/35 hover:text-foreground/70",
+                  )}
+                >
+                  {/* The old highlight was `scale-[1.02]` in the same colour
+                      as the running text, so the current line barely registered
+                      against a wall of identical rows. An explicit marker plus
+                      a real size/weight step makes it unmissable. */}
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      "absolute top-1/2 left-0 w-[3px] -translate-y-1/2 rounded-full bg-[rgb(var(--tint))] transition-[height,opacity] duration-500",
+                      i === activeIndex && synced
+                        ? "h-6 opacity-100"
+                        : "h-0 opacity-0",
+                    )}
+                  />
+                  {line.text}
+                </button>
+              ),
+            )}
           </div>
         )}
+        </div>
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-0 h-12 bg-gradient-to-b from-[#0b0c11] via-[#0b0c11]/70 to-transparent"
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-[#0b0c11] via-[#0b0c11]/70 to-transparent"
+        />
       </div>
     </motion.div>
   );

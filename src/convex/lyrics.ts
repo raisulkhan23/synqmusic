@@ -6,6 +6,15 @@ export interface LyricLine {
   /** seconds from track start */
   t: number;
   text: string;
+  /**
+   * A section break, not a real line.
+   *
+   * Both parsers used to drop empty lines, which flattened every song into one
+   * undifferentiated wall of text with no verse structure — the single biggest
+   * reason the panel read as a list instead of as lyrics. Blanks are kept as
+   * zero-height-content markers purely so the UI can render the gap.
+   */
+  blank?: boolean;
 }
 
 const UA = { "User-Agent": "SYNQ/1.0 (web player)" };
@@ -36,8 +45,21 @@ function parseLrc(lrc: string): LyricLine[] {
     const t =
       Number(m[1]) * 60 + Number(m[2]) + (m[3] ? Number(`0.${m[3]}`) : 0);
     const text = m[4].trim();
-    if (text) lines.push({ t, text });
+    // A timestamp with no words is a section break in an LRC file. Keeping it
+    // as a blank marker is what gives the panel its verse rhythm.
+    if (!text) {
+      // Leading padding is dropped, and a RUN of blanks collapses to one, or
+      // a sloppy provider's stack of empty timestamps opens a hole in the
+      // middle of a verse. `distributePlain` applies the same two rules.
+      const prev = lines[lines.length - 1];
+      if (lines.length === 0 || prev?.blank) continue;
+      lines.push({ t, text: "", blank: true });
+      continue;
+    }
+    lines.push({ t, text });
   }
+  // Trailing breaks carry no information and just add dead space.
+  while (lines.length > 0 && lines[lines.length - 1].blank) lines.pop();
   return lines;
 }
 
@@ -47,18 +69,30 @@ function parseLrc(lrc: string): LyricLine[] {
  * than "no lyrics found" when only plain text exists).
  */
 function distributePlain(text: string, duration: number): LyricLine[] {
-  const rawLines = text
-    .split("\n")
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0 && !/^\[.*\]$/.test(l)); // skip [Chorus] style tags
+  const kept: string[] = [];
+  for (const raw of text.split("\n")) {
+    const l = raw.trim();
+    // skip [Chorus] style tags
+    if (/^\[.*\]$/.test(l)) continue;
+    // Blank lines survive as section breaks, but a run of them collapses to
+    // one so a sloppy provider can't open a hole in the middle of a verse.
+    if (l.length === 0) {
+      if (kept.length > 0 && kept[kept.length - 1] !== "") kept.push("");
+      continue;
+    }
+    kept.push(l);
+  }
+  while (kept.length > 0 && kept[kept.length - 1] === "") kept.pop();
+  const rawLines = kept;
   if (rawLines.length === 0) return [];
   // Reserve 8% at the end for the outro; spread lines over the rest.
   const usable = duration > 60 ? duration * 0.92 : duration * 0.8;
   const step = usable / rawLines.length;
-  return rawLines.map((text, i) => ({
-    t: Number((i * step).toFixed(2)),
-    text,
-  }));
+  return rawLines.map((text, i) =>
+    text === ""
+      ? { t: Number((i * step).toFixed(2)), text: "", blank: true }
+      : { t: Number((i * step).toFixed(2)), text },
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -484,8 +518,17 @@ export const fetchLyrics = action({
   },
 });
 
+/**
+ * Bump when the *shape* of the cached lines changes, not when a provider
+ * changes. The cache stores parsed lines, so entries written before the
+ * section-break markers existed would keep serving a flat, structureless
+ * lyric for their whole 30-day TTL and the new panel would look broken on
+ * exactly the songs people have already played.
+ */
+const CACHE_SCHEMA_VERSION = "v2";
+
 function cacheKey(candidate: Candidate): string {
-  return `${candidate.title.toLowerCase()}|${candidate.artist.toLowerCase()}`;
+  return `${CACHE_SCHEMA_VERSION}|${candidate.title.toLowerCase()}|${candidate.artist.toLowerCase()}`;
 }
 
 export const cacheGet = query({
