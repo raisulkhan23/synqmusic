@@ -767,34 +767,27 @@ export default function Landing() {
             Four things that changed how SYNQ feels day to day.
           </p>
         </motion.div>
-        <div className="mt-12 grid gap-4 md:grid-cols-2">
-          {whatsNewCards.map(({ icon: Icon, title, body, points }, index) => (
+        <div className="mt-12 flex flex-col gap-2.5">
+          {whatsNewCards.map(({ icon: Icon, title, body }, index) => (
             <motion.div
               key={title}
               {...fadeUp}
               transition={{ ...fadeUp.transition, delay: index * 0.08 }}
-              className="group flex flex-col rounded-2xl border border-white/[0.07] bg-white/[0.03] p-6 transition-all hover:-translate-y-1 hover:border-brand/30 hover:bg-white/[0.05]"
+              className="group flex items-center gap-4 rounded-2xl border border-white/[0.07] bg-white/[0.03] px-5 py-4 transition-colors hover:border-brand/30 hover:bg-white/[0.05]"
             >
               <span className="flex size-10 items-center justify-center rounded-xl bg-brand/12 text-brand ring-1 ring-brand/20 transition-transform group-hover:scale-110">
                 <Icon className="size-5" />
               </span>
-              <h3 className="mt-4 font-display text-lg font-semibold">
+              <h3 className="max-w-full shrink-0 truncate font-display text-base font-semibold sm:text-lg">
                 {title}
               </h3>
-              <p className="mt-1.5 text-sm leading-6 text-muted-foreground">
+              <span
+                aria-hidden
+                className="hidden h-4 w-px shrink-0 bg-white/10 sm:block"
+              />
+              <p className="hidden min-w-0 flex-1 truncate text-sm text-muted-foreground sm:block">
                 {body}
               </p>
-              <ul className="mt-5 flex flex-col gap-2">
-                {points.map((point) => (
-                  <li
-                    key={point}
-                    className="flex items-start gap-2 text-sm leading-6 text-muted-foreground"
-                  >
-                    <Check className="mt-1 size-3.5 shrink-0 text-brand" />
-                    <span>{point}</span>
-                  </li>
-                ))}
-              </ul>
             </motion.div>
           ))}
         </div>
