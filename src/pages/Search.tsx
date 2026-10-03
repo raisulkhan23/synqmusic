@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
-import { JamendoResults } from "@/components/search/JamendoResults";
+
 import { RemoteTrackRow } from "@/components/tracks/RemoteTrackRow";
 import { api } from "@/convex/_generated/api";
 import { toPlayableYoutube } from "@/lib/playable";
@@ -756,10 +756,11 @@ export default function Search() {
             )}
           </section>
 
-          {/* Creative Commons audio — the only results here that play without
-              a YouTube lookup. Self-contained, so it never blocks or delays
-              the YouTube results above. */}
-          <JamendoResults query={debouncedQuery || query} />
+          {/* Jamendo is intentionally NOT rendered here.
+              Creative Commons discovery lives behind the header CC switch,
+              which is server-verified against YouTube's licence field. Jamendo
+              repeated a second licence story, a second empty state and a third
+              silent-empty failure mode underneath the primary results. */}
 
           {/*
             Rendered whenever the lookup has SETTLED — not only when it found
