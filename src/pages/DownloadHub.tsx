@@ -1,11 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePlayerStore } from "@/store/player";
-import { DownloadManager } from "@/lib/downloadManager";
-import type {
-  DownloadRecord,
-  DownloadAdapter,
-  DownloadConfig,
-} from "@/lib/downloadManager";
+import { registerDownloadAdapter, getDownloadManager } from "@/lib/downloads";
+import type { DownloadRecord, DownloadAdapter } from "@/lib/downloadManager";
 import { cn } from "@/lib/utils";
 import {
   AlertTriangle,
@@ -43,12 +39,7 @@ import {
  * which is empty until a provider that grants download rights is connected.
  */
 
-const CONFIG: Partial<DownloadConfig> = {
-  chunkSize: 1_048_576,
-  maxConcurrentRanges: 2,
-  timeoutMs: 30_000,
-  maxFileSize: 512 * 1_048_576,
-};
+
 
 /** Human-readable byte count. */
 function formatBytes(bytes: number): string {
@@ -92,21 +83,23 @@ export default function DownloadHub() {
     typeof navigator === "undefined" ? true : navigator.onLine,
   );
 
-  // One manager for the app's lifetime. A lazy `useState` initialiser is the
-  // React-sanctioned way to build a once-only instance; a `useRef` assigned
-  // during render would drop in-flight downloads on every re-render and is
-  // flagged by `react-hooks/refs` for good reason.
-  const [manager] = useState(
-    () =>
-      new DownloadManager(
-        CONFIG,
-        // No adapter is reachable until an authorised source is wired in.
-        // Throwing is honest: it cannot silently report a fake success.
-        (): DownloadAdapter => {
-          throw new Error("No download source is configured");
-        },
-      ),
-  );
+  // One manager for the whole app, not this page. It lives in `lib/downloads`
+  // so a track's context menu — which is used on pages where this hub is not
+  // mounted — starts transfers into the SAME queue this page renders.
+  const manager = getDownloadManager();
+
+  useEffect(() => {
+    // Register the adapter with the shared manager. There is deliberately no
+    // cleanup: the manager outlives this page, and clearing it on unmount
+    // would take downloads away from every other surface.
+    registerDownloadAdapter(
+      // No authorised source is wired in yet. Refusing is the honest answer
+      // and cannot be mistaken for a finished download.
+      (): DownloadAdapter => {
+        throw new Error("No download source is configured");
+      },
+    );
+  }, []);
 
   useEffect(() => {
     const on = () => setOnline(true);

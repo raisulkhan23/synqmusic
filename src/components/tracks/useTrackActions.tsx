@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -16,9 +17,11 @@ import {
 import { buildTrackShareUrl } from "@/lib/shareLink";
 import { copyText } from "@/lib/clipboard";
 import { toPlayableYoutube } from "@/lib/playable";
+import { requestTrackDownload } from "@/lib/downloads";
 import { cleanArtistName, cleanTrackTitle, type YtItem } from "@/lib/youtube";
 import { usePlayerStore } from "@/store/player";
 import {
+  Download,
   Heart,
   ListEnd,
   ListMusic,
@@ -214,6 +217,7 @@ export function TrackActionsMenu({
   contentClassName?: string;
 }) {
   const actions = useTrackActions(item, source);
+  const navigate = useNavigate();
   const { title } = actions;
 
   return (
@@ -262,6 +266,36 @@ export function TrackActionsMenu({
           >
             <ListMusic className="size-4" />
             Copy song link
+          </DropdownMenuItem>
+          {/*
+            Download.
+
+            This is a real action, not a disabled placeholder. It asks the
+            download hub what it can do with THIS track and then does that:
+            if the source licenses download, the transfer starts and the hub
+            opens showing live progress; if it does not, the user is told the
+            actual reason and taken to the hub, which reports the same truth.
+
+            The alternative — omitting the item until a rights-granting source
+            exists — would leave every track menu looking identical to how it
+            did before downloads existed, with no way to discover the feature.
+          */}
+          <DropdownMenuItem
+            className="gap-2"
+            onSelect={() => {
+              const result = requestTrackDownload(actions.track);
+              if (result.started) {
+                toast.success("Download started");
+              } else {
+                toast.info(
+                  "This provider licenses streaming, not download — see what's available offline",
+                );
+              }
+              navigate("/downloads");
+            }}
+          >
+            <Download className="size-4" />
+            Download
           </DropdownMenuItem>
           <DropdownMenuItem
             className="gap-2"
