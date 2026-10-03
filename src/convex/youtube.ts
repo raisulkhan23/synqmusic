@@ -1,6 +1,11 @@
 import { ConvexError, v } from "convex/values";
 import { action } from "./_generated/server";
-import { broadFallbackOrder, rankSearchResults } from "../lib/searchRelevance";
+import {
+  MIN_POOL_COVERAGE,
+  bestPoolCoverage,
+  broadFallbackOrder,
+  rankSearchResults,
+} from "../lib/searchRelevance";
 
 // ---------------------------------------------------------------------------
 // SYNQ audio source resolver.
@@ -301,9 +306,14 @@ function musicSearchAnswered(data: Record<string, unknown>): boolean {
     "contents",
   ]);
   if (!Array.isArray(contents)) return false;
-  return contents.some((section) =>
-    Array.isArray(get(section, ["musicShelfRenderer", "contents"])),
-  );
+  // A present-but-EMPTY shelf is NOT an answer. This is the exact shape
+  // returned to Convex's egress IP: HTTP 200, valid JSON, a music shelf that
+  // contains zero rows. Treating it as a real answer is what made the page
+  // confidently report "no results found" for songs that do exist.
+  return contents.some((section) => {
+    const shelf = get(section, ["musicShelfRenderer", "contents"]);
+    return Array.isArray(shelf) && shelf.length > 0;
+  });
 }
 
 /**
@@ -510,6 +520,21 @@ const DISCOVERY_SEEDS: Array<[RegExp, string[]]> = [
     /\bnostalgic\b/i,
     ["Fleetwood Mac songs", "The Weeknd songs", "Tame Impala songs"],
   ],
+  // Generic terms that DISCOVERY_QUERY_RE recognises but that had no
+  // artist-backed seeds. Without these, "worldwide music hits" or "viral songs
+  // this week" entered the discovery branch, found zero seeds, then fell
+  // through to a literal search that could never match — so the mix silently
+  // returned nothing.
+  //
+  // These are LAST on purpose. `discoverySeedQueries` round-robins across
+  // matching groups in array order, so a broad term sitting first would win
+  // every round and make unrelated mixes ("electronic…", "retro synth pop…",
+  // "top hits today") all return the SAME artist — the exact
+  // all-mixes-sound-the-same behaviour this list exists to avoid.
+  [/\bviral\b/i, ["Sabrina Carpenter songs", "Chappell Roan songs", "Tate McRae songs"]],
+  [/\bworldwide\b/i, ["Coldplay songs", "Imagine Dragons songs", "OneRepublic songs"]],
+  [/\bacoustic\b/i, ["José González songs", "Iron & Wine songs", "Ben Howard songs"]],
+  [/\bhits?\b/i, ["Hozier songs", "Billie Eilish songs", "Post Malone songs"]],
 ];
 
 /**
@@ -714,11 +739,47 @@ export function parseMusicListItem(
   const artistIndex = typeIndex >= 0 ? typeIndex + 1 : 0;
   const typeRun = typeIndex >= 0 ? metaRuns[typeIndex] : "";
   // The Songs shelf often omits the explicit "Song" metadata run and returns
-  // only [artist, album, duration]. Keep those rows conservative: they are
-  // promoted later only when they carry independent music evidence, while
-  // explicitly non-track rows are always rejected.
-  const kind: "song" | "other" =
-    typeRun === "" || /^(playlist|album|artist|episode)$/i.test(typeRun)
+  // only [artist, album, duration]. Worse, the column the type run is expected
+  // in frequently holds the ALBUM title instead ("Charlie Puth", "Nine Track
+  // Mind", "3:38"), so the text heuristic below cannot see a "Song" marker
+  // and classified every album track as "other" — which `extractMusicResults`
+  // then discarded, leaving YouTube Music search permanently empty.
+  //
+  // `musicVideoType` is the authoritative signal and is what actually
+  // decides this: ATV is an album track, OMV an official music video,
+  // OFFICIAL_SOURCE_MUSIC a topic/audio row. All three ARE songs. UGC rows
+  // (covers, lyric videos, reaction uploads) are not, and the old
+  // promotion path for them stays closed.
+  const musicVideoType = String(
+    get(renderer, [
+      "flexColumns",
+      0,
+      "musicResponsiveListItemFlexColumnRenderer",
+      "text",
+      "runs",
+      0,
+      "navigationEndpoint",
+      "watchEndpoint",
+      "watchEndpointMusicSupportedConfigs",
+      "watchEndpointMusicConfig",
+      "musicVideoType",
+    ]) ??
+    get(renderer, [
+      "navigationEndpoint",
+      "watchEndpoint",
+      "watchEndpointMusicSupportedConfigs",
+      "watchEndpointMusicConfig",
+      "musicVideoType",
+    ]) ??
+    "",
+  );
+  const isCatalogTrack =
+    musicVideoType === "MUSIC_VIDEO_TYPE_ATV" ||
+    musicVideoType === "MUSIC_VIDEO_TYPE_OMV" ||
+    musicVideoType === "MUSIC_VIDEO_TYPE_OFFICIAL_SOURCE_MUSIC";
+  const kind: "song" | "other" = isCatalogTrack
+    ? "song"
+    : typeRun === "" || /^(playlist|album|artist|episode)$/i.test(typeRun)
       ? "other"
       : "song";
   const artist = firstCreatorName(
@@ -853,7 +914,7 @@ export const searchYoutube = action({
     // These are intentionally NOT re-ranked against the raw query — a genre
     // request is not a title, so scoring it against literal tokens would throw
     // the whole shelf away.
-    if (DISCOVERY_QUERY_RE.test(query)) {
+    if (DISCOVERY_QUERY_RE.test(query) && discoverySeedQueries(query).length > 0) {
       // Run the artist-backed seeds CONCURRENTLY, not one after another. A
       // broad genre query can match several seed groups at once ("indie pop"
       // matches both `indie` and `pop`), so the sequential version chained up
@@ -872,15 +933,22 @@ export const searchYoutube = action({
 
     // Preferred: YouTube Music — returns real studio tracks (Songs shelf),
     // never random YouTube videos.
-    let answered = false;
+    //
+    // `catalogAnswered` tracks ONLY the YouTube Music catalogue source. It is
+    // deliberately NOT reset by the video fallback below: the plain web
+    // fallback answers a different question ("what videos exist") and its
+    // results are "[Official Video]" uploads, not a music catalogue. Letting it
+    // clear this flag is what made the page claim a song did not exist while
+    // the real problem was that the catalogue was unreachable.
+    let catalogAnswered = false;
     try {
       const response = await musicSearch(query);
       // Only trust this when YouTube Music actually returned a shelf. The
       // bot-check interstitial is a 200 with valid JSON but no results
       // structure, and treating it as an answer is what let the page claim a
       // song did not exist.
-      answered = response.answered;
-      if (response.items.length > 0 && answered) {
+      catalogAnswered = response.answered;
+      if (response.items.length > 0 && catalogAnswered) {
         // Relevance ranking (src/lib/searchRelevance.ts). YouTube Music's own
         // order is a popularity/recency blend, not an answer to the question
         // that was asked: it regularly returned a lyric upload or an unrelated
@@ -893,10 +961,15 @@ export const searchYoutube = action({
         // progressively over the pool we ALREADY fetched — version words
         // dropped, same threshold — rather than issuing a second network
         // request or falling back to unrelated popular content.
-        return {
-          items: broadFallbackOrder(response.items, query, 10),
-          failed: false,
-        };
+        const relaxed = broadFallbackOrder(response.items, query, 10);
+        if (relaxed.length > 0) return { items: relaxed, failed: false };
+        // Still nothing. A shelf in which not one query word appears anywhere
+        // was never an answer to this query — the source returned a generic
+        // list. Reporting that as "no results found" is the lie that made an
+        // unreachable catalogue look like a song that does not exist.
+        const answeredTheQuestion =
+          bestPoolCoverage(response.items, query) >= MIN_POOL_COVERAGE;
+        return { items: [], failed: !answeredTheQuestion };
       }
     } catch {
       // fall through to the video-filter retry below
@@ -911,7 +984,8 @@ export const searchYoutube = action({
         query,
         params: "EgIQAQ%3D%3D",
       });
-      answered = true;
+      // NOTE: `catalogAnswered` is intentionally left untouched here. See its
+      // declaration above.
       // The fallback is only for a failed/empty YouTube Music response. It must
       // be stricter than the primary path: no duration-less or marker-less
       // uploads, otherwise a generic vlog can appear to be a song result.
@@ -931,16 +1005,15 @@ export const searchYoutube = action({
           ranked.length > 0
             ? ranked
             : broadFallbackOrder(webItems, query, 10),
-        failed: false,
+        // These are playable uploads, but if the catalogue never answered then
+        // this list is not a trustworthy answer to the query and the caller
+        // must say so.
+        failed: !catalogAnswered,
       };
     }
 
-    // Nothing matched. Before giving up, run the broader matching pass over
-    // the music shelf WITHOUT the relevance gate, so a near miss (a typo, or a
-    // query that named a version we do not have) still surfaces the song
-    // instead of an empty page. This reorders the pool we already fetched; it
-    // never invents unrelated content and never widens the network.
-    return { items: [], failed: !answered };
+    // Nothing matched anywhere.
+    return { items: [], failed: !catalogAnswered };
   },
 });
 

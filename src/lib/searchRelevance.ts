@@ -243,13 +243,24 @@ export function primaryVersion(title: string): VersionKind | null {
 }
 
 /**
+ * A featured-artist credit — "(feat. Selena Gomez)", "(ft. L'vibe)" — is a
+ * decoration on the title, not a different song. Removing it matters: without
+ * this, "We Don't Talk Anymore (feat. Selena Gomez)" is NOT an exact title
+ * match for "we dont talk anymore", so every exact-titled cover of the song
+ * outranked the artist's own release. It is removed from the RAW title (before
+ * normalization) because the brackets have to still be intact for this.
+ */
+const FEAT_CREDIT_RE = /[([][^)\]]*\b(?:feat|ft|featuring)\b[^)\]]*[)\]]/gi;
+
+/**
  * Title text with version markers removed — the "canonical core" of a song.
  *
  * Falls back to the unstripped title when stripping would empty it (a title
  * that is nothing but a descriptor still has to be comparable to something).
  */
 export function stripVersions(title: string): string {
-  const normalized = normalizeForMatch(title);
+  const withoutFeat = title.replace(FEAT_CREDIT_RE, " ");
+  const normalized = normalizeForMatch(withoutFeat);
   const stripped = normalized
     .replace(ALL_VERSION_PATTERN, " ")
     .replace(/\s+/g, " ")
@@ -381,6 +392,12 @@ const TIER_SCORE: Record<number, number> = {
  * shares a single common word ("we", "the", "talk") from being displayed.
  */
 export const MIN_RELEVANCE = 90;
+
+/**
+ * Below this much token coverage anywhere in a pool, the pool was not an
+ * answer to the query — see `bestPoolCoverage`.
+ */
+export const MIN_POOL_COVERAGE = 0.25;
 
 /** A title must account for at least this much of the query to count as
  *  "the query is contained in / contains the title" at tier 2. Without it,
@@ -728,6 +745,42 @@ export function broadFallbackOrder<T extends RankableItem>(
   return sortScored(relaxedScored)
     .slice(0, limit)
     .map((entry) => entry.item);
+}
+
+/**
+ * Best token coverage found anywhere in a result pool.
+ *
+ * Used to tell two very different situations apart, which look identical
+ * from the outside — both surface as "no results":
+ *
+ *   1. The catalogue genuinely has no such song.
+ *   2. The source never really answered and returned a generic shelf.
+ *
+ * A shelf in which not even ONE query word appears anywhere is not an answer
+ * to that query. This measures that without knowing anything about the song.
+ * General, and not tied to any particular query.
+ */
+export function bestPoolCoverage(
+  items: readonly RankableItem[],
+  rawQuery: string,
+): number {
+  const parsed = parseQuery(rawQuery);
+  if (parsed.coreTokens.length === 0) return 1;
+  let best = 0;
+  for (const item of items) {
+    const titleCore = stripVersions(item.title);
+    const titleTokens = titleCore.length ? titleCore.split(" ") : [];
+    const artistTokens = normalizeForMatch(item.artist)
+      .split(" ")
+      .filter(Boolean);
+    const { covered } = coverageOf(
+      parsed.coreTokens,
+      titleTokens.concat(artistTokens),
+      true,
+    );
+    best = Math.max(best, covered / parsed.coreTokens.length);
+  }
+  return best;
 }
 
 // ---------------------------------------------------------------------------

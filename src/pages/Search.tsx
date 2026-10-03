@@ -481,23 +481,26 @@ export default function Search() {
         searchYt({ query: q })
           .then(({ items, failed }) => {
             if (cancelled) return;
-            if (items.length > 0) {
-              finish(items, false);
-              return;
-            }
-            // The backend could not reach its sources. Saying "no results"
-            // here would be a lie: nothing was actually searched.
+            // `failed` is checked FIRST, deliberately. When the music
+            // catalogue is unreachable the backend may still return generic
+            // "[Official Video]" uploads from the video fallback; showing
+            // those as "Top matches" is exactly the wrong-answer behaviour
+            // this ranking pass exists to stop.
             if (failed) {
               setYtResults([]);
               setSearching(false);
               setSearchError(
-                "We couldn't reach our music sources just now, so this isn't a real answer about your search. Usually temporary — try again in a moment.",
+                "We couldn't reach our music catalogue just now, so this isn't a real answer about your search. Usually temporary — try again in a moment.",
               );
               trackEvent("search_results", {
                 query: q.slice(0, 120),
                 result_count: 0,
                 failed: true,
               });
+              return;
+            }
+            if (items.length > 0) {
+              finish(items, false);
               return;
             }
             // Answered, and genuinely nothing matched. The backend has already
