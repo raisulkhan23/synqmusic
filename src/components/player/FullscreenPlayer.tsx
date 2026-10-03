@@ -1086,6 +1086,13 @@ export function FullscreenPlayer() {
                   : "flex",
               // Real air above and below, on top of the column's own gap-3.
               lyrics.activeLine && "my-4 sm:my-5",
+              // THE BUG THIS FIXES. The artwork and the metadata block both
+              // reserve the panel's width with `lg:pr-[28rem]` so they slide
+              // left and stay clear of it. This stack was missing that, so
+              // when the panel opened it stayed centred across the FULL
+              // viewport — putting the lyrics behind the panel while the
+              // title and the controls correctly moved out from under it.
+              lyricsOpen && "lg:pr-[28rem]",
             )}
           >
             {/* The neighbours slide as well, so the whole stack drifts upward on the
