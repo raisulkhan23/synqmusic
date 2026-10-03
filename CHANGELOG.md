@@ -34,36 +34,6 @@ icon stacked above the word "Install", in a tall lozenge. It is now an
 `inline-flex` row with `whitespace-nowrap`, slightly roomier padding, and
 `shrink-0` so the strip's long explanatory text cannot squeeze it.
 
-#### Playlist import
-
-- **YouTube Music playlists could not be imported at all.** Not a permissions
-  problem and not a bad link: **YouTube silently changed the shape of its
-  InnerTube browse response**, and the parser was still written against the old
-  one. Measured against the live endpoint, `playlistVideoListRenderer` — the
-  renderer the code looked for — appears **zero times**, while
-  `musicResponsiveListItemRenderer` appears 100 times inside a
-  `musicPlaylistShelfRenderer`. The header moved too, from
-  `playlistHeaderRenderer` to `musicResponsiveHeaderRenderer`.
-  The parser therefore found an empty list, produced zero rows, and reported
-  _"That playlist looks private, empty, or unavailable"_ — which is what every
-  listener saw, and which was, for all of them, simply untrue.
-  Both shapes are now read, so a rollback by YouTube will not break it again.
-- **Multi-artist tracks imported as `"ROSÉ, &, Bruno Mars"`.** The artist column
-  is one run per artist plus separators (`" & "`) as runs of their own, so
-  joining them all produced a name matching nothing on YouTube — which then
-  meant the track could never be found when played. Artist runs are now
-  identified by the channel endpoint they carry.
-- **Long playlists stopped at 100 tracks and claimed to be complete.** The music
-  shelf pages through a `continuationItemRenderer` rather than a
-  `continuations` array, so no token was found, no further pages were fetched,
-  and the import was reported as whole.
-- **An unconfigured importer said nothing actionable.** _"An admin needs to add
-  the API credentials for this service"_ is a dead end for a listener. Each
-  importer already declares its own environment variables, so the error now
-  names the exact missing key.
-
-### Fixed — transitions
-
 #### Crossfade diagnostics
 
 A crossfade that does not run is invisible: there is no overlap, no error and no

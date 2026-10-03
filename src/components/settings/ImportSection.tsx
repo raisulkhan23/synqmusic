@@ -93,60 +93,34 @@ export function ImportSection({
    * Convex wraps handler errors, so the code is dug back out of the message
    * rather than being lost and replaced with a generic "something went wrong".
    */
-  /**
-   * Turn a failure into something the listener can act on.
-   *
-   * The generic `not-configured` copy — "an admin needs to add the API
-   * credentials for this service" — is a dead end: the app already knows
-   * exactly which keys are missing, because each importer declares its own
-   * `envVars`. Naming them turns an unactionable error into a one-line fix, and
-   * it is the whole difference between a listener reporting "Spotify import is
-   * broken" and being able to add the key themselves.
-   */
-  const toFailure = useCallback(
-    (error: unknown): ImportFailure => {
-      const withKeys = (base: ImportFailure): ImportFailure => {
-        if (base.code !== "not-configured") return base;
-        const keys = detected
-          ? (importerFor(detected.service)?.envVars ?? [])
-          : [];
-        if (keys.length === 0) return base;
-        return {
-          ...base,
-          hint: `This deployment is missing ${keys.join(
-            " and ",
-          )}. Add ${keys.length === 1 ? "it" : "them"} in Settings → Keys, then try again.`,
-        };
-      };
-      if (error instanceof ImportError) {
-        return withKeys({
-          code: error.code,
-          message: error.message,
-          retryable: error.retryable,
-          ...(error.hint ? { hint: error.hint } : {}),
-        });
-      }
-      const raw = error instanceof Error ? error.message : String(error ?? "");
-      const codes = Object.keys(IMPORT_ERRORS) as ImportErrorCode[];
-      const found = codes.find((code) => raw.includes(code));
-      if (found) {
-        return withKeys({
-          code: found,
-          message: IMPORT_ERRORS[found].message,
-          retryable: IMPORT_ERRORS[found].retryable,
-          ...(IMPORT_ERRORS[found].hint
-            ? { hint: IMPORT_ERRORS[found].hint }
-            : {}),
-        });
-      }
+  const toFailure = useCallback((error: unknown): ImportFailure => {
+    if (error instanceof ImportError) {
       return {
-        code: "unknown",
-        message: raw || IMPORT_ERRORS.unknown.message,
-        retryable: IMPORT_ERRORS.unknown.retryable,
+        code: error.code,
+        message: error.message,
+        retryable: error.retryable,
+        ...(error.hint ? { hint: error.hint } : {}),
       };
-    },
-    [detected],
-  );
+    }
+    const raw = error instanceof Error ? error.message : String(error ?? "");
+    const codes = Object.keys(IMPORT_ERRORS) as ImportErrorCode[];
+    const found = codes.find((code) => raw.includes(code));
+    if (found) {
+      return {
+        code: found,
+        message: IMPORT_ERRORS[found].message,
+        retryable: IMPORT_ERRORS[found].retryable,
+        ...(IMPORT_ERRORS[found].hint
+          ? { hint: IMPORT_ERRORS[found].hint }
+          : {}),
+      };
+    }
+    return {
+      code: "unknown",
+      message: raw || IMPORT_ERRORS.unknown.message,
+      retryable: IMPORT_ERRORS.unknown.retryable,
+    };
+  }, []);
 
   /** Save whatever an importer produced — one place, for every service. */
   const persist = useCallback(
