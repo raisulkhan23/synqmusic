@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 
 import { useNavigate } from "react-router";
 import { SeekBar } from "@/components/player/SeekBar";
@@ -490,6 +490,11 @@ export function FullscreenPlayer() {
   // without this the open landed at the top of the song and then lurched down
   // to the current line whenever the next lyric arrived.
   const lyrics = useTrackLyrics(fullscreen, lyricsOpen);
+  // Respect the OS motion setting. A lyric line that flies up every few
+  // seconds is exactly the kind of ambient movement that setting exists to
+  // stop, so the whole stack degrades to a plain fade rather than merely
+  // shortening the travel.
+  const reduceMotion = useReducedMotion() ?? false;
   // Tap-to-expand the clamped song title (touch devices have no hover). Storing
   // the track id instead of a boolean means a new track is collapsed for free —
   // no effect needed to reset it.
@@ -1083,23 +1088,63 @@ export function FullscreenPlayer() {
               lyrics.activeLine && "my-4 sm:my-5",
             )}
           >
-            {/* Neighbouring lines fade out toward the edges of the stack. */}
-            <p
+            {/* The neighbours slide as well, so the whole stack drifts upward on the
+                beat instead of only the middle line jumping. They are keyed on
+                their own text, which gives each a transition; a tiny offset
+                (less than a line) keeps it as a supporting motion rather than
+                a second focal point. */}
+            <motion.p
+              key={lyrics.prevLine}
+              initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+              animate={
+                reduceMotion
+                  ? { opacity: 1 }
+                  : { opacity: 1, y: 0 }
+              }
+              transition={
+                reduceMotion
+                  ? { duration: 0.15 }
+                  : { type: "spring", stiffness: 320, damping: 36, mass: 0.7 }
+              }
               className={cn(
                 "line-clamp-1 w-full max-w-[32rem] text-center text-xs leading-tight text-balance text-foreground/25 sm:text-[13px]",
                 !lyrics.prevLine && "invisible",
               )}
             >
               {lyrics.prevLine}
-            </p>
+            </motion.p>
 
-            <AnimatePresence mode="wait" initial={false}>
+            {/* The line rises. `mode="wait"` is deliberately NOT used: it finishes
+                the outgoing line before starting the incoming one, which reads
+                as a flicker between two words. Letting both exist at once —
+                the old one travelling up and out, the new one arriving from
+                below — is what makes it feel like the lyric is scrolling
+                rather than swapping. The slight scale difference adds depth so
+                the two lines read as one moving past the other.
+                `prefers-reduced-motion` drops it to a plain fade. */}
+            <AnimatePresence initial={false}>
               <motion.p
                 key={lyrics.activeLine}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.28, ease: "easeOut" }}
+                initial={
+                  reduceMotion
+                    ? { opacity: 0 }
+                    : { opacity: 0, y: 16, scale: 0.96 }
+                }
+                animate={
+                  reduceMotion
+                    ? { opacity: 1 }
+                    : { opacity: 1, y: 0, scale: 1 }
+                }
+                exit={
+                  reduceMotion
+                    ? { opacity: 0 }
+                    : { opacity: 0, y: -16, scale: 0.96 }
+                }
+                transition={
+                  reduceMotion
+                    ? { duration: 0.15 }
+                    : { type: "spring", stiffness: 320, damping: 34, mass: 0.7 }
+                }
                 className={cn(
                   // `my-2` is what separates this from the title below it and
                   // from its own neighbours above.
@@ -1114,14 +1159,22 @@ export function FullscreenPlayer() {
               </motion.p>
             </AnimatePresence>
 
-            <p
+            <motion.p
+              key={lyrics.nextLine}
+              initial={reduceMotion ? false : { opacity: 0, y: -6 }}
+              animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+              transition={
+                reduceMotion
+                  ? { duration: 0.15 }
+                  : { type: "spring", stiffness: 320, damping: 36, mass: 0.7 }
+              }
               className={cn(
                 "line-clamp-1 w-full max-w-[32rem] text-center text-xs leading-tight text-balance text-foreground/25 sm:text-[13px]",
                 !lyrics.nextLine && "invisible",
               )}
             >
               {lyrics.nextLine}
-            </p>
+            </motion.p>
           </div>
 
           {/* metadata + controls — slide left alongside the video when the
