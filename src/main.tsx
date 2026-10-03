@@ -87,6 +87,7 @@ import Home from "./pages/Home.tsx";
 import Search from "./pages/Search.tsx";
 import Discover from "./pages/Discover.tsx";
 import DownloadHub from "./pages/DownloadHub.tsx";
+import ImportHub from "./pages/ImportHub.tsx";
 import Artist from "./pages/Artist.tsx";
 import Album from "./pages/Album.tsx";
 import Liked from "./pages/Liked.tsx";
@@ -416,6 +417,14 @@ createRoot(document.getElementById("root")!).render(
                     element={
                       <PageBoundary>
                         <DownloadHub />
+                      </PageBoundary>
+                    }
+                  />
+                  <Route
+                    path="/import"
+                    element={
+                      <PageBoundary>
+                        <ImportHub />
                       </PageBoundary>
                     }
                   />
