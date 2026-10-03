@@ -78,6 +78,7 @@ export function Sidebar() {
             { to: "/liked", label: "Liked Songs", icon: Heart },
             { to: "/recent", label: "Recently Played", icon: History },
             { to: "/social", label: "Listening Rooms", icon: Radio },
+            { to: "/downloads", label: "Downloads", icon: ArrowRightToLine },
           ].map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to + label}
@@ -220,6 +221,7 @@ export function Sidebar() {
               { to: "/home", label: "Home", icon: House },
               { to: "/search", label: "Search", icon: Search },
               { to: "/social", label: "Listening Rooms", icon: Radio },
+            { to: "/downloads", label: "Downloads", icon: ArrowRightToLine },
             ].map(({ to, label, icon: Icon }) => (
               <NavLink key={to + label} to={to} className={linkCls}>
                 <Icon className="size-[18px]" />
