@@ -356,7 +356,14 @@ export function ImportSection({
   const reset = () => setPhase({ kind: "idle" });
 
   return (
-    <section className={`settings-import flex flex-col gap-2.5 ${className}`}>
+    // `id="import"` is what `/import` redirects to now that importing lives in
+    // Settings. Without it that redirect is a dead link: the browser jumps to
+    // `/settings#import`, finds no element with that id, and silently leaves
+    // the listener at the TOP of a long settings page with import far below.
+    <section
+      id="import"
+      className={`settings-import flex flex-col gap-2.5 ${className}`}
+    >
       <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
         <Music4 className="size-3.5" />
         Import playlists

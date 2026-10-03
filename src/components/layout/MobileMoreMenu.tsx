@@ -7,7 +7,6 @@ import {
   Download,
   Heart,
   History,
-  Import,
   Loader2,
   LogOut,
   Menu,
@@ -67,12 +66,6 @@ const EXTRA_DESTINATIONS = [
     label: "Downloads",
     detail: "Offline copies and what's cached",
     icon: Download,
-  },
-  {
-    to: "/import",
-    label: "Import",
-    detail: "Bring in a playlist from a file or link",
-    icon: Import,
   },
 ] as const;
 

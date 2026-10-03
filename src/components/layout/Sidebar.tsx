@@ -16,7 +16,6 @@ import {
   Heart,
   History,
   House,
-  Import,
   Library,
   ListMusic,
   Plus,
@@ -80,7 +79,6 @@ export function Sidebar() {
             { to: "/recent", label: "Recently Played", icon: History },
             { to: "/social", label: "Listening Rooms", icon: Radio },
             { to: "/downloads", label: "Downloads", icon: ArrowRightToLine },
-            { to: "/import", label: "Import", icon: Import },
           ].map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to + label}
@@ -224,7 +222,6 @@ export function Sidebar() {
               { to: "/search", label: "Search", icon: Search },
               { to: "/social", label: "Listening Rooms", icon: Radio },
             { to: "/downloads", label: "Downloads", icon: ArrowRightToLine },
-            { to: "/import", label: "Import", icon: Import },
             ].map(({ to, label, icon: Icon }) => (
               <NavLink key={to + label} to={to} className={linkCls}>
                 <Icon className="size-[18px]" />
