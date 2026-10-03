@@ -874,7 +874,9 @@ export function SettingsDialog({
           )}
           aria-label="Settings sections"
         >
-          <div className="settings-jump-rail slider-rail flex items-center gap-2 overflow-x-auto pb-0.5">
+          {/* `pb-2.5` reserves a band for the 8px `.slider-rail` scrollbar so it
+                stops riding over the jump chips. */}
+          <div className="settings-jump-rail slider-rail flex items-center gap-2 overflow-x-auto pt-0.5 pb-2.5">
             <span className="settings-jump-label hidden shrink-0 px-1 text-[10px] font-semibold tracking-widest text-foreground/70 uppercase sm:block">
               Jump to
             </span>

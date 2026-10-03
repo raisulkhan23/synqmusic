@@ -186,7 +186,10 @@ export function Shelf({
           />
           <div
             ref={railRef}
-            className="slider-rail -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:gap-4 sm:px-0"
+            // `pb-3` reserves a real band for `.slider-rail`'s 8px scrollbar, which
+            // renders inside the padding box — the old `pb-1` let the scrollbar
+            // ride up over the bottom of the cards.
+            className="slider-rail -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pt-0.5 pb-3 sm:mx-0 sm:gap-4 sm:px-0"
           >
             {children}
           </div>

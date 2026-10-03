@@ -859,20 +859,25 @@ export function FullscreenPlayer() {
               type="button"
               aria-label="Exit full-screen player"
               onClick={() => setFullscreen(false)}
-              className="flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
+              className="flex shrink-0 items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
             >
               <ChevronDown className="size-5" />
               <span className="hidden sm:inline">Minimize</span>
             </button>
-            <div className="hidden text-center sm:block">
+            {/* `min-w-0` + `truncate`: a long album name used to push this
+                block into the two flanking clusters and the Minimize button
+                and the action icons ended up sitting on top of the text. */}
+            <div className="hidden min-w-0 text-center sm:block">
               {current.albumName && (
-                <p className="font-display text-sm font-semibold tracking-tight">
+                <p className="truncate font-display text-sm font-semibold tracking-tight">
                   {current.albumName}
                 </p>
               )}
-              <p className="text-xs text-muted-foreground">Live session</p>
+              <p className="truncate text-xs text-muted-foreground">
+                Live session
+              </p>
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex shrink-0 items-center gap-1">
               <SleepTimerButton />
               <button
                 type="button"
@@ -1119,7 +1124,10 @@ export function FullscreenPlayer() {
               </span>
             </div>
 
-            <div className="flex items-center gap-1 sm:gap-2">
+            {/* `flex-wrap` + `justify-center`: this row used to be a single rigid line,
+                so on a narrow player the fixed-width transport grid pushed the
+                queue button off the edge and into the controls beside it. */}
+            <div className="flex flex-wrap items-center justify-center gap-1 sm:gap-2">
               <TransportControls />
               <div className="mx-1 hidden h-5 w-px bg-white/10 sm:mx-3 sm:block" />
               <VolumeControl className="hidden sm:flex" />

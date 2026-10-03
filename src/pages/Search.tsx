@@ -679,8 +679,10 @@ export default function Search() {
         </button>
       </header>
 
-      {/* search input */}
-      <div className="relative max-w-xl">
+      {/* search input. `z-20` puts the whole input + suggestions group above
+          the results section, so no result row can ever paint over the open
+          dropdown (result rows are themselves `relative`). */}
+      <div className="relative z-20 max-w-xl">
         <SearchIcon className="pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2 text-muted-foreground" />
         <input
           autoFocus
@@ -739,7 +741,17 @@ export default function Search() {
           <ul
             id="synq-search-suggestions"
             role="listbox"
-            className="absolute top-full right-0 left-0 z-30 mt-1.5 overflow-hidden rounded-2xl border border-white/10 bg-[rgb(var(--panel))] py-1 shadow-xl backdrop-blur"
+            // This panel MUST be opaque. It used to ask for
+            // `bg-[rgb(var(--panel))]`, but no `--panel` custom property is
+            // defined anywhere in the theme — so the declaration was invalid,
+            // the background silently fell back to transparent, and the whole
+            // result list (titles, artist names, artwork) bled straight
+            // through the open dropdown. `--panel` -> `bg-popover`, which is
+            // an opaque theme token in every mode. `z-50` + `isolate` keep it
+            // above the results section and out of the caller's stacking
+            // context; the blur is gone because there is nothing to blur once
+            // the surface is solid.
+            className="isolate absolute top-full right-0 left-0 z-50 mt-1.5 overflow-hidden rounded-2xl border border-white/10 bg-popover py-1 shadow-2xl shadow-black/40 ring-1 ring-black/20"
           >
             {suggestions.map((suggestion, i) => (
               <li key={suggestion} role="option" aria-selected={i === activeSuggestion}>
@@ -1011,12 +1023,17 @@ function BrowseView({ onPick }: { onPick: (q: string) => void }) {
         <h2 className="mb-3 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
           Popular mixes
         </h2>
-        <div className="slider-rail -mx-4 flex gap-3 overflow-x-auto px-4 pb-2">
+        {/* The visible scrollbar is 8px tall and lives INSIDE the element's
+            padding box, so the old `pb-2` put the card bottoms flush against
+            the scrollbar track and left the caption 8px below that. The
+            padding now reserves a band for the scrollbar and the caption gets
+            its own air, so nothing crowds anything. */}
+        <div className="slider-rail -mx-4 flex gap-3 overflow-x-auto px-4 pt-0.5 pb-4">
           {popularMixes.map((mix) => (
             <MixCard key={mix.id} mix={mix} />
           ))}
         </div>
-        <p className="mt-2 text-[10px] text-muted-foreground/70">
+        <p className="mt-1 text-[10px] text-muted-foreground/70">
           Live from YouTube Music · picks rotate every 12 hours
         </p>
       </section>
