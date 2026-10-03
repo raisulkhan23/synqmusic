@@ -300,11 +300,16 @@ export class ResumableDownload {
     // would be picked up a second time by the manager's pump — two runs
     // writing to one sink.
     this.status = "downloading";
-    // The adapter may be async. Awaiting here means a resolution failure
-    // surfaces as a download failure with a real reason, rather than a
-    // half-started file.
-    const adapter = await adapterSpec;
+    // The adapter may be async, and it may REFUSE — `createTrackAdapter` throws
+    // when the browser has no filesystem, and the app factory throws when a
+    // record has no resolved stream. That await is therefore INSIDE the try:
+    // when it sat outside, a rejecting factory escaped before `markSettled()`
+    // was ever reached, so the record stayed "downloading" for the lifetime of
+    // the page and `settled()` never resolved. A download that can never start
+    // has to end as a failure with a readable reason, not hang.
+    let adapter: DownloadAdapter | null = null;
     try {
+      adapter = await adapterSpec;
       const resumeFrom = await adapter.sink.bytesWritten();
       this.downloadedBytes = resumeFrom;
 
@@ -364,7 +369,12 @@ export class ResumableDownload {
       const resumable =
         err instanceof DownloadError && err.kind === "interrupted";
       if (!resumable) {
-        await adapter.sink.discardIncomplete().catch(() => undefined);
+        // No adapter means nothing was ever opened, so there is no partial to
+        // clean up — and calling through a null adapter here is what turned a
+        // refusal into a second, misleading crash.
+        await adapter?.sink
+          .discardIncomplete()
+          .catch(() => undefined);
       }
     } finally {
       this.controller = null;
@@ -548,6 +558,23 @@ export class ResumableDownload {
   whenSettled(): Promise<void> {
     return this.settled;
   }
+
+  /**
+   * Fail this download without having run it.
+   *
+   * Used by the manager when the ADAPTER FACTORY itself refuses, before `run()`
+   * is ever invoked. Without this the record stayed `queued` for the lifetime of
+   * the page and `settled` never resolved — an awaited download that hangs
+   * forever instead of reporting the real reason. No sink was ever opened, so
+   * there is no partial to clean up here.
+   */
+  failToStart(reason: string): void {
+    if (this.status === "completed" || this.status === "cancelled") return;
+    this.status = "failed";
+    this.error = reason;
+    this.speed = 0;
+    this.markSettled();
+  }
 }
 
 /** Thrown to unwind a paused/cancelled fetch without treating it as failure. */
@@ -618,6 +645,17 @@ export class DownloadManager {
   private readonly downloads = new Map<string, ResumableDownload>();
   private readonly byTrack = new Map<string, string>();
   private running = 0;
+  /**
+   * Downloads handed to `pump` but not yet started.
+   *
+   * A download's status only flips to `downloading` once `run()` is actually
+   * invoked, which is now asynchronous (the adapter factory is resolved inside
+   * the promise chain so a synchronous throw cannot leak a concurrency slot).
+   * Without this set the `find(status === "queued")` scan below would see the
+   * same still-queued record again on the next iteration and start it twice,
+   * writing two runs into one file.
+   */
+  private readonly claimed = new Set<string>();
   private seq = 0;
   private readonly config: Partial<DownloadConfig>;
   private readonly adapterFor: (d: ResumableDownload) => DownloadAdapter | Promise<DownloadAdapter>;
@@ -708,14 +746,33 @@ export class DownloadManager {
   private async pump(): Promise<void> {
     const cap = Math.max(1, this.config.maxConcurrentRanges ?? DEFAULT_DOWNLOAD_CONFIG.maxConcurrentRanges);
     while (this.running < cap) {
-      const next = [...this.downloads.values()].find((d) => d.status === "queued");
+      const next = [...this.downloads.values()].find(
+        (d) => d.status === "queued" && !this.claimed.has(d.id),
+      );
       if (!next) return;
       this.running++;
-      void next
-        .run(this.adapterFor(next))
-        .catch(() => undefined)
+      this.claimed.add(next.id);
+      // The adapter factory is resolved INSIDE the promise chain, never as an
+      // argument. It throws synchronously in real cases (`createTrackAdapter`
+      // when the browser has no filesystem, the app factory when a record has
+      // no resolved stream), and an eagerly-evaluated argument would throw
+      // before `.finally()` was ever attached. `this.running` had already been
+      // incremented, so the concurrency slot leaked permanently: after one such
+      // failure the queue was wedged and no later download could ever start.
+      void Promise.resolve()
+        .then(() => this.adapterFor(next))
+        .then((adapter) => next.run(adapter))
+        .catch((err: unknown) => {
+          // The factory refused, so `run` was never reached. The record has to
+          // be failed HERE or it sits in `queued` forever with a `settled`
+          // promise that never resolves.
+          next.failToStart(
+            err instanceof Error ? err.message : String(err),
+          );
+        })
         .finally(() => {
           this.running--;
+          this.claimed.delete(next.id);
           void this.pump();
         });
     }

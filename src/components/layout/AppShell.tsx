@@ -1,3 +1,4 @@
+import { installDownloadAdapter } from "@/lib/installDownloadAdapter";
 import {
   useEffect,
   useRef,
@@ -105,6 +106,15 @@ function useAnimatedCssTint(
 ) {
   const currentRef = useRef(target);
   const frameRef = useRef<number | null>(null);
+
+  // The download adapter is installed here, at app level, because the track
+  // menu can start a download from any page — including ones where the
+  // Download hub is not mounted. Registering it on the hub's mount was one
+  // navigation too late and every menu-started download failed against a
+  // manager that had no adapter yet.
+  useEffect(() => {
+    installDownloadAdapter();
+  }, []);
 
   useEffect(() => {
     if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);

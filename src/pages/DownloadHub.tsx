@@ -1,13 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePlayerStore } from "@/store/player";
 import {
-  registerDownloadAdapter,
   getDownloadManager,
-  takeResolved,
   requestTrackDownload,
 } from "@/lib/downloads";
-import { createTrackAdapter, resolveStreamUrl } from "@/lib/trackSource";
-import { opfsSupported } from "@/lib/opfsSink";
+import { resolveStreamUrl } from "@/lib/trackSource";
+import { installDownloadAdapter } from "@/lib/installDownloadAdapter";
+import {
+  deleteStoredDownload,
+  listStoredDownloads,
+  opfsSupported,
+  parseStoredName,
+  type StoredFile,
+} from "@/lib/opfsSink";
 import { useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { toast } from "sonner";
@@ -134,21 +139,12 @@ export default function DownloadHub() {
   const manager = getDownloadManager();
 
   useEffect(() => {
-    // The shared adapter factory. There is deliberately no cleanup: the
-    // manager outlives this page, and clearing it on unmount would take
-    // downloads away from every other surface.
-    //
-    // Each download carries its own resolved stream URL, claimed by track id.
-    // A download with no resolved URL means it was enqueued without going
-    // through `requestTrackDownload`, so refusing is correct — it prevents a
-    // queued record from silently producing an empty file.
-    registerDownloadAdapter((download) => {
-      const stream = takeResolved(download.trackId);
-      if (!stream) {
-        throw new Error("This download has no resolved stream");
-      }
-      return createTrackAdapter(stream.url, stream.filename, download.id);
-    });
+    // The adapter is installed app-wide from `AppShell`, not here. Registering
+    // it on this page's mount was one navigation too late: the track menu
+    // enqueues a download and THEN navigates here, so the download had already
+    // failed against a manager with no adapter. Calling it here too is
+    // harmless and covers the case where this page is the first thing loaded.
+    installDownloadAdapter();
   }, []);
 
   useEffect(() => {
@@ -215,6 +211,8 @@ export default function DownloadHub() {
 
       {/* What is actually stored, from the real cache, not a claim. */}
       <OfflineSummary />
+
+      <StoredDownloads />
 
       <section>
         <h2 className="mb-3 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
@@ -404,6 +402,100 @@ function DownloadButton({
     <button type="button" aria-label="Cancel" onClick={onCancel} className={cls}>
       <X className="size-4" />
     </button>
+  );
+}
+
+/**
+ * Music that is REALLY on this device.
+ *
+ * WHY THIS IS SEPARATE FROM THE TRANSFER LIST ABOVE. The `DownloadManager`
+ * keeps its records in an in-memory `Map`, so a page reload empties it — while
+ * the audio itself is sitting in the Origin Private File System, complete and
+ * perfectly playable. Showing only the manager's list therefore made a finished
+ * download vanish the moment the tab reloaded, which is exactly the "I
+ * downloaded it and it isn't there" report. The manager is the right source of
+ * truth for a transfer in flight; the filesystem is the right source of truth
+ * for what has been saved. This reads the directory itself, so what you see
+ * here is what is on disk.
+ */
+function StoredDownloads() {
+  const [files, setFiles] = useState<StoredFile[]>([]);
+  const [ready, setReady] = useState(false);
+
+  const refresh = useCallback(() => {
+    void listStoredDownloads().then((rows) => {
+      setFiles(rows);
+      setReady(true);
+    });
+  }, []);
+
+  useEffect(() => {
+    refresh();
+    // The transfer list polls at 500ms; this only needs to catch a commit, so a
+    // slower cadence is plenty and keeps the filesystem read cheap.
+    const id = window.setInterval(refresh, 2000);
+    return () => window.clearInterval(id);
+  }, [refresh]);
+
+  if (!opfsSupported()) return null;
+
+  const totalBytes = files.reduce((n, f) => n + f.size, 0);
+
+  return (
+    <section>
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
+          Saved on this device
+        </h2>
+        {files.length > 0 && (
+          <p className="text-xs text-muted-foreground">
+            {files.length} track{files.length === 1 ? "" : "s"} ·{" "}
+            {formatBytes(totalBytes)}
+          </p>
+        )}
+      </div>
+
+      {!ready ? (
+        <p className="text-sm text-muted-foreground">Checking storage…</p>
+      ) : files.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          Nothing saved to this device yet.
+        </p>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {files.map((file) => {
+            const { filename } = parseStoredName(file.name);
+            return (
+              <li
+                key={file.name}
+                className="flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.03] px-4 py-3"
+              >
+                <Check className="size-4 shrink-0 text-emerald-300/70" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{filename}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatBytes(file.size)}
+                    {file.modifiedAt
+                      ? ` · ${new Date(file.modifiedAt).toLocaleDateString()}`
+                      : ""}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  aria-label={`Delete ${filename}`}
+                  onClick={() => {
+                    void deleteStoredDownload(file.name).then(refresh);
+                  }}
+                  className="shrink-0 rounded-full p-2 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
+                >
+                  <Trash2 className="size-4" />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
   );
 }
 

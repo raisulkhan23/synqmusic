@@ -37,6 +37,90 @@ async function dir(): Promise<FileSystemDirectoryHandle> {
   return base.getDirectoryHandle(DIR, { create: true });
 }
 
+/** A file physically present in the downloads directory. */
+export interface StoredFile {
+  /** The OPFS entry name, i.e. `<id>__<filename>`. */
+  name: string;
+  /** Real size on disk, in bytes. */
+  size: number;
+  /** Epoch millis of the last write, or null when the browser won't say. */
+  modifiedAt: number | null;
+}
+
+/** Split `<id>__<filename>` back into its parts. */
+function parseName(name: string): { id: string; filename: string } {
+  const sep = name.indexOf("__");
+  if (sep === -1) return { id: "", filename: name };
+  return { id: name.slice(0, sep), filename: name.slice(sep + 2) };
+}
+
+/**
+ * Every FINISHED download on this device, read from the real filesystem.
+ *
+ * WHY THIS EXISTS. `DownloadManager` keeps its records in a `Map`, so a page
+ * reload produced an empty list — the bytes were sitting in OPFS the whole
+ * time, invisible and unreachable. The manager is the right source of truth
+ * for a transfer *in flight*; it cannot be the source of truth for what is
+ * already downloaded, because it forgets on reload. The filesystem does not
+ * forget, so this is what the hub reads to show saved music.
+ *
+ * `.part` entries are excluded: they are partial transfers, not downloads, and
+ * listing them as saved would over-report what is playable offline.
+ */
+export async function listStoredDownloads(): Promise<StoredFile[]> {
+  if (!opfsSupported()) return [];
+  try {
+    const directory = await dir();
+    const out: StoredFile[] = [];
+    // `keys()` on a directory handle is not in every TS lib yet, so the handle
+    // is walked through `entries()` with an explicit async iterator type.
+    const iterable = directory as unknown as {
+      entries?: () => AsyncIterableIterator<[string, FileSystemHandle]>;
+      values?: () => AsyncIterableIterator<FileSystemHandle>;
+    };
+    const names: string[] = [];
+    if (typeof iterable.entries === "function") {
+      for await (const [name] of iterable.entries()) names.push(name);
+    } else if (typeof iterable.values === "function") {
+      for await (const handle of iterable.values()) names.push(handle.name);
+    }
+    for (const name of names) {
+      if (name.endsWith(".part")) continue;
+      try {
+        const handle = await directory.getFileHandle(name);
+        const file = await handle.getFile();
+        out.push({
+          name,
+          size: file.size,
+          modifiedAt: file.lastModified ?? null,
+        });
+      } catch {
+        // A file removed between listing and reading is not an error worth
+        // reporting; it simply is not there any more.
+      }
+    }
+    return out.sort((a, b) => (b.modifiedAt ?? 0) - (a.modifiedAt ?? 0));
+  } catch {
+    // OPFS exists but is refusing access (private mode, quota, permissions).
+    // Reported as "nothing stored" rather than crashing the page.
+    return [];
+  }
+}
+
+/** Remove one stored download by its OPFS entry name. */
+export async function deleteStoredDownload(name: string): Promise<boolean> {
+  if (!opfsSupported()) return false;
+  try {
+    const directory = await dir();
+    await directory.removeEntry(name);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export { parseName as parseStoredName };
+
 /** OPFS names are path segments, so separators and traversal must go. */
 function safeName(filename: string, id: string): string {
   const cleaned = filename

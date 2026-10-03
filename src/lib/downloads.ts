@@ -48,9 +48,12 @@ let adapterFactory: AdapterFactory | null = null;
  */
 export function registerDownloadAdapter(factory: AdapterFactory | null): void {
   adapterFactory = factory;
-  // A manager built before an adapter existed must be rebuilt, or it would
-  // keep the refusing adapter forever.
-  manager = null;
+  // The manager is deliberately NOT recreated here. Its factory closure reads
+  // `adapterFactory` at CALL time, so a newly registered adapter is picked up
+  // without a rebuild. Resetting `manager` used to throw away every download
+  // already in flight — and because the track menu enqueues a download and
+  // then navigates to /downloads, where this registration happens, every
+  // single menu-started download was wiped the instant its own hub opened.
 }
 
 /** The one manager, created on first use. */
