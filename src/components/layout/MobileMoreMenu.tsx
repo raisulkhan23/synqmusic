@@ -12,6 +12,7 @@ import {
   Menu,
   Radio,
   ShieldCheck,
+  Upload,
   Users,
 } from "lucide-react";
 
@@ -66,6 +67,12 @@ const EXTRA_DESTINATIONS = [
     label: "Downloads",
     detail: "Offline copies and what's cached",
     icon: Download,
+  },
+  {
+    to: "/import",
+    label: "Import music",
+    detail: "Bring a playlist in from another service",
+    icon: Upload,
   },
 ] as const;
 

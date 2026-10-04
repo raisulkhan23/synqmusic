@@ -992,7 +992,13 @@ export function AppShell() {
             the phone nav rendered on desktop right next to the real sidebar. */}
         <nav className="mobile-bottom-nav liquid-glass h-[calc(3.5rem+env(safe-area-inset-bottom))] shrink-0 border-t border-white/[0.06] pb-[env(safe-area-inset-bottom)]">
           {MOBILE_NAV.map(({ to, label, icon: Icon }) => {
-            const isActive = location.pathname === to;
+            // Prefix-aware, not exact. Opening a playlist, album, artist or a
+            // shared track link put the reader on `/playlists/abc` (or
+            // `/t/xyz`), which never equals `/playlists`, so the tab they came
+            // from went dark and the bar looked like it had lost its place.
+            const isActive =
+              location.pathname === to ||
+              location.pathname.startsWith(`${to}/`);
             return (
               <button
                 key={to}

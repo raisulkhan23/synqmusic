@@ -666,7 +666,17 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
 
         {/* now playing */}
         <div className="relative z-10 flex min-w-0 flex-1 items-center gap-2 sm:max-w-[34%] sm:gap-3 lg:max-w-[230px] lg:flex-none lg:basis-[230px]">
-          <div className="mobile-player-art relative size-10 shrink-0 overflow-hidden rounded-[0.9rem] shadow-lg ring-1 ring-white/15 sm:size-11 lg:size-10 lg:rounded-md">
+          {/* The artwork IS the expand target on a phone. Tapping the cover to
+              open the now-playing view is the gesture people already reach for,
+              and a 40px cover is a far larger hit area than the small maximize
+              button on the other side of the island. It is a real button, so it
+              is also reachable by keyboard and announced by a screen reader. */}
+          <button
+            type="button"
+            aria-label="Open full-screen player"
+            onClick={() => setFullscreen(true)}
+            className="mobile-player-art touch-manipulation relative size-10 shrink-0 overflow-hidden rounded-[0.9rem] shadow-lg ring-1 ring-white/15 transition-transform active:scale-95 sm:size-11 lg:size-10 lg:rounded-md"
+          >
             <img
               src={current.coverUrl}
               alt=""
@@ -677,7 +687,7 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
                 <Loader2 className="size-4 animate-spin text-white" />
               </div>
             )}
-          </div>
+          </button>
           <div className="min-w-0 flex-1 overflow-hidden">
             <div className="flex min-w-0 items-center gap-1.5">
               <p

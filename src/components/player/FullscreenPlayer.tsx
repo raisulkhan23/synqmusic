@@ -89,8 +89,13 @@ function SleepTimerButton() {
           type="button"
           aria-label="Sleep timer"
           title="Sleep timer"
+          // Visible on EVERY size now. It used to be `hidden ... sm:block`, so
+          // the only place a phone could arm a sleep timer was Settings — the
+          // timer was the one playback control that silently did not exist in
+          // the mobile now-playing view. The mobile header has room for it: the
+          // album-name block on the left of this cluster is sm-only.
           className={cn(
-            "relative hidden rounded-full p-2 transition-colors hover:bg-white/[0.06] sm:block",
+            "relative rounded-full p-2 transition-colors hover:bg-white/[0.06]",
             active
               ? "text-[rgb(var(--tint))]"
               : "text-muted-foreground hover:text-foreground",
