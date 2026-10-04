@@ -247,11 +247,7 @@ export interface Tuning {
  * who asks for comfort still gets some.
  */
 export function buildTuning(exploration: number | undefined | null): Tuning {
-  const raw =
-    typeof exploration === "number" && Number.isFinite(exploration)
-      ? exploration
-      : DEFAULT_EXPLORATION;
-  const value = Math.min(100, Math.max(0, raw));
+  const value = clampExploration(exploration);
   // 0 at pure familiarity, 1 at pure discovery.
   const lean = value / 100;
   return {
@@ -268,6 +264,117 @@ export function buildTuning(exploration: number | undefined | null): Tuning {
 
 /** The tuning used when a caller expresses no preference. */
 export const DEFAULT_TUNING: Tuning = buildTuning(DEFAULT_EXPLORATION);
+
+// ---------------------------------------------------------------------------
+// Adaptive discovery/familiarity balance
+// ---------------------------------------------------------------------------
+//
+// The exploration slider is a LISTENER'S INTENT, not the whole story. A person
+// can ask for discovery and then skip every unfamiliar track the engine offers;
+// continuing to serve them surprises they reject is not "following their
+// setting", it is ignoring them. These pure functions read how the listener
+// actually responds to what the engine recommended and nudge the dial toward
+// what is working — bounded, and reversible as behaviour changes.
+//
+// Only RECOMMENDED plays count. What a listener does with music they chose
+// themselves says nothing about whether the RECOMMENDER is landing, and mixing
+// the two would let a heavy self-directed listener look tolerant of
+// recommendations they never saw.
+
+/** How the listener responds to recommended/autoplay/radio plays. */
+export interface FeedbackTolerance {
+  /** Plays that came from the engine (recommendation, autoplay or radio). */
+  recommended: number;
+  /** Of those, how many the listener skipped. */
+  skipped: number;
+}
+
+/**
+ * Below this many recommended plays, adaptivity keeps its hands off the dial.
+ * With one or two skips a listener has no pattern yet, and moving their setting
+ * would be reading noise as signal.
+ */
+export const ADAPT_MIN_SAMPLES = 6;
+
+/**
+ * The most adaptivity may ever shift the discovery dial, in points (0..100).
+ *
+ * Capped on purpose: adaptivity is a NUDGE that corrects a small mismatch
+ * between what the listener asked for and what they enjoy, not a replacement
+ * for their preference. A run of skips must never be able to switch discovery
+ * off entirely, and the shift simply falls away once the listening changes.
+ */
+export const ADAPT_MAX_SHIFT = 18;
+
+/** Fold the raw plays into the two numbers adaptivity cares about. */
+export function measureFeedbackTolerance(
+  plays: PlaySignal[],
+): FeedbackTolerance {
+  let recommended = 0;
+  let skipped = 0;
+  for (const play of plays) {
+    if (
+      play.origin !== "recommendation" &&
+      play.origin !== "autoplay" &&
+      play.origin !== "radio"
+    ) {
+      continue;
+    }
+    recommended += 1;
+    if (play.skipped) skipped += 1;
+  }
+  return { recommended, skipped };
+}
+
+/**
+ * Shift the exploration preference toward what the listener actually accepts.
+ *
+ * A 50% skip rate is neutral — the mix lands about as often as it misses, which
+ * is an ordinary hit rate for discovery. Liking more than half of it earns more
+ * discovery; skipping more than half of it earns more of the familiar. The
+ * shift is proportional to how far from neutral the rate is, capped by
+ * {@link ADAPT_MAX_SHIFT}, and returns the base value untouched until there is
+ * enough evidence to justify moving it.
+ */
+export function adaptExploration(
+  base: number | undefined | null,
+  tolerance: FeedbackTolerance,
+): number {
+  const value = clampExploration(base);
+  if (tolerance.recommended < ADAPT_MIN_SAMPLES) return value;
+  const skipRatio = Math.min(
+    1,
+    Math.max(0, tolerance.skipped / tolerance.recommended),
+  );
+  // Confidence ramps in over the first forty rated plays so the correction is
+  // gentle while the picture is still forming and firm once it is clear.
+  const confidence = Math.min(1, tolerance.recommended / 40);
+  const shift =
+    (0.5 - skipRatio) * 2 * ADAPT_MAX_SHIFT * confidence;
+  return clampExploration(value + shift);
+}
+
+/**
+ * The tuning the engine should actually use, given real behaviour.
+ *
+ * This is the ONE entry point callers should reach for: it folds the listener's
+ * stated preference together with how they respond to recommendations and
+ * returns a tuning, never a bare number, so "what plays next", the Home
+ * shelves and the score inspector all adapt identically.
+ */
+export function adaptiveTuning(
+  base: number | undefined | null,
+  plays: PlaySignal[],
+): Tuning {
+  return buildTuning(adaptExploration(base, measureFeedbackTolerance(plays)));
+}
+
+/** Coerce anything into a sane 0..100 exploration value. */
+export function clampExploration(value: unknown): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return DEFAULT_EXPLORATION;
+  return Math.min(100, Math.max(0, n));
+}
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 

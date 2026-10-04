@@ -2564,7 +2564,16 @@ function commitTransition(
 ): void {
   const s = usePlayerStore.getState();
   transition = null;
-  resetAllDeckGains();
+  // Silence ONLY the outgoing deck — do NOT reset both decks to unity.
+  //
+  // A finished crossfade leaves the outgoing deck faded to ~0, but
+  // `resetAllDeckGains()` forced BOTH decks back to full volume for the instant
+  // before `releaseDeck` paused the outgoing one. On every completed blend that
+  // was an audible burst of the song that had just finished, at unity gain,
+  // right at the seam — a click/blip of the previous track under the new one.
+  // The incoming deck is brought to unity by `swapActiveDeck` below, so the
+  // outgoing one simply needs to be hard zeroed.
+  setDeckGainNow(outgoingSlot, 0);
   const incoming = getSpareAudio();
   incoming.volume = s.volume;
   incoming.muted = s.muted;

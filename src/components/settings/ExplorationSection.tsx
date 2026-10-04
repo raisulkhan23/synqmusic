@@ -53,6 +53,11 @@ export function ExplorationSection() {
         <span>Stay close</span>
         <span>Surprise me</span>
       </div>
+      <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground/80">
+        SYNQ also adapts this on its own: if you skip what it suggests, it eases
+        toward music you already like, and if you finish and replay it, it opens
+        up more discovery — never more than a small nudge from your setting.
+      </p>
       {exploration === DEFAULT_EXPLORATION ? (
         <button
           type="button"

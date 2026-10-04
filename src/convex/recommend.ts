@@ -21,9 +21,9 @@ import { v } from "convex/values";
 import { action, mutation, query, type ActionCtx } from "./_generated/server";
 import { api } from "./_generated/api";
 import {
+  adaptiveTuning,
   buildSeeds,
   buildSignals,
-  buildTuning,
   explainCandidate,
   pickNextTrack,
   rankCandidates,
@@ -782,7 +782,9 @@ export const forYou = action({
       userSignals = EMPTY_SIGNALS;
     }
 
-    const tuning = buildTuning(args.exploration);
+    // Adaptive tuning: the stated preference, corrected by how the listener
+    // actually responds to what the engine recommends (see `adaptiveTuning`).
+    const tuning = adaptiveTuning(args.exploration, userSignals.plays);
     const built = buildSignals(userSignals, now);
     const eligible = sectionEligibility(built, userSignals);
 
@@ -1042,7 +1044,9 @@ export const nextTrack = action({
         (await ctx.runQuery(api.recommend.signals, {})) ?? EMPTY_SIGNALS;
       // The SAME tuning the Home shelves use: "what plays next" must not
       // quietly disagree with what the listener was just shown.
-      const tuning = buildTuning(args.exploration);
+      // Adaptive tuning: the stated preference, corrected by how the listener
+    // actually responds to what the engine recommends (see `adaptiveTuning`).
+    const tuning = adaptiveTuning(args.exploration, userSignals.plays);
       const built = buildSignals(userSignals, now);
       const current = args.currentTrack ?? null;
       const seeds = buildSeeds(built, userSignals, {
@@ -1257,7 +1261,9 @@ export const explain = action({
     const now = Date.now();
     const userSignals =
       (await ctx.runQuery(api.recommend.signals, {})) ?? EMPTY_SIGNALS;
-    const tuning = buildTuning(args.exploration);
+    // Adaptive tuning: the stated preference, corrected by how the listener
+    // actually responds to what the engine recommends (see `adaptiveTuning`).
+    const tuning = adaptiveTuning(args.exploration, userSignals.plays);
     const built = buildSignals(userSignals, now);
     const seeds = buildSeeds(built, userSignals, {
       maxSeeds: MAX_SEEDS,
