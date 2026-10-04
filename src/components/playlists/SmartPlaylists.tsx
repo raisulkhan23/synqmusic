@@ -323,6 +323,7 @@ export function SmartPlaylists() {
     | ResolvedSmart[]
     | undefined;
   const remove = useMutation(api.smartPlaylists.remove);
+  const create = useMutation(api.smartPlaylists.create);
   const playTrack = usePlayerStore((s) => s.playTrack);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<
@@ -347,7 +348,19 @@ export function SmartPlaylists() {
   const del = async (p: ResolvedSmart) => {
     try {
       await remove({ playlistId: p._id as never });
-      toast.success(`Deleted “${p.name}”`);
+      // Undo re-creates the playlist from its rules — a smart playlist holds no
+      // track list, so the stored rules are all that is needed to rebuild it
+      // exactly. Matches the undo the plain playlist card already offers.
+      toast.success(`Deleted “${p.name}”`, {
+        action: {
+          label: "Undo",
+          onClick: () => {
+            void create({ name: p.name, rules: p.rules })
+              .then(() => toast.success("Smart playlist restored"))
+              .catch(() => toast.error("Couldn't restore the smart playlist"));
+          },
+        },
+      });
     } catch {
       toast.error("Couldn't delete that smart playlist");
     }

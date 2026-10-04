@@ -7,6 +7,7 @@
  */
 
 import {
+  REDISCOVER_DEFAULT_DAYS,
   SMART_DEFAULT_RULES,
   SMART_MAX_LIMIT,
   SMART_MIN_LIMIT,
@@ -86,6 +87,22 @@ const library: SmartTrack[] = [
   eq("bad source falls back", normalizeSmartRules({ source: "genre" as unknown as SmartRules["source"] }).source, "any");
   eq("bad sort falls back", normalizeSmartRules({ sort: "az" as unknown as SmartRules["sort"] }).sort, "most_played");
   eq("artist is trimmed", normalizeSmartRules({ artist: "  Adele  " }).artist, "Adele");
+  // rediscover is only meaningful with a staleness floor, so it defaults one.
+  eq(
+    "rediscover gets a default staleness floor",
+    normalizeSmartRules({ source: "rediscover" }).notWithinDays,
+    REDISCOVER_DEFAULT_DAYS,
+  );
+  eq(
+    "an explicit rediscover floor is honoured",
+    normalizeSmartRules({ source: "rediscover", notWithinDays: 7 }).notWithinDays,
+    7,
+  );
+  eq(
+    "non-rediscover sources keep a zero floor",
+    normalizeSmartRules({ source: "played" }).notWithinDays,
+    0,
+  );
 }
 
 // --------------------------------------------------------------- sources

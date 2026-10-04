@@ -17,6 +17,7 @@ import {
   adaptiveTuning,
   buildTuning,
   clampExploration,
+  explainReason,
   measureFeedbackTolerance,
   type PlaySignal,
 } from "../src/lib/recommend";
@@ -182,6 +183,34 @@ function repeat<T>(n: number, fn: (i: number) => T): T[] {
   check(
     "repeated artists are penalised harder when exploring",
     exploratory.diversityPerRepeat < familiar.diversityPerRepeat,
+  );
+}
+
+// ------------------------------------------------------------- explainReason ("why this song?")
+{
+  // Every reason the engine can emit must have honest, human copy — an
+  // undefined label would leave a Home card with an empty "why" line.
+  const reasons: Array<Parameters<typeof explainReason>[0]> = [
+    "based_on_likes",
+    "because_you_listened",
+    "favorite_artist",
+    "similar_song",
+    "playlist_related",
+    "discovery",
+    "new_release",
+    "continuing_mix",
+    "global_fallback",
+  ];
+  check(
+    "every reason has copy",
+    reasons.every((r) => typeof explainReason(r) === "string" && explainReason(r)!.length > 0),
+  );
+  eq("null has no copy", explainReason(null), null);
+  eq("undefined has no copy", explainReason(undefined), null);
+  check("likes read as personal", explainReason("based_on_likes")!.includes("liked"));
+  check(
+    "global fallback does not claim personalisation",
+    !/you|your/i.test(explainReason("global_fallback")!),
   );
 }
 

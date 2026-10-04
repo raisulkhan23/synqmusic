@@ -633,9 +633,16 @@ export const recap = query({
       const first = firstPlayByArtist.get(artist);
       if (first === undefined || play.at < first) firstPlayByArtist.set(artist, play.at);
     }
+    // "New artists" only means something for a bounded period. For all-time the
+    // window starts at 0, so every artist's first play technically falls inside
+    // it and the count would just equal the total artist count — technically
+    // true and completely useless. Report 0 for all-time so the recap omits
+    // the card rather than showing a meaningless number.
     let newArtists = 0;
-    for (const first of firstPlayByArtist.values()) {
-      if (inRange(first, bounds)) newArtists += 1;
+    if (p !== "all") {
+      for (const first of firstPlayByArtist.values()) {
+        if (inRange(first, bounds)) newArtists += 1;
+      }
     }
 
     const topTracks = [...playCountByTrack.entries()]

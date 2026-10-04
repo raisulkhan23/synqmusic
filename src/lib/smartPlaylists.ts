@@ -143,14 +143,29 @@ function text(value: unknown): string {
  * evaluator expects, clamping every numeric field so a hostile or stale row can
  * never request a 10-million-track playlist or a negative window.
  */
+/**
+ * The staleness floor applied by default to the `rediscover` source. Named so
+ * the UI and tests refer to the same number.
+ */
+export const REDISCOVER_DEFAULT_DAYS = 30;
+
 export function normalizeSmartRules(partial: Partial<SmartRules> | undefined): SmartRules {
   const p = partial ?? {};
+  const source = isSource(p.source) ? p.source : SMART_DEFAULT_RULES.source;
+  const notWithinDays = clampInt(p.notWithinDays, 0, 3650, 0);
   return {
-    source: isSource(p.source) ? p.source : SMART_DEFAULT_RULES.source,
+    source,
     minPlays: clampInt(p.minPlays, 0, 1_000_000, 0),
     maxPlays: clampInt(p.maxPlays, 0, 1_000_000, 0),
     withinDays: clampInt(p.withinDays, 0, 3650, 0),
-    notWithinDays: clampInt(p.notWithinDays, 0, 3650, 0),
+    // "Songs I haven't played lately" is only true if there IS a staleness
+    // floor. Left at 0 the source is indistinguishable from "Songs I've
+    // played" — the label would be a lie. Default the floor when the source is
+    // `rediscover` and none was supplied; an explicit value is always honoured.
+    notWithinDays:
+      source === "rediscover" && notWithinDays === 0
+        ? REDISCOVER_DEFAULT_DAYS
+        : notWithinDays,
     artist: text(p.artist),
     title: text(p.title),
     limit: clampInt(p.limit, SMART_MIN_LIMIT, SMART_MAX_LIMIT, SMART_DEFAULT_RULES.limit),
