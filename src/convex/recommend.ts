@@ -727,7 +727,10 @@ function buildSections(
       title: meta.title,
       subtitle: meta.subtitle,
       personalised: id === "for_you" ? built.personalised : true,
-      items: ranked.map((entry) => entry.track),
+      // Carry each track's reason so the Home card can explain itself without a
+      // second round trip. `reasonFor` already resolved it from the term that
+      // actually scored highest, so this never invents a connection.
+      items: ranked.map((entry) => ({ ...entry.track, reason: entry.reason })),
     });
   }
 

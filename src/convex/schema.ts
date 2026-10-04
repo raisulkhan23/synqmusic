@@ -31,6 +31,17 @@ const schema = defineSchema(
 
       role: v.optional(roleValidator), // role of the user. do not remove
       following: v.optional(v.array(v.id("users"))), // social follows
+      // Cold-start taste picks from the "What are you into?" onboarding.
+      // Optional forever: an account that never saw onboarding has no taste,
+      // which is different from an empty one.
+      taste: v.optional(
+        v.object({
+          artists: v.array(v.string()),
+          moods: v.array(v.string()),
+        }),
+      ),
+      /** True once the listener has completed or dismissed onboarding. */
+      onboardingDone: v.optional(v.boolean()),
     }).index("email", ["email"]), // index for the email. do not remove or modify
 
     /**
@@ -91,6 +102,28 @@ const schema = defineSchema(
     })
       .index("by_user_track", ["userId", "trackId"])
       .index("by_user", ["userId"]),
+
+    // Saved smart playlists: a RULE SET recomputed on open, not a track list.
+    // `rules` mirrors lib/smartPlaylists.ts SmartRules exactly. Kept as a typed
+    // object rather than v.any() so a malformed write is rejected at the
+    // boundary instead of surfacing as a broken playlist later.
+    smartPlaylists: defineTable({
+      userId: v.id("users"),
+      name: v.string(),
+      rules: v.object({
+        source: v.string(),
+        minPlays: v.number(),
+        maxPlays: v.number(),
+        withinDays: v.number(),
+        notWithinDays: v.number(),
+        artist: v.string(),
+        title: v.string(),
+        limit: v.number(),
+        sort: v.string(),
+      }),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    }).index("by_user", ["userId"]),
 
     // user-created playlists referencing track ids (any source)
     playlists: defineTable({

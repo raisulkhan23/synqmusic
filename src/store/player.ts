@@ -63,6 +63,17 @@ import {
   type AnimationLevel,
 } from "@/lib/motion";
 import { planSleep, type SleepSelection } from "@/lib/sleepTimer";
+import {
+  applyArtistRepetition,
+  readArtistRepetition,
+  recentArtistKeys,
+  writeArtistRepetition,
+  type ArtistRepetitionLevel,
+} from "@/lib/artistRepetition";
+import {
+  readNotificationsEnabled,
+  writeNotificationsEnabled,
+} from "@/lib/notifications";
 import { toPlayableYoutube, type Playable } from "@/lib/playable";
 import { localAudioUrl } from "@/lib/opfsSink";
 import { resolveViaPiped } from "@/lib/pipedResolve";
@@ -560,6 +571,16 @@ interface PlayerStore {
    */
   animationLevel: AnimationLevel;
   setAnimationLevel: (level: AnimationLevel) => void;
+  /**
+   * How hard shuffle works to spread artists out instead of clustering them.
+   * Off / Balanced / Strict — see lib/artistRepetition.ts. Applied on every
+   * shuffle pick (queue pick and smart-shuffle candidate pool).
+   */
+  artistRepetition: ArtistRepetitionLevel;
+  setArtistRepetition: (level: ArtistRepetitionLevel) => void;
+  /** Whether to post an OS notification when the track changes in a hidden tab. */
+  notificationsEnabled: boolean;
+  setNotificationsEnabled: (enabled: boolean) => void;
   /** 0 = solid panels, 80 = maximum see-through. */
   cardTransparency: number;
   setCardTransparency: (value: number) => void;
@@ -630,6 +651,8 @@ interface PlayerStore {
   replaceCurrentStream: (playable: Playable, startSeconds?: number) => void;
   togglePlay: () => void;
   next: () => void;
+  /** Re-resolve and reload the current track (error-recovery "Retry"). */
+  retryCurrent: () => void;
   prev: () => void;
   seek: (time: number) => void;
   setVolume: (volume: number) => void;
@@ -924,6 +947,8 @@ const initialPerformanceMode = readBool("ss.performanceMode", false);
 // Motion budget. `readAnimationLevel` also migrates the older boolean toggle.
 const initialAnimationLevel = readAnimationLevel();
 const initialPointerEffects = readBool("ss.pointerEffects", true);
+const initialArtistRepetition = readArtistRepetition();
+const initialNotifications = readNotificationsEnabled();
 const initialWallpaper = localStorage.getItem("ss.wallpaper");
 const initialWallpaperType =
   localStorage.getItem("ss.wallpaperType") === "video" ? "video" : "image";
@@ -1056,6 +1081,7 @@ function pickShuffleIndex(
   currentIndex: number,
   smart: boolean,
 ): number {
+  const state = usePlayerStore.getState();
   const candidates: number[] = [];
   const recent = smart ? new Set(recentTrackIds) : null;
   for (let i = 0; i < queueLen; i++) {
@@ -1064,7 +1090,7 @@ function pickShuffleIndex(
     // queue entry plays right before this pick.
     if (i === (currentIndex + 1) % queueLen && queueLen > 2) continue;
     if (recent) {
-      const t = usePlayerStore.getState().queue[i];
+      const t = state.queue[i];
       if (t && recent.has(t.id)) continue;
     }
     candidates.push(i);
@@ -1077,7 +1103,17 @@ function pickShuffleIndex(
     if (fallback.length === 0) return currentIndex;
     return fallback[Math.floor(Math.random() * fallback.length)];
   }
-  return candidates[Math.floor(Math.random() * candidates.length)];
+  // Artist-repetition control: narrow the pool so a shuffle cannot cluster the
+  // same artist back to back. `applyArtistRepetition` falls back to the full
+  // pool when narrowing would empty it, so shuffle never dead-ends.
+  const recentArtists = recentArtistKeys(state.history.slice(0, 12));
+  const spread = applyArtistRepetition(
+    candidates,
+    (i) => state.queue[i]?.artistName,
+    recentArtists,
+    state.artistRepetition,
+  );
+  return spread[Math.floor(Math.random() * spread.length)]!;
 }
 
 // --- last-played memory (any source) ------------------------------------------
@@ -3311,7 +3347,14 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
         "Can't play \"" +
           track.title +
           '" \u2014 this track has no audio source',
-        { id: "yt-fallback" },
+        {
+          id: "yt-fallback",
+          // §47 error recovery: never a dead end. "Play next" (cancel) lets
+          // the listener move on immediately; "Retry" covers a transient
+          // source failure without reloading the app.
+          action: { label: "Retry", onClick: () => retryCurrent() },
+          cancel: { label: "Play next", onClick: () => next() },
+        },
       );
       return;
     }
@@ -3896,6 +3939,20 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       return;
     }
     advance();
+  };
+
+  /**
+   * Retry the current track. Used by the error-recovery toast when a track
+   * fails to play for a transient reason (a stream that would not resolve, an
+   * upstream hiccup): re-running `loadTrack` re-resolves and re-attaches the
+   * engine, which is exactly what a retry needs — and unlike a page reload it
+   * keeps the queue, the position and the session.
+   */
+  const retryCurrent = () => {
+    const track = get().current;
+    if (!track) return;
+    cancelTransition("retry");
+    loadTrack(track);
   };
 
   const prev = () => {
@@ -4787,6 +4844,12 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
         applyAnimationLevel(level);
         return { animationLevel: level };
       }),
+    artistRepetition: initialArtistRepetition,
+    setArtistRepetition: (level) =>
+      set(() => ({ artistRepetition: writeArtistRepetition(level) })),
+    notificationsEnabled: initialNotifications,
+    setNotificationsEnabled: (enabled) =>
+      set(() => ({ notificationsEnabled: writeNotificationsEnabled(enabled) })),
     pointerEffects: initialPointerEffects,
     togglePointerEffects: () =>
       set((state) => {
@@ -4904,6 +4967,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     replaceCurrentStream,
     togglePlay,
     next,
+    retryCurrent,
     prev,
     seek,
     setVolume,

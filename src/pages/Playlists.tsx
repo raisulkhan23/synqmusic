@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import { PlaylistCard } from "@/components/playlists/PlaylistCard";
 import { PlaylistDialog } from "@/components/playlists/PlaylistDialog";
 import { LikedSongsCard } from "@/components/playlists/LikedSongsCard";
+import { SmartPlaylists } from "@/components/playlists/SmartPlaylists";
 import { api } from "@/convex/_generated/api";
 import { useQuery } from "convex/react";
 import { useLocation } from "react-router";
@@ -100,6 +101,8 @@ export default function Playlists() {
           );
         })}
       </nav>
+
+      <SmartPlaylists />
 
       {/* Liked Songs is pinned above the user's own playlists. */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">

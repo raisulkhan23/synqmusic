@@ -6,7 +6,7 @@ import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Shelf } from "@/components/core/shelf";
 import { MixesRow } from "@/components/home/MixesRow";
 import { api } from "@/convex/_generated/api";
-import type { RecoCandidate } from "@/lib/recommend";
+import { explainReason, type RecoCandidate } from "@/lib/recommend";
 import { buildMixes, type Mix } from "@/lib/mixes";
 import { greeting } from "@/lib/format";
 import { toPlayableYoutube, type Playable } from "@/lib/playable";
@@ -1003,6 +1003,10 @@ export default function Home() {
                 item={toYtItem(item)}
                 onOpen={() => playRecommendation(section, item)}
                 onPlay={() => playRecommendation(section, item)}
+                // "Why this song?" — the engine's own reason, resolved from
+                // whichever signal actually scored highest. Absent when there
+                // was no real signal, so a card never shows a fake rationale.
+                meta={explainReason(item.reason) ?? undefined}
               />
             ))}
           </Shelf>

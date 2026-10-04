@@ -26,6 +26,8 @@ import { VisitTracker } from "@/components/analytics/VisitTracker";
 import { PwaManager } from "@/components/pwa/PwaManager";
 import { BackToTop } from "@/components/core/BackToTop";
 import { CommandPalette } from "@/components/core/CommandPalette";
+import { NotificationBridge } from "@/components/player/NotificationBridge";
+import { TasteOnboarding } from "@/components/onboarding/TasteOnboarding";
 import { api } from "@/convex/_generated/api";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
@@ -1036,6 +1038,8 @@ export function AppShell() {
       {/* Mounted once each, at the shell level. Both render null until they
           have something to show, so neither can affect layout. */}
       <CommandPalette />
+      <NotificationBridge />
+      <TasteOnboarding />
       <BackToTop />
       <FullscreenPlayer />
       <NowPlayingAnnouncer />

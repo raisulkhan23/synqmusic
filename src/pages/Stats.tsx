@@ -66,13 +66,21 @@ export default function Stats() {
 
   return (
     <div className="flex flex-col gap-8">
-      <header>
-        <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
-          Your listening stats
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Everything you've played through SYNQ, visualized.
-        </p>
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
+            Your listening stats
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Everything you've played through SYNQ, visualized.
+          </p>
+        </div>
+        <Link
+          to="/recap"
+          className="rounded-full border border-[rgb(var(--tint)_/_0.35)] bg-[rgb(var(--tint)_/_0.1)] px-4 py-2 text-sm font-semibold text-[rgb(var(--tint))] transition-colors hover:bg-[rgb(var(--tint)_/_0.18)]"
+        >
+          Open your Recap
+        </Link>
       </header>
 
       {isEmpty ? (

@@ -100,6 +100,7 @@ import Playlists from "./pages/Playlists.tsx";
 import PlaylistDetail from "./pages/PlaylistDetail.tsx";
 import Admin from "./pages/Admin.tsx";
 import Stats from "./pages/Stats.tsx";
+import Recap from "./pages/Recap.tsx";
 import Recent from "./pages/Recent.tsx";
 import Social from "./pages/Social.tsx";
 import Profile from "./pages/Profile.tsx";
@@ -509,6 +510,16 @@ createRoot(document.getElementById("root")!).render(
                       <RequireAuth>
                         <PageBoundary>
                           <Recent />
+                        </PageBoundary>
+                      </RequireAuth>
+                    }
+                  />
+                  <Route
+                    path="/recap"
+                    element={
+                      <RequireAuth>
+                        <PageBoundary>
+                          <Recap />
                         </PageBoundary>
                       </RequireAuth>
                     }

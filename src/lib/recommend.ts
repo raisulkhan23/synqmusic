@@ -35,6 +35,13 @@ export interface RecoCandidate {
   thumbnail: string;
   /** Real album name when the source supplied one; never invented. */
   album?: string;
+  /**
+   * Why the engine picked this track. Set on the candidates the Home rows are
+   * built from so the UI can show a "why" line without a second lookup. Absent
+   * on a bare candidate (e.g. a raw search hit) — never fabricated to fill a
+   * card.
+   */
+  reason?: RecoReason;
 }
 
 /** One observed listening event, already normalised. */
@@ -74,6 +81,39 @@ export interface UserSignals {
   likes: LikeSignal[];
   playlists: PlaylistSignal[];
   /** Populated when the listener is signed in; empty for anonymous. */
+}
+
+/**
+ * Human copy for a recommendation reason — the "why this song?" line.
+ *
+ * Every label describes a signal the engine actually used; none of them claims
+ * a genre or a mood, because SYNQ has no such metadata. `discovery` and
+ * `global_fallback` are deliberately worded as non-personal so a cold-start row
+ * never reads as if it knew the listener.
+ */
+export function explainReason(reason: RecoReason | null | undefined): string | null {
+  switch (reason) {
+    case "based_on_likes":
+      return "From songs you liked";
+    case "because_you_listened":
+      return "Based on your listening";
+    case "favorite_artist":
+      return "An artist you keep playing";
+    case "similar_song":
+      return "Sounds like your music";
+    case "playlist_related":
+      return "From your playlists";
+    case "discovery":
+      return "Something new";
+    case "new_release":
+      return "A fresh release";
+    case "continuing_mix":
+      return "Keeps the vibe going";
+    case "global_fallback":
+      return "Popular right now";
+    default:
+      return null;
+  }
 }
 
 /** Why a candidate was picked. Never emitted without a supporting signal. */

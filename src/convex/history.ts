@@ -3,6 +3,12 @@ import { ConvexError, v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
+import {
+  previousRecapPeriodBounds,
+  recapPeriodBounds,
+  type RecapInput,
+  type RecapPeriod,
+} from "../lib/recap";
 
 const playSnapshot = {
   source: v.optional(v.string()),
@@ -501,6 +507,210 @@ export const listeningStats = query({
       monthlyActivity: monthly,
       streak,
       activeHours: hourBuckets,
+    };
+  },
+});
+
+/**
+ * Aggregated listening facts for one Recap period (month / year / all time).
+ *
+ * Returns the ALREADY-AGGREGATED facts, not playEvents — the client shapes them
+ * into the recap cards with the shared pure `buildRecap`. The window is derived
+ * from the same `recapPeriodBounds` the UI labels the recap with, so the period
+ * a listener sees is exactly the period that was counted.
+ *
+ * Uses the append-only event log with the same legacy bridge as
+ * `listeningStats`: plays recorded before the log existed are counted from the
+ * summary row so they do not silently vanish from an older account's recap.
+ */
+export const recap = query({
+  args: { period: v.optional(v.string()) },
+  handler: async (ctx, { period }): Promise<RecapInput | null> => {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) return null;
+    const p: RecapPeriod =
+      period === "year" || period === "all" ? period : "month";
+    const now = Date.now();
+    const bounds = recapPeriodBounds(p, now);
+    const prevBounds = previousRecapPeriodBounds(p, now);
+
+    const rows = await ctx.db
+      .query("playHistory")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    const events = await ctx.db
+      .query("playEvents")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+
+    const meta = new Map<
+      string,
+      { title: string; artistName: string; coverUrl: string; duration: number }
+    >();
+    for (const row of rows) {
+      meta.set(row.trackId, {
+        title: row.title ?? "Unknown song",
+        artistName: row.artistName ?? "",
+        coverUrl: row.coverUrl ?? "",
+        duration: row.duration ?? 0,
+      });
+    }
+
+    const eventCounts = new Map<string, number>();
+    for (const event of events) {
+      eventCounts.set(event.trackId, (eventCounts.get(event.trackId) ?? 0) + 1);
+    }
+
+    const plays: Array<{ trackId: string; at: number }> = events.map((e) => ({
+      trackId: e.trackId,
+      at: e.playedAt,
+    }));
+    for (const row of rows) {
+      const legacy = Math.max(0, row.playCount - (eventCounts.get(row.trackId) ?? 0));
+      for (let i = 0; i < legacy; i++) {
+        plays.push({ trackId: row.trackId, at: row.playedAt });
+      }
+    }
+
+    const artistOf = (trackId: string): string =>
+      meta.get(trackId)?.artistName?.trim() ?? "";
+
+    const inRange = (at: number, b: { start: number; end: number }) =>
+      at >= b.start && at < b.end;
+    const periodPlays = plays.filter((play) => inRange(play.at, bounds));
+
+    const totalPlays = periodPlays.length;
+    const uniqueSongs = new Set(periodPlays.map((pl) => pl.trackId)).size;
+    const uniqueArtists = new Set(
+      periodPlays.map((pl) => artistOf(pl.trackId)).filter(Boolean),
+    ).size;
+
+    const durationOf = (trackId: string) => meta.get(trackId)?.duration ?? 0;
+    let totalSeconds = 0;
+    const playCountByTrack = new Map<string, number>();
+    const hourBuckets = new Array(24).fill(0) as number[];
+    const dayBuckets = new Map<string, { label: string; plays: number }>();
+    for (const play of periodPlays) {
+      totalSeconds += Math.max(0, durationOf(play.trackId));
+      playCountByTrack.set(play.trackId, (playCountByTrack.get(play.trackId) ?? 0) + 1);
+      hourBuckets[new Date(play.at).getHours()] += 1;
+      const d = new Date(play.at);
+      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      const bucket = dayBuckets.get(key);
+      if (bucket) bucket.plays += 1;
+      else
+        dayBuckets.set(key, {
+          label: d.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+          plays: 1,
+        });
+    }
+
+    let busiestDay: { label: string; plays: number } | null = null;
+    for (const bucket of dayBuckets.values()) {
+      if (bucket.plays > 0 && (busiestDay === null || bucket.plays > busiestDay.plays)) {
+        busiestDay = bucket;
+      }
+    }
+
+    // Streak is a property of the listener right now, not of the period.
+    const dayMs = 24 * 60 * 60 * 1000;
+    const today = new Date(now);
+    today.setHours(0, 0, 0, 0);
+    const todayStart = today.getTime();
+    const playedDays = new Set(plays.map((pl) => new Date(pl.at).setHours(0, 0, 0, 0)));
+    let streak = 0;
+    const startOffset = playedDays.has(todayStart) ? 0 : 1;
+    for (let i = startOffset; ; i++) {
+      if (playedDays.has(todayStart - i * dayMs)) streak += 1;
+      else break;
+    }
+
+    // New artists: those whose FIRST recorded play falls inside this period.
+    const firstPlayByArtist = new Map<string, number>();
+    for (const play of plays) {
+      const artist = artistOf(play.trackId);
+      if (!artist) continue;
+      const first = firstPlayByArtist.get(artist);
+      if (first === undefined || play.at < first) firstPlayByArtist.set(artist, play.at);
+    }
+    let newArtists = 0;
+    for (const first of firstPlayByArtist.values()) {
+      if (inRange(first, bounds)) newArtists += 1;
+    }
+
+    const topTracks = [...playCountByTrack.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([trackId, playsCount]) => {
+        const m = meta.get(trackId);
+        return {
+          trackId,
+          title: m?.title ?? "Unknown song",
+          artistName: m?.artistName ?? "Unknown artist",
+          coverUrl: m?.coverUrl ?? "",
+          plays: playsCount,
+        };
+      });
+
+    const artistAgg = new Map<
+      string,
+      { plays: number; tracks: Set<string>; coverUrl: string }
+    >();
+    for (const play of periodPlays) {
+      const artist = artistOf(play.trackId);
+      if (!artist) continue;
+      const entry = artistAgg.get(artist);
+      const coverUrl = meta.get(play.trackId)?.coverUrl ?? "";
+      if (entry) {
+        entry.plays += 1;
+        entry.tracks.add(play.trackId);
+        if (!entry.coverUrl && coverUrl) entry.coverUrl = coverUrl;
+      } else {
+        artistAgg.set(artist, {
+          plays: 1,
+          tracks: new Set([play.trackId]),
+          coverUrl,
+        });
+      }
+    }
+    const topArtists = [...artistAgg.entries()]
+      .sort((a, b) => b[1].plays - a[1].plays)
+      .slice(0, 8)
+      .map(([artistName, entry]) => ({
+        artistName,
+        plays: entry.plays,
+        trackCount: entry.tracks.size,
+        coverUrl: entry.coverUrl,
+      }));
+
+    let previous: RecapInput["previous"] = null;
+    if (prevBounds) {
+      const prevPlays = plays.filter((play) => inRange(play.at, prevBounds));
+      let prevSeconds = 0;
+      for (const play of prevPlays) prevSeconds += Math.max(0, durationOf(play.trackId));
+      previous = {
+        totalPlays: prevPlays.length,
+        totalSeconds: prevSeconds,
+        uniqueArtists: new Set(
+          prevPlays.map((pl) => artistOf(pl.trackId)).filter(Boolean),
+        ).size,
+      };
+    }
+
+    return {
+      period: p,
+      label: bounds.label,
+      totalPlays,
+      totalSeconds,
+      uniqueSongs,
+      uniqueArtists,
+      topTracks,
+      topArtists,
+      activeHours: hourBuckets,
+      busiestDay,
+      streak,
+      newArtists,
+      previous,
     };
   },
 });

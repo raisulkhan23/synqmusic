@@ -71,15 +71,30 @@ export function useTrackActions(
   );
   const invalidateRecommendCache = useMutation(api.recommend.invalidateCache);
 
-  const likeThis = () =>
-    toggleLike(item.id, {
+  /**
+   * Like / unlike. Unliking offers an Undo, because the heart is the one
+   * control a listener taps fast and by reflex — a mis-tap that silently
+   * removed a saved song was the whole reason this toast exists. The undo is a
+   * second toggle of the same track with the same snapshot, so it restores the
+   * row (metadata included) exactly as it was.
+   */
+  const likeThis = () => {
+    const wasLiked = isLiked;
+    const snapshot = {
       title,
       artistName,
       coverUrl: item.thumbnail,
       duration: item.duration,
       youtubeId: item.id,
       source,
-    });
+    };
+    toggleLike(item.id, snapshot);
+    if (wasLiked) {
+      toast(`Removed “${title}” from liked songs`, {
+        action: { label: "Undo", onClick: () => toggleLike(item.id, snapshot) },
+      });
+    }
+  };
 
   const playNext = () => {
     const state = usePlayerStore.getState();

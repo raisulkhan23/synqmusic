@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 export function PlaylistCard({ playlist }: { playlist: Doc<"playlists"> }) {
   const navigate = useNavigate();
   const removePlaylist = useMutation(api.playlists.remove);
+  const createPlaylist = useMutation(api.playlists.create);
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -24,7 +25,28 @@ export function PlaylistCard({ playlist }: { playlist: Doc<"playlists"> }) {
     setDeleting(true);
     try {
       await removePlaylist({ playlistId: playlist._id });
-      toast.success(`Deleted "${playlist.name}"`);
+      // Undo re-creates the playlist from the snapshot we already hold: the
+      // name, the description and (when the playlist was saved with them) the
+      // track snapshots. It is a NEW row rather than a resurrection of the old
+      // id, but the listener gets their playlist back either way. A legacy
+      // id-only playlist restores empty rather than with fabricated tracks.
+      const snapshots = playlist.trackSnapshots;
+      toast.success(`Deleted "${playlist.name}"`, {
+        action: {
+          label: "Undo",
+          onClick: () => {
+            void createPlaylist({
+              name: playlist.name,
+              ...(playlist.description
+                ? { description: playlist.description }
+                : {}),
+              ...(snapshots && snapshots.length > 0 ? { tracks: snapshots } : {}),
+            })
+              .then(() => toast.success("Playlist restored"))
+              .catch(() => toast.error("Couldn't restore the playlist"));
+          },
+        },
+      });
     } catch (error) {
       const message =
         error instanceof Error && error.message

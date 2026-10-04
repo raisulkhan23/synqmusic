@@ -48,6 +48,68 @@ export const updateName = mutation({
   },
 });
 
+/**
+ * Save the cold-start taste picks from the "What are you into?" onboarding.
+ *
+ * Bounded server-side as well as on the client: a listener (or a script) cannot
+ * store an unbounded list. Values are trimmed and de-duplicated, and the mood
+ * ids are validated against the known set so a stored profile can always be
+ * turned back into real search seeds.
+ */
+export const setTaste = mutation({
+  args: {
+    artists: v.array(v.string()),
+    moods: v.array(v.string()),
+  },
+  handler: async (ctx, { artists, moods }) => {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) throw new ConvexError("Sign in first");
+    const cleanArtists: string[] = [];
+    const seen = new Set<string>();
+    for (const artist of artists) {
+      const name = artist.trim().slice(0, 60);
+      if (!name) continue;
+      const key = name.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      cleanArtists.push(name);
+      if (cleanArtists.length >= 6) break;
+    }
+    const cleanMoods = [...new Set(moods.map((m) => m.trim()))].slice(0, 3);
+    await ctx.db.patch(userId, {
+      taste: { artists: cleanArtists, moods: cleanMoods },
+      onboardingDone: true,
+    });
+    return { artists: cleanArtists, moods: cleanMoods };
+  },
+});
+
+/** Mark onboarding complete/dismissed without changing the taste picks. */
+export const completeOnboarding = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) throw new ConvexError("Sign in first");
+    await ctx.db.patch(userId, { onboardingDone: true });
+  },
+});
+
+/** The signed-in user's stored taste profile (null before onboarding). */
+export const myTaste = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) return null;
+    const user = await ctx.db.get(userId);
+    if (user === null) return null;
+    return {
+      artists: user.taste?.artists ?? [],
+      moods: user.taste?.moods ?? [],
+      onboardingDone: user.onboardingDone ?? false,
+    };
+  },
+});
+
 /** Update the signed-in user's profile picture with a small data URL. */
 export const updateImage = mutation({
   args: { image: v.optional(v.string()) },

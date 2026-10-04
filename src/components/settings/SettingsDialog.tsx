@@ -16,6 +16,15 @@ import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { DEFAULT_CARD_TRANSPARENCY } from "@/lib/cardTransparency";
 import { ANIMATION_LEVEL_META, ANIMATION_LEVELS } from "@/lib/motion";
+import {
+  ARTIST_REPETITION_LEVELS,
+  ARTIST_REPETITION_META,
+} from "@/lib/artistRepetition";
+import {
+  notificationPermission,
+  notificationsSupported,
+  requestNotificationPermission,
+} from "@/lib/notifications";
 import { downloadJson } from "@/lib/download";
 import { useSleepCountdown } from "@/lib/sleepTimer";
 import { CROSSFADE_CHOICES } from "@/lib/transition";
@@ -70,6 +79,7 @@ import {
   RotateCcw,
   Trash2,
   UserRound,
+  Users,
 } from "lucide-react";
 import {
   useCallback,
@@ -214,6 +224,10 @@ export function SettingsDialog({
   const togglePerformanceMode = usePlayerStore((s) => s.togglePerformanceMode);
   const animationLevel = usePlayerStore((s) => s.animationLevel);
   const setAnimationLevel = usePlayerStore((s) => s.setAnimationLevel);
+  const artistRepetition = usePlayerStore((s) => s.artistRepetition);
+  const setArtistRepetition = usePlayerStore((s) => s.setArtistRepetition);
+  const notificationsEnabled = usePlayerStore((s) => s.notificationsEnabled);
+  const setNotificationsEnabled = usePlayerStore((s) => s.setNotificationsEnabled);
   const themeMode = usePlayerStore((s) => s.themeMode);
   const setThemeMode = usePlayerStore((s) => s.setThemeMode);
   const hideExplicit = usePlayerStore((s) => s.hideExplicit);
@@ -997,6 +1011,76 @@ export function SettingsDialog({
             onToggle={() => {
               toggleSmartShuffle();
               toast(smartShuffle ? "Smart shuffle off" : "Smart shuffle on");
+            }}
+          />
+          {/* Artist-repetition control: Off / Balanced / Strict. Complements
+              smart shuffle — that avoids the same TRACK, this spreads ARTISTS
+              out so a shuffle cannot play one artist three songs in a row. */}
+          <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
+            <div className="flex items-center gap-2">
+              <Users className="size-4 text-[rgb(var(--tint))]" />
+              <div className="min-w-0">
+                <p className="text-sm font-medium">Artist repetition</p>
+                <p className="text-xs text-muted-foreground">
+                  {ARTIST_REPETITION_META[artistRepetition].description}
+                </p>
+              </div>
+            </div>
+            <div
+              role="radiogroup"
+              aria-label="Artist repetition"
+              className="mt-2 flex gap-1 rounded-lg border border-white/10 bg-white/[0.02] p-1"
+            >
+              {ARTIST_REPETITION_LEVELS.map((level) => (
+                <button
+                  key={level}
+                  type="button"
+                  role="radio"
+                  aria-checked={artistRepetition === level}
+                  onClick={() => {
+                    setArtistRepetition(level);
+                    toast(`Artist repetition: ${ARTIST_REPETITION_META[level].label}`);
+                  }}
+                  className={cn(
+                    "flex-1 rounded-md px-2 py-1.5 text-xs font-semibold transition-colors",
+                    artistRepetition === level
+                      ? "bg-[rgb(var(--tint))] text-black"
+                      : "text-muted-foreground hover:bg-white/[0.05] hover:text-foreground",
+                  )}
+                >
+                  {ARTIST_REPETITION_META[level].label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Web notifications. The toggle is the ONLY place permission is
+              requested, and only after an explicit click — never on load. */}
+          <ToggleRow
+            label="Track-change notifications"
+            description={
+              !notificationsSupported()
+                ? "Not supported in this browser"
+                : notificationPermission() === "denied"
+                  ? "Blocked in your browser settings"
+                  : "Show what's playing when you're in another tab"
+            }
+            on={notificationsEnabled}
+            onToggle={() => {
+              void (async () => {
+                if (notificationsEnabled) {
+                  setNotificationsEnabled(false);
+                  toast("Track notifications off");
+                  return;
+                }
+                const permission = await requestNotificationPermission();
+                if (permission !== "granted") {
+                  toast.error("Allow notifications in your browser to use this");
+                  return;
+                }
+                setNotificationsEnabled(true);
+                toast("Track notifications on");
+              })();
             }}
           />
           <ToggleRow
