@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router";
+import { readCustomResolver } from "@/lib/customResolver";
 import { usePlayerStore } from "@/store/player";
 import { noteTrackDownloaded, noteTrackRemoved } from "@/store/player";
 import {
@@ -102,6 +104,11 @@ export default function DownloadHub() {
   );
   const [starting, setStarting] = useState(false);
   const resolveStream = useAction(api.youtube.resolveStream);
+  const navigate = useNavigate();
+  // Read lazily from storage, the same way the settings section does. This is
+  // what decides whether the empty state explains the blocker or stays quiet
+  // for someone who has already configured a resolver.
+  const [hasCustomResolver] = useState(() => readCustomResolver() !== "");
 
   /**
    * Download whatever is playing, resolving its stream first.
@@ -299,11 +306,35 @@ export default function DownloadHub() {
             <p className="max-w-prose text-sm text-muted-foreground">
               Nothing saved yet. Open a track&rsquo;s menu and choose{" "}
               <span className="text-foreground">Download</span>, or use the
-              button above while something is playing. Transfers use ranged
-              requests, so they resume after an interruption instead of
-              starting over, and they write straight to disk rather than
-              sitting in memory.
+              button above while something is playing.
             </p>
+            {/* WHY THIS IS EMPTY, AND THE ONE THING THAT UNBLOCKS IT.
+                This state used to promise ranged, resumable transfers as if
+                they simply had not been used yet. In practice every download
+                fails, because Google refuses to hand stream URLs to
+                data-centre IPs — which is every server-side resolver,
+                including this app's own backend. Saying so here, with the fix
+                one click away, is the difference between a broken feature and
+                an honest one. */}
+            {!hasCustomResolver ? (
+              <div className="max-w-prose rounded-xl border border-amber-500/25 bg-amber-500/[0.07] px-3.5 py-3">
+                <p className="flex items-start gap-2 text-sm text-amber-200/90">
+                  <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                  <span>
+                    Google blocks every public resolver, so downloads cannot
+                    start until SYNQ has a resolver of your own. It takes one
+                    command and stays on your device.
+                  </span>
+                </p>
+                <button
+                  type="button"
+                  onClick={() => navigate("/settings#resolver")}
+                  className="mt-2.5 rounded-lg bg-white/90 px-3 py-1.5 text-xs font-semibold text-black hover:bg-white"
+                >
+                  Set up a resolver
+                </button>
+              </div>
+            ) : null}
           </div>
         ) : (
           <ul className="flex flex-col gap-2">
