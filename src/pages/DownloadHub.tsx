@@ -16,6 +16,7 @@ import {
   parseStoredName,
   type StoredFile,
 } from "@/lib/opfsSink";
+import { Input } from "@/components/ui/input";
 import { useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { toast } from "sonner";
@@ -26,6 +27,7 @@ import {
   Check,
   Download,
   HardDriveDownload,
+  Link2,
   Loader2,
   Pause,
   Play,
@@ -103,6 +105,11 @@ export default function DownloadHub() {
     typeof navigator === "undefined" ? true : navigator.onLine,
   );
   const [starting, setStarting] = useState(false);
+  // The direct-link downloader. Deliberately separate from the resolver path:
+  // it needs no provider cooperation at all, only a URL that will answer a
+  // cross-origin ranged request.
+  const [directUrl, setDirectUrl] = useState("");
+  const [directBusy, setDirectBusy] = useState(false);
   const resolveStream = useAction(api.youtube.resolveStream);
   const navigate = useNavigate();
   // Read lazily from storage, the same way the settings section does. This is
@@ -138,6 +145,65 @@ export default function DownloadHub() {
       toast.error(err instanceof Error ? err.message : "Download failed");
     } finally {
       setStarting(false);
+    }
+  };
+
+  /**
+   * Download any direct media URL.
+   *
+   * THIS IS THE DOWNLOAD PATH THAT DOES NOT DEPEND ON A RESOLVER. Every
+   * resolver route is blocked by Google's IP binding (see the note on the
+   * empty state), but a URL that is *already* a plain audio file needs no
+   * resolution at all — SYNQ just pulls the bytes. That covers a user's own
+   * resolver output, a Creative-Commons track (Jamendo, archive.org, an
+   * artist's own download page), a podcast enclosure, or any file host that
+   * answers a cross-origin ranged request.
+   *
+   * It reuses the real engine: the same `requestTrackDownload` →
+   * `DownloadManager` → OPFS pipeline the track menu uses, so it ranges,
+   * resumes, validates and reports exactly like every other download. The one
+   * honest limitation is CORS — a host that forbids cross-origin reads cannot
+   * be fetched from a web page, and the transfer fails with the browser's own
+   * error rather than a success that quietly wrote nothing.
+   */
+  const downloadFromUrl = async () => {
+    const raw = directUrl.trim();
+    if (!raw || directBusy) return;
+    let parsed: URL;
+    try {
+      parsed = new URL(raw);
+    } catch {
+      toast.error("That doesn't look like a link");
+      return;
+    }
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      toast.error("Only http and https links can be downloaded");
+      return;
+    }
+    const tail = decodeURIComponent(
+      parsed.pathname.split("/").filter(Boolean).pop() ?? "",
+    );
+    const filename = (tail || `${parsed.hostname} download`).slice(0, 120);
+    // Stable id derived from the URL so re-downloading the same link reuses
+    // (and overwrites) its own offline copy instead of piling up duplicates.
+    const trackId = `url:${parsed.host}${parsed.pathname}`;
+    setDirectBusy(true);
+    try {
+      const result = await requestTrackDownload(
+        { id: trackId, title: filename, artistName: parsed.hostname },
+        () => Promise.resolve({ url: raw, filename }),
+        { force: true },
+      );
+      if (result.started) {
+        toast.success("Download started");
+        setDirectUrl("");
+      } else {
+        toast.error(result.detail ?? "Couldn't start that download");
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Download failed");
+    } finally {
+      setDirectBusy(false);
     }
   };
 
@@ -284,6 +350,72 @@ export default function DownloadHub() {
             Nothing playing right now.
           </p>
         )}
+      </section>
+
+      {/* ── Download from a link ────────────────────────────────────────────
+          The resolver-free path. If you already have a URL that IS the audio
+          file, no provider has to cooperate — SYNQ pulls the bytes with the
+          same resumable engine the track menu uses. This is the honest answer
+          to "make download work" while Google keeps refusing to hand stream
+          URLs to any server: it needs nothing from Google at all. */}
+      <section>
+        <h2 className="mb-3 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
+          Download from a link
+        </h2>
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+          <div className="flex items-start gap-3">
+            <Link2 className="mt-0.5 size-4 shrink-0 text-[rgb(var(--tint))]" />
+            <p className="text-sm text-muted-foreground">
+              Paste a direct audio link — your own resolver&rsquo;s output, a
+              Creative-Commons track, an artist&rsquo;s download page or a
+              podcast file. SYNQ saves it to this device and keeps it for
+              offline playback.
+            </p>
+          </div>
+          <form
+            className="mt-3 flex flex-col gap-2 sm:flex-row"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void downloadFromUrl();
+            }}
+          >
+            <Input
+              type="url"
+              inputMode="url"
+              autoComplete="off"
+              spellCheck={false}
+              placeholder="https://example.com/song.mp3"
+              value={directUrl}
+              onChange={(event) => setDirectUrl(event.target.value)}
+              disabled={!opfsSupported() || directBusy}
+              aria-label="Direct audio link"
+            />
+            <button
+              type="submit"
+              disabled={
+                !opfsSupported() || directBusy || directUrl.trim() === ""
+              }
+              className={cn(
+                "flex shrink-0 items-center justify-center gap-2 rounded-lg border px-4 py-2 text-xs font-semibold transition-colors",
+                opfsSupported() && directUrl.trim() !== ""
+                  ? "border-white/15 bg-white/[0.06] hover:border-[rgb(var(--tint)_/_0.6)] hover:bg-[rgb(var(--tint)_/_0.12)] hover:text-[rgb(var(--tint))]"
+                  : "cursor-not-allowed border-white/10 bg-white/[0.04] text-muted-foreground/50",
+              )}
+            >
+              {directBusy ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Download className="size-3.5" />
+              )}
+              {directBusy ? "Starting…" : "Download"}
+            </button>
+          </form>
+          <p className="mt-2 text-[11px] text-muted-foreground/80">
+            {opfsSupported()
+              ? "The link must allow cross-origin downloads; a host that blocks them fails with your browser's own network error."
+              : "This browser has no filesystem for downloads."}
+          </p>
+        </div>
       </section>
 
       <section>

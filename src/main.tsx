@@ -22,6 +22,7 @@ import {
   readCardTransparency,
 } from "@/lib/cardTransparency";
 import { usePlayerStore } from "@/store/player";
+import { applyAnimationLevel, readAnimationLevel } from "@/lib/motion";
 import "./index.css";
 
 // SYNQ defaults to dark; restore the user's theme mode before first paint.
@@ -36,6 +37,10 @@ if (localStorage.getItem("ss.liquidGlass") === "0") {
 if (localStorage.getItem("ss.performanceMode") === "1") {
   document.documentElement.classList.add("perf-lite");
 }
+// Motion budget, restored before paint for exactly the same reason: "reduced"
+// and "off" must not flash a frame of full motion on the way in. This also
+// migrates the older boolean Reduce-motion setting.
+applyAnimationLevel(readAnimationLevel());
 // Restore the saved card transparency before paint so glass panels never flash
 // at the default opacity first.
 applyCardTransparency(readCardTransparency());
@@ -292,9 +297,16 @@ const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
  *  only AppShell ever sets leaves every one of them running at full cost. */
 function PerformanceModeSync() {
   const performanceMode = usePlayerStore((s) => s.performanceMode);
+  const animationLevel = usePlayerStore((s) => s.animationLevel);
   useEffect(() => {
     document.documentElement.classList.toggle("perf-lite", performanceMode);
   }, [performanceMode]);
+  // Keeps the motion level applied even if the store changes it somewhere that
+  // does not go through `setAnimationLevel` (a future reset, a hydration). The
+  // applier is idempotent, so running it here and from the setter is safe.
+  useEffect(() => {
+    applyAnimationLevel(animationLevel);
+  }, [animationLevel]);
   return null;
 }
 
@@ -306,10 +318,17 @@ function PerformanceModeSync() {
  *  supported way to tell the library to stop moving things. */
 function MotionPrefs({ children }: { children: React.ReactNode }) {
   const performanceMode = usePlayerStore((s) => s.performanceMode);
+  const animationLevel = usePlayerStore((s) => s.animationLevel);
+  // framer-motion animates from JavaScript, so the CSS rules cannot reach it.
+  // `always` stops it outright (performance mode, or motion Off); `user` lets
+  // the OS preference decide for the calmer Reduced level; `never` is full.
+  const reducedMotion = performanceMode || animationLevel === "off"
+    ? "always"
+    : animationLevel === "reduced"
+      ? "user"
+      : "never";
   return (
-    <MotionConfig reducedMotion={performanceMode ? "always" : "never"}>
-      {children}
-    </MotionConfig>
+    <MotionConfig reducedMotion={reducedMotion}>{children}</MotionConfig>
   );
 }
 

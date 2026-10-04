@@ -1416,6 +1416,28 @@ html.reduce-motion *::after {
     }
   }
 
+  /* Reduced motion (Settings → Appearance → Animations → Reduced).
+     Calmer than full, alive unlike off: the ambient, infinitely-looping
+     decorations are paused and long transitions are shortened, but short
+     feedback and the real busy spinner stay, because removing those makes an
+     app feel broken rather than calm. */
+  html[data-motion="reduced"] .aurora-orb,
+  html[data-motion="reduced"] .liquid-glass::before,
+  html[data-motion="reduced"] .mobile-island-aura,
+  html[data-motion="reduced"] .mobile-player-art,
+  html[data-motion="reduced"] .mobile-live-cue i,
+  html[data-motion="reduced"] .settings-liquid-glass::before,
+  html[data-motion="reduced"] .settings-jump-glass::before {
+    animation-play-state: paused !important;
+  }
+  html[data-motion="reduced"] .glass-card,
+  html[data-motion="reduced"] .pointer-glow {
+    transition-duration: 140ms !important;
+  }
+  html[data-motion="reduced"] .cursor-trail-layer {
+    display: none !important;
+  }
+
   /* Performance mode.
      One class on <html> removes every decoration that costs frames on a
      weaker machine, without touching layout, playback or the player:

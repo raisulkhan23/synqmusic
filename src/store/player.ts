@@ -56,6 +56,12 @@ import {
   CARD_TRANSPARENCY_KEY,
   readCardTransparency,
 } from "@/lib/cardTransparency";
+import {
+  ANIMATION_LEVEL_KEY,
+  applyAnimationLevel,
+  readAnimationLevel,
+  type AnimationLevel,
+} from "@/lib/motion";
 import { toPlayableYoutube, type Playable } from "@/lib/playable";
 import { localAudioUrl } from "@/lib/opfsSink";
 import { resolveViaPiped } from "@/lib/pipedResolve";
@@ -277,6 +283,8 @@ export function prewarmYoutubeStream(videoId: string): void {
 }
 
 export type RepeatMode = "off" | "all" | "one";
+/** Re-exported so consumers import the level from the store, as with the rest. */
+export type { AnimationLevel };
 
 let likeMutation: LikeMutation | null = null;
 
@@ -531,6 +539,18 @@ interface PlayerStore {
    */
   performanceMode: boolean;
   togglePerformanceMode: () => void;
+  /**
+   * Motion budget: Full / Reduced / Off.
+   *
+   * Deliberately SEPARATE from `performanceMode`. That flag is about the cost
+   * of drawing (blur, sheen, aurora orbs); this one is about motion itself,
+   * and the two are not the same trade — a powerful machine may still want
+   * calm motion, and a weak one may still want full motion with the expensive
+   * glass off. `Full` is the default so nothing moves for anyone who has not
+   * asked for it.
+   */
+  animationLevel: AnimationLevel;
+  setAnimationLevel: (level: AnimationLevel) => void;
   /** 0 = solid panels, 80 = maximum see-through. */
   cardTransparency: number;
   setCardTransparency: (value: number) => void;
@@ -892,6 +912,8 @@ const initialVisualizer = readBool("ss.visualizer", true);
 // Performance mode is opt-in: a default-off machine is the reason it exists,
 // but nothing should change for anyone who has not asked for it.
 const initialPerformanceMode = readBool("ss.performanceMode", false);
+// Motion budget. `readAnimationLevel` also migrates the older boolean toggle.
+const initialAnimationLevel = readAnimationLevel();
 const initialPointerEffects = readBool("ss.pointerEffects", true);
 const initialWallpaper = localStorage.getItem("ss.wallpaper");
 const initialWallpaperType =
@@ -4712,6 +4734,16 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       set((state) => {
         writeSetting("ss.performanceMode", state.performanceMode ? "0" : "1");
         return { performanceMode: !state.performanceMode };
+      }),
+
+    animationLevel: initialAnimationLevel,
+    setAnimationLevel: (level) =>
+      set(() => {
+        writeSetting(ANIMATION_LEVEL_KEY, level);
+        // The DOM applier also mirrors the legacy boolean, so this is the one
+        // place the class, the data attribute and the old key all change.
+        applyAnimationLevel(level);
+        return { animationLevel: level };
       }),
     pointerEffects: initialPointerEffects,
     togglePointerEffects: () =>

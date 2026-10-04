@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { DEFAULT_CARD_TRANSPARENCY } from "@/lib/cardTransparency";
+import { ANIMATION_LEVEL_META, ANIMATION_LEVELS } from "@/lib/motion";
 import { downloadJson } from "@/lib/download";
 import { useSleepCountdown } from "@/lib/sleepTimer";
 import { CROSSFADE_CHOICES } from "@/lib/transition";
@@ -210,6 +211,8 @@ export function SettingsDialog({
   const togglePointerEffects = usePlayerStore((s) => s.togglePointerEffects);
   const performanceMode = usePlayerStore((s) => s.performanceMode);
   const togglePerformanceMode = usePlayerStore((s) => s.togglePerformanceMode);
+  const animationLevel = usePlayerStore((s) => s.animationLevel);
+  const setAnimationLevel = usePlayerStore((s) => s.setAnimationLevel);
   const themeMode = usePlayerStore((s) => s.themeMode);
   const setThemeMode = usePlayerStore((s) => s.setThemeMode);
   const hideExplicit = usePlayerStore((s) => s.hideExplicit);
@@ -237,9 +240,6 @@ export function SettingsDialog({
   );
   const [settingsDepth, setSettingsDepth] = useState(
     () => localStorage.getItem("ss.settingsDepth") !== "0",
-  );
-  const [reduceMotion, setReduceMotion] = useState(
-    () => localStorage.getItem("ss.reduceMotion") === "1",
   );
   const [focusLayout, setFocusLayout] = useState<FocusLayout>(() => {
     const saved = localStorage.getItem("ss.focusLayout");
@@ -357,10 +357,6 @@ export function SettingsDialog({
         onFocusLayoutChange,
       );
   }, [onOpenChange, pageMode]);
-
-  useEffect(() => {
-    document.documentElement.classList.toggle("reduce-motion", reduceMotion);
-  }, [reduceMotion]);
 
   // A resize under a stationary cursor fires no pointerenter, so the cached
   // bounds (and the glow that follows them) would stay offset by the size
@@ -667,7 +663,9 @@ export function SettingsDialog({
     setTrackPalettes(true);
     setSettingsShimmer(true);
     setSettingsDepth(true);
-    setReduceMotion(false);
+    // Motion budget lives in the store now, and its applier writes the legacy
+    // `ss.reduceMotion` key too, so this is the only line the reset needs.
+    setAnimationLevel("full");
     if (!liquidGlass) toggleLiquidGlass();
     if (
       usePlayerStore.getState().cardTransparency !== DEFAULT_CARD_TRANSPARENCY
@@ -683,7 +681,6 @@ export function SettingsDialog({
     localStorage.setItem("ss.trackPalettes", "1");
     localStorage.setItem("ss.settingsShimmer", "1");
     localStorage.setItem("ss.settingsDepth", "1");
-    localStorage.setItem("ss.reduceMotion", "0");
     localStorage.setItem("ss.liquidGlass", "1");
     localStorage.setItem("ss.ambientGlow", "1");
     localStorage.setItem("ss.pointerEffects", "1");
@@ -1384,17 +1381,44 @@ export function SettingsDialog({
                   toast(next ? "Surface depth on" : "Surface depth off");
                 }}
               />
-              <ToggleRow
-                label="Reduce motion"
-                description="Minimize animation for a calmer, more accessible interface"
-                on={reduceMotion}
-                onToggle={() => {
-                  const next = !reduceMotion;
-                  setReduceMotion(next);
-                  localStorage.setItem("ss.reduceMotion", next ? "1" : "0");
-                  toast(next ? "Reduced motion on" : "Reduced motion off");
-                }}
-              />
+              {/* Animations: Full / Reduced / Off. Replaces the older
+                  Reduce-motion boolean with the three levels the rest of the
+                  app now understands — and it is a store setting, so it
+                  applies from boot, not only while this dialog is open. */}
+              <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
+                <p className="text-sm font-medium">Animations</p>
+                <p className="text-xs text-muted-foreground">
+                  {ANIMATION_LEVEL_META[animationLevel].description}
+                </p>
+                <div
+                  role="radiogroup"
+                  aria-label="Animation level"
+                  className="mt-2 flex gap-1 rounded-lg border border-white/10 bg-white/[0.02] p-1"
+                >
+                  {ANIMATION_LEVELS.map((level) => (
+                    <button
+                      key={level}
+                      type="button"
+                      role="radio"
+                      aria-checked={animationLevel === level}
+                      onClick={() => {
+                        setAnimationLevel(level);
+                        toast(
+                          `Animations ${ANIMATION_LEVEL_META[level].label.toLowerCase()}`,
+                        );
+                      }}
+                      className={cn(
+                        "flex-1 rounded-md px-2 py-1.5 text-xs font-semibold transition-colors",
+                        animationLevel === level
+                          ? "bg-[rgb(var(--tint))] text-black"
+                          : "text-muted-foreground hover:bg-white/[0.05] hover:text-foreground",
+                      )}
+                    >
+                      {ANIMATION_LEVEL_META[level].label}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <button
                 type="button"
                 onClick={resetVisualPreferences}

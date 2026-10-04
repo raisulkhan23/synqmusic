@@ -4,8 +4,10 @@ import { PlaylistCard } from "@/components/playlists/PlaylistCard";
 import { MediaCard } from "@/components/tracks/MediaCard";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Shelf } from "@/components/core/shelf";
+import { MixesRow } from "@/components/home/MixesRow";
 import { api } from "@/convex/_generated/api";
 import type { RecoCandidate } from "@/lib/recommend";
+import { buildMixes, type Mix } from "@/lib/mixes";
 import { greeting } from "@/lib/format";
 import { toPlayableYoutube, type Playable } from "@/lib/playable";
 import { shuffleList } from "@/lib/queueOrder";
@@ -137,6 +139,16 @@ const MOOD_LAUNCHES = [
     tone: "from-emerald-500/25 to-lime-500/5",
   },
   {
+    // Guilty pleasures — SYNQ's playful take on "corny". It is a curated
+    // SEARCH, not a taste model: SYNQ has no genre or mood metadata anywhere,
+    // so calling a track "corny" by inference would be fiction. Running a real
+    // query that returns real results on demand is the honest version, and it
+    // is framed as fun rather than as a judgement about the music.
+    label: "Guilty pleasures",
+    query: "cheesy 80s love songs",
+    tone: "from-rose-500/25 to-fuchsia-500/5",
+  },
+  {
     label: "Bengali moods",
     query: "Bengali lofi", // 10 results
     tone: "from-teal-500/25 to-cyan-500/5",
@@ -161,6 +173,9 @@ export default function Home() {
   const likedCount = usePlayerStore((s) => Object.keys(s.liked).length);
   const likedLoaded = usePlayerStore((s) => s.likedLoaded);
   const playlists = useQuery(api.playlists.myPlaylists);
+  // Liked tracks with their metadata, for the Favorites Mix. Empty for a
+  // signed-out visitor, which is why the mix simply does not appear for them.
+  const likedRemote = useQuery(api.likes.myLikedRemote);
   const listeningStats = useQuery(api.history.listeningStats);
   const spotifyChart = useAction(api.spotify.spotifyChart);
   const searchYt = useAction(api.youtube.searchYoutube);
@@ -421,6 +436,47 @@ export default function Home() {
         rest.filter((r) => r.id !== item.id),
       ),
     );
+  };
+
+  // ── Your Mixes ────────────────────────────────────────────────────────────
+  // Assembled from data this page has ALREADY fetched — the play history, the
+  // most-played shelf, the recommendation sections and the live discovery
+  // shelves. No extra network request, no second recommender, and nothing is
+  // cached: a mix is recomputed from whatever the shelves currently hold, so
+  // it is genuinely personal rather than a frozen snapshot.
+  const mixes: Mix[] = useMemo(
+    () =>
+      buildMixes({
+        favorites: likedRemote
+          ?.filter((r) => r.youtubeId)
+          .map((r) => ({
+            id: r.youtubeId as string,
+            title: r.title,
+            artist: r.artistName,
+            duration: r.duration,
+            thumbnail: r.coverUrl,
+          })),
+        mostPlayed: mostPlayedItems,
+        recent: historyItems,
+        discovery: remote.discover,
+        // Prefer the live new-release shelf; fall back to the chart, which is
+        // also genuinely "new" music to this listener.
+        newMusic: remote.newReleases ?? trending ?? undefined,
+        soundAlike: recoSections
+          ?.find((section) => section.id === "sound_alike")
+          ?.items.map(toYtItem),
+        timeOfDay: remote.timeOfDay,
+      }),
+    [likedRemote, mostPlayedItems, historyItems, remote, trending, recoSections],
+  );
+
+  // Playing a mix is exactly playing a shelf: the first track starts and the
+  // rest of the mix becomes the queue, so autoplay, repeat and shuffle all
+  // keep working through the existing player. No separate mix engine exists.
+  const playMix = (mix: Mix) => {
+    const [first, ...rest] = mix.items;
+    if (!first) return;
+    playRemoteItem(first, rest);
   };
 
   // "Play something random" — random seed, random pick.
@@ -909,6 +965,10 @@ export default function Home() {
           ))}
         </Shelf>
       ) : null}
+
+      {/* ── Your Mixes. Placed above the recommendation shelves because a
+          press-to-play set is a faster way in than a row of single tracks. */}
+      <MixesRow mixes={mixes} onPlay={playMix} />
 
       {/* ── The recommendation shelves. The engine already decided what is
           honest to show; this only decides how it looks. Skeleton while the

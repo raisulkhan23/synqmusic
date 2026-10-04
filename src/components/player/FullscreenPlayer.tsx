@@ -40,6 +40,7 @@ import { usePlayerStore } from "@/store/player";
 import { toast } from "sonner";
 import {
   ChevronDown,
+  Crosshair,
   Gauge,
   Heart,
   ListMusic,
@@ -166,6 +167,24 @@ function LyricsPanel({
   const current = usePlayerStore((s) => s.current);
   const seek = usePlayerStore((s) => s.seek);
 
+  //
+  // Jump back to the line that is playing now. The panel already follows the
+  // active line automatically, but a listener who scrolls away to read ahead
+  // had no way back except scrolling by hand. This is that way back.
+  const jumpToCurrent = () => {
+    const el = containerRef.current?.querySelector<HTMLElement>(
+      "[data-active='true']",
+    );
+    if (!el) return;
+    const smooth =
+      typeof window === "undefined" ||
+      !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    el.scrollIntoView({
+      block: "center",
+      behavior: smooth ? "smooth" : "auto",
+    });
+  };
+
   // Fetching, the active-line calculation and the auto-scroll all moved into
   // `useTrackLyrics`. They used to be private to this panel, which meant the
   // fullscreen player's now-lyric line would have needed its own copy — two
@@ -193,6 +212,17 @@ function LyricsPanel({
               <span className="rounded-full border border-white/10 bg-white/[0.05] px-2 py-0.5 text-[10px] whitespace-nowrap text-muted-foreground">
                 No timings
               </span>
+            )}
+            {synced && activeIndex >= 0 && (
+              <button
+                type="button"
+                aria-label="Jump to the current line"
+                title="Back to the current line"
+                onClick={jumpToCurrent}
+                className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
+              >
+                <Crosshair className="size-4" />
+              </button>
             )}
             <button
               type="button"
