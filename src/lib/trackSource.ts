@@ -166,7 +166,7 @@ function describeFailure(
   // particular mirrors were additionally unreachable.
   const anyBlocked = failures.some((f) => blockedDetail.test(f.detail));
   if (anyBlocked) {
-    return "Google is blocking every public resolver. Add your own in Settings → Offline downloads.";
+    return "Google is blocking every public resolver. Add your own in Settings → Offline downloads, or use Record in Downloads to capture playback directly.";
   }
 
   // Otherwise one line per instance, capped: this string is shown in a toast,

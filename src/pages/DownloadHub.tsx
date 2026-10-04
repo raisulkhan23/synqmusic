@@ -8,10 +8,18 @@ import {
   requestTrackDownload,
 } from "@/lib/downloads";
 import { resolveStreamUrl } from "@/lib/trackSource";
+import {
+  captureFilename,
+  captureSupported,
+  pickCaptureMimeType,
+  startAudioCapture,
+  CaptureError,
+} from "@/lib/captureDownload";
 import { installDownloadAdapter } from "@/lib/installDownloadAdapter";
 import {
   deleteStoredDownload,
   listStoredDownloads,
+  OpfsSink,
   opfsSupported,
   parseStoredName,
   type StoredFile,
@@ -24,12 +32,14 @@ import { cn } from "@/lib/utils";
 import {
   AlertTriangle,
   Check,
+  Circle,
   Download,
   HardDriveDownload,
   Loader2,
   Pause,
   Play,
   RefreshCw,
+  Square,
   Trash2,
   WifiOff,
   X,
@@ -111,6 +121,74 @@ export default function DownloadHub() {
   const [hasCustomResolver] = useState(() => readCustomResolver() !== "");
 
   /**
+   * The resolver-free path: record what the tab is already playing.
+   *
+   * This is the only download route that does not need a stream URL, and it is
+   * therefore the only one that works with no resolver configured and with
+   * every public mirror blocked. It is also real-time and re-encodes, so the
+   * button says so rather than pretending to be a normal download.
+   */
+  const [recording, setRecording] = useState(false);
+  const [recordedBytes, setRecordedBytes] = useState(0);
+  const captureRef = useRef<Awaited<ReturnType<typeof startAudioCapture>> | null>(
+    null,
+  );
+  const pollRef = useRef<number | null>(null);
+  /**
+   * WHO this recording is of, fixed when it started.
+   *
+   * This has to be a snapshot rather than a read of `current` at stop time. A
+   * recording runs in real time, so the queue can advance mid-take; reading the
+   * live track then would file the audio of song A under song B's id, and
+   * offline playback would confidently play the wrong song.
+   */
+  const subjectRef = useRef<{ id: string; title: string; artist: string } | null>(
+    null,
+  );
+  const canCapture = opfsSupported() && captureSupported();
+
+  const clearPoll = useCallback(() => {
+    if (pollRef.current !== null) window.clearInterval(pollRef.current);
+    pollRef.current = null;
+  }, []);
+
+  const stopRecording = useCallback(async () => {
+    const capture = captureRef.current;
+    const subject = subjectRef.current;
+    captureRef.current = null;
+    subjectRef.current = null;
+    clearPoll();
+    setRecording(false);
+    setRecordedBytes(0);
+    if (!capture || !subject) return;
+    const trackId = subject.id;
+    try {
+      const bytes = await capture.stop();
+      const filename = captureFilename(
+        subject.title,
+        subject.artist,
+        pickCaptureMimeType(),
+      );
+      // Written through the SAME sink the download engine uses, so a recording
+      // is a first-class download: it lands in the same folder, is found by the
+      // same reader, and plays back offline through the same lookup by track
+      // id. The stored list re-reads the directory on its own interval, so
+      // there is nothing to refresh by hand here.
+      const sink = await OpfsSink.open(filename, trackId);
+      await sink.append(bytes);
+      await sink.commit();
+      noteTrackDownloaded(trackId);
+      toast.success(`Saved ${filename}`);
+    } catch (err) {
+      toast.error(
+        err instanceof CaptureError || err instanceof Error
+          ? err.message
+          : "Couldn't save the recording",
+      );
+    }
+  }, [clearPoll]);
+
+  /**
    * Download whatever is playing, resolving its stream first.
    *
    * `requestTrackDownload` resolves before it enqueues, so a provider refusal
@@ -140,6 +218,48 @@ export default function DownloadHub() {
       setStarting(false);
     }
   };
+
+  const beginRecording = useCallback(async () => {
+    if (!current || recording) return;
+    try {
+      const capture = await startAudioCapture();
+      captureRef.current = capture;
+      // Frozen at the moment recording began, so the audio is always filed
+      // under the track that was actually playing.
+      subjectRef.current = {
+        id: current.youtubeId ?? current.id,
+        title: current.title,
+        artist: current.artistName,
+      };
+      setRecordedBytes(0);
+      setRecording(true);
+      // The recorder emits no progress event, so the live byte count is
+      // sampled. One second is frequent enough to feel live and cheap enough
+      // to be invisible.
+      clearPoll();
+      pollRef.current = window.setInterval(() => {
+        setRecordedBytes(capture.bytes);
+      }, 1_000);
+    } catch (err) {
+      setRecording(false);
+      toast.error(
+        err instanceof CaptureError || err instanceof Error
+          ? err.message
+          : "Couldn't start recording",
+      );
+    }
+  }, [clearPoll, current, recording]);
+
+  // An abandoned capture would leave the tab's share indicator on and the
+  // recorder running to the end of the page's life, so unmounting must end it.
+  useEffect(() => {
+    return () => {
+      captureRef.current?.dispose();
+      captureRef.current = null;
+      subjectRef.current = null;
+      if (pollRef.current !== null) window.clearInterval(pollRef.current);
+    };
+  }, []);
 
   // One manager for the whole app, not this page. It lives in `lib/downloads`
   // so a track's context menu — which is used on pages where this hub is not
@@ -278,6 +398,41 @@ export default function DownloadHub() {
               )}
               {opfsSupported() ? (starting ? "Starting…" : "Download") : "Unavailable"}
             </button>
+            {/* The resolver-free route. Offered first when nothing else can
+                work, because it is the only one that does not need a stream
+                URL — and it is labelled "Record" rather than "Download"
+                because it really does record in real time and re-encode. */}
+            <button
+              type="button"
+              onClick={() =>
+                recording ? void stopRecording() : void beginRecording()
+              }
+              disabled={!canCapture}
+              title={
+                canCapture
+                  ? "Record this tab's audio in real time and save it — no resolver needed"
+                  : opfsSupported()
+                    ? "This browser can't record its own audio"
+                    : "This browser has no filesystem for downloads"
+              }
+              className={cn(
+                "flex shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors",
+                canCapture
+                  ? recording
+                    ? "border-red-400/40 bg-red-500/15 text-red-200 hover:bg-red-500/25"
+                    : "border-white/15 bg-white/[0.06] hover:border-[rgb(var(--tint)_/_0.6)] hover:bg-[rgb(var(--tint)_/_0.12)] hover:text-[rgb(var(--tint))]"
+                  : "cursor-not-allowed border-white/10 bg-white/[0.04] text-muted-foreground/50",
+              )}
+            >
+              {recording ? (
+                <Square className="size-3.5 fill-current" />
+              ) : (
+                <Circle className="size-3.5 fill-current" />
+              )}
+              {recording
+                ? `Stop${recordedBytes ? ` · ${formatBytes(recordedBytes)}` : ""}`
+                : "Record"}
+            </button>
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">
@@ -321,9 +476,11 @@ export default function DownloadHub() {
                 <p className="flex items-start gap-2 text-sm text-amber-200/90">
                   <AlertTriangle className="mt-0.5 size-4 shrink-0" />
                   <span>
-                    Google blocks every public resolver, so downloads cannot
-                    start until SYNQ has a resolver you control — on this
-                    machine, your network, or a server of your own.
+                    Google blocks every public resolver, so a normal
+                    download needs a resolver you control. Not ready for that?
+                    <span className="text-foreground"> Record</span> saves the
+                    audio this tab is already playing, with no resolver at
+                    all — in real time.
                   </span>
                 </p>
                 <button
