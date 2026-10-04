@@ -17,8 +17,8 @@ import {
 import { buildTrackShareUrl } from "@/lib/shareLink";
 import { copyText } from "@/lib/clipboard";
 import { toPlayableYoutube } from "@/lib/playable";
-import { requestTrackDownload } from "@/lib/downloads";
-import { resolveStreamUrl } from "@/lib/trackSource";
+import { downloadAvailability } from "@/lib/downloadAuth";
+import { requestAuthorizedDownload } from "@/lib/authorizedDownload";
 import { useAction } from "convex/react";
 import { cleanArtistName, cleanTrackTitle, type YtItem } from "@/lib/youtube";
 import { usePlayerStore } from "@/store/player";
@@ -235,9 +235,17 @@ export function TrackActionsMenu({
 }) {
   const actions = useTrackActions(item, source);
   const navigate = useNavigate();
-  const resolveStream = useAction(api.youtube.resolveStream);
-  const trackItem = item;
+  const authorizeDownload = useAction(api.downloads.authorizeDownload);
   const { title } = actions;
+  /**
+   * Whether this track can be saved at all.
+   *
+   * A playable audioUrl is not permission to make a copy: almost everything
+   * SYNQ plays is a stream it may only PLAY. The Download action is therefore
+   * rendered only for tracks from an authorized source, and the server
+   * independently re-checks that flag on every request.
+   */
+  const availability = downloadAvailability(item.id);
 
   return (
     <>
@@ -299,29 +307,43 @@ export function TrackActionsMenu({
             exists — would leave every track menu looking identical to how it
             did before downloads existed, with no way to discover the feature.
           */}
-          <DropdownMenuItem
-            className="gap-2"
-            onSelect={() => {
-              void (async () => {
-                const result = await requestTrackDownload(actions.track, () =>
-                  resolveStreamUrl(resolveStream, trackItem, "high"),
-                );
-                if (result.started) {
-                  toast.success("Download started");
-                } else if (result.reason === "unresolved") {
-                  toast.error(
-                    result.detail ?? "Couldn't get a stream for this track",
+          {/*
+            Download.
+
+            Rendered ONLY for tracks SYNQ is authorized to distribute as files.
+            The previous version sent the listener's own resolved stream URL to
+            the download engine for every track, which meant pressing Download
+            on an ordinary YouTube track tried to save a copy SYNQ had no right
+            to make. There is no disabled placeholder here on purpose: an action
+            that is always unavailable is noise, and its absence is the honest
+            answer.
+          */}
+          {availability.allowed ? (
+            <DropdownMenuItem
+              className="gap-2"
+              onSelect={() => {
+                void (async () => {
+                  const result = await requestAuthorizedDownload(
+                    authorizeDownload,
+                    item.id,
                   );
-                } else {
-                  toast.error("This track can't be downloaded right now");
-                }
-                navigate("/downloads");
-              })();
-            }}
-          >
-            <Download className="size-4" />
-            Download
-          </DropdownMenuItem>
+                  if (result.started) {
+                    toast.success("Download started");
+                  } else if (result.refusal.retryable) {
+                    toast.error(result.refusal.message, {
+                      description: "Try again in a moment.",
+                    });
+                  } else {
+                    toast.error(result.refusal.message);
+                  }
+                  navigate("/downloads");
+                })();
+              }}
+            >
+              <Download className="size-4" />
+              Download
+            </DropdownMenuItem>
+          ) : null}
           <DropdownMenuItem
             className="gap-2"
             onSelect={(event) => {

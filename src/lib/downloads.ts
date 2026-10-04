@@ -106,6 +106,21 @@ export function forgetResolved(trackId: string): void {
 }
 
 /**
+ * Record the authorized source for a download BEFORE enqueuing it.
+ *
+ * The adapter factory reads this map at transfer time, so the URL a download
+ * pulls from is the one the backend just authorized for that exact track — it
+ * cannot be supplied by the caller, and a download whose entry is missing is
+ * refused by the factory rather than silently producing an empty file.
+ */
+export function rememberResolved(
+  trackId: string,
+  source: { url: string; filename: string },
+): void {
+  resolved.set(trackId, source);
+}
+
+/**
  * Ask for `track` to be downloaded.
  *
  * `resolve` performs the provider lookup and returns the stream URL. It is

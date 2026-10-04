@@ -7,6 +7,7 @@ import {
   getDownloadManager,
   requestTrackDownload,
 } from "@/lib/downloads";
+import { requestAuthorizedDownload } from "@/lib/authorizedDownload";
 import { resolveStreamUrl } from "@/lib/trackSource";
 import { trackIdFromShareUrl } from "@/lib/shareLink";
 import type { YtItem } from "@/lib/youtube";
@@ -113,6 +114,12 @@ export default function DownloadHub() {
   const [directUrl, setDirectUrl] = useState("");
   const [directBusy, setDirectBusy] = useState(false);
   const resolveStream = useAction(api.youtube.resolveStream);
+  /**
+   * The download authority. Unlike `resolveStream` above — which exists only
+   * for the legacy link-download panels further down — this decides whether a
+   * track may be saved at all, server-side.
+   */
+  const authorizeDownload = useAction(api.downloads.authorizeDownload);
   // Metadata (title/artist/cover) for a shared SYNQ track, resolved from its
   // id via oembed so the downloaded file is named after the song, not a hash.
   const fetchTrackMeta = useAction(api.youtube.trackMeta);
@@ -133,19 +140,22 @@ export default function DownloadHub() {
     if (!current || starting) return;
     setStarting(true);
     try {
-      const result = await requestTrackDownload(current, () =>
-        resolveStreamUrl(resolveStream, {
-          id: current.youtubeId ?? current.id,
-          title: current.title,
-          artist: current.artistName,
-          duration: current.duration,
-          thumbnail: current.coverUrl,
-        }),
+      // The authorized path: SYNQ's backend decides whether this track may be
+      // saved, and only returns a URL if it may. The page never resolves a
+      // stream itself and never accepts a URL from anywhere but the server.
+      const result = await requestAuthorizedDownload(
+        authorizeDownload,
+        current.id,
       );
-      if (result.started) toast.success("Download started");
-      else if (result.reason === "unresolved")
-        toast.error(result.detail ?? "Couldn't get a stream for this track");
-      else toast.error("This track can't be downloaded right now");
+      if (result.started) {
+        toast.success("Download started");
+      } else if (result.refusal.retryable) {
+        toast.error(result.refusal.message, {
+          description: "Try again in a moment.",
+        });
+      } else {
+        toast.error(result.refusal.message);
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Download failed");
     } finally {

@@ -42,6 +42,16 @@ export interface JamendoTrack {
   /** Direct link to the track on Jamendo — where a listener goes to support
    *  the artist. */
   shareUrl: string;
+  /**
+   * Whether the ARTIST has released this track for download.
+   *
+   * This is the one flag in the whole app that can authorize a download, and
+   * it used to be parsed straight off the API response and thrown away. Keeping
+   * it is what lets the UI decide whether to offer a Download action at all;
+   * the server still re-verifies it independently (see `convex/downloads.ts`),
+   * because a client-side flag is a hint, never an authority.
+   */
+  downloadAllowed: boolean;
 }
 
 /** The shape Jamendo actually returns, after the envelope is unwrapped. */
@@ -101,6 +111,10 @@ export function normalizeTrack(raw: RawTrack): JamendoTrack | null {
     licenseUrl: (raw.license_ccurl ?? "").trim(),
     tags,
     shareUrl: (raw.shareurl || raw.shorturl || "").trim(),
+    // Strictly `=== true`. An absent or non-boolean value means the provider did
+    // not say yes, and "probably fine" is exactly the reasoning that turns a
+    // licence boundary into a bug.
+    downloadAllowed: raw.audiodownload_allowed === true,
   };
 }
 
