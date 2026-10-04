@@ -8,6 +8,8 @@ import {
   requestTrackDownload,
 } from "@/lib/downloads";
 import { resolveStreamUrl } from "@/lib/trackSource";
+import { trackIdFromShareUrl } from "@/lib/shareLink";
+import type { YtItem } from "@/lib/youtube";
 import { installDownloadAdapter } from "@/lib/installDownloadAdapter";
 import {
   deleteStoredDownload,
@@ -111,6 +113,9 @@ export default function DownloadHub() {
   const [directUrl, setDirectUrl] = useState("");
   const [directBusy, setDirectBusy] = useState(false);
   const resolveStream = useAction(api.youtube.resolveStream);
+  // Metadata (title/artist/cover) for a shared SYNQ track, resolved from its
+  // id via oembed so the downloaded file is named after the song, not a hash.
+  const fetchTrackMeta = useAction(api.youtube.trackMeta);
   const navigate = useNavigate();
   // Read lazily from storage, the same way the settings section does. This is
   // what decides whether the empty state explains the blocker or stays quiet
@@ -180,15 +185,25 @@ export default function DownloadHub() {
       toast.error("Only http and https links can be downloaded");
       return;
     }
-    const tail = decodeURIComponent(
-      parsed.pathname.split("/").filter(Boolean).pop() ?? "",
-    );
-    const filename = (tail || `${parsed.hostname} download`).slice(0, 120);
-    // Stable id derived from the URL so re-downloading the same link reuses
-    // (and overwrites) its own offline copy instead of piling up duplicates.
-    const trackId = `url:${parsed.host}${parsed.pathname}`;
     setDirectBusy(true);
     try {
+      // A SYNQ share link names a SONG, not a file: `/t/<id>`. It is resolved
+      // through the exact pipeline the player and the track menu already use,
+      // so it needs no special download machinery — only the id is read here.
+      const sharedId = trackIdFromShareUrl(raw);
+      if (sharedId) {
+        await startSharedTrackDownload(sharedId);
+        return;
+      }
+
+      // Otherwise the pasted URL must already BE the media.
+      const tail = decodeURIComponent(
+        parsed.pathname.split("/").filter(Boolean).pop() ?? "",
+      );
+      const filename = (tail || `${parsed.hostname} download`).slice(0, 120);
+      // Stable id derived from the URL so re-downloading the same link reuses
+      // (and overwrites) its own offline copy instead of piling up duplicates.
+      const trackId = `url:${parsed.host}${parsed.pathname}`;
       const result = await requestTrackDownload(
         { id: trackId, title: filename, artistName: parsed.hostname },
         () => Promise.resolve({ url: raw, filename }),
@@ -204,6 +219,53 @@ export default function DownloadHub() {
       toast.error(err instanceof Error ? err.message : "Download failed");
     } finally {
       setDirectBusy(false);
+    }
+  };
+
+  /**
+   * Download the song behind a SYNQ share link (`/t/<id>`).
+   *
+   * The link carries only a track id, so this is the SAME resolution the player
+   * performs: read the metadata (for a real filename), resolve a stream through
+   * `resolveStreamUrl` — backend first, then the listener's own Piped mirrors —
+   * and hand the result to the shared download engine. It inherits that
+   * pipeline's honesty too: if Google refuses to hand a stream to any resolver,
+   * the user sees the real reason immediately instead of a transfer that fails
+   * silently in the background.
+   */
+  const startSharedTrackDownload = async (videoId: string) => {
+    let meta: {
+      title: string;
+      artist: string;
+      coverUrl: string;
+      duration: number;
+    } | null = null;
+    try {
+      meta = await fetchTrackMeta({ videoId });
+    } catch {
+      // oembed can be rate-limited or geo-blocked; the id alone still resolves.
+    }
+    const title = meta?.title?.trim() || videoId;
+    const artist = meta?.artist?.trim() || "SYNQ";
+    const track: YtItem = {
+      id: videoId,
+      title,
+      artist,
+      duration: meta?.duration ?? 0,
+      thumbnail: meta?.coverUrl ?? "",
+    };
+    const stream = await resolveStreamUrl(resolveStream, track);
+    const filename = `${artist} - ${title}`;
+    const result = await requestTrackDownload(
+      { id: videoId, title, artistName: artist },
+      () => Promise.resolve({ url: stream.url, filename }),
+      { force: true },
+    );
+    if (result.started) {
+      toast.success("Download started");
+      setDirectUrl("");
+    } else {
+      toast.error(result.detail ?? "Couldn't start that download");
     }
   };
 
@@ -366,10 +428,10 @@ export default function DownloadHub() {
           <div className="flex items-start gap-3">
             <Link2 className="mt-0.5 size-4 shrink-0 text-[rgb(var(--tint))]" />
             <p className="text-sm text-muted-foreground">
-              Paste a direct audio link — your own resolver&rsquo;s output, a
-              Creative-Commons track, an artist&rsquo;s download page or a
-              podcast file. SYNQ saves it to this device and keeps it for
-              offline playback.
+              Paste a SYNQ song link (the one you share) to download that
+              track, or a direct audio link — your resolver&rsquo;s output, a
+              Creative-Commons track or a podcast file. SYNQ saves it to this
+              device for offline playback.
             </p>
           </div>
           <form
@@ -384,7 +446,7 @@ export default function DownloadHub() {
               inputMode="url"
               autoComplete="off"
               spellCheck={false}
-              placeholder="https://example.com/song.mp3"
+              placeholder="https://synq.app/t/dQw4w9WgXcQ  ·  https://example.com/song.mp3"
               value={directUrl}
               onChange={(event) => setDirectUrl(event.target.value)}
               disabled={!opfsSupported() || directBusy}
@@ -412,7 +474,7 @@ export default function DownloadHub() {
           </form>
           <p className="mt-2 text-[11px] text-muted-foreground/80">
             {opfsSupported()
-              ? "The link must allow cross-origin downloads; a host that blocks them fails with your browser's own network error."
+              ? "A SYNQ song link is resolved like playback, so it needs a working resolver. A direct audio link must itself allow cross-origin downloads."
               : "This browser has no filesystem for downloads."}
           </p>
         </div>

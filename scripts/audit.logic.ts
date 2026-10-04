@@ -24,7 +24,12 @@ import {
   matchesAlbum,
   uniqueTracks,
 } from "../src/lib/artistLinks";
-import { isTrackId, buildTrackShareUrl, shareableId } from "../src/lib/shareLink";
+import {
+  isTrackId,
+  buildTrackShareUrl,
+  shareableId,
+  trackIdFromShareUrl,
+} from "../src/lib/shareLink";
 import { formatRemaining } from "../src/lib/sleepTimer";
 
 let pass = 0;
@@ -291,6 +296,46 @@ check("greeting is a string", typeof greeting() === "string");
     buildTrackShareUrl("https://x.dev", { id: "a/b" } as never),
     "https://x.dev/t/a%2Fb",
   );
+
+  // Round-trip: a shared link must parse back to the id it was built from.
+  const shared = buildTrackShareUrl("https://synq.app", {
+    id: "dQw4w9WgXcQ",
+  } as never);
+  eq("share link round-trips", trackIdFromShareUrl(shared), "dQw4w9WgXcQ");
+  eq(
+    "share link round-trips with trailing-slash origin",
+    trackIdFromShareUrl(
+      buildTrackShareUrl("https://synq.app/", { id: "kJQP7kiw5Fk" } as never),
+    ),
+    "kJQP7kiw5Fk",
+  );
+
+  // ANY origin is accepted: preview, custom domain, localhost.
+  eq(
+    "share link from a localhost preview",
+    trackIdFromShareUrl("http://localhost:5173/t/dQw4w9WgXcQ"),
+    "dQw4w9WgXcQ",
+  );
+  eq(
+    "share link ignores query and hash",
+    trackIdFromShareUrl("https://synq.app/t/dQw4w9WgXcQ?ref=x#y"),
+    "dQw4w9WgXcQ",
+  );
+
+  // Rejections: not a share link, not a valid id, not http(s).
+  eq("rejects a search url", trackIdFromShareUrl("https://x.dev/search?q=a"), null);
+  eq("rejects a bare id", trackIdFromShareUrl("dQw4w9WgXcQ"), null);
+  eq("rejects a bare path", trackIdFromShareUrl("/t/dQw4w9WgXcQ"), null);
+  eq("rejects a short id", trackIdFromShareUrl("https://x.dev/t/abc"), null);
+  eq(
+    "rejects extra path segments",
+    trackIdFromShareUrl("https://x.dev/t/dQw4w9WgXcQ/edit"),
+    null,
+  );
+  eq("rejects a non-track path", trackIdFromShareUrl("https://x.dev/a/dQw4w9WgXcQ"), null);
+  eq("rejects javascript: urls", trackIdFromShareUrl("javascript:/t/dQw4w9WgXcQ"), null);
+  eq("rejects garbage", trackIdFromShareUrl("not a url"), null);
+  eq("rejects empty", trackIdFromShareUrl(""), null);
 }
 
 // -------------------------------------------------------- sleepTimer

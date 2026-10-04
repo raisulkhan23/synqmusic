@@ -55,6 +55,36 @@ export function buildTrackShareUrl(origin: string, track: Playable): string {
   return `${origin.replace(/\/$/, "")}${TRACK_PATH}/${encodeURIComponent(id)}`;
 }
 
+/** The bare path segment SYNQ share links use, without the leading slash. */
+const TRACK_SEGMENT = TRACK_PATH.replace(/^\//, "");
+
+/**
+ * Pull the track id out of a SYNQ share link (`/t/<id>`).
+ *
+ * This is the inverse of {@link buildTrackShareUrl}, and it exists so a pasted
+ * share link can be turned back into something playable or downloadable. It
+ * accepts ANY origin — a preview deployment, a custom domain, localhost —
+ * because the id is the only part of the URL that identifies the song; that is
+ * precisely why the link carries nothing else.
+ *
+ * Returns null for anything that is not a well-formed share link, so a caller
+ * can fall back to treating the pasted text as a plain URL.
+ */
+export function trackIdFromShareUrl(value: string): string | null {
+  if (typeof value !== "string") return null;
+  let url: URL;
+  try {
+    url = new URL(value.trim());
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+  const segments = url.pathname.split("/").filter(Boolean);
+  // Exactly `/t/<id>` — a bare id, no extra path. Query and hash are ignored.
+  if (segments.length !== 2 || segments[0] !== TRACK_SEGMENT) return null;
+  return isTrackId(segments[1]) ? segments[1]! : null;
+}
+
 /**
  * Rebuild a playable from metadata resolved off the id.
  *
