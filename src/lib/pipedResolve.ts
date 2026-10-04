@@ -30,6 +30,8 @@
  * routing it through the proxy would add a hop and a failure mode for nothing.
  */
 
+import { readCustomResolver } from "@/lib/customResolver";
+
 /**
  * Public Piped instances, tried in order.
  *
@@ -47,6 +49,24 @@ const PIPED_INSTANCES = [
   "https://pipedapi.reallyaweso.me",
   "https://pipedapi.leptons.xyz",
 ] as const;
+
+/**
+ * The user's own resolver, if they configured one.
+ *
+ * Tried FIRST, and deliberately not merged into the public list: it is the
+ * only entry that is expected to work, so a failure here is worth reporting
+ * on its own rather than lumped in with mirrors that are blocked by YouTube.
+ */
+function customInstance(): string | null {
+  const custom = readCustomResolver();
+  return custom || null;
+}
+
+/** The user's resolver first, then the public mirrors. */
+function instanceList(): string[] {
+  const custom = customInstance();
+  return custom ? [custom, ...PIPED_INSTANCES] : [...PIPED_INSTANCES];
+}
 
 /** Per-instance resolve budget. Short, because a dead host must not stall us. */
 const RESOLVE_TIMEOUT_MS = 6_000;
@@ -83,7 +103,7 @@ export async function resolveViaPiped(
 
   const failures: PipedResolutionFailure[] = [];
 
-  for (const base of PIPED_INSTANCES) {
+  for (const base of instanceList()) {
     const host = hostOf(base);
     let res: Response;
     try {

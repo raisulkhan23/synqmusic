@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { CardTransparencySection } from "@/components/settings/CardTransparencySection";
 import { ExplorationSection } from "@/components/settings/ExplorationSection";
 import { ImportSection } from "@/components/settings/ImportSection";
+import { ResolverSection } from "@/components/settings/ResolverSection";
 import { useSettingsNavigation } from "@/components/settings/useSettingsNavigation";
 import {
   Dialog,
@@ -2308,6 +2309,11 @@ export function SettingsDialog({
 
         {/* import */}
         <ImportSection open={open} />
+
+        <Separator className="bg-white/[0.07]" />
+
+        {/* offline downloads — the resolver downloads need */}
+        <ResolverSection />
 
         <Separator className="bg-white/[0.07]" />
 

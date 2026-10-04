@@ -32,7 +32,12 @@ import { readFileSync } from "node:fs";
 // nested type — the test then failed to PARSE, which says nothing about the
 // product. Compiling the real source is both simpler and honest.
 const realPiped = new Bun.Transpiler({ loader: "ts" }).transformSync(
-  readFileSync("src/lib/pipedResolve.ts", "utf8"),
+  readFileSync("src/lib/pipedResolve.ts", "utf8")
+    // The module imports `readCustomResolver`, which needs a `localStorage`
+    // this harness does not have. It is injected as a function PARAMETER
+    // instead, which shadows the import for the whole body — the same trick
+    // used for `fetch` below.
+    .replace(/^import[\s\S]*?from "@\/lib\/[^"]*";\n/gm, ""),
 );
 
 const PIPED_INSTANCES: string[] = (() => {
@@ -70,9 +75,13 @@ function makeResolver(handler: (url: string) => ScriptedResponse) {
   // than the function itself.
   const factory = new Function(
     "fetch",
+    "readCustomResolver",
     `${realPiped.replace(/^export /gm, "")}
      return resolveViaPiped;`,
-  ) as (f: typeof fetch) => (videoId: string) => Promise<PipedResult>;
+  ) as (
+    f: typeof fetch,
+    readCustom: () => string,
+  ) => (videoId: string) => Promise<PipedResult>;
 
   const fakeFetch = (async (input: RequestInfo | URL) => {
     const url = String(input);
@@ -90,7 +99,9 @@ function makeResolver(handler: (url: string) => ScriptedResponse) {
     };
   }) as unknown as typeof fetch;
 
-  return { resolve: factory(fakeFetch), calls };
+  // No custom resolver unless a test asks for one, so the public-mirror
+  // assertions below describe the out-of-the-box behaviour.
+  return { resolve: factory(fakeFetch, () => ""), calls };
 }
 
 // ---------------------------------------------------------------------------
@@ -251,8 +262,8 @@ console.log("\nThe message the user sees");
   const msg = describeFailure(
     { reason: "Sign in to confirm you're not a bot" },
     [
-      { instance: "a.test", detail: "HTTP 502" },
-      { instance: "b.test", detail: "Failed to fetch" },
+      { instance: "a.test", detail: "Failed to fetch" },
+      { instance: "b.test", detail: "no audio or muxed stream" },
     ],
   );
   check(
@@ -263,7 +274,11 @@ console.log("\nThe message the user sees");
   check("names the mirror that failed", msg.includes("a.test"), msg);
   check("says how many mirrors were tried", msg.includes("2 mirrors"), msg);
   check("uses the singular for one mirror", describeFailure(null, [{ instance: "a.test", detail: "x" }]).includes("1 mirror:"));
-  check("keeps each failure's detail", msg.includes("HTTP 502") && msg.includes("Failed to fetch"), msg);
+  check(
+    "keeps each failure's detail",
+    msg.includes("Failed to fetch") && msg.includes("no audio or muxed stream"),
+    msg,
+  );
 }
 
 {
@@ -278,14 +293,76 @@ console.log("\nThe message the user sees");
 }
 
 {
+  // A MIXED set, so this exercises the per-host listing rather than the
+  // "every source is bot-blocked" summary, which is a different branch with
+  // its own assertions below.
   const many = Array.from({ length: 9 }, (_, i) => ({
     instance: `h${i}.test`,
-    detail: "HTTP 502",
+    detail: i % 2 === 0 ? "Failed to fetch" : "HTTP 404",
   }));
   const msg = describeFailure(null, many);
   check("caps a long list of hosts", !msg.includes("h5.test"), msg);
   check("still reports the true total", msg.includes("9 mirrors") && msg.includes("+6 more"), msg);
   check("stays a single line", !msg.includes("\n"), JSON.stringify(msg));
+}
+
+{
+  // When EVERY source is bot-blocked — the state of the public mirrors today —
+  // the message must name the cause and the fix rather than list hostnames.
+  const blocked = [
+    { instance: "api.piped.private.coffee", detail: "HTTP 500" },
+    { instance: "pipedapi.ducks.party", detail: "HTTP 502" },
+  ];
+  const withBody = [
+    {
+      instance: "api.piped.private.coffee",
+      detail: "SignInConfirmNotBotException: blocked anonymous watch access",
+    },
+  ];
+  const a = describeFailure(null, blocked);
+  check("all-blocked names the cause", /block/i.test(a), a);
+  check("all-blocked points at Settings", /Settings/i.test(a), a);
+  check("all-blocked does not list hostnames", !a.includes("pipedapi"), a);
+  check(
+    "an explicit bot-check body is also treated as blocked",
+    /Settings/i.test(describeFailure(null, withBody)),
+    describeFailure(null, withBody),
+  );
+  check("one blocked mirror is enough to trigger it", /Settings/i.test(describeFailure(null, [blocked[0]])));
+
+  // THE EXACT failure that was reported, kept as a regression. One mirror
+  // proved blocked (HTTP 500) while two others failed to connect. An `every()`
+  // rule called this unblocked and showed a bare hostname list, which is the
+  // message that told the user nothing and prompted the original complaint.
+  const reported = describeFailure(null, [
+    { instance: "api.piped.private.coffee", detail: "HTTP 500" },
+    { instance: "pipedapi.ducks.party", detail: "Failed to fetch" },
+    { instance: "pipedapi.adminforge.de", detail: "Failed to fetch" },
+  ]);
+  check(
+    "the REPORTED failure points at the fix",
+    /Settings/i.test(reported),
+    reported,
+  );
+  check(
+    "the REPORTED failure does not list hostnames",
+    !reported.includes("adminforge"),
+    reported,
+  );
+  check(
+    "a proven block alongside transport failures still counts",
+    describeFailure(null, [
+      { instance: "a.test", detail: "Failed to fetch" },
+      { instance: "b.test", detail: "HTTP 500" },
+    ]).includes("Settings"),
+  );
+
+  // A transport failure on its own proves nothing, so it keeps the per-host
+  // listing — the reader needs to see WHICH host was unreachable.
+  const transport = [{ instance: "gone.test", detail: "Failed to fetch" }];
+  const t = describeFailure(null, transport);
+  check("a lone transport failure still names the host", t.includes("gone.test"), t);
+  check("a lone transport failure is not called a block", !/Settings/i.test(t), t);
 }
 
 // ---------------------------------------------------------------------------
@@ -445,7 +522,11 @@ console.log("\nresolveStreamUrl — the reason the user is shown");
     !String(err?.message).includes("not a bot"),
     String(err?.message),
   );
-  check("the thrown reason names the mirror", String(err?.message).includes("piped.private.coffee"), String(err?.message));
+  check(
+    "the thrown reason points at the fix when a mirror proved blocked",
+    /Settings/i.test(String(err?.message)),
+    String(err?.message),
+  );
   check("the error is a StreamUnavailableError", err?.name === "StreamUnavailableError", String(err?.name));
 }
 

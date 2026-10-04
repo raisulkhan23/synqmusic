@@ -143,8 +143,35 @@ function describeFailure(
   if (failures.length === 0) {
     return backend?.reason ?? "This track can't be streamed right now";
   }
-  // One line per instance, capped: this string is shown in a toast, and a wall
-  // of hostnames helps nobody. The count of failures is itself the signal.
+
+  // EVERY server-side resolver being bot-blocked is the expected state of the
+  // world right now, not a transient fault, and the fix is a setting the user
+  // can actually change. So when the failures are all bot-checks, name the
+  // cause and the fix instead of listing hostnames — a list of six dead mirrors
+  // tells the reader nothing they can act on.
+  // The signatures that mean "YouTube refused this network", which is what a
+  // server-hosted resolver runs into.
+  const blockedDetail =
+    /SignInConfirmNotBot|not a bot|LOGIN_REQUIRED|bot.?check|HTTP 50[0234]/i;
+
+  // AT LEAST ONE confirmed block is enough — not all of them.
+  //
+  // This was `every(...)` at first, and it was wrong in the way that matters
+  // most: it never fired for the actual reported failure. In that failure one
+  // mirror answered HTTP 500 (blocked) while the rest failed to connect, so
+  // `every` was false and the user got the old hostname list with no way
+  // forward. A single PROVEN block already establishes the thing the reader
+  // needs to know — that server-hosted resolvers are being refused — and the
+  // remaining transport failures do not weaken that, they just mean those
+  // particular mirrors were additionally unreachable.
+  const anyBlocked = failures.some((f) => blockedDetail.test(f.detail));
+  if (anyBlocked) {
+    return "Google is blocking every public resolver. Add your own in Settings → Offline downloads.";
+  }
+
+  // Otherwise one line per instance, capped: this string is shown in a toast,
+  // and a wall of hostnames helps nobody. The count of failures is itself the
+  // signal.
   const shown = failures
     .slice(0, 3)
     .map((f) => `${f.instance} (${f.detail})`)
