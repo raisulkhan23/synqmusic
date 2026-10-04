@@ -85,6 +85,14 @@ const featuredOn = [
     height: 56,
     radius: "rounded-xl",
   },
+  {
+    name: "Wired Business",
+    href: "https://wired.business",
+    badge: "https://wired.business/badge0-dark.svg",
+    width: 200,
+    height: 54,
+    radius: "rounded-lg",
+  },
 ] as const;
 
 export function SiteFooter() {
@@ -138,7 +146,7 @@ export function SiteFooter() {
                 copies past the first are inert, so each launch directory is
                 clickable and keyboard-reachable once, not four times. */}
             <InfiniteSlider
-              speed={14}
+              speed={20}
               // EASE OFF on hover. A badge is a link to somebody's launch
               // directory, and a link you cannot hit is a dead button. This
               // used to be 4, which accelerated the strip four-fold at exactly
