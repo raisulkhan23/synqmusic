@@ -64,13 +64,14 @@ interface Module {
   >;
 }
 
-function load(storage: MemoryStorage, fetchImpl: typeof fetch): Module {
-  const factory = new Function("localStorage", "fetch", `${js}
+function load(storage: MemoryStorage, fetchImpl: typeof fetch, loc?: unknown): Module {
+  const factory = new Function("localStorage", "fetch", "location", `${js}
     return { CUSTOM_RESOLVER_KEY, readCustomResolver, writeCustomResolver, clearCustomResolver, checkCustomResolver };`) as (
     s: MemoryStorage,
     f: typeof fetch,
+    l: unknown,
   ) => Module;
-  return factory(storage, fetchImpl);
+  return factory(storage, fetchImpl, loc);
 }
 
 const noFetch = (() => {
@@ -117,6 +118,14 @@ console.log("\nrefusing what must never be fetched");
     "not a url",
     "",
     "   ",
+    // A scheme with no host. `new URL("http://")` throws in most engines but
+    // must never become a fetch against an empty host either way.
+    "http://",
+    "https://",
+    // Credentials would be persisted to localStorage in the clear and echoed
+    // into any message quoting the address.
+    "http://user:secret@box.example.com",
+    "http://user@box.example.com",
   ]) {
     check(`rejects ${JSON.stringify(bad)}`, m.writeCustomResolver(bad) === "", m.writeCustomResolver(bad));
   }
@@ -155,7 +164,107 @@ console.log("\nsurviving a browser that refuses storage");
   check("writing survives blocked storage", wrote === "http://localhost:8080", String(wrote));
 }
 
-console.log("\ntesting a resolver — the three outcomes must stay distinct");
+/** A minimal well-formed Piped response, for the "resolver works" path. */
+const GOOD = {
+  title: "Test",
+  audioStreams: [{ url: "https://cdn.test/a.m4a" }],
+  videoStreams: [],
+};
+
+console.log("\nany self-hosted address is accepted, not just localhost");
+
+{
+  const m = load(new MemoryStorage(), noFetch);
+  // THE POINT OF THIS BLOCK. There is no allowlist and no localhost check, so a
+  // resolver on a LAN box, a VPS, or a hostname behind a reverse proxy is a
+  // first-class setting. Previously this feature could only be described in
+  // terms of localhost, which made a perfectly good remote resolver look
+  // unsupported.
+  const cases: [string, string][] = [
+    ["http://localhost:8080", "http://localhost:8080"],
+    ["http://127.0.0.1:8080", "http://127.0.0.1:8080"],
+    ["http://192.168.1.50:8080", "http://192.168.1.50:8080"],
+    ["http://10.0.0.7:8080", "http://10.0.0.7:8080"],
+    ["https://piped.example.com", "https://piped.example.com"],
+    ["https://resolver.my-domain.net/api", "https://resolver.my-domain.net/api"],
+    ["http://nas.local:8080", "http://nas.local:8080"],
+    ["http://[::1]:8080", "http://[::1]:8080"],
+    ["https://user.example.com:8443", "https://user.example.com:8443"],
+    ["  https://box.example.com/  ", "https://box.example.com"],
+  ];
+  for (const [input, expected] of cases) {
+    check(
+      `accepts ${JSON.stringify(input)}`,
+      m.writeCustomResolver(input) === expected,
+      m.writeCustomResolver(input),
+    );
+  }
+  check("a remote resolver survives a reload", (() => {
+    m.writeCustomResolver("https://piped.example.com");
+    return m.readCustomResolver() === "https://piped.example.com";
+  })());
+}
+
+console.log("\nplain-HTTP remote addresses are blocked by the browser, not the network");
+
+{
+  const { f, calls } = scripted(() => ({ json: GOOD }));
+  const httpsPage = load(new MemoryStorage(), f, { protocol: "https:" });
+  const r = await httpsPage.checkCustomResolver("http://192.168.1.50:8080");
+
+  // The single most important new behaviour. On an HTTPS page the browser
+  // refuses a plain-HTTP request to any non-loopback host before it leaves the
+  // device, and hands `fetch` an error identical to "server down". Reporting
+  // that as "unreachable" sends people to debug a server that is running fine.
+  check(
+    "a plain-HTTP remote address is named mixed-content, not unreachable",
+    r.ok === false && r.reason === "mixed-content",
+    JSON.stringify(r),
+  );
+  check("its message says HTTPS is the fix", /https/i.test(r.detail), r.detail);
+  check(
+    "it never spends a request that cannot succeed",
+    calls.length === 0,
+    `${calls.length} calls`,
+  );
+}
+
+{
+  // Loopback is exempt from mixed-content blocking, which is the ONLY reason a
+  // localhost resolver works from an HTTPS page. If this regressed, the
+  // headline setup would start reporting as broken.
+  const { f } = scripted(() => ({ json: GOOD }));
+  const httpsPage = load(new MemoryStorage(), f, { protocol: "https:" });
+  for (const loopback of [
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
+    "http://127.1.2.3:8080",
+    "http://[::1]:8080",
+    "http://app.localhost:8080",
+  ]) {
+    const r = await httpsPage.checkCustomResolver(loopback);
+    check(`${loopback} is trusted on an HTTPS page`, r.ok === true, JSON.stringify(r));
+  }
+}
+
+{
+  const { f } = scripted(() => ({ json: GOOD }));
+  const httpsPage = load(new MemoryStorage(), f, { protocol: "https:" });
+  const r = await httpsPage.checkCustomResolver("https://piped.example.com");
+  check("an HTTPS remote address is tested for real", r.ok === true, JSON.stringify(r));
+}
+
+{
+  // Same address, insecure page: there is no mixed content, so the request must
+  // actually be attempted rather than being pre-emptively refused.
+  const { f, calls } = scripted(() => ({ json: GOOD }));
+  const httpPage = load(new MemoryStorage(), f, { protocol: "http:" });
+  const r = await httpPage.checkCustomResolver("http://192.168.1.50:8080");
+  check("on an HTTP page a plain-HTTP address is attempted", calls.length === 1, `${calls.length} calls`);
+  check("and reports what the server said", r.ok === true, JSON.stringify(r));
+}
+
+console.log("\ntesting a resolver — the outcomes must stay distinct");
 
 function scripted(
   behaviour: (url: string) => { status?: number; json?: unknown; throws?: string },
@@ -182,12 +291,6 @@ function scripted(
   }) as unknown as typeof fetch;
   return { f, calls };
 }
-
-const GOOD = {
-  title: "Test",
-  audioStreams: [{ url: "https://cdn.test/a.m4a" }],
-  videoStreams: [],
-};
 
 {
   const { f } = scripted(() => ({ json: GOOD }));

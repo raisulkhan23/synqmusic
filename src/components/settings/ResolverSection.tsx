@@ -20,10 +20,10 @@ import {
  * runs through the IFrame API, which is a real browser session rather than a
  * resolver, and its audio cannot be read back out to be saved.
  *
- * A resolver you run on your own machine or network is reached from your own
- * IP, so YouTube has no reason to block it. That is the whole fix, and it is
- * why the app asks for a URL rather than pretending a public mirror will
- * start working.
+ * A resolver on a network YouTube does not block is reached from an IP YouTube
+ * is willing to serve, so it works. That network can be anything you control —
+ * this machine, a box on your LAN, a VPS, a residential connection. The app
+ * asks for a URL rather than pretending a public mirror will start working.
  *
  * The "Test connection" button is the point of the section. Without it, the
  * only way to find out whether a resolver is right is to start a download and
@@ -99,16 +99,21 @@ export function ResolverSection({ className = "" }: { className?: string }) {
           unaffected; only saving a copy needs this.
         </p>
         <p className="mx-auto mt-1.5 max-w-md text-xs text-muted-foreground">
-          Run one on your own machine or network and paste its address — for
-          example{" "}
+          Run Piped anywhere you control and paste its address — on this machine
+          with{" "}
           <code className="rounded bg-white/10 px-1 py-0.5 font-mono text-[11px]">
             docker run -p 8080:8080 teamnewpipe/piped
           </code>{" "}
-          then use{" "}
-          <code className="rounded bg-white/10 px-1 py-0.5 font-mono text-[11px]">
-            http://localhost:8080
-          </code>
-          . It stays on this device and is never sent anywhere else.
+          (then <code className="rounded bg-white/10 px-1 py-0.5 font-mono text-[11px]">http://localhost:8080</code>),
+          or on a box you own over your LAN or the internet. The address stays
+          on this device and is never sent anywhere else.
+        </p>
+        <p className="mx-auto mt-1.5 max-w-md text-xs text-muted-foreground">
+          Two things to know if it is not on this machine. Browsers only trust
+          plain HTTP for <em>localhost</em>, so anywhere else it needs HTTPS or
+          the browser will refuse it before it leaves the device. And YouTube
+          bans server addresses, so a VPS should reach YouTube through an IPv6
+          rotator or a VPN — Piped&rsquo;s own docs recommend one of those two.
         </p>
 
         <div className="mt-2.5 flex flex-wrap items-center gap-2">
@@ -116,7 +121,7 @@ export function ResolverSection({ className = "" }: { className?: string }) {
             type="url"
             inputMode="url"
             value={value}
-            placeholder="http://localhost:8080"
+            placeholder="http://localhost:8080  ·  https://piped.example.com"
             aria-label="Resolver address"
             onChange={(e) => {
               setValue(e.target.value);

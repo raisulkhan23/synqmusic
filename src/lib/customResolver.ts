@@ -24,9 +24,21 @@
  *    cross-origin and cannot be read back out of it, so it cannot be saved.
  *
  * So the routes are: no resolver at all, or a resolver on a network YouTube
- * does not block. This module is the second one. A resolver run on the
- * listener's own machine or LAN — `docker run piped` and paste the URL — is
- * reached from the listener's own IP, and it works.
+ * does not block. This module is the second one, and it accepts ANY
+ * self-hosted Piped-compatible address — the listener's own machine, a box on
+ * their LAN, a VPS they own, a residential-network relay. None of those is
+ * special-cased. What matters is only that YouTube does not refuse that
+ * network's IP, and that the browser can actually reach the URL.
+ *
+ * WHY THAT SECOND CONDITION NEEDS ITS OWN CODE. Localhost is the one address
+ * the browser treats as trustworthy even over plain HTTP, because
+ * `http://localhost` and `http://127.0.0.0/8` are "potentially trustworthy"
+ * origins and so are exempt from mixed-content blocking. Every other host is
+ * not. On an HTTPS page — which is how the app is normally served — the
+ * browser refuses `http://box:8080` outright, before a single packet leaves
+ * the device, and hands `fetch` an error indistinguishable from "server down".
+ * Untreated, that sends people to fix a server that is running perfectly, so it
+ * is detected up front and named as what it is. See `mixedContentBlocked`.
  *
  * WHAT IT IS NOT. This is not a workaround that pretends a public mirror will
  * start working. It is an explicit, user-owned dependency, stored locally and
@@ -37,17 +49,38 @@
 export const CUSTOM_RESOLVER_KEY = "ss.customResolver";
 
 /**
- * A Piped-compatible API base, e.g. `http://localhost:8080`.
+ * A Piped-compatible API base.
  *
- * The URL is stored in the clear on purpose: it is a LAN address the user
- * typed, it never leaves the device, and it is what makes the feature work.
+ * Any http(s) address is accepted — `http://localhost:8080`, a bare LAN IP, a
+ * hostname, or `https://piped.example.com` behind a reverse proxy. There is no
+ * localhost allowlist, because the constraint was never "where it runs"; it is
+ * "can the browser reach it, and will YouTube serve it". This function's only
+ * job is to guarantee the value is safe to store and safe to hand to `fetch`.
+ *
+ * The URL is stored in the clear on purpose: it is an address the user typed,
+ * it never leaves the device, and it is what makes the feature work.
  */
 function sanitise(raw: string): string {
   const trimmed = raw.trim();
   if (!trimmed) return "";
   // Only http(s), and no trailing slash, so joining a path never doubles up.
   if (!/^https?:\/\//i.test(trimmed)) return "";
-  return trimmed.replace(/\/+$/, "");
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed.replace(/\/+$/, ""));
+  } catch {
+    return "";
+  }
+  // A scheme with no host fails to parse in most engines but not all; refuse
+  // it explicitly rather than letting it become a fetch against an empty host.
+  if (!parsed.hostname) return "";
+  // Credentials in the URL would be persisted to localStorage in the clear and
+  // echoed into any message that quotes the address. Not supported.
+  if (parsed.username || parsed.password) return "";
+  // Reassembled rather than returned raw, so what gets stored is always a
+  // canonical absolute URL and cannot smuggle whitespace or a second scheme.
+  const path = parsed.pathname === "/" ? "" : parsed.pathname;
+  return `${parsed.protocol}//${parsed.host}${path}${parsed.search}`;
 }
 
 /** The user's resolver, or "" when they have not set one. */
@@ -88,13 +121,74 @@ export function clearCustomResolver(): void {
  *
  * A dedicated "test" matters here because the whole point is to let someone
  * confirm their own resolver works BEFORE waiting on a download. It asks for
- * one real video and reports what came back, which distinguishes the three
- * outcomes that matter: the resolver is unreachable, it is reachable but also
- * IP-blocked, or it works.
+ * one real video and reports what came back, keeping apart the outcomes that
+ * each call for a different fix: the address is malformed, the browser refused
+ * it as mixed content, the host is unreachable, the host answers but YouTube is
+ * blocking its IP, or it simply works.
  */
 export type ResolverCheck =
   | { ok: true; detail: string }
-  | { ok: false; reason: "unreachable" | "blocked" | "no-stream" | "invalid"; detail: string };
+  | {
+      ok: false;
+      reason:
+        | "unreachable"
+        | "blocked"
+        | "no-stream"
+        | "invalid"
+        | "mixed-content";
+      detail: string;
+    };
+
+/**
+ * Hosts the browser considers secure even when spoken to over plain HTTP.
+ *
+ * These are the "potentially trustworthy origins": `localhost` and the whole
+ * `127.0.0.0/8` loopback range, plus `::1`. Mixed-content rules exempt them,
+ * which is the entire reason a loopback resolver works from an HTTPS page while
+ * a LAN address on HTTP does not.
+ */
+function isTrustworthyHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  return (
+    host === "localhost" ||
+    host.endsWith(".localhost") ||
+    host === "::1" ||
+    /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)
+  );
+}
+
+/** Is the page itself served over HTTPS? Unknown means "assume yes is safe". */
+function pageIsSecure(): boolean {
+  try {
+    return typeof location !== "undefined" && location.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+const MIXED_CONTENT_DETAIL =
+  "This page is HTTPS, so the browser blocks plain-HTTP requests before they leave the device — no request ever reaches your server, which is why it looks like the server is down. Put it behind HTTPS (a domain with a certificate), or run it on localhost, which browsers trust over plain HTTP.";
+
+/**
+ * Would the browser block this URL as mixed content, before any request?
+ *
+ * This is the single biggest difference between a loopback resolver and a
+ * remote one, and it is invisible: the browser refuses the request locally and
+ * reports the same opaque network error it reports for a dead host. Detecting
+ * it up front is what lets the UI say "put it behind HTTPS" instead of "your
+ * server is unreachable".
+ */
+function mixedContentBlocked(url: string): boolean {
+  if (!pageIsSecure()) return false;
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== "http:") return false;
+  return !isTrustworthyHost(parsed.hostname);
+}
 
 /** A well-known video that is a stable, public, non-age-gated target. */
 const PROBE_VIDEO_ID = "dQw4w9WgXcQ";
@@ -111,7 +205,7 @@ const BOT_CHECK =
   /SignInConfirmNotBot|not a bot|LOGIN_REQUIRED|bot.?check/i;
 
 const BLOCKED_DETAIL =
-  "It answered, but YouTube is blocking that network's IP. It needs to run on a network YouTube does not block — your own machine or LAN is the reliable choice.";
+  "It answered, but YouTube is refusing that network's IP. A VPS address is blocked just like a data-centre one — Piped's own docs recommend routing it through an IPv6 rotator or a VPN, or running it on a residential connection.";
 
 export async function checkCustomResolver(
   base: string,
@@ -120,6 +214,12 @@ export async function checkCustomResolver(
   const url = sanitise(base);
   if (!url) {
     return { ok: false, reason: "invalid", detail: "That is not an http(s) address." };
+  }
+
+  // Refused by the browser, not by the network — so say so before spending a
+  // request that cannot succeed.
+  if (mixedContentBlocked(url)) {
+    return { ok: false, reason: "mixed-content", detail: MIXED_CONTENT_DETAIL };
   }
 
   let data: {

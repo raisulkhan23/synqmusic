@@ -322,8 +322,8 @@ export default function DownloadHub() {
                   <AlertTriangle className="mt-0.5 size-4 shrink-0" />
                   <span>
                     Google blocks every public resolver, so downloads cannot
-                    start until SYNQ has a resolver of your own. It takes one
-                    command and stays on your device.
+                    start until SYNQ has a resolver you control — on this
+                    machine, your network, or a server of your own.
                   </span>
                 </p>
                 <button
