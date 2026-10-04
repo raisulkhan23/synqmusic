@@ -63,22 +63,24 @@ import {
   LIVE_WALLPAPER_MARKER,
 } from "@/lib/wallpaperStorage";
 
-const SLEEP_OPTIONS: { label: string; value: number | "end" }[] = [
+const SLEEP_OPTIONS: { label: string; value: number | "end" | "queue" }[] = [
   { label: "5 minutes", value: 5 },
   { label: "10 minutes", value: 10 },
   { label: "15 minutes", value: 15 },
   { label: "30 minutes", value: 30 },
   { label: "60 minutes", value: 60 },
   { label: "After current song", value: "end" },
+  { label: "At the end of the queue", value: "queue" },
 ];
 
 function SleepTimerButton() {
   const sleepEndsAt = usePlayerStore((s) => s.sleepEndsAt);
   const sleepAtSongEnd = usePlayerStore((s) => s.sleepAtSongEnd);
+  const sleepAtQueueEnd = usePlayerStore((s) => s.sleepAtQueueEnd);
   const setSleepTimer = usePlayerStore((s) => s.setSleepTimer);
   const now = useSleepCountdown(sleepEndsAt);
 
-  const active = sleepEndsAt !== null || sleepAtSongEnd;
+  const active = sleepEndsAt !== null || sleepAtSongEnd || sleepAtQueueEnd;
 
   return (
     <DropdownMenu modal={false}>
@@ -106,7 +108,9 @@ function SleepTimerButton() {
             ? `Pauses in ${formatRemaining(sleepEndsAt - now)}`
             : sleepAtSongEnd
               ? "Stops after this song"
-              : "Sleep timer"}
+              : sleepAtQueueEnd
+                ? "Stops at the end of the queue"
+                : "Sleep timer"}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         {SLEEP_OPTIONS.map(({ label, value }) => (
@@ -118,7 +122,9 @@ function SleepTimerButton() {
               toast.success(
                 value === "end"
                   ? "Will stop after this song"
-                  : `Sleep timer: ${label}`,
+                  : value === "queue"
+                    ? "Will stop at the end of the queue"
+                    : `Sleep timer: ${label}`,
               );
             }}
           >

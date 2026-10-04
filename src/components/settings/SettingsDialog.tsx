@@ -193,6 +193,7 @@ export function SettingsDialog({
   const toggleIntroTrim = usePlayerStore((s) => s.toggleIntroTrim);
   const sleepEndsAt = usePlayerStore((s) => s.sleepEndsAt);
   const sleepAtSongEnd = usePlayerStore((s) => s.sleepAtSongEnd);
+  const sleepAtQueueEnd = usePlayerStore((s) => s.sleepAtQueueEnd);
   // Ticking clock for the preset highlight below. Reading `Date.now()` during
   // render made the check an impure render, and it went stale: the preset only
   // repainted when something else in the dialog changed, so a timer that had
@@ -1022,7 +1023,7 @@ export function SettingsDialog({
                   Stop playback automatically
                 </p>
               </div>
-              {sleepAtSongEnd || sleepEndsAt !== null ? (
+              {sleepAtSongEnd || sleepAtQueueEnd || sleepEndsAt !== null ? (
                 <span className="text-[10px] font-semibold uppercase tracking-widest text-[rgb(var(--tint))]">
                   Active
                 </span>
@@ -1032,21 +1033,29 @@ export function SettingsDialog({
               {[
                 { label: "Off", value: null },
                 { label: "Song end", value: "end" as const },
+                { label: "Queue end", value: "queue" as const },
+                { label: "5 min", value: 5 },
+                { label: "10 min", value: 10 },
                 { label: "15 min", value: 15 },
                 { label: "30 min", value: 30 },
+                { label: "45 min", value: 45 },
                 { label: "60 min", value: 60 },
               ].map((option) => {
                 const active =
                   option.value === null
-                    ? sleepEndsAt === null && !sleepAtSongEnd
+                    ? sleepEndsAt === null &&
+                      !sleepAtSongEnd &&
+                      !sleepAtQueueEnd
                     : option.value === "end"
                       ? sleepAtSongEnd
-                      : // Compared against the ticking clock, not a value
-                        // captured once: a timer that counted down into the
-                        // next bucket has to move the highlight with it.
-                        sleepEndsAt !== null &&
-                        sleepEndsAt - sleepNow > (option.value - 1) * 60_000 &&
-                        sleepEndsAt - sleepNow < (option.value + 1) * 60_000;
+                      : option.value === "queue"
+                        ? sleepAtQueueEnd
+                        : // Compared against the ticking clock, not a value
+                          // captured once: a timer that counted down into the
+                          // next bucket has to move the highlight with it.
+                          sleepEndsAt !== null &&
+                          sleepEndsAt - sleepNow > (option.value - 1) * 60_000 &&
+                          sleepEndsAt - sleepNow < (option.value + 1) * 60_000;
                 return (
                   <button
                     key={option.label}
@@ -1058,7 +1067,9 @@ export function SettingsDialog({
                           ? "Sleep timer off"
                           : option.value === "end"
                             ? "Stopping after this song"
-                            : `Sleep timer set for ${option.value} minutes`,
+                            : option.value === "queue"
+                              ? "Stopping at the end of the queue"
+                              : `Sleep timer set for ${option.value} minutes`,
                       );
                     }}
                     className={cn(

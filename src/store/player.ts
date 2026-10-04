@@ -62,6 +62,7 @@ import {
   readAnimationLevel,
   type AnimationLevel,
 } from "@/lib/motion";
+import { planSleep, type SleepSelection } from "@/lib/sleepTimer";
 import { toPlayableYoutube, type Playable } from "@/lib/playable";
 import { localAudioUrl } from "@/lib/opfsSink";
 import { resolveViaPiped } from "@/lib/pipedResolve";
@@ -495,6 +496,14 @@ interface PlayerStore {
   sleepEndsAt: number | null;
   /** Stop after the current song finishes. */
   sleepAtSongEnd: boolean;
+  /**
+   * Stop when the queue runs dry, instead of autoplaying more music.
+   *
+   * Distinct from `sleepAtSongEnd`: that stops at the first boundary, this one
+   * plays the rest of what the listener queued and then stops — the "finish the
+   * album" behaviour.
+   */
+  sleepAtQueueEnd: boolean;
 
   // A-B repeat (seconds within current track; null = unset)
   abA: number | null;
@@ -641,7 +650,7 @@ interface PlayerStore {
   setRate: (rate: number) => void;
   setAudioFilter: (id: AudioFilterId) => void;
   /** minutes, "end" (after current song) or null to cancel */
-  setSleepTimer: (mode: number | "end" | null) => void;
+  setSleepTimer: (mode: number | "end" | "queue" | null) => void;
   /** Turn smart intro trim on/off. Persisted like every other preference. */
   toggleIntroTrim: () => void;
   /**
@@ -1688,6 +1697,22 @@ function completeEndedTrack(): void {
       return;
     }
   }
+  // Sleep timer set to stop at the end of the queue: do NOT roll on into
+  // autoplay. Reaching this point is the definition of "the queue is
+  // exhausted" — every earlier branch returned — so this is the one correct
+  // place for the check.
+  if (s.sleepAtQueueEnd) {
+    cancelTransition("sleep-queue-end");
+    pauseAllDecks();
+    ytEngine.pause();
+    usePlayerStore.setState({
+      isPlaying: false,
+      currentTime: 0,
+      sleepAtQueueEnd: false,
+    });
+    return;
+  }
+
   // End of queue, repeat off — autoplay. The queue is only exhausted here, so
   // every manually queued track has already been consumed and none can be
   // reordered or overwritten: the listener's queue always wins by
@@ -4492,21 +4517,28 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       });
   };
 
-  const setSleepTimer = (mode: number | "end" | null) => {
+  const setSleepTimer = (mode: number | "end" | "queue" | null) => {
     if (sleepCheckInterval) {
       clearInterval(sleepCheckInterval);
       sleepCheckInterval = null;
     }
-    if (mode === null) {
-      set({ sleepEndsAt: null, sleepAtSongEnd: false });
-      return;
-    }
-    if (mode === "end") {
-      set({ sleepAtSongEnd: true, sleepEndsAt: null });
-      return;
-    }
-    const endsAt = Date.now() + mode * 60_000;
-    set({ sleepEndsAt: endsAt, sleepAtSongEnd: false });
+    // One pure function resolves the choice into all three fields, so switching
+    // modes can never leave a stale flag from the previous one behind.
+    const selection: SleepSelection =
+      mode === null
+        ? "off"
+        : mode === "end"
+          ? "song-end"
+          : mode === "queue"
+            ? "queue-end"
+            : mode;
+    const plan = planSleep(selection);
+    set({
+      sleepEndsAt: plan.endsAt,
+      sleepAtSongEnd: plan.atSongEnd,
+      sleepAtQueueEnd: plan.atQueueEnd,
+    });
+    if (plan.endsAt === null) return;
     sleepCheckInterval = setInterval(() => {
       const s = get();
       if (s.sleepEndsAt !== null && Date.now() >= s.sleepEndsAt) {
@@ -4706,6 +4738,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
 
     sleepEndsAt: null,
     sleepAtSongEnd: false,
+    sleepAtQueueEnd: false,
 
     abA: null,
     abB: null,

@@ -58,10 +58,11 @@ function isSessionLayout(value: string | null): value is SessionLayout {
 function SleepTimerChip() {
   const sleepEndsAt = usePlayerStore((s) => s.sleepEndsAt);
   const sleepAtSongEnd = usePlayerStore((s) => s.sleepAtSongEnd);
+  const sleepAtQueueEnd = usePlayerStore((s) => s.sleepAtQueueEnd);
   const setSleepTimer = usePlayerStore((s) => s.setSleepTimer);
   const now = useSleepCountdown(sleepEndsAt);
 
-  if (sleepEndsAt === null && !sleepAtSongEnd) return null;
+  if (sleepEndsAt === null && !sleepAtSongEnd && !sleepAtQueueEnd) return null;
 
   return (
     <div className="hidden shrink-0 items-center gap-1 rounded-full bg-white/[0.07] py-1 pr-0.5 pl-2 text-[10px] font-semibold text-muted-foreground sm:flex">
@@ -69,7 +70,9 @@ function SleepTimerChip() {
       <span className="tabular-nums">
         {sleepEndsAt !== null
           ? formatRemaining(sleepEndsAt - now)
-          : "end of song"}
+          : sleepAtSongEnd
+            ? "end of song"
+            : "end of queue"}
       </span>
       <button
         type="button"

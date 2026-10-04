@@ -30,7 +30,11 @@ import {
   shareableId,
   trackIdFromShareUrl,
 } from "../src/lib/shareLink";
-import { formatRemaining } from "../src/lib/sleepTimer";
+import {
+  formatRemaining,
+  planSleep,
+  MAX_SLEEP_MINUTES,
+} from "../src/lib/sleepTimer";
 
 let pass = 0;
 const failures: string[] = [];
@@ -340,6 +344,35 @@ check("greeting is a string", typeof greeting() === "string");
 
 // -------------------------------------------------------- sleepTimer
 {
+  // planSleep must set ALL THREE fields on every path, so switching modes can
+  // never leave a stale flag from the previous one armed.
+  const off = planSleep("off", 1000);
+  eq("sleep off clears the clock", off.endsAt, null);
+  eq("sleep off clears the song flag", off.atSongEnd, false);
+  eq("sleep off clears the queue flag", off.atQueueEnd, false);
+
+  const song = planSleep("song-end", 1000);
+  eq("song-end arms the song flag", song.atSongEnd, true);
+  eq("song-end does not arm queue", song.atQueueEnd, false);
+  eq("song-end has no clock", song.endsAt, null);
+
+  const queue = planSleep("queue-end", 5);
+  eq("queue-end arms the queue flag", queue.atQueueEnd, true);
+  eq("queue-end does not arm song", queue.atSongEnd, false);
+  eq("queue-end has no clock", queue.endsAt, null);
+
+  eq("a minute countdown resolves to a deadline", planSleep(15, 1000).endsAt, 1000 + 15 * 60_000);
+  eq("a countdown clears the song flag", planSleep(15, 0).atSongEnd, false);
+  eq("a countdown clears the queue flag", planSleep(15, 0).atQueueEnd, false);
+  eq("zero minutes is effectively off", planSleep(0, 1000).endsAt, null);
+  eq("negative minutes is off", planSleep(-5, 1000).endsAt, null);
+  eq("NaN minutes is off", planSleep(NaN, 1000).endsAt, null);
+  eq(
+    "an absurd countdown is capped",
+    planSleep(99999, 0).endsAt,
+    MAX_SLEEP_MINUTES * 60_000,
+  );
+
   eq("formatRemaining 0", formatRemaining(0), "0s");
   eq("formatRemaining negative clamps", formatRemaining(-5000), "0s");
   eq("formatRemaining 9s", formatRemaining(9000), "9s");
