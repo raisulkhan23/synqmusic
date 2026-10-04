@@ -185,8 +185,7 @@ export function ResolverSection({ className = "" }: { className?: string }) {
         ) : (
           <p className="mt-2 text-xs text-muted-foreground">
             No resolver set — downloads will try public mirrors, which Google
-            currently blocks. <span className="text-foreground">Record</span> in
-            Downloads still works without one.
+            currently blocks.
           </p>
         )}
       </div>
