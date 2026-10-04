@@ -1,191 +1,41 @@
 import { OpfsSink, opfsSupported } from "@/lib/opfsSink";
-import type {
-  DownloadAdapter,
-  Segment,
-} from "@/lib/downloadManager";
-import type { YtItem } from "@/lib/youtube";
-import { resolveViaPiped } from "@/lib/pipedResolve";
+import type { DownloadAdapter, Segment } from "@/lib/downloadManager";
 
 /**
- * The download SOURCE: resolves a track to a playable stream URL through the
- * app's existing `youtube:resolveStream` action, then serves that URL to the
- * range/segment engine.
+ * The download SOURCE adapter.
  *
- * It deliberately reuses `resolveStream` rather than reaching for the
- * InnerTube `player` response itself. That resolver is the one the PLAYER
- * already uses, so a download can never diverge from what is playing — same
- * client rotation, same format preference, same failure reasons.
+ * ── What was removed from this file, and why ──────────────────────────────
  *
- * The resolver runs on the server, so the signed stream URL is obtained there
- * and used here only to make ordinary authenticated-by-URL GETs. It is never
- * cached long: `resolveStream` is asked per transfer, not memoised, because a
- * `streamingData` URL is a bearer credential for that media.
+ * This used to also contain `resolveStreamUrl()`, a helper whose whole job was
+ * to turn a YouTube video id into a direct media URL: it called the server's
+ * InnerTube extraction action and, when that was bot-blocked, fell through to
+ * public Piped mirrors. `DownloadHub` then handed the result to the download
+ * engine, which wrote the bytes to disk.
+ *
+ * That is saving a copy of audio SYNQ only ever had permission to STREAM, so
+ * it was not a bug to be repaired but the wrong source, and it is gone. Its
+ * last production caller was removed in the same change, and its dedicated test
+ * (`scripts/audit.resolve.ts`) was deleted with it rather than left asserting
+ * behaviour nothing uses.
+ *
+ * Downloads now get their URL from `convex/downloads.ts`, which re-verifies
+ * the artist's `audiodownload_allowed` grant server-side. `lib/downloadAuth.ts`
+ * owns the rules; `lib/authorizedDownload.ts` calls the backend; this file owns
+ * only the mechanics of pulling authorized bytes to disk.
+ *
+ * NOTE — `lib/customResolver.ts` and `lib/pipedResolve.ts` were NOT removed.
+ * They look related (they were built for this same path) but they are also the
+ * PLAYBACK resolver's fallback, which is a different system and is still in
+ * use by `store/player.ts`. Deleting them here would have broken playback.
+ *
+ * ── Mechanics (unchanged) ────────────────────────────────────────────────
+ *
+ * Ranged GETs so a dropped connection resumes instead of restarting, and the
+ * `googlevideo.com`-shaped CORS problem is irrelevant here because an
+ * authorized download URL is served with CORS headers of its own.
  */
 
-export class StreamUnavailableError extends Error {
-  readonly reason: string;
-  constructor(reason: string) {
-    super(reason);
-    this.name = "StreamUnavailableError";
-    this.reason = reason;
-  }
-}
-
-/** How long the backend resolver gets before it is written off. */
-const BACKEND_RESOLVE_TIMEOUT_MS = 12_000;
-
-/**
- * Run the backend resolver under a timeout, treating any failure as "no URL".
- *
- * WHY THIS EXISTS. `resolveStream` is a Convex action, so it can reject on a
- * transport error and it can hang while it rotates five InnerTube clients
- * against a bot-checked YouTube. Both outcomes used to be fatal here: the
- * `await` was unguarded, so a rejection propagated straight out of
- * `resolveStreamUrl` and the Piped fallback below it never ran at all. A
- * backend that is merely SLOW therefore looked identical to a backend that is
- * broken, and neither reached the fallback that actually works from the
- * listener's own IP.
- *
- * Returning `null` rather than throwing is deliberate: the caller's job is to
- * try somewhere else, and it already has somewhere else to try.
- */
-async function resolveViaBackend(
-  resolveStream: (args: {
-    videoId: string;
-    quality?: "high" | "low";
-  }) => Promise<{ url: string | null; title: string; reason?: string }>,
-  videoId: string,
-  quality: "high" | "low",
-): Promise<{ url: string | null; title: string; reason?: string } | null> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    const timeout = new Promise<null>((resolve) => {
-      timer = setTimeout(() => resolve(null), BACKEND_RESOLVE_TIMEOUT_MS);
-    });
-    return await Promise.race([resolveStream({ videoId, quality }), timeout]);
-  } catch {
-    return null;
-  } finally {
-    if (timer !== undefined) clearTimeout(timer);
-  }
-}
-
-/**
- * The app's CORS proxy for stream hosts.
- *
- * WHY A DOWNLOAD NEEDS THIS AND A NAIVE `fetch` DOES NOT WORK. `resolveStream`
- * hands back a signed `googlevideo.com` URL, and that host sends NO CORS
- * headers. The `<audio>` element gets away with it because the player routes
- * playback through `/audio-proxy` (see `store/player.ts`, `audioProxyBase`).
- * A `fetch()` from the page is a different matter: the browser blocks the
- * response before the adapter's probe can even read `Content-Range`, so every
- * download would fail at the probe with an opaque CORS error and no useful
- * message. Going through the same proxy the player uses is what makes ranged
- * GETs possible at all.
- */
-const audioProxyBase = `${(
-  (import.meta.env.VITE_CONVEX_URL as string) ?? ""
-).replace(".cloud", ".site")}/audio-proxy`;
-
-/** Wrap a raw stream URL in the CORS proxy, as the player does. */
-export function viaAudioProxy(rawUrl: string): string {
-  return `${audioProxyBase}?u=${encodeURIComponent(rawUrl)}`;
-}
-
-/** Resolve a track's stream URL. Returns null when the provider refuses. */
-export async function resolveStreamUrl(
-  resolveStream: (args: {
-    videoId: string;
-    quality?: "high" | "low";
-  }) => Promise<{ url: string | null; title: string; reason?: string }>,
-  track: YtItem,
-  quality: "high" | "low" = "high",
-): Promise<{ url: string; title: string }> {
-  const result = await resolveViaBackend(resolveStream, track.id, quality);
-  if (result?.url) {
-    return { url: viaAudioProxy(result.url), title: result.title };
-  }
-
-  // The backend is usually met with YouTube's datacenter bot-check
-  // ("Sign in to confirm you're not a bot"), because it resolves from Convex's
-  // IP rather than the listener's. The PLAYER already survives that by falling
-  // back to public Piped instances, which resolve from the user's own IP; the
-  // download path did not, which is why a track could play and still refuse to
-  // download. Both now resolve identically, via the same shared module.
-  //
-  // Only the backend's own reason is discarded once Piped succeeds, because the
-  // download works and repeating "not a bot" would be untrue.
-  const piped = await resolveViaPiped(track.id);
-  if (piped.url) return { url: piped.url, title: track.title };
-
-  // Both routes failed. Report what actually broke, NOT the backend's reason.
-  //
-  // WHY NOT THE BACKEND'S REASON. It used to be `result.reason`, which is
-  // almost always YouTube's bot-check aimed at Convex's datacenter IP. That
-  // message describes a problem the user cannot act on and that is usually not
-  // the reason the download failed — the reason is that no Piped instance
-  // answered either. Showing the bot-check for a dead third-party host is how
-  // this looked like a YouTube problem for an entire session.
-  throw new StreamUnavailableError(describeFailure(result, piped.failures));
-}
-
-/**
- * Build the one honest sentence for a total resolution failure.
- *
- * Prefers the fallback's own diagnostics, because those describe the LAST
- * thing that failed and are the ones the user could do something about. The
- * backend reason is only used when there is nothing better to say.
- */
-function describeFailure(
-  backend: { reason?: string } | null,
-  failures: { instance: string; detail: string }[],
-): string {
-  if (failures.length === 0) {
-    return backend?.reason ?? "This track can't be streamed right now";
-  }
-
-  // EVERY server-side resolver being bot-blocked is the expected state of the
-  // world right now, not a transient fault, and the fix is a setting the user
-  // can actually change. So when the failures are all bot-checks, name the
-  // cause and the fix instead of listing hostnames — a list of six dead mirrors
-  // tells the reader nothing they can act on.
-  // The signatures that mean "YouTube refused this network", which is what a
-  // server-hosted resolver runs into.
-  const blockedDetail =
-    /SignInConfirmNotBot|not a bot|LOGIN_REQUIRED|bot.?check|HTTP 50[0234]/i;
-
-  // AT LEAST ONE confirmed block is enough — not all of them.
-  //
-  // This was `every(...)` at first, and it was wrong in the way that matters
-  // most: it never fired for the actual reported failure. In that failure one
-  // mirror answered HTTP 500 (blocked) while the rest failed to connect, so
-  // `every` was false and the user got the old hostname list with no way
-  // forward. A single PROVEN block already establishes the thing the reader
-  // needs to know — that server-hosted resolvers are being refused — and the
-  // remaining transport failures do not weaken that, they just mean those
-  // particular mirrors were additionally unreachable.
-  const anyBlocked = failures.some((f) => blockedDetail.test(f.detail));
-  if (anyBlocked) {
-    return "Google is blocking every public resolver. Add your own in Settings → Offline downloads.";
-  }
-
-  // Otherwise one line per instance, capped: this string is shown in a toast,
-  // and a wall of hostnames helps nobody. The count of failures is itself the
-  // signal.
-  const shown = failures
-    .slice(0, 3)
-    .map((f) => `${f.instance} (${f.detail})`)
-    .join(", ");
-  const more = failures.length > 3 ? `, +${failures.length - 3} more` : "";
-  return `No source could be reached. Tried ${failures.length} mirror${
-    failures.length === 1 ? "" : "s"
-  }: ${shown}${more}`;
-}
-
-/**
- * Build the adapter the manager uses. It is created per download because it
- * carries that download's resolved URL and its own sink.
- */
+/** Build the adapter the manager uses, for one authorized transfer. */
 export function createTrackAdapter(
   url: string,
   filename: string,

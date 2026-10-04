@@ -1,16 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router";
-import { readCustomResolver } from "@/lib/customResolver";
+
+
 import { usePlayerStore } from "@/store/player";
 import { noteTrackDownloaded, noteTrackRemoved } from "@/store/player";
-import {
-  getDownloadManager,
-  requestTrackDownload,
-} from "@/lib/downloads";
+import { getDownloadManager } from "@/lib/downloads";
 import { requestAuthorizedDownload } from "@/lib/authorizedDownload";
-import { resolveStreamUrl } from "@/lib/trackSource";
-import { trackIdFromShareUrl } from "@/lib/shareLink";
-import type { YtItem } from "@/lib/youtube";
 import { installDownloadAdapter } from "@/lib/installDownloadAdapter";
 import {
   deleteStoredDownload,
@@ -113,21 +107,13 @@ export default function DownloadHub() {
   // cross-origin ranged request.
   const [directUrl, setDirectUrl] = useState("");
   const [directBusy, setDirectBusy] = useState(false);
-  const resolveStream = useAction(api.youtube.resolveStream);
   /**
-   * The download authority. Unlike `resolveStream` above — which exists only
-   * for the legacy link-download panels further down — this decides whether a
-   * track may be saved at all, server-side.
+   * The download authority: it decides, server-side, whether a track may be
+   * saved at all. This is the ONLY source of download URLs in the app.
    */
   const authorizeDownload = useAction(api.downloads.authorizeDownload);
-  // Metadata (title/artist/cover) for a shared SYNQ track, resolved from its
-  // id via oembed so the downloaded file is named after the song, not a hash.
-  const fetchTrackMeta = useAction(api.youtube.trackMeta);
-  const navigate = useNavigate();
-  // Read lazily from storage, the same way the settings section does. This is
-  // what decides whether the empty state explains the blocker or stays quiet
-  // for someone who has already configured a resolver.
-  const [hasCustomResolver] = useState(() => readCustomResolver() !== "");
+  
+  
 
   /**
    * Download whatever is playing, resolving its stream first.
@@ -197,34 +183,14 @@ export default function DownloadHub() {
     }
     setDirectBusy(true);
     try {
-      // A SYNQ share link names a SONG, not a file: `/t/<id>`. It is resolved
-      // through the exact pipeline the player and the track menu already use,
-      // so it needs no special download machinery — only the id is read here.
-      const sharedId = trackIdFromShareUrl(raw);
-      if (sharedId) {
-        await startSharedTrackDownload(sharedId);
-        return;
-      }
-
-      // Otherwise the pasted URL must already BE the media.
-      const tail = decodeURIComponent(
-        parsed.pathname.split("/").filter(Boolean).pop() ?? "",
-      );
-      const filename = (tail || `${parsed.hostname} download`).slice(0, 120);
-      // Stable id derived from the URL so re-downloading the same link reuses
-      // (and overwrites) its own offline copy instead of piling up duplicates.
-      const trackId = `url:${parsed.host}${parsed.pathname}`;
-      const result = await requestTrackDownload(
-        { id: trackId, title: filename, artistName: parsed.hostname },
-        () => Promise.resolve({ url: raw, filename }),
-        { force: true },
-      );
-      if (result.started) {
-        toast.success("Download started");
-        setDirectUrl("");
-      } else {
-        toast.error(result.detail ?? "Couldn't start that download");
-      }
+      // Downloading an arbitrary pasted URL is not something SYNQ can
+      // authorize: the server was never told about that file, so letting the
+      // browser fetch it would put the "is this allowed?" decision back on the
+      // client — the exact flaw this pipeline was rebuilt to remove.
+      toast.error("Downloads come from SYNQ's authorized releases.", {
+        description:
+          "Use Download on a track that offers it — SYNQ won't fetch a link you pasted.",
+      });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Download failed");
     } finally {
@@ -233,51 +199,13 @@ export default function DownloadHub() {
   };
 
   /**
-   * Download the song behind a SYNQ share link (`/t/<id>`).
+   * REMOVED: the SYNQ share-link downloader.
    *
-   * The link carries only a track id, so this is the SAME resolution the player
-   * performs: read the metadata (for a real filename), resolve a stream through
-   * `resolveStreamUrl` — backend first, then the listener's own Piped mirrors —
-   * and hand the result to the shared download engine. It inherits that
-   * pipeline's honesty too: if Google refuses to hand a stream to any resolver,
-   * the user sees the real reason immediately instead of a transfer that fails
-   * silently in the background.
+   * It resolved a shared track id through the very pipeline this change set
+   * deleted — `youtube:resolveStream` and then public Piped mirrors — purely so
+   * the link would yield something to save. A playable stream is not permission
+   * to make a copy of it, so the path was removed rather than repaired.
    */
-  const startSharedTrackDownload = async (videoId: string) => {
-    let meta: {
-      title: string;
-      artist: string;
-      coverUrl: string;
-      duration: number;
-    } | null = null;
-    try {
-      meta = await fetchTrackMeta({ videoId });
-    } catch {
-      // oembed can be rate-limited or geo-blocked; the id alone still resolves.
-    }
-    const title = meta?.title?.trim() || videoId;
-    const artist = meta?.artist?.trim() || "SYNQ";
-    const track: YtItem = {
-      id: videoId,
-      title,
-      artist,
-      duration: meta?.duration ?? 0,
-      thumbnail: meta?.coverUrl ?? "",
-    };
-    const stream = await resolveStreamUrl(resolveStream, track);
-    const filename = `${artist} - ${title}`;
-    const result = await requestTrackDownload(
-      { id: videoId, title, artistName: artist },
-      () => Promise.resolve({ url: stream.url, filename }),
-      { force: true },
-    );
-    if (result.started) {
-      toast.success("Download started");
-      setDirectUrl("");
-    } else {
-      toast.error(result.detail ?? "Couldn't start that download");
-    }
-  };
 
   // One manager for the whole app, not this page. It lives in `lib/downloads`
   // so a track's context menu — which is used on pages where this hub is not
@@ -520,25 +448,22 @@ export default function DownloadHub() {
                 including this app's own backend. Saying so here, with the fix
                 one click away, is the difference between a broken feature and
                 an honest one. */}
-            {!hasCustomResolver ? (
-              <div className="max-w-prose rounded-xl border border-amber-500/25 bg-amber-500/[0.07] px-3.5 py-3">
-                <p className="flex items-start gap-2 text-sm text-amber-200/90">
-                  <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-                  <span>
-                    Google blocks every public resolver, so downloads cannot
-                    start until SYNQ has a resolver you control — on this
-                    machine, your network, or a server of your own.
-                  </span>
-                </p>
-                <button
-                  type="button"
-                  onClick={() => navigate("/settings#resolver")}
-                  className="mt-2.5 rounded-lg bg-white/90 px-3 py-1.5 text-xs font-semibold text-black hover:bg-white"
-                >
-                  Set up a resolver
-                </button>
-              </div>
-            ) : null}
+            {/* WHY THIS IS EMPTY. The Download action appears only on tracks
+                SYNQ's own API has confirmed may be saved — audio the artist
+                explicitly released for download. Nothing here can be
+                un-blocked by configuring a resolver: there is no resolver
+                path left, by design. */}
+            <div className="max-w-prose rounded-xl border border-white/[0.08] bg-white/[0.03] px-3.5 py-3">
+              <p className="flex items-start gap-2 text-sm text-muted-foreground">
+                <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                <span>
+                  Downloads are limited to tracks whose artist has released the
+                  audio for download. Most streaming tracks are play-only, so
+                  they won&rsquo;t show a Download action — and SYNQ won&rsquo;t
+                  save them by another route.
+                </span>
+              </p>
+            </div>
           </div>
         ) : (
           <ul className="flex flex-col gap-2">
