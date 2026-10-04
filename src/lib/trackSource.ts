@@ -4,6 +4,7 @@ import type {
   Segment,
 } from "@/lib/downloadManager";
 import type { YtItem } from "@/lib/youtube";
+import { resolveViaPiped } from "@/lib/pipedResolve";
 
 /**
  * The download SOURCE: resolves a track to a playable stream URL through the
@@ -27,6 +28,45 @@ export class StreamUnavailableError extends Error {
     super(reason);
     this.name = "StreamUnavailableError";
     this.reason = reason;
+  }
+}
+
+/** How long the backend resolver gets before it is written off. */
+const BACKEND_RESOLVE_TIMEOUT_MS = 12_000;
+
+/**
+ * Run the backend resolver under a timeout, treating any failure as "no URL".
+ *
+ * WHY THIS EXISTS. `resolveStream` is a Convex action, so it can reject on a
+ * transport error and it can hang while it rotates five InnerTube clients
+ * against a bot-checked YouTube. Both outcomes used to be fatal here: the
+ * `await` was unguarded, so a rejection propagated straight out of
+ * `resolveStreamUrl` and the Piped fallback below it never ran at all. A
+ * backend that is merely SLOW therefore looked identical to a backend that is
+ * broken, and neither reached the fallback that actually works from the
+ * listener's own IP.
+ *
+ * Returning `null` rather than throwing is deliberate: the caller's job is to
+ * try somewhere else, and it already has somewhere else to try.
+ */
+async function resolveViaBackend(
+  resolveStream: (args: {
+    videoId: string;
+    quality?: "high" | "low";
+  }) => Promise<{ url: string | null; title: string; reason?: string }>,
+  videoId: string,
+  quality: "high" | "low",
+): Promise<{ url: string | null; title: string; reason?: string } | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const timeout = new Promise<null>((resolve) => {
+      timer = setTimeout(() => resolve(null), BACKEND_RESOLVE_TIMEOUT_MS);
+    });
+    return await Promise.race([resolveStream({ videoId, quality }), timeout]);
+  } catch {
+    return null;
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
   }
 }
 
@@ -61,16 +101,58 @@ export async function resolveStreamUrl(
   track: YtItem,
   quality: "high" | "low" = "high",
 ): Promise<{ url: string; title: string }> {
-  const result = await resolveStream({
-    videoId: track.id,
-    quality,
-  });
-  if (!result.url) {
-    throw new StreamUnavailableError(
-      result.reason ?? "This track can't be streamed right now",
-    );
+  const result = await resolveViaBackend(resolveStream, track.id, quality);
+  if (result?.url) {
+    return { url: viaAudioProxy(result.url), title: result.title };
   }
-  return { url: viaAudioProxy(result.url), title: result.title };
+
+  // The backend is usually met with YouTube's datacenter bot-check
+  // ("Sign in to confirm you're not a bot"), because it resolves from Convex's
+  // IP rather than the listener's. The PLAYER already survives that by falling
+  // back to public Piped instances, which resolve from the user's own IP; the
+  // download path did not, which is why a track could play and still refuse to
+  // download. Both now resolve identically, via the same shared module.
+  //
+  // Only the backend's own reason is discarded once Piped succeeds, because the
+  // download works and repeating "not a bot" would be untrue.
+  const piped = await resolveViaPiped(track.id);
+  if (piped.url) return { url: piped.url, title: track.title };
+
+  // Both routes failed. Report what actually broke, NOT the backend's reason.
+  //
+  // WHY NOT THE BACKEND'S REASON. It used to be `result.reason`, which is
+  // almost always YouTube's bot-check aimed at Convex's datacenter IP. That
+  // message describes a problem the user cannot act on and that is usually not
+  // the reason the download failed — the reason is that no Piped instance
+  // answered either. Showing the bot-check for a dead third-party host is how
+  // this looked like a YouTube problem for an entire session.
+  throw new StreamUnavailableError(describeFailure(result, piped.failures));
+}
+
+/**
+ * Build the one honest sentence for a total resolution failure.
+ *
+ * Prefers the fallback's own diagnostics, because those describe the LAST
+ * thing that failed and are the ones the user could do something about. The
+ * backend reason is only used when there is nothing better to say.
+ */
+function describeFailure(
+  backend: { reason?: string } | null,
+  failures: { instance: string; detail: string }[],
+): string {
+  if (failures.length === 0) {
+    return backend?.reason ?? "This track can't be streamed right now";
+  }
+  // One line per instance, capped: this string is shown in a toast, and a wall
+  // of hostnames helps nobody. The count of failures is itself the signal.
+  const shown = failures
+    .slice(0, 3)
+    .map((f) => `${f.instance} (${f.detail})`)
+    .join(", ");
+  const more = failures.length > 3 ? `, +${failures.length - 3} more` : "";
+  return `No source could be reached. Tried ${failures.length} mirror${
+    failures.length === 1 ? "" : "s"
+  }: ${shown}${more}`;
 }
 
 /**

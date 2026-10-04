@@ -58,6 +58,7 @@ import {
 } from "@/lib/cardTransparency";
 import { toPlayableYoutube, type Playable } from "@/lib/playable";
 import { localAudioUrl } from "@/lib/opfsSink";
+import { resolveViaPiped } from "@/lib/pipedResolve";
 import type { RecoCandidate } from "@/lib/recommend";
 import { DEFAULT_EXPLORATION } from "@/lib/recommend";
 import * as ytEngine from "@/lib/youtubePlayer";
@@ -140,66 +141,17 @@ const resolveYoutubeStream = async (
   } catch {
     /* fall through to browser-side resolution */
   }
-  // 2) Browser-side fallback via public Piped instances. These run CORS
-  //    headers directly and resolve from the USER's IP (never bot-blocked),
-  //    so the Web Audio effect chain always gets a stream to process.
-  try {
-    const instances = [
-      "https://api.piped.private.coffee",
-      "https://pipedapi.ducks.party",
-    ];
-    for (const base of instances) {
-      try {
-        const ctrl = new AbortController();
-        const timeout = setTimeout(() => ctrl.abort(), 6000);
-        const res = await fetch(`${base}/streams/${videoId}`, {
-          signal: ctrl.signal,
-        });
-        clearTimeout(timeout);
-        if (!res.ok) continue;
-        const data = (await res.json()) as {
-          audioStreams?: { url: string; bitrate?: number; mimeType?: string }[];
-          videoStreams?: {
-            url: string;
-            quality?: string;
-            videoOnly?: boolean;
-            mimeType?: string;
-          }[];
-        };
-        // Preferred: dedicated audio-only streams (best quality).
-        const audioStreams = (data.audioStreams ?? [])
-          .filter(
-            (s) => !!s.url && (!s.mimeType || s.mimeType.includes("audio")),
-          )
-          .sort((a, b) => (b.bitrate ?? 0) - (a.bitrate ?? 0));
-        if (audioStreams[0]?.url) return audioStreams[0].url;
-        // Fallback: ANY muxed (video+audio) stream, not just exact "360p".
-        // Piped now strips audio-only formats for many videos (verified live:
-        // audioStreams comes back EMPTY), so muxed is often the only source.
-        // Web Audio decodes its audio track fine, and Piped's proxy serves
-        // CORS headers. Sort by lowest resolution — we only need the audio.
-        const muxed = (data.videoStreams ?? [])
-          .filter(
-            (s) =>
-              !!s.url &&
-              s.videoOnly === false &&
-              (!s.mimeType ||
-                s.mimeType.includes("mp4") ||
-                s.mimeType.includes("webm")),
-          )
-          .sort(
-            (a, b) =>
-              (parseInt(a.quality ?? "0", 10) || 9999) -
-              (parseInt(b.quality ?? "0", 10) || 9999),
-          );
-        if (muxed[0]?.url) return muxed[0].url;
-      } catch {
-        continue;
-      }
-    }
-  } catch {
-    /* nothing else to try */
-  }
+  // 2) Browser-side fallback via public Piped instances. These resolve from
+  // the USER's IP, so unlike the Convex resolver they are not met with YouTube's
+  // datacenter bot-check. The implementation moved to `lib/pipedResolve` so the
+  // download path resolves exactly the same way — while it was inline here,
+  // playback worked and downloading did not, for the same track at once.
+  // NOTE: `resolveViaPiped` returns `{ url, failures }`, NOT a bare string.
+  // This call site must test `piped.url` — an `if (piped)` truthiness check
+  // would be true even when resolution failed, and would hand the caller an
+  // object where a URL string belongs.
+  const piped = await resolveViaPiped(videoId);
+  if (piped.url) return piped.url;
   return null;
 };
 
