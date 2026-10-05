@@ -229,13 +229,15 @@ export async function resolveViaPiped(
         continue;
       }
       try {
+        // Piped exposes a hosted odycdn stream (CORS-enabled directly) as
+        // the first muxed video stream. Route THAT through /audio-proxy so
+        // the <audio crossOrigin="anonymous"> element gets the headers it
+        // needs and the stream is actually playable from the browser.
         const target = new URL(video.url);
-        target.searchParams.set("proxy", proxyUrl.replace(/^https?:\/\//, ""));
-        // Reaching through the proxy changes the host, so the page can fetch it
-        // without a CORS hop through the app's own /audio-proxy.
+        // Piped's own proxy parameter is not needed here; odycdn already
+        // serves with CORS, and /audio-proxy will add the extra headers.
         return {
-          url: `https://${proxyUrl.replace(/^https?:\/\//, "")}/` +
-            encodeURIComponent(target.pathname + "&" + target.search.slice(1)),
+          url: `${import.meta.env.VITE_CONVEX_URL?.replace(".cloud", ".site") ?? ""}/audio-proxy?u=${encodeURIComponent(target.origin + target.pathname)}${target.search ? "&" + target.search.slice(1) : ""}`,
           failures: [],
         };
       } catch {

@@ -18,11 +18,18 @@ auth.addHttpRoutes(http);
 const STREAM_PROXY = httpAction(async (ctx, request) => {
   const url = new URL(request.url);
   const target = url.searchParams.get("u");
+  if (!target) {
+    return new Response("Bad or missing stream url", { status: 400 });
+  }
+  // Validate the target is an audio/video stream we expect to proxy.
+  // Historically only googlevideo videoplayback URLs landed here; Piped's
+  // own proxy endpoint is now also a supported upstream, so accept either.
   if (
-    !target ||
-    !/^https:\/\/rr[0-9a-z-]*---sn-[a-z0-9-]+\.googlevideo\.com\/videoplayback\?/.test(
-      target,
-    )
+    !target.startsWith("https://") ||
+    (!(target.includes("googlevideo.com/videoplayback") ||
+      target.includes("player.odycdn.com") ||
+      target.includes("piped-proxy.") ||
+      target.includes("odycdn.com")))
   ) {
     return new Response("Bad or missing stream url", { status: 400 });
   }
