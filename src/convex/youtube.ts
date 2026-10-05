@@ -36,6 +36,94 @@ const API = "https://www.youtube.com/youtubei/v1/";
 const REQUEST_TIMEOUT_MS = 10_000;
 const INNERTUBE_KEY = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8";
 
+// ---------------------------------------------------------------------------
+// Authorized session support.
+//
+// YouTube answers `player` requests from a cloud IP with
+// `LOGIN_REQUIRED — Sign in to confirm you're not a bot`, and it does that for
+// the large majority of real tracks: measured 0/6 resolutions on 3 of 4
+// popular videos, against 6/6 on the fourth. It is a demand for
+// authentication, not a verdict on the content, so the fix is to authenticate.
+//
+// Two headers are needed together, which is what every working YouTube client
+// sends and what a bare request is missing:
+//
+//   Cookie        the account's session cookies
+//   Authorization SAPISIDHASH <unix_ts>_<sha1(ts + " " + SAPISID + " " + origin)>
+//
+// Sending only the cookie is not enough: InnerTube treats the pair as proof
+// the request really came from that signed-in browser, and without the hash a
+// cookie alone is treated as anonymous.
+//
+// WHERE THE SECRET LIVES. `YOUTUBE_COOKIE` is read from the server environment
+// and never leaves the backend — no action returns it, and it is deliberately
+// not echoed into any error or failure message. Paste it through the API Keys
+// UI; it must not be committed.
+//
+// WHEN IT IS ABSENT this is all inert: the header is simply omitted and
+// behaviour is exactly as before, so an unconfigured deployment degrades to the
+// anonymous path instead of breaking.
+// ---------------------------------------------------------------------------
+
+/** The account's `Cookie` header value, or "" when not configured. */
+function youtubeCookieHeader(): string {
+  const raw = process.env.YOUTUBE_COOKIE;
+  return typeof raw === "string" ? raw.trim() : "";
+}
+
+/**
+ * The SID to build the hash from, preferring the classic name.
+ *
+ * `SAPISID` is what the hash is defined over, but a session exported from a
+ * modern browser is not guaranteed to include it, and the `__Secure-3PSID` /
+ * `__Secure-1PSID` pair is the same credential under its newer names. Falling
+ * back to those means a correctly-pasted session is not silently reduced to
+ * "cookies but no proof" — the failure mode that looks like a working setup
+ * and is not.
+ *
+ * Returns the cookie's NAME only; the value never leaves this module.
+ */
+function hashKeyName(cookie: string): string | null {
+  for (const name of ["SAPISID", "__Secure-3PSID", "__Secure-1PSID"]) {
+    if (new RegExp(`(?:^|;\\s*)${name}=`).test(cookie)) return name;
+  }
+  return null;
+}
+
+/**
+ * `SAPISIDHASH` proof for the configured session, or "" when there is no SID
+ * to prove. SHA-1 via Web Crypto, which the Convex runtime provides.
+ */
+async function sapisidAuthHeader(
+  cookie: string,
+  origin: string,
+): Promise<string> {
+  const name = hashKeyName(cookie);
+  if (!name) return "";
+  const sid = cookie.match(new RegExp(`(?:^|;\\s*)${name}=([^;]+)`))?.[1];
+  if (!sid) return "";
+  const ts = Math.floor(Date.now() / 1000);
+  const digest = await crypto.subtle.digest(
+    "SHA-1",
+    new TextEncoder().encode(`${ts} ${sid} ${origin}`),
+  );
+  const hex = Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+  return `SAPISIDHASH ${ts}_${hex}`;
+}
+
+/** The auth headers for a request, or `{}` when no session is configured. */
+async function authHeaders(origin: string): Promise<Record<string, string>> {
+  const cookie = youtubeCookieHeader();
+  if (!cookie) return {};
+  const authorization = await sapisidAuthHeader(cookie, origin);
+  return {
+    Cookie: cookie,
+    ...(authorization ? { Authorization: authorization } : {}),
+  };
+}
+
 interface InnerTubeClient {
   /** X-Youtube-Client-Name header value */
   id: string;
@@ -119,6 +207,8 @@ async function innerTube(
       "X-Youtube-Client-Version": client.clientVersion,
       Origin: "https://www.youtube.com",
       "X-Origin": "https://www.youtube.com",
+      // Present only when YOUTUBE_COOKIE is configured; see authHeaders.
+      ...(await authHeaders("https://www.youtube.com")),
     },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
@@ -343,6 +433,8 @@ async function musicSearch(
       Origin: "https://music.youtube.com",
       "X-Origin": "https://music.youtube.com",
       Referer: "https://music.youtube.com/",
+      // The same authorized session, hashed against the Music origin.
+      ...(await authHeaders("https://music.youtube.com")),
     },
     body: JSON.stringify({
       context: {
@@ -1248,6 +1340,78 @@ export const trackMeta = action({
  * Always resolves (never throws) — when no stream is available it returns
  * { url: null, reason, youtubeUrl } so the UI can link out instead.
  */
+/**
+ * Reports whether the authorized-session wiring actually works, without ever
+ * returning a single character of the secret.
+ *
+ * This exists because `Cookie` is a FORBIDDEN header name in the Fetch spec:
+ * a runtime is entitled to strip it silently, in which case every cookie we
+ * "sent" was dropped and the bot-check would persist with no error anywhere to
+ * say why. A build that compiles and a deployment that succeeds both look
+ * exactly like a working one. So the only honest check is to send a cookie to
+ * an endpoint that reflects what it received.
+ *
+ * Returns booleans and counts ONLY. No cookie, no token, no header value.
+ */
+export const authStatus = action({
+  args: {},
+  handler: async (): Promise<{
+    configured: boolean;
+    /** A SAPISIDHASH-able SID is present, under whichever of the three names. */
+    hashKeyFound: boolean;
+    /** Which cookie NAME was used, or null. The NAME only, never its value. */
+    hashKeyName: string | null;
+    cookieHeaderTransmitted: boolean;
+    probeStatus: number;
+    detail: string;
+  }> => {
+    const cookie = youtubeCookieHeader();
+    const hashKey = hashKeyName(cookie);
+    const hashKeyFound = hashKey !== null;
+
+    // A marker that is obviously not a credential, used only to see whether a
+    // Cookie header set here survives the trip. Deliberately run whether or
+    // not a session is configured: whether the runtime can send the header at
+    // all is a property of the RUNTIME, and is worth knowing before a secret
+    // is pasted in on the assumption that it will be transmitted.
+    const probe = "synq_header_probe=1";
+    let transmitted = false;
+    let probeStatus = 0;
+    let detail = "";
+
+    try {
+      const res = await fetch("https://httpbin.org/anything", {
+        headers: { Cookie: probe },
+        signal: AbortSignal.timeout(10_000),
+      });
+      probeStatus = res.status;
+      const body = (await res.text()) as string;
+      transmitted = body.includes("synq_header_probe=1");
+      detail = transmitted
+        ? "Cookie header reaches the network"
+        : "Cookie header was STRIPPED by the runtime — the session cannot work";
+    } catch (e) {
+      detail = `probe failed: ${e instanceof Error ? e.message : "unknown"}`;
+    }
+
+    if (!cookie) {
+      detail += " | YOUTUBE_COOKIE is not set, resolving anonymously";
+    } else if (!hashKeyFound) {
+      detail +=
+        " | no SAPISID / __Secure-3PSID / __Secure-1PSID found, so no SAPISIDHASH proof is sent and the session will be treated as anonymous";
+    }
+
+    return {
+      configured: !!cookie,
+      hashKeyFound,
+      hashKeyName: hashKey,
+      cookieHeaderTransmitted: transmitted,
+      probeStatus,
+      detail,
+    };
+  },
+});
+
 export const resolveStream = action({
   args: {
     videoId: v.string(),
