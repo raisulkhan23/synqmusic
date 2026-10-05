@@ -55,23 +55,34 @@ const WEB: InnerTubeClient = {
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
 };
 
-// ANDROID / IOS — historically returned unencrypted stream URLs for `player`.
-const ANDROID: InnerTubeClient = {
-  id: "3",
-  clientName: "ANDROID",
-  clientVersion: "19.44.38",
-  userAgent: "com.google.android.youtube/19.44.38 (Linux; U; Android 14) gzip",
-  extra: { androidSdkVersion: 34 },
-};
-
-const IOS: InnerTubeClient = {
-  id: "5",
-  clientName: "IOS",
-  clientVersion: "19.45.4",
-  userAgent:
-    "com.google.ios.youtube/19.45.4 (iPhone16,2; U; CPU iOS 18_1_0 like Mac OS X)",
-  extra: { deviceModel: "iPhone16,2", osVersion: "18.1.0.22B83" },
-};
+// ---------------------------------------------------------------------------
+// Clients that are GONE, and why they are not coming back.
+//
+// ANDROID (id 3), IOS (id 5) and WEB_EMBEDDED (id 56) used to be the workhorses
+// here — they returned unencrypted stream URLs from `player` with no session.
+// YouTube has since closed them off. Probed live against the `player`
+// endpoint, all three now answer `HTTP 400` — the request itself is rejected,
+// before any playability question is even asked:
+//
+//     ANDROID        HTTP 400
+//     IOS            HTTP 400
+//     WEB_EMBEDDED   HTTP 400
+//
+// TVHTML5_SIMPLY_EMBEDDED_PLAYER (id 85) is refused in its own words:
+//
+//     ERROR — YouTube is no longer supported in this application or device
+//
+// These are STRUCTURAL rejections, not the IP-reputation bot-check. They
+// return the same result from a residential connection, a different cloud
+// region, and a different moment, so no amount of rotating IPs or retrying
+// revives them. Keeping them in the client list was pure cost: each one is a
+// full HTTPS round trip to youtube.com that is guaranteed to fail before the
+// next client is even tried, so every dead client added latency to every
+// unresolvable track and delayed the browser-side fallback that does work.
+//
+// Their definitions are deleted rather than merely unreferenced, so the next
+// person does not "restore" a rotation that cannot resolve anything.
+// ---------------------------------------------------------------------------
 
 const MWEB: InnerTubeClient = {
   id: "2",
@@ -81,8 +92,9 @@ const MWEB: InnerTubeClient = {
     "Mozilla/5.0 (iPad; CPU OS 16_7_10 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
 };
 
-// Android VR (Daydream) client — newer client that is generally not subject
-// to the datacenter bot-check that blocks ANDROID/IOS stream resolution.
+// Android VR (Daydream) client — currently the ONLY client that still answers
+// `player` with real audio formats. It survives where ANDROID/IOS no longer do,
+// which is why the stream rotation below is built around it.
 const ANDROID_VR: InnerTubeClient = {
   id: "28",
   clientName: "ANDROID_VR",
@@ -90,17 +102,6 @@ const ANDROID_VR: InnerTubeClient = {
   userAgent:
     "com.google.android.apps.youtube.vr.oculus/1.60.19 (Linux; U; Android 12; eureka-user Build/SQ3A.220605.009.A1) gzip",
   extra: { androidSdkVersion: 31, osName: "Android", osVersion: "12" },
-};
-
-// TV embedded client — typically not subject to the datacenter bot-check that
-// blocks ANDROID/IOS stream resolution from cloud IPs.
-const TV_EMBEDDED: InnerTubeClient = {
-  id: "85",
-  clientName: "TVHTML5_SIMPLY_EMBEDDED_PLAYER",
-  clientVersion: "2.0",
-  userAgent:
-    "Mozilla/5.0 (PlayStation; PlayStation 4/12.00) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.4 Safari/605.1.15",
-  extra: { clientScreen: "EMBED" },
 };
 
 async function innerTube(
@@ -1201,7 +1202,12 @@ export const trackMeta = action({
 
     // Fallback: InnerTube. A video that fails the bot-check can still return
     // its videoDetails, which is enough to label the page.
-    for (const client of [ANDROID_VR, TV_EMBEDDED, ANDROID, IOS, MWEB, WEB]) {
+    // ANDROID_VR first, then MWEB. The three structurally-dead clients that
+    // used to sit between them (TV_EMBEDDED, ANDROID, IOS) are gone — see the
+    // note by their former definitions. WEB is kept here because it is the one
+    // client that reliably serves `player` METADATA even when streams are
+    // refused, so it is a genuine last chance for a title.
+    for (const client of [ANDROID_VR, MWEB, WEB]) {
       try {
         const data = await innerTube("player", client, {
           context: clientContext(client),
@@ -1261,7 +1267,12 @@ export const resolveStream = action({
     let lastTitle: string | undefined;
     let lastYoutubeUrl: string | undefined;
 
-    for (const client of [ANDROID_VR, TV_EMBEDDED, ANDROID, IOS, MWEB]) {
+    // ANDROID_VR is the only client left that returns stream URLs at all, and
+    // MWEB is the only other one YouTube still evaluates rather than rejecting
+    // outright. The dead ones are gone: each was a guaranteed-fail HTTPS round
+    // trip that delayed the browser-side Piped fallback on every unresolvable
+    // track. See the note where those clients used to be defined.
+    for (const client of [ANDROID_VR, MWEB]) {
       try {
         const data = await innerTube("player", client, {
           context: clientContext(client),
