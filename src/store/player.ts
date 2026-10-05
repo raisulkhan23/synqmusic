@@ -3413,7 +3413,21 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
         // cache, and `prefetchTrack` already resolves the NEXT track while the
         // current one plays, so that cost is paid off the critical path for
         // every track after the first.
-        void resolveWithDeadline(videoId).then((url) => {
+        // Wait for the resolver PROPERLY. This used to be `resolveWithDeadline`,
+        // which raced resolution against a 1.2s timer — and resolution normally
+        // takes longer than that, so the race returned null, the deck was
+        // abandoned, and playback fell to the IFrame. In an environment where
+        // the IFrame loads but never plays (bot-check refusal, embed blocked)
+        // that meant: buffering spinner forever, clock stuck at 0.0, both decks
+        // with no src — while the resolver's result, seconds later, was thrown
+        // away. The deck path exists precisely because the IFrame is not
+        // reliable, so it must not be gated by a timer that assumes the IFrame
+        // will win. A generous cap (15s) only guards a hung fetch; a failed
+        // resolver still returns null quickly and falls back.
+        void Promise.race([
+          ytResolve(videoId),
+          new Promise<null>((r) => setTimeout(() => r(null), 15_000)),
+        ]).then((url) => {
           const state = usePlayerStore.getState();
           if (state.current?.youtubeId !== videoId || !state.current) return;
           if (!url) {
