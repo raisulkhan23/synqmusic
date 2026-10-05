@@ -361,6 +361,13 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
   const attempts = useRef(0);
   const rescueExhausted = useRef(false);
   const lastErrorTrack = useRef<string | null>(null);
+  // Session-wide cap on rescue swaps. Each re-searched upload looks like a
+  // NEW track (so `lastErrorTrack` resets `attempts` below), which means an
+  // environment where YouTube embeds never play (network blocker, bot-check)
+  // looped load → rescue → different upload → load forever. After this many
+  // total swaps the chain stops and says so instead of repeating.
+  const totalSwaps = useRef(0);
+  const MAX_TOTAL_SWAPS = 3;
   useEffect(() => {
     if (errorNonce === 0) return;
     const s = usePlayerStore.getState();
@@ -371,6 +378,17 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
       lastErrorTrack.current = track.id;
       attempts.current = 0;
       rescueExhausted.current = false;
+    }
+    if (totalSwaps.current >= MAX_TOTAL_SWAPS) {
+      rescueExhausted.current = true;
+      toast.error(
+        giveUpNotice({
+          blockedProvider: "YouTube",
+          hasAlternatives: (track.alternatives ?? []).length > 0,
+        }),
+        { id: "yt-fallback" },
+      );
+      return;
     }
     const alternatives = track.alternatives ?? [];
     // NOTE: don't bail out just because `alternatives` is empty — the rescue
@@ -446,6 +464,7 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
               items.filter((i) => i.id !== candidate.id),
             ),
           );
+          totalSwaps.current += 1;
           toast.success(`Playing "${track.title}"`, { id: "yt-fallback" });
         })
         .catch(() =>
@@ -478,6 +497,7 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
     });
     // The IFrame engine plays by video id — just swap the current track.
     replaceCurrentStream(toPlayableYoutube(next, next.id, alternatives));
+    totalSwaps.current += 1;
     toast.success("Playing a matching version", { id: "yt-fallback" });
   }, [errorNonce, replaceCurrentStream, playViaStream, searchSameSong]);
 
