@@ -3369,8 +3369,13 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       // <audio> element. Checking only the effect preset is why the bass /
       // treble sliders appeared to do nothing.
       const wantFilter = get().audioFilter !== "off" || hasAudioProcessing();
-      // Crossfade and gapless are ALSO reasons to play through the <audio>
-      // decks rather than the YouTube IFrame.
+      // Crossfade is ALSO a reason to play through the <audio> decks rather
+      // than the YouTube IFrame. NOTE: `gapless` deliberately does NOT route
+      // here — it defaulted to true, which forced EVERY YouTube track through
+      // stream resolution (a Convex/Piped round trip that YouTube's bot-check
+      // routinely refuses) before any sound, and left the player silent when
+      // both the resolver and the late IFrame fallback failed. Gapless
+      // degrades to a hard cut instead of blocking playback.
       //
       // The IFrame owns its audio inside a cross-origin frame that Web Audio
       // cannot tap, so while it is the sound source there is literally nothing
@@ -3380,7 +3385,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       // the IFrame, `crossfadePossible()` returned false, and every plan
       // silently degraded to a cut. Asking for a crossfade now routes playback
       // the same way an effect preset already did.
-      const wantDeckEngine = wantFilter || get().crossfade > 0 || get().gapless;
+      const wantDeckEngine = wantFilter || get().crossfade > 0;
       // The decks need a RUNNING AudioContext before a blend is possible, and
       // the context is only ever created lazily. Build it here, inside the
       // gesture that started playback, so a crossfade is not permanently
