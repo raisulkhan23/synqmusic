@@ -35,19 +35,39 @@ import { readCustomResolver } from "@/lib/customResolver";
 /**
  * Public Piped instances, tried in order.
  *
- * These are volunteer-run and go down without warning, so the list is a
- * rotation rather than a set of guarantees, and every entry is allowed to
- * fail. The first two are the instances verified reachable; the rest are kept
- * because a rotation is the only defence against the first two disappearing,
- * and an unreachable instance costs one fast timeout rather than a failure.
+ * This list is the result of probing every instance on the official TeamPiped
+ * list (15 of them) and keeping only the ones that actually answer. Run
+ * `bun scripts/audit.piped.instances.ts` to re-probe and refresh it.
+ *
+ * The four that were removed were not removed for being slow, and not because
+ * they refused me — they are gone for the listener too:
+ *
+ *     adminforge.de    HTTP 403   Cloudflare HTML, not the API
+ *     kavin.rocks      HTTP 526   invalid SSL certificate
+ *     reallyaweso.me   HTTP 502   upstream gone
+ *     leptons.xyz      HTTP 502   upstream gone
+ *
+ * Nine further official instances (nosebs.ru, piped-api.privacy.com.de,
+ * api.piped.yt, drgns.space, owo.si, codespace.cz, darkness.services,
+ * orangenet.cc, pipedapi-libre.kavin.rocks) no longer resolve in DNS at all,
+ * so they were never added. That is the whole public network right now: two
+ * hosts, and a rotation is the only defence against both disappearing.
+ *
+ * WHAT WAS DELIBERATELY NOT PRUNED. Both survivors are frequently answered by
+ * YouTube with `SignInConfirmNotBotException` — for some videos, from some IPs.
+ * That is a verdict about the caller's IP reputation, not evidence the host is
+ * down, and these instances resolve normally for the same video from a
+ * residential connection. Pruning on that basis would have emptied the list
+ * while the one working fallback was still in it.
+ *
+ * ORDER IS BY MEASURED SPEED, ducks.party first: 761ms average against
+ * private.coffee's 1149ms over repeated probes of the same video. Since the
+ * first instance to answer ends the search, putting the slower one second is
+ * worth roughly 390ms of perceived start-up on every track that resolves.
  */
 const PIPED_INSTANCES = [
-  "https://api.piped.private.coffee",
   "https://pipedapi.ducks.party",
-  "https://pipedapi.adminforge.de",
-  "https://pipedapi.kavin.rocks",
-  "https://pipedapi.reallyaweso.me",
-  "https://pipedapi.leptons.xyz",
+  "https://api.piped.private.coffee",
 ] as const;
 
 /**
@@ -68,8 +88,30 @@ function instanceList(): string[] {
   return custom ? [custom, ...PIPED_INSTANCES] : [...PIPED_INSTANCES];
 }
 
-/** Per-instance resolve budget. Short, because a dead host must not stall us. */
-const RESOLVE_TIMEOUT_MS = 6_000;
+/**
+ * Per-instance resolve budget. Short, because a dead host must not stall us.
+ *
+ * Down from 6000ms. The slowest instance that actually works answers in
+ * ~1200ms, so 4000ms leaves generous headroom for a slow-but-alive mirror
+ * while cutting the cost of a dead one by a third.
+ */
+const RESOLVE_TIMEOUT_MS = 4_000;
+
+/**
+ * Ceiling for the WHOLE mirror search, not per instance.
+ *
+ * The per-instance timeout alone does not bound anything. These are tried
+ * SEQUENTIALLY, so the worst case is `instances x per-instance timeout` —
+ * with the previous six-entry list that was up to 36 seconds of a track
+ * sitting silent, and callers outside the player's 1.2s race (the download
+ * path, `prepareIncoming`) waited the full amount. A list of dead mirrors
+ * should cost a moment, not half a minute.
+ *
+ * Eight seconds comfortably covers both live instances answering normally
+ * while guaranteeing the search ends promptly. Whichever instance is in flight
+ * when the budget expires is aborted rather than left to finish.
+ */
+const RESOLVE_BUDGET_MS = 8_000;
 
 export interface PipedResolutionFailure {
   /** The instance that was tried, host only — enough to identify it. */
@@ -103,12 +145,30 @@ export async function resolveViaPiped(
 
   const failures: PipedResolutionFailure[] = [];
 
+  const deadline = Date.now() + RESOLVE_BUDGET_MS;
+
   for (const base of instanceList()) {
     const host = hostOf(base);
+
+    // Checked BEFORE starting a fetch, never after: beginning a request we
+    // have no time left to hear the answer to is exactly how a mirror list
+    // turns into a stall. Whatever is left is reported rather than skipped
+    // silently, so "the budget ran out" stays distinguishable from "that
+    // instance was broken" in the failures the caller shows a person.
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) {
+      failures.push({ instance: host, detail: "not tried: resolve budget spent" });
+      break;
+    }
+
     let res: Response;
     try {
       const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), RESOLVE_TIMEOUT_MS);
+      // An instance can never outlive the overall budget, not even the first.
+      const timer = setTimeout(
+        () => ctrl.abort(),
+        Math.min(RESOLVE_TIMEOUT_MS, remaining),
+      );
       try {
         res = await fetch(`${base}/streams/${videoId}`, { signal: ctrl.signal });
       } finally {
