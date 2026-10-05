@@ -197,7 +197,7 @@ export async function resolveViaPiped(
         videoOnly?: boolean;
         mimeType?: string;
       }[];
-    };
+    } & { proxyUrl?: string; };
     try {
       data = (await res.json()) as typeof data;
     } catch {
@@ -205,14 +205,46 @@ export async function resolveViaPiped(
       continue;
     }
 
-    // Preferred: a dedicated audio-only stream, best bitrate first.
+    // Preferred: a dedicated audio-only stream (best bitrate first).
     const audio = (data.audioStreams ?? [])
       .filter((s) => !!s.url && (!s.mimeType || s.mimeType.includes("audio")))
       .sort((a, b) => (b.bitrate ?? 0) - (a.bitrate ?? 0));
     if (audio[0]?.url) return { url: audio[0].url, failures: [] };
 
-    // Otherwise the lowest-resolution muxed stream: the video track is
-    // discarded by the media engine, and only the audio is ever used.
+    // Piped can serve the source through its own proxy regardless of whether
+    // it exposed an audio-only format.
+    const proxyUrl = data.proxyUrl;
+    if (proxyUrl && proxyUrl.startsWith("http")) {
+      const video = (data.videoStreams ?? [])
+        .filter(
+          (s): s is typeof s & { url: string } => !!s.url && !s.videoOnly,
+        )
+        .sort(
+          (a, b) =>
+            (parseInt(a.quality ?? "0", 10) || 9999) -
+            (parseInt(b.quality ?? "0", 10) || 9999),
+        )[0];
+      if (!video?.url) {
+        failures.push({ instance: host, detail: "no muxed stream for proxy" });
+        continue;
+      }
+      try {
+        const target = new URL(video.url);
+        target.searchParams.set("proxy", proxyUrl.replace(/^https?:\/\//, ""));
+        // Reaching through the proxy changes the host, so the page can fetch it
+        // without a CORS hop through the app's own /audio-proxy.
+        return {
+          url: `https://${proxyUrl.replace(/^https?:\/\//, "")}/` +
+            encodeURIComponent(target.pathname + "&" + target.search.slice(1)),
+          failures: [],
+        };
+      } catch {
+        failures.push({ instance: host, detail: "bad proxy target url" });
+        continue;
+      }
+    }
+
+    // Fallback: pick the lowest-resolution muxed stream directly.
     const muxed = (data.videoStreams ?? [])
       .filter(
         (s) =>
