@@ -652,6 +652,10 @@ interface PlayerStore {
   cardTransparency: number;
   setCardTransparency: (value: number) => void;
   /** Optional locally-persisted blurred background wallpaper. */
+  /**
+   * The stored wallpaper picker value. This is a stored-asset key (object with
+   * a `key` field), a fallback public URL string, or null.
+   */
   wallpaper: string | null;
   wallpaperType: "image" | "video";
   setWallpaper: (value: string | null, type?: "image" | "video") => void;
@@ -1018,9 +1022,41 @@ const initialAnimationLevel = readAnimationLevel();
 const initialPointerEffects = readBool("ss.pointerEffects", true);
 const initialArtistRepetition = readArtistRepetition();
 const initialNotifications = readNotificationsEnabled();
-const initialWallpaper = localStorage.getItem("ss.wallpaper");
+const RAW_WALLPAPER_KEY = "ss.wallpaper";
+const initialWallpaper = readWallpaperPicker();
 const initialWallpaperType =
   localStorage.getItem("ss.wallpaperType") === "video" ? "video" : "image";
+
+/**
+ * The wallpaper picker historically stored both a reference and a separate key
+ * in localStorage, and only the reference was read back at startup. That left a
+ * stale picker value standing in as the wallpaper every time the real file asset
+ * was missing (including the first open after the file-key slot was cleared).
+ *
+ * The picker is now the single source for the initial value. When it names a
+ * stored wallpaper asset, the blob URL is refreshed on open so a cleared IndexedDB
+ * slot does not resurrect the default cover as the background.
+ */
+function readWallpaperPicker(): string | null {
+  try {
+    const raw = window.localStorage.getItem(RAW_WALLPAPER_KEY);
+    if (raw === null) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object" && "key" in parsed) {
+      const key = String(parsed.key ?? "").trim();
+      if (!key) return null;
+      return key;
+    }
+    // Legacy plaintext reference preserved for the rare hand-edited store.
+    if (typeof parsed === "string" && parsed.trim()) return parsed.trim();
+    return raw;
+  } catch {
+    return null;
+  }
+}
+
+/** Re-export the picker key so the tuning change can seed the wallpapers list. */
+export { RAW_WALLPAPER_KEY };
 const savedQueue = readSavedQueue();
 
 const readIdSet = (key: string): Record<string, true> => {
@@ -5013,8 +5049,8 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     setWallpaper: (value, type = "image") =>
       set(() => {
         try {
-          if (value) writeSetting("ss.wallpaper", value);
-          else removeSetting("ss.wallpaper");
+                  if (value) writeSetting(RAW_WALLPAPER_KEY, value);
+          else removeSetting(RAW_WALLPAPER_KEY);
           writeSetting("ss.wallpaperType", type);
         } catch {
           // Keep the current session usable even when browser storage is full.

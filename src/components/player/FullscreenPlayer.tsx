@@ -61,7 +61,10 @@ import { formatRemaining, useSleepCountdown } from "@/lib/sleepTimer";
 import {
   IMAGE_WALLPAPER_MARKER,
   LIVE_WALLPAPER_MARKER,
+  listWallpaperFiles,
+  wallpaperMarker,
 } from "@/lib/wallpaperStorage";
+import { RAW_WALLPAPER_KEY } from "@/store/player";
 
 const SLEEP_OPTIONS: { label: string; value: number | "end" | "queue" }[] = [
   { label: "5 minutes", value: 5 },
@@ -560,7 +563,7 @@ export function FullscreenPlayer() {
   // default OFF. Off keeps the player audio-only and shows cover art, which is
   // also the escape hatch when a browser extension blocks embedded players.
   const videoEnabled = usePlayerStore((s) => s.videoEnabled);
-  const wallpaper = usePlayerStore((s) => s.wallpaper);
+  const wallpaperPickerValue = usePlayerStore((s) => s.wallpaper);
   const wallpaperType = usePlayerStore((s) => s.wallpaperType);
 
   useEffect(() => {
@@ -815,7 +818,10 @@ export function FullscreenPlayer() {
         }
       >
         {/* User wallpaper stays behind the maximized player, with the same
-            blur preference and glass treatment as the main app. */}
+            blur preference and glass treatment as the main app. The fullscreen
+            player reads the same stored asset the rest of the app uses, so the
+            background is consistent whether it is shown here or on the landing
+            and settings screens. */}
         {wallpaperEnabled &&
           wallpaper &&
           wallpaper !== LIVE_WALLPAPER_MARKER &&
