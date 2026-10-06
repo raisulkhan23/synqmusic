@@ -79,13 +79,13 @@ const whatsNewCards = [
   },
   {
     icon: Download,
-    title: "Downloads & offline",
+    title: "Downloads that are actually downloadable",
     body: "An honest look at what SYNQ is allowed to keep.",
     points: [
-      "A Download hub at /downloads showing real progress, speed and ETA",
-      "Range-based, resumable downloads with integrity checking",
-      "Reports what is genuinely cached for offline use",
-      "Says plainly when a provider licenses streaming, not download",
+      "A Download hub at /downloads with progress, speed, ETA, cancel and retry",
+      "Range-based, resumable downloads with integrity checking, stored on your device",
+      "Download shows in the fullscreen player and in every track menu — only when the track can be saved",
+      "Report what is genuinely offline, and say plainly when a provider only licenses streaming",
     ],
   },
 ] as const;

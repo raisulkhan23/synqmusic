@@ -849,7 +849,7 @@ describe("the What's New section tells the truth", () => {
     expect(landing).toMatch(/Lyrics that keep up/);
     expect(landing).toMatch(/Mixes that mix/);
     expect(landing).toMatch(/Roughly 10× faster lookups/);
-    expect(landing).toMatch(/Downloads & offline/);
+    expect(landing).toMatch(/Downloads that are actually downloadable/);
     const cards = landing.slice(
       landing.indexOf("const whatsNewCards = ["),
       landing.indexOf("const fadeUp = {"),

@@ -148,6 +148,45 @@ transitions simply never reached the audio.
 
 ### Added
 
+#### Single-profile settings sync
+
+Settings and player preferences now live on the account, so they come back
+when you sign in on another device.
+
+- Settings, theme, wallpaper and playback preferences are stored once per
+  account rather than only in the browser.
+- Signing in hydrates the local defaults from the server first, so the
+  profile version of each preference wins.
+- Local changes are pushed back in the background when they settle.
+- Only stable UI/player preferences are synced; current track, queue
+  position and play state stay local to the device.
+
+#### Authorized downloads, where they are allowed
+
+Downloads are now an honest, server-authorized feature rather than a
+attempt to copy a stream SYNQ only has permission to play.
+
+- The backend decides, on every request, whether a release is licensed for
+  download before any bytes move.
+- A playable track is not automatically a downloadable one; the menu and the
+  player only show Download when the track can actually be saved.
+- The Download hub shows progress, speed, ETA, cancel and retry.
+- Downloaded copies are stored on the device and used for offline playback,
+  but streaming and downloading remain separate paths.
+
+#### Fullscreen download
+
+The fullscreen player can start a download from the player itself.
+
+- The Download button in the fullscreen player uses the same eligibility
+  rules as the track menus, so it never offers something the backend would
+  refuse.
+
+#### Visual preferences
+
+- The Performance mode toggle was moved into the Visual Preferences section
+  so it sits with the other display controls instead of under Focus modes.
+
 #### Crossfade & gapless playback
 
 Songs now blend into one another instead of stopping dead at the end of a
