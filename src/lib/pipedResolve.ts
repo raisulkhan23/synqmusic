@@ -211,31 +211,91 @@ export async function resolveViaPiped(
       .sort((a, b) => (b.bitrate ?? 0) - (a.bitrate ?? 0));
     if (audio[0]?.url) return { url: audio[0].url, failures: [] };
 
-    // Piped can serve the source through its own proxy regardless of whether
-    // it exposed an audio-only format.
-    const proxyUrl = data.proxyUrl;
-    if (proxyUrl && proxyUrl.startsWith("http")) {
-      const video = (data.videoStreams ?? [])
-        .filter(
-          (s): s is typeof s & { url: string } => !!s.url && !s.videoOnly,
-        )
-        .sort(
-          (a, b) =>
-            (parseInt(a.quality ?? "0", 10) || 9999) -
-            (parseInt(b.quality ?? "0", 10) || 9999),
-        )[0];
-      if (!video?.url) {
-        failures.push({ instance: host, detail: "no muxed stream for proxy" });
-        continue;
-      }
+    // Piped strips audio-only formats for most videos now, so the fallback is
+    // a MUXED stream. Which one is picked decides whether playback streams or
+    // stalls, and the label tells you nothing — so rank by what was MEASURED:
+    //
+    //   player.odycdn.com        video/mp4   136ms first 64KB  ~470 KB/s  CORS: *
+    //   piped-proxy.ducks.party  video/mp4   923ms first 64KB   ~69 KB/s  (403s
+    //                                                       without its cookies)
+    //
+    // 69 KB/s is under what one 128 kbps audio track needs, and the
+    // piped-proxy host answers 403 to anything that is not a browser holding
+    // its cookies. The old rank sorted on `parseInt(quality)`, which reads
+    // "LBRY" as NaN→9999 and "360p" as 360, so it ALWAYS chose the 69 KB/s
+    // piped-proxy entry over the 470 KB/s odycdn one. That ordering is the
+    // constant-buffering report.
+    const isCorsDirect = (url: string): boolean => {
       try {
-        // Piped exposes a hosted odycdn stream (CORS-enabled directly) as
-        // the first muxed video stream. Route THAT through /audio-proxy so
-        // the <audio crossOrigin="anonymous"> element gets the headers it
-        // needs and the stream is actually playable from the browser.
-        const target = new URL(video.url);
-        // Piped's own proxy parameter is not needed here; odycdn already
-        // serves with CORS, and /audio-proxy will add the extra headers.
+        // odycdn is LBRY-backed and serves `access-control-allow-origin: *`,
+        // so an <audio crossOrigin="anonymous"> element can read it with no
+        // proxy hop at all.
+        const h = new URL(url).host;
+        return h === "odycdn.com" || h.endsWith(".odycdn.com");
+      } catch {
+        return false;
+      }
+    };
+    const proxyUrl = data.proxyUrl;
+    const muxed = (data.videoStreams ?? [])
+      .filter(
+        (s): s is typeof s & { url: string } =>
+          !!s.url &&
+          s.videoOnly !== true &&
+          (!s.mimeType ||
+            s.mimeType.includes("mp4") ||
+            s.mimeType.includes("webm")),
+      )
+      .map((s) => {
+        let hostname = "";
+        try {
+          hostname = new URL(s.url).host;
+        } catch {
+          /* unparseable — ranked as neither direct nor proxied */
+        }
+        return {
+          ...s,
+          hostname,
+          corsDirect: isCorsDirect(s.url),
+          throughInstanceProxy: hostname.includes("piped-proxy."),
+        };
+      })
+      .sort((a, b) => {
+        // 1. A CORS-direct host wins: no extra hop, and measured ~7x the
+        //    throughput of the instance's own proxy.
+        if (a.corsDirect !== b.corsDirect) return a.corsDirect ? -1 : 1;
+        // 2. The instance's own proxy goes LAST — it measured slowest and it
+        //    rejects any client it did not hand a cookie to.
+        if (a.throughInstanceProxy !== b.throughInstanceProxy)
+          return a.throughInstanceProxy ? 1 : -1;
+        // 3. Only then does the resolution label decide, and only between
+        //    streams whose labels are actually comparable.
+        return (
+          (parseInt(a.quality ?? "0", 10) || 9999) -
+          (parseInt(b.quality ?? "0", 10) || 9999)
+        );
+      });
+
+    const best = muxed[0];
+    if (!best) {
+      // The instance answered, and had nothing for us. Piped returns HTTP 200
+      // with empty stream lists for videos it cannot extract, so this is a
+      // real per-video outcome rather than a broken host.
+      failures.push({ instance: host, detail: "no audio or muxed stream" });
+      continue;
+    }
+
+    // A CORS-direct stream plays WITHOUT the proxy: it already sends the header
+    // the <audio crossOrigin="anonymous"> element needs, and routing it through
+    // /audio-proxy would add a hop and a failure mode for nothing.
+    if (best.corsDirect) return { url: best.url, failures: [] };
+
+    // Anything else is routed through /audio-proxy, which adds the missing CORS
+    // headers. Piped's own proxyUrl is preferred as the upstream when it is
+    // advertised, because the instance is then responsible for fetching it.
+    if (proxyUrl && proxyUrl.startsWith("http")) {
+      try {
+        const target = new URL(best.url);
         return {
           url: `${import.meta.env.VITE_CONVEX_URL?.replace(".cloud", ".site") ?? ""}/audio-proxy?u=${encodeURIComponent(target.origin + target.pathname)}${target.search ? "&" + target.search.slice(1) : ""}`,
           failures: [],
@@ -246,27 +306,8 @@ export async function resolveViaPiped(
       }
     }
 
-    // Fallback: pick the lowest-resolution muxed stream directly.
-    const muxed = (data.videoStreams ?? [])
-      .filter(
-        (s) =>
-          !!s.url &&
-          s.videoOnly === false &&
-          (!s.mimeType ||
-            s.mimeType.includes("mp4") ||
-            s.mimeType.includes("webm")),
-      )
-      .sort(
-        (a, b) =>
-          (parseInt(a.quality ?? "0", 10) || 9999) -
-          (parseInt(b.quality ?? "0", 10) || 9999),
-      );
-    if (muxed[0]?.url) return { url: muxed[0].url, failures: [] };
-
-    // The instance answered, and had nothing for us. Piped returns HTTP 200
-    // with empty stream lists for videos it cannot extract, so this is a
-    // real per-video outcome rather than a broken host.
-    failures.push({ instance: host, detail: "no audio or muxed stream" });
+    // No proxy advertised: the stream is used directly.
+    return { url: best.url, failures: [] };
   }
 
   return { url: null, failures };

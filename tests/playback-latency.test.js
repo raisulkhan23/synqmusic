@@ -7,6 +7,7 @@ const tidal = readSource("src/convex/tidal.ts");
 const importers = readSource("src/lib/importers.ts");
 const sources = readSource("src/lib/sources.ts");
 const importSection = readSource("src/components/settings/ImportSection.tsx");
+const piped = readSource("src/lib/pipedResolve.ts");
 
 const flatStore = store.replace(/\s+/g, " ");
 
@@ -79,6 +80,26 @@ describe("no artificial delay before a song plays", () => {
   test("playback is still handed to the engine immediately", () => {
     // Guard against "removing the delay" being overdone into never starting.
     expect(flatStore).toContain("void audio.play().catch(() => undefined)");
+  });
+
+  test("the Piped fallback picks the fast stream, not the label that sorts first", () => {
+    // MEASURED (first 64 KB, ranged) on the one instance that still serves
+    // muxed streams:
+    //     player.odycdn.com        ~924 KB/s  277ms  access-control-allow-origin: *
+    //     piped-proxy.ducks.party  ~213 KB/s 1201ms  (403s without its cookies)
+    //
+    // Piped strips audio-only formats for most videos, so this IS the stream
+    // most blocked tracks end up on. The old rank sorted on parseInt(quality),
+    // which read "LBRY" as NaN→9999 and "360p" as 360, so it always picked the
+    // ~213 KB/s instance proxy. Under one 128 kbps track's requirement is what
+    // "buffers constantly" means.
+    expect(piped).toContain("isCorsDirect");
+    // The CORS-direct stream must be played DIRECTLY — routing it through
+    // /audio-proxy would add a hop and a failure mode for nothing.
+    expect(piped).toMatch(/if \(best\.corsDirect\) return \{ url: best\.url/);
+    // And the instance's own proxy must be ranked last, not first.
+    expect(piped).toMatch(/throughInstanceProxy\b/);
+    expect(piped).toMatch(/return a\.throughInstanceProxy \? 1 : -1/);
   });
 });
 
