@@ -202,8 +202,14 @@ describe("performance mode stops the frame loops CSS cannot reach", () => {
     expect(mainSource).toMatch(
       /import \{ MotionConfig \} from "framer-motion"/,
     );
+    // The value is computed now rather than inlined: performance mode (and
+    // motion Off) stop framer-motion outright, Reduced defers to the OS
+    // preference, and anything else runs full.
     expect(mainSource).toMatch(
-      /<MotionConfig reducedMotion=\{performanceMode \? "always" : "never"\}>/,
+      /<MotionConfig reducedMotion=\{reducedMotion\}>/,
+    );
+    expect(mainSource).toMatch(
+      /performanceMode \|\| animationLevel === "off"[\s\S]{0,80}?"always"/,
     );
     expect(mainSource).toMatch(/<MotionPrefs>/);
   });

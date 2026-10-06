@@ -4,6 +4,9 @@ import { readSource } from "./helpers/tailwind-css.js";
 const lyricsSource = readSource("src/convex/lyrics.ts");
 const schemaSource = readSource("src/convex/schema.ts");
 const playerSource = readSource("src/components/player/FullscreenPlayer.tsx");
+// The lyrics client moved out of the fullscreen player into its own hook, so
+// the fetching logic is asserted against where it actually lives now.
+const lyricsHookSource = readSource("src/components/player/useTrackLyrics.ts");
 
 describe("lyrics lookup matches more songs", () => {
   test("titles are normalised instead of searched verbatim", () => {
@@ -109,13 +112,13 @@ describe("lyrics lookup matches more songs", () => {
     // The fetch effect listed only the action in its dependencies, so the
     // panel cleared itself on a track change and then never asked again:
     // every song after the first sat on "loading" for the rest of the session.
-    const effect = playerSource.slice(
-      playerSource.indexOf("const fetchLyrics = useAction"),
-      playerSource.indexOf("// current line index"),
+    const effect = lyricsHookSource.slice(
+      lyricsHookSource.indexOf("const fetchLyrics = useAction"),
+      lyricsHookSource.indexOf("const activeIndex = useMemo"),
     );
-    expect(effect).toMatch(/\}, \[fetchLyrics, key\]\);/);
+    expect(effect).toMatch(/\}, \[enabled, fetchLyrics, key\]\);/);
     // The timings flag is per-result and must not survive into the next song.
-    expect(playerSource).toMatch(/setSynced\(true\);/);
+    expect(lyricsHookSource).toMatch(/setSynced\(true\);/);
   });
 
   test("the client tells the user when lyrics have no timings", () => {

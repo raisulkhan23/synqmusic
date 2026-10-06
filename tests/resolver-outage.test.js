@@ -50,10 +50,17 @@ describe("a total resolver outage must not stop playback", () => {
       "const wantDeckEngine = wantFilter",
       "getAudio().pause();",
     );
-    // A raw `ytResolve` here means a hung resolver keeps the track silent at
-    // position 0 indefinitely.
-    expect(branch).toContain("resolveWithDeadline(videoId)");
+    // A raw `await ytResolve` here means a hung resolver keeps the track
+    // silent at position 0 indefinitely, so it must race a timer.
+    expect(branch).toMatch(/Promise\.race\(\[\s*ytResolve\(videoId\)/);
+    expect(branch).toMatch(/15_000/);
     expect(branch).not.toMatch(/void ytResolve\(videoId\)\.then/);
+    // And it must NOT go back to the old 1.2s `resolveWithDeadline` race:
+    // resolution normally takes longer than that, so the deadline expired
+    // first, the deck was abandoned, and playback fell through to the IFrame —
+    // the path that hangs forever when YouTube refuses to play. The cap here
+    // is a guard against a hung fetch, not a bet that the IFrame will win.
+    expect(branch).not.toContain("resolveWithDeadline(videoId)");
   });
 
   test("the deadline is short enough to actually save the track", () => {

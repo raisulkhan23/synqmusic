@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { isFatalError } from "../src/lib/youtubePlayer.ts";
+import { isEmbedBlocked, isFatalError } from "../src/lib/youtubePlayer.ts";
 import { readSource } from "./helpers/tailwind-css.js";
 
 /**
@@ -43,6 +43,29 @@ describe("a blocked YouTube embed fails immediately, not after 12 seconds", () =
     // stray state value, so the set stays explicit.
     for (const code of [-1, 0, 1, 3, 4, 12, 99]) {
       expect(isFatalError(code)).toBe(false);
+    }
+  });
+});
+
+describe("only a refused embed may blame the listener's blocker", () => {
+  test("153 (embed refused — what a blocker causes) is the only code that does", () => {
+    expect(isEmbedBlocked(153)).toBe(true);
+  });
+
+  test("owner-disabled embeds and removed videos never blame the listener", () => {
+    // 101/150 = the VIDEO OWNER disabled embedding, 2/5/100 = bad or removed
+    // video. None of these is something a listener can fix by touching their
+    // blocker, so none of them may produce "your blocker is blocking YouTube".
+    for (const code of [2, 5, 100, 101, 150, -1, 0, 1, 99]) {
+      expect(isEmbedBlocked(code)).toBe(false);
+    }
+  });
+
+  test("blaming a blocker is a strict subset of failing fast", () => {
+    // Anything allowed to name a blocker must still be a fatal error, or the
+    // rescue chain would never run in the first place.
+    for (const code of [2, 5, 100, 101, 150, 153, 99, -1]) {
+      if (isEmbedBlocked(code)) expect(isFatalError(code)).toBe(true);
     }
   });
 });
@@ -93,8 +116,13 @@ describe("the wired-up player actually does this", () => {
   test("a track with no video id and no stream URL is refused up front", () => {
     // `audio.src = undefined` resolves to the page itself: never playable,
     // never an error. This is the silent case that must never happen.
+    //
+    // The guard's block grew a user-facing toast with Retry / Play next
+    // actions, so the window is wide enough to reach its `return;`. What the
+    // test is actually about is that the guard exists AND returns, instead of
+    // falling through to an engine with nothing to play.
     expect(playerSrc).toMatch(
-      /if \(!track\.youtubeId && !track\.audioUrl\) \{[\s\S]{0,400}?return;/,
+      /if \(!track\.youtubeId && !track\.audioUrl\) \{[\s\S]{0,900}?toast\.error\([\s\S]{0,600}?return;/,
     );
   });
 
@@ -116,9 +144,27 @@ describe("the wired-up player actually does this", () => {
     expect(barSrc).not.toContain("searchJamendo");
   });
 
-  test("running out of ways to play names the blocker instead of going quiet", () => {
+  test("running out of ways to play still says something, without inventing a blocker", () => {
+    // The end of the chain must still produce a message — total silence was
+    // the bug this whole file exists for.
     expect(barSrc).toMatch(
-      /const next = alternatives\[attempts\.current - 1\][\s\S]{0,700}?blockedProvider: "YouTube"/,
+      /const next = alternatives\[attempts\.current - 1\][\s\S]{0,900}?giveUpNotice\(/,
     );
+    // But it may name a blocker ONLY from the engine's own verdict. A
+    // hardcoded "YouTube" here is exactly what told listeners with no blocker
+    // running that their blocker was blocking YouTube — the false positive
+    // this test now guards against.
+    expect(barSrc).not.toContain('blockedProvider: "YouTube"');
+    expect(barSrc).toMatch(/blockedProvider: s\.blockedProvider/);
+  });
+
+  test("the store only records a blocker from the engine's blocked-embed signal", () => {
+    expect(playerSrc).toMatch(
+      /blockedProvider: ytEngine\.isEmbedBlocked\(code\)/,
+    );
+    // And it must be cleared at the start of every load, so one blocked track
+    // cannot brand the next, unrelated one as blocked too.
+    const clears = playerSrc.match(/blockedProvider: null/g) ?? [];
+    expect(clears.length).toBeGreaterThanOrEqual(2);
   });
 });

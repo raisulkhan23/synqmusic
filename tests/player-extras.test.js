@@ -36,9 +36,10 @@ describe("the sleep timer is visible and cancellable from the bar", () => {
     expect(bar).toMatch(/<SleepTimerChip \/>/);
     expect(bar).toMatch(/aria-label="Cancel sleep timer"/);
     expect(bar).toMatch(/setSleepTimer\(null\)/);
-    // Nothing on screen when no timer is armed.
+    // Nothing on screen when no timer is armed — including the queue-end arm,
+    // which is a third way to have a timer running with no countdown.
     expect(bar).toMatch(
-      /if \(sleepEndsAt === null && !sleepAtSongEnd\) return null;/,
+      /if \(sleepEndsAt === null && !sleepAtSongEnd && !sleepAtQueueEnd\) return null;/,
     );
   });
 
