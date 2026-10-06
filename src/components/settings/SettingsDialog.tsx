@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { DEFAULT_CARD_TRANSPARENCY } from "@/lib/cardTransparency";
+import { PresetSelector } from "@/components/settings/PresetSelector";
 import { ANIMATION_LEVEL_META, ANIMATION_LEVELS } from "@/lib/motion";
 import {
   ARTIST_REPETITION_LEVELS,
@@ -1540,6 +1541,10 @@ export function SettingsDialog({
             <Palette className="size-3.5" />
             Appearance
           </p>
+
+          <PresetSelector />
+
+          <Separator className="my-3 bg-white/[0.07]" />
 
           <ToggleRow
             label="Adaptive track palettes"
