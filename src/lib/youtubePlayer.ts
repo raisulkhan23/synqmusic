@@ -587,6 +587,21 @@ export function isFatalError(code: number): boolean {
   );
 }
 
+/**
+ * TRUE only when the failure is evidence that the LISTENER's browser blocked
+ * the embed — the one case where it is honest to name a blocker.
+ *
+ * Only 153 qualifies: it is what a network blocker (uBlock, AdGuard,
+ * 1Blocker) produces when it stops `youtube.com/embed/*`. Deliberately
+ * EXCLUDES 101/150 (the VIDEO OWNER disabled embedding — nothing the listener
+ * can fix) and 2/5/100 (bad or removed video). Attributing any of those to a
+ * blocker is exactly how the "your blocker is blocking YouTube" message used
+ * to appear to listeners who had no blocker running.
+ */
+export function isEmbedBlocked(code: number): boolean {
+  return code === 153;
+}
+
 /** The video id the engine currently has loaded — null when nothing loaded. */
 export function getLoadedVideoId(): string | null {
   return loadedVideoId;

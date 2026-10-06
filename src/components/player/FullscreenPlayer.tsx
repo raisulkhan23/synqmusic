@@ -556,9 +556,10 @@ export function FullscreenPlayer() {
   const [wallpaperEnabled, setWallpaperEnabled] = useState(
     () => localStorage.getItem("ss.wallpaperEnabled") !== "0",
   );
-  // Video presentation is temporarily disabled while the YouTube overlay is
-  // unreliable. Keep the audio player fully functional and use cover art.
-  const videoEnabled = false;
+  // Video presentation is a persisted preference (Settings → "Video preview"),
+  // default OFF. Off keeps the player audio-only and shows cover art, which is
+  // also the escape hatch when a browser extension blocks embedded players.
+  const videoEnabled = usePlayerStore((s) => s.videoEnabled);
   const wallpaper = usePlayerStore((s) => s.wallpaper);
   const wallpaperType = usePlayerStore((s) => s.wallpaperType);
 

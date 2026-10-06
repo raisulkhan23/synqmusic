@@ -192,6 +192,8 @@ export function SettingsDialog({
   const [playbackCheck, setPlaybackCheck] = useState<string | null>(null);
   const gapless = usePlayerStore((s) => s.gapless);
   const toggleGapless = usePlayerStore((s) => s.toggleGapless);
+  const videoEnabled = usePlayerStore((s) => s.videoEnabled);
+  const toggleVideo = usePlayerStore((s) => s.toggleVideo);
   const setRate = usePlayerStore((s) => s.setRate);
   const autoplay = usePlayerStore((s) => s.autoplay);
   const toggleAutoplay = usePlayerStore((s) => s.toggleAutoplay);
@@ -1311,6 +1313,16 @@ export function SettingsDialog({
             onToggle={() => {
               toggleGapless();
               toast(gapless ? "Gapless playback off" : "Gapless playback on");
+            }}
+          />
+
+          <ToggleRow
+            label="Video preview"
+            description="Show the live video in the fullscreen player when a song plays from YouTube. Leave it off for an audio-only player — useful if a browser extension blocks embedded videos."
+            on={videoEnabled}
+            onToggle={() => {
+              toggleVideo();
+              toast(videoEnabled ? "Video preview hidden" : "Video preview on");
             }}
           />
 

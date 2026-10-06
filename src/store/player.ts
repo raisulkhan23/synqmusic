@@ -450,6 +450,13 @@ interface PlayerStore {
   duration: number;
   bufferedEnd: number;
   errorNonce: number;
+  /**
+   * Name of the provider a genuine EMBED-BLOCKED error came from ("YouTube"),
+   * or null. Set only by `isEmbedBlocked` codes (101/150/153), never by a
+   * timeout, a generic load failure or a removed video — so the "your blocker
+   * is blocking X" message can never be shown to someone who has no blocker.
+   */
+  blockedProvider: string | null;
 
   // preferences
   volume: number;
@@ -934,9 +941,11 @@ const initialRepeat: RepeatMode =
   storedRepeat === "all" || storedRepeat === "one" ? storedRepeat : "off";
 const initialRate = Math.min(2, Math.max(0.5, readNum("ss.rate", 1)));
 const initialAutoplay = readBool("ss.autoplay", true);
-// Video presentation is temporarily disabled while the YouTube overlay is
-// unreliable. Audio playback remains fully supported.
-const initialVideoEnabled = false;
+// Video presentation defaults OFF — the audio player is the product and the
+// overlaid YouTube player has been unreliable. It is a persisted preference
+// (`ss.video`) so a listener who wants the picture can keep it, and one whose
+// browser extension blocks embeds can keep it hidden. `toggleVideo` writes it.
+const initialVideoEnabled = readBool("ss.video", false);
 const initialAccentTheme = localStorage.getItem("ss.accentTheme") ?? "auto";
 const initialCompact = readBool("ss.compact", false);
 const initialGlow = readBool("ss.ambientGlow", true);
@@ -3048,6 +3057,13 @@ function wireYoutubeEngine() {
         usePlayerStore.setState((s) => ({
           isBuffering: false,
           isPlaying: false,
+          // Only code 153 (embed refused → the listener's blocker) is evidence
+          // of a blocker. Owner-disabled embedding (101/150) and removed or
+          // invalid videos (2/5/100) are NOT, and must never produce the
+          // "your blocker is blocking YouTube" message.
+          blockedProvider: ytEngine.isEmbedBlocked(code)
+            ? "YouTube"
+            : s.blockedProvider,
           errorNonce: s.errorNonce + 1,
         }));
       }
@@ -3317,6 +3333,10 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       duration: track.duration,
       bufferedEnd: 0,
       isBuffering: true,
+      // Evidence of a blocked embed belongs to the track that produced it. A
+      // fresh load starts with no such evidence, so a later give-up on THIS
+      // track cannot inherit the previous one's blocker verdict.
+      blockedProvider: null,
       // A-B points don't carry across tracks
       abA: null,
       abB: null,
@@ -4750,6 +4770,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     duration: 0,
     bufferedEnd: 0,
     errorNonce: 0,
+    blockedProvider: null,
 
     volume: initialVolume,
     muted: initialMuted,

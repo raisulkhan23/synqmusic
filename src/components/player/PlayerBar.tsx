@@ -383,7 +383,11 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
       rescueExhausted.current = true;
       toast.error(
         giveUpNotice({
-          blockedProvider: "YouTube",
+          // Named ONLY when the engine actually reported a refused embed
+          // (101/150/153). Otherwise this is an ordinary failure and blaming a
+          // blocker would be a false accusation against a listener who has
+          // none running.
+          blockedProvider: s.blockedProvider,
           hasAlternatives: (track.alternatives ?? []).length > 0,
         }),
         { id: "yt-fallback" },
@@ -402,7 +406,7 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
     ) {
       toast.error(
         giveUpNotice({
-          blockedProvider: "YouTube",
+          blockedProvider: s.blockedProvider,
           hasAlternatives: alternatives.length > 0,
         }),
         { id: "yt-fallback" },
@@ -484,7 +488,7 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
       // playback source. The honest end of the chain is to say what happened.
       toast.error(
         giveUpNotice({
-          blockedProvider: "YouTube",
+          blockedProvider: s.blockedProvider,
           hasAlternatives: alternatives.length > 0,
         }),
         { id: "yt-fallback" },
