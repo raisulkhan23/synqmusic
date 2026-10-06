@@ -52,6 +52,8 @@ import {
   LIVE_WALLPAPER_MARKER,
 } from "@/lib/wallpaperStorage";
 
+import { usePreferencesSync } from "@/hooks/usePreferencesSync";
+
 const MOBILE_NAV = [
   { to: "/home", label: "Home", icon: House },
   { to: "/search", label: "Search", icon: Search },
@@ -117,6 +119,11 @@ function useAnimatedCssTint(
   useEffect(() => {
     installDownloadAdapter();
   }, []);
+
+  // Single-profile sync: hydrate server preferences on sign-in and push local
+  // changes back, debounced. Transient state (currentTime, queue, fullscreen) is
+  // ignored — only whitelisted UI/player preferences leave the device.
+  usePreferencesSync();
 
   useEffect(() => {
     if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);

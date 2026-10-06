@@ -73,66 +73,64 @@ function snapshotPrefs(state: Record<string, unknown>): Record<string, PrefValue
   return out;
 }
 
-/** The store's shape, as the sync hook is allowed to see it. */
-type StoreApi = {
-  [key: string]: unknown;
-};
-/** A store member we intend to call. */
-const fn = (v: unknown): ((...args: unknown[]) => unknown) | undefined =>
-  typeof v === "function" ? (v as (...args: unknown[]) => unknown) : undefined;
-
 /** Map a server pref key onto the store setter that applies it. */
 function applyPref(key: string, value: unknown): void {
-  const s = usePlayerStore.getState() as unknown as StoreApi;
+  const s = usePlayerStore.getState() as unknown as {
+    [key: string]: unknown;
+  };
+  const call = (v: unknown) => {
+    if (typeof v !== "function") return;
+    (v as (...args: unknown[]) => unknown)();
+  };
+  const callArg = <T>(f: unknown, arg: T) => {
+    if (typeof f !== "function") return;
+    (f as (a: T) => void)(arg);
+  };
+
   switch (key) {
     case "volume":
-      if (typeof value === "number") fn(s.setVolume)?.(value);
+      if (typeof value === "number") callArg(s.setVolume, value);
       break;
     case "muted":
-      if (typeof value === "boolean" && s.muted !== value) fn(s.toggleMute)?.();
+      if (typeof value === "boolean" && s.muted !== value) call(s.toggleMute);
       break;
     case "shuffle":
-      if (typeof value === "boolean" && s.shuffle !== value) fn(s.toggleShuffle)?.();
+      if (typeof value === "boolean" && s.shuffle !== value) call(s.toggleShuffle);
       break;
     case "repeat": {
       if (typeof value !== "string") break;
-      // Cycle until the requested mode is reached (at most 3 steps).
-      for (let i = 0; i < 3 && s.repeat !== value; i++) fn(s.cycleRepeat)?.();
+      for (let i = 0; i < 3 && s.repeat !== value; i++) call(s.cycleRepeat);
       break;
     }
     case "rate":
-      if (typeof value === "number") fn(s.setRate)?.(value);
+      if (typeof value === "number") callArg(s.setRate, value);
       break;
     case "crossfade":
-      if (typeof value === "number") fn(s.setCrossfade)?.(value);
+      if (typeof value === "number") callArg(s.setCrossfade, value);
       break;
     case "gapless":
-      if (typeof value === "boolean" && s.gapless !== value) fn(s.toggleGapless)?.();
+      if (typeof value === "boolean" && s.gapless !== value) call(s.toggleGapless);
       break;
     case "autoplay":
-      if (typeof value === "boolean" && s.autoplay !== value) fn(s.toggleAutoplay)?.();
+      if (typeof value === "boolean" && s.autoplay !== value) call(s.toggleAutoplay);
       break;
     case "videoEnabled":
-      if (typeof value === "boolean" && s.videoEnabled !== value) {
-        fn(s.toggleVideo)?.();
-      }
+      if (typeof value === "boolean" && s.videoEnabled !== value) call(s.toggleVideo);
       break;
     case "accentTheme":
-      if (typeof value === "string") fn(s.setAccentTheme)?.(value);
+      if (typeof value === "string") callArg(s.setAccentTheme, value);
       break;
     case "themeMode":
-      if (typeof value === "string") fn(s.setThemeMode)?.(value);
+      if (typeof value === "string") callArg(s.setThemeMode, value);
       break;
     case "wallpaperType":
-      if (value === "image" || value === "video") fn(s.setWallpaperType)?.(value);
+      if (value === "image" || value === "video") callArg(s.setWallpaperType, value);
       break;
     case "sidebarCollapsed":
-      if (typeof value === "boolean" && s.sidebarCollapsed !== value)
-        fn(s.toggleSidebarCollapsed)?.();
+      if (typeof value === "boolean" && s.sidebarCollapsed !== value) call(s.toggleSidebarCollapsed);
       break;
     case "hideSidebarEmail":
-      if (typeof value === "boolean" && s.hideSidebarEmail !== value)
-        fn(s.toggleHideSidebarEmail)?.();
+      if (typeof value === "boolean" && s.hideSidebarEmail !== value) call(s.toggleHideSidebarEmail);
       break;
     default:
       // Toggles without a dedicated conditional setter (visualizer, glow,
@@ -171,8 +169,6 @@ export function usePreferencesSync(): void {
         }
       }
     } finally {
-      // Released after a tick so the setters' effects settle before the push
-      // watcher considers the state "user changed".
       window.setTimeout(() => {
         hydratingRef.current = false;
         lastPushedRef.current = JSON.stringify(

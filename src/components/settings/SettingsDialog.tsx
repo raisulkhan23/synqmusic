@@ -2115,6 +2115,20 @@ export function SettingsDialog({
           />
 
           <ToggleRow
+            label="Performance mode"
+            description="Turn off glass blur, the light sheen, aurora orbs, pointer glow and cursor trail for a smoother page"
+            on={performanceMode}
+            onToggle={() => {
+              togglePerformanceMode();
+              toast(
+                performanceMode
+                  ? "Performance mode off"
+                  : "Performance mode on",
+              );
+            }}
+          />
+
+          <ToggleRow
             label="Hide explicit content"
             description="Filter out tracks flagged explicit"
             on={hideExplicit}
@@ -2219,19 +2233,6 @@ export function SettingsDialog({
             onToggle={() => {
               togglePointerEffects();
               toast(pointerEffects ? "Pointer glow off" : "Pointer glow on");
-            }}
-          />
-          <ToggleRow
-            label="Performance mode"
-            description="Turn off glass blur, the light sheen, aurora orbs, pointer glow and cursor trail for a smoother page"
-            on={performanceMode}
-            onToggle={() => {
-              togglePerformanceMode();
-              toast(
-                performanceMode
-                  ? "Performance mode off"
-                  : "Performance mode on",
-              );
             }}
           />
           <p className="px-1 text-xs leading-5 text-muted-foreground">
