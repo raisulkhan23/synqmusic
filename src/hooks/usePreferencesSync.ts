@@ -114,7 +114,7 @@ function applyPref(key: string, value: unknown): void {
       break;
     case "videoEnabled":
       if (typeof value === "boolean" && s.videoEnabled !== value) {
-        fn(s.toggleVideoEnabled)?.();
+        fn(s.toggleVideo)?.();
       }
       break;
     case "accentTheme":
