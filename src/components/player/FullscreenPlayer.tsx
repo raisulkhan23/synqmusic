@@ -38,9 +38,19 @@ import {
 } from "@/lib/audio";
 import { usePlayerStore } from "@/store/player";
 import { toast } from "sonner";
+import { useAction } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import {
+  downloadAvailability,
+  downloadTargetId,
+  DOWNLOAD_MESSAGES,
+} from "@/lib/downloadAuth";
+import { requestAuthorizedDownload } from "@/lib/authorizedDownload";
+import { getDownloadManager } from "@/lib/downloads";
 import {
   ChevronDown,
   Crosshair,
+  Download,
   Gauge,
   Heart,
   ListMusic,
@@ -563,7 +573,7 @@ export function FullscreenPlayer() {
   // default OFF. Off keeps the player audio-only and shows cover art, which is
   // also the escape hatch when a browser extension blocks embedded players.
   const videoEnabled = usePlayerStore((s) => s.videoEnabled);
-  const wallpaperPickerValue = usePlayerStore((s) => s.wallpaper);
+  const wallpaper = usePlayerStore((s) => s.wallpaper);
   const wallpaperType = usePlayerStore((s) => s.wallpaperType);
 
   useEffect(() => {
@@ -981,6 +991,7 @@ export function FullscreenPlayer() {
               >
                 <ListMusic className="size-5" />
               </button>
+              <DownloadCurrentButton />
               <button
                 type="button"
                 aria-label="Share current song"
@@ -1483,5 +1494,88 @@ export function FullscreenPlayer() {
         </AnimatePresence>
       </motion.div>
     </AnimatePresence>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+/**
+ * Download button for the track currently in the fullscreen player.
+ *
+ * Rendered ONLY when the current track is downloadable through an authorized
+ * release — same rule as the track three-dot menu, so the fullscreen surface
+ * never offers a Download the backend would refuse. States: idle (Download),
+ * in-flight (queued/downloading), and downloaded (a completed record — the
+ * manager's duplicate guard is the single source of truth).
+ */
+function DownloadCurrentButton() {
+  const current = usePlayerStore((s) => s.current);
+  const authorizeDownload = useAction(api.downloads.authorizeDownload);
+  // A tick counter instead of holding status state: the manager is a plain
+  // object, so this just re-renders while a transfer is live and stops when
+  // it is not — no React state inside the download engine itself.
+  const [, forceTick] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => forceTick((n) => n + 1), 500);
+    return () => window.clearInterval(id);
+  }, []);
+
+  if (!current) return null;
+  const availability = downloadAvailability(current.id, current.jamendoId);
+  if (!availability.allowed) return null;
+
+  const records = getDownloadManager().list();
+  const record = records.find((r) => r.trackId === current.id);
+  const downloading =
+    record?.status === "queued" || record?.status === "downloading";
+  const downloaded = record?.status === "completed";
+
+  return (
+    <button
+      type="button"
+      aria-label={
+        downloaded
+          ? "Downloaded"
+          : downloading
+            ? "Downloading"
+            : "Download current song"
+      }
+      title={
+        downloaded
+          ? "Downloaded ✓"
+          : downloading
+            ? "Downloading…"
+            : "Download"
+      }
+      disabled={downloading || downloaded}
+      onClick={() => {
+        if (downloading || downloaded) return;
+        const target = downloadTargetId(current.id, current.jamendoId);
+        if (!target) return;
+        void (async () => {
+          const result = await requestAuthorizedDownload(
+            authorizeDownload,
+            target,
+            // Authorized against the Jamendo release, stored under the
+            // playable's id so offline playback finds it.
+            current.jamendoId ? { storageKey: current.id } : undefined,
+          );
+          if (result.started) {
+            toast.success("Download started");
+          } else {
+            toast.error(
+              result.refusal.message ?? DOWNLOAD_MESSAGES["not-authorized"],
+            );
+          }
+          forceTick((n) => n + 1);
+        })();
+      }}
+      className="relative rounded-full p-2 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground sm:p-2.5"
+    >
+      <Download className="size-5" />
+      {downloading && (
+        <span className="absolute top-1 right-1 size-1.5 animate-pulse rounded-full bg-[rgb(var(--tint))]" />
+      )}
+    </button>
   );
 }

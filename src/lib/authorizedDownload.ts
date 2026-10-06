@@ -55,11 +55,21 @@ export async function requestAuthorizedDownload(
     | { authorized: false; decision: DownloadRefusal }
   >,
   trackId: string,
-  opts: { force?: boolean } = {},
+  opts: {
+    force?: boolean;
+    /**
+     * The id the copy is STORED under, when it differs from the authorized
+     * release id. A discovery-resolved track plays through its YouTube upload
+     * and looks its local copy up by THAT id, while authorization is granted
+     * for the Jamendo release. Default: same as `trackId`.
+     */
+    storageKey?: string;
+  } = {},
 ): Promise<AuthorizedDownloadResult> {
+  const storageKey = opts.storageKey ?? trackId;
   const existing = getDownloadManager()
     .list()
-    .find((record) => record.trackId === trackId && record.status !== "failed");
+    .find((record) => record.trackId === storageKey && record.status !== "failed");
   if (existing && !opts.force) {
     // Already queued or in flight: the manager's own guard makes this
     // idempotent, so a second press must not resolve or transfer anything.
@@ -87,16 +97,17 @@ export async function requestAuthorizedDownload(
 
   try {
     // The authorized source is recorded first, so the adapter factory can never
-    // start a transfer without one.
-    rememberResolved(trackId, { url: decision.downloadUrl, filename });
+    // start a transfer without one. Recorded under the STORAGE key, because
+    // that is the id the manager and offline playback both use.
+    rememberResolved(storageKey, { url: decision.downloadUrl, filename });
     getDownloadManager().enqueue({
-      trackId,
+      trackId: storageKey,
       filename,
       ...(opts.force !== undefined ? { force: opts.force } : {}),
     });
     return { started: true };
   } catch (error) {
-    forgetResolved(trackId);
+    forgetResolved(storageKey);
     return {
       started: false,
       refusal: refuse(

@@ -17,7 +17,7 @@ import {
 import { buildTrackShareUrl } from "@/lib/shareLink";
 import { copyText } from "@/lib/clipboard";
 import { toPlayableYoutube } from "@/lib/playable";
-import { downloadAvailability } from "@/lib/downloadAuth";
+import { downloadAvailability, downloadTargetId } from "@/lib/downloadAuth";
 import { requestAuthorizedDownload } from "@/lib/authorizedDownload";
 import { useAction } from "convex/react";
 import { cleanArtistName, cleanTrackTitle, type YtItem } from "@/lib/youtube";
@@ -245,7 +245,7 @@ export function TrackActionsMenu({
    * rendered only for tracks from an authorized source, and the server
    * independently re-checks that flag on every request.
    */
-  const availability = downloadAvailability(item.id);
+  const availability = downloadAvailability(item.id, item.jamendoId);
 
   return (
     <>
@@ -325,7 +325,11 @@ export function TrackActionsMenu({
                 void (async () => {
                   const result = await requestAuthorizedDownload(
                     authorizeDownload,
-                    item.id,
+                    downloadTargetId(item.id, item.jamendoId) ?? item.id,
+                    // The copy is stored under the PLAYABLE's id (the YouTube
+                    // upload offline playback looks up), while authorization
+                    // is granted for the licensed Jamendo release.
+                    item.jamendoId ? { storageKey: item.id } : undefined,
                   );
                   if (result.started) {
                     toast.success("Download started");

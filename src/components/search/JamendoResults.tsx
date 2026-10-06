@@ -138,7 +138,11 @@ export function JamendoResults({ query }: { query: string }) {
           return;
         }
         const others = results.filter((it) => it.id !== hit.ytId);
-        const playable = toPlayableYoutube(chosen, "", others);
+        // The chosen upload carries the Jamendo release id it was resolved
+        // from: playback stays 100% YouTube, but the download pipeline needs
+        // the licensed release to authorize against.
+        const withProvenance: typeof chosen = { ...chosen, jamendoId: track.jamendoId };
+        const playable = toPlayableYoutube(withProvenance, "", others, track.jamendoId);
         // The queue is the resolved upload plus its siblings, so "next" keeps
         // moving through the same results rather than stopping dead.
         playTrack(playable, [

@@ -30,6 +30,8 @@ export interface YtItem {
   thumbnail: string;
   /** Album when the source reports one; absent means unknown, never guessed. */
   album?: string;
+  /** Jamendo release provenance for discovery-resolved rows (download only). */
+  jamendoId?: string;
 }
 
 const API = "https://www.youtube.com/youtubei/v1/";

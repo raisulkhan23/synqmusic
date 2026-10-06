@@ -11,6 +11,12 @@ export interface YtItem {
    * engine must treat "unknown album" as unknown rather than guessing.
    */
   album?: string;
+  /**
+   * The Jamendo release this result was discovered from, when the row came
+   * from a Jamendo → YouTube resolution. Carried so the download pipeline can
+   * authorize against the licensed release. Never used for playback.
+   */
+  jamendoId?: string;
 }
 
 const INVALID_ARTIST_NAMES =

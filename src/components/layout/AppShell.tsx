@@ -223,18 +223,18 @@ export function AppShell() {
     void restore
       .then((url) => {
         if (!url) {
-          initial.setWallpaper(null, initial.wallpaperType);
+          // Missing blob: clear the visible wallpaper but KEEP the persisted
+          // marker — the file may still land (slow IndexedDB) and the user's
+          // selection must not be erased by one failed restore.
+          initial.setWallpaperSessionOnly(null, initial.wallpaperType);
           return;
         }
         restoredUrl = url;
-        initial.setWallpaper(url, initial.wallpaperType);
-        // setWallpaper receives a session-only blob URL; keep only the marker.
-        localStorage.setItem(
-          "ss.wallpaper",
-          isLiveFile ? LIVE_WALLPAPER_MARKER : IMAGE_WALLPAPER_MARKER,
-        );
+        // Session-only update: `setWallpaper` would persist the transient blob
+        // URL over the stable marker and break the next restore.
+        initial.setWallpaperSessionOnly(url, initial.wallpaperType);
       })
-      .catch(() => initial.setWallpaper(null, initial.wallpaperType));
+      .catch(() => initial.setWallpaperSessionOnly(null, initial.wallpaperType));
 
     return () => {
       if (restoredUrl) URL.revokeObjectURL(restoredUrl);

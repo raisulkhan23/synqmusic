@@ -86,12 +86,39 @@ export function authorizedTrackId(providerId: string | number): string {
  * First-line eligibility check, run on the client so the menu can hide the
  * action instead of offering something that will be refused.
  *
+ * Accepts either a SYNQ track id or, preferably, the full provenance of a
+ * playable: a track PLAYS through its YouTube upload, but it is DOWNLOADABLE
+ * through the Jamendo release it was discovered from. When `jamendoId` is
+ * present it wins — a discovery-resolved upload would otherwise never be
+ * eligible even though its original release is licensed for download.
+ *
  * This is a UX filter, NOT a security control. The server independently
  * re-verifies `audiodownload_allowed`; a client that forges its way past this
  * function still gets a refusal.
  */
-export function isTrackDownloadable(trackId: string | null | undefined): boolean {
-  return authorizedProviderId(trackId) !== null;
+export function isTrackDownloadable(
+  trackId: string | null | undefined,
+  jamendoId?: string | null,
+): boolean {
+  return (
+    authorizedProviderId(jamendoId ?? undefined) !== null ||
+    authorizedProviderId(trackId) !== null
+  );
+}
+
+/**
+ * The id the download API should be asked about. Prefers the Jamendo release
+ * id when the playable carries one, since that is the release the artist
+ * licensed for download.
+ */
+export function downloadTargetId(
+  trackId: string | null | undefined,
+  jamendoId?: string | null,
+): string | null {
+  if (jamendoId && authorizedProviderId(jamendoId) !== null) {
+    return authorizedTrackId(jamendoId);
+  }
+  return authorizedProviderId(trackId) !== null ? trackId! : null;
 }
 
 /**
@@ -173,10 +200,10 @@ export interface DownloadAvailability {
  */
 export function downloadAvailability(
   trackId: string | null | undefined,
+  jamendoId?: string | null,
 ): DownloadAvailability {
-  const providerId = authorizedProviderId(trackId);
-  if (providerId === null) {
-    return { allowed: false, decision: refuse("not-authorized") };
+  if (isTrackDownloadable(trackId, jamendoId)) {
+    return { allowed: true, decision: { ok: true, providerId: jamendoId ?? authorizedProviderId(trackId)! } };
   }
-  return { allowed: true, decision: { ok: true, providerId } };
+  return { allowed: false, decision: refuse("not-authorized") };
 }

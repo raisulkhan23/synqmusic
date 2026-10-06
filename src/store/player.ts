@@ -659,6 +659,8 @@ interface PlayerStore {
   wallpaper: string | null;
   wallpaperType: "image" | "video";
   setWallpaper: (value: string | null, type?: "image" | "video") => void;
+  /** Same shape, but never writes the persisted picker key (startup restore). */
+  setWallpaperSessionOnly: (value: string | null, type?: "image" | "video") => void;
   setWallpaperType: (type: "image" | "video") => void;
   /** Hide the account email in the sidebar corner. */
   hideSidebarEmail: boolean;
@@ -5057,6 +5059,15 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
         }
         return { wallpaper: value, wallpaperType: type };
       }),
+    /**
+     * Update the in-session wallpaper WITHOUT touching the persisted picker
+     * key. Used by the startup restore: if the IndexedDB read fails or comes
+     * back empty, the persisted marker must survive — a failed restore used to
+     * strip `ss.wallpaper`, so one slow cold start permanently reset the user's
+     * selection to the default background.
+     */
+    setWallpaperSessionOnly: (value, type = "image") =>
+      set(() => ({ wallpaper: value, wallpaperType: type })),
 
     // restore queue from the last session (does not autoplay — user resumes)
     ...(savedQueue

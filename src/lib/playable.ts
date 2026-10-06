@@ -34,6 +34,15 @@ export interface Playable {
   source: "youtube";
   /** Set when this track plays through the YouTube IFrame engine (by video id). */
   youtubeId?: string;
+  /**
+   * The Jamendo release this track was discovered from, when it was.
+   *
+   * Playback always happens through the resolved YouTube upload, but the
+   * Jamendo release is the one the artist licensed for download — so this id
+   * is what the download pipeline authorizes against. It never influences
+   * which engine plays the track.
+   */
+  jamendoId?: string;
   /** Present for YouTube tracks, used for manual source switching. */
   alternatives?: YtItem[];
   /**
@@ -50,6 +59,7 @@ export function toPlayableYoutube(
   item: YtItem,
   audioUrl: string,
   alternatives: YtItem[] = [],
+  jamendoId?: string,
 ): Playable {
   const artistName = cleanArtistName(item.artist, item.title);
   return {
@@ -66,6 +76,7 @@ export function toPlayableYoutube(
     duration: item.duration,
     source: "youtube",
     youtubeId: item.id,
+    ...(jamendoId ? { jamendoId } : {}),
     alternatives,
   };
 }

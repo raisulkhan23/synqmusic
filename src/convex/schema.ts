@@ -433,6 +433,20 @@ const schema = defineSchema(
       .index("byKey", ["key"])
       // Lets `cachePrune` delete expired rows without scanning the whole table.
       .index("byExpiry", ["expiresAt"]),
+
+    /**
+     * One preferences blob per account — SYNQ has a single profile, so this
+     * syncs the listener's settings and player prefs across devices. Values
+     * are plain JSON of whitelisted UI preferences only: no tokens, no
+     * session material, no queue contents (likes/history have their own
+     * tables). A single row per user, last write wins — preferences are
+     * toggles and sliders, not data that needs merging.
+     */
+    userPreferences: defineTable({
+      userId: v.id("users"),
+      prefs: v.any(),
+      updatedAt: v.number(),
+    }).index("byUser", ["userId"]),
   },
   {
     schemaValidation: false,
