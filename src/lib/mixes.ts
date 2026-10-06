@@ -40,6 +40,8 @@ export interface Mix {
   items: YtItem[];
   /** Static Tailwind gradient classes for the tile, from SYNQ's palette. */
   accent: string;
+  /** Full-width gradient-from-key for the OpenAI cardface render. */
+  cardFrom?: string;
 }
 
 /** The already-fetched Home data a mix may be assembled from. */
@@ -109,6 +111,8 @@ interface MixBlueprint {
   name: string;
   subtitle: string;
   accent: string;
+  /** Full-width gradient-from for the card face when the opener has no art. */
+  cardFrom?: string;
   /** Where this mix's tracks come from. */
   pick: (sources: MixSources) => YtItem[];
 }
@@ -128,6 +132,7 @@ const BLUEPRINTS: MixBlueprint[] = [
     name: "Favorites Mix",
     subtitle: "The songs you saved, ready when you want them",
     accent: "from-rose-400/28 to-transparent",
+    cardFrom: "from-[rgb(244_63_94/0.32)] via-rose-500/20 to-transparent",
     pick: (s) => s.favorites ?? [],
   },
   {
@@ -135,6 +140,7 @@ const BLUEPRINTS: MixBlueprint[] = [
     name: "On Repeat",
     subtitle: "The songs you keep coming back to",
     accent: "from-[rgb(var(--tint)_/_0.28)] to-transparent",
+    cardFrom: "from-[rgb(var(--tint)_/_0.32)] via-[rgb(var(--tint)_/18)] to-transparent",
     pick: (s) => s.mostPlayed ?? [],
   },
   {
@@ -142,6 +148,7 @@ const BLUEPRINTS: MixBlueprint[] = [
     name: "Recently Played",
     subtitle: "Pick up where you left off",
     accent: "from-cyan-400/25 to-transparent",
+    cardFrom: "from-[rgb(34_211_238/0.32)] via-cyan-400/18 to-transparent",
     pick: (s) => s.recent ?? [],
   },
   {
@@ -149,6 +156,7 @@ const BLUEPRINTS: MixBlueprint[] = [
     name: "Sounds Like You",
     subtitle: "Matched by sound, not by name",
     accent: "from-violet-400/25 to-transparent",
+    cardFrom: "from-[rgb(139_92_246/0.32)] via-violet-400/18 to-transparent",
     pick: (s) => s.soundAlike ?? [],
   },
   {
@@ -156,6 +164,7 @@ const BLUEPRINTS: MixBlueprint[] = [
     name: "Discovery Mix",
     subtitle: "Near your taste, outside your history",
     accent: "from-emerald-400/25 to-transparent",
+    cardFrom: "from-[rgb(5_150_105/0.32)] via-emerald-400/18 to-transparent",
     pick: (s) => s.discovery ?? [],
   },
   {
@@ -163,6 +172,7 @@ const BLUEPRINTS: MixBlueprint[] = [
     name: "New Music",
     subtitle: "Fresh releases worth a listen",
     accent: "from-amber-400/25 to-transparent",
+    cardFrom: "from-[rgb(245_158_11/0.32)] via-amber-400/18 to-transparent",
     pick: (s) => s.newMusic ?? [],
   },
   {
@@ -170,6 +180,7 @@ const BLUEPRINTS: MixBlueprint[] = [
     name: "Right Now",
     subtitle: "Picked for this time of day",
     accent: "from-sky-400/25 to-transparent",
+    cardFrom: "from-[rgb(14_165_233/0.32)] via-sky-400/18 to-transparent",
     pick: (s) => s.timeOfDay ?? [],
   },
 ];

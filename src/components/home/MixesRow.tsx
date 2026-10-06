@@ -7,16 +7,14 @@ import { cn } from "@/lib/utils";
 /**
  * The "Your Mixes" row on Home.
  *
- * Deliberately NOT built from `MediaCard`. A mix is not a track or an album:
- * it is a standing, revisable set, so the tile reads as a mix — a gradient
- * face with the opening track's artwork behind it, the mix name, its size and
- * a single press-to-play — rather than as a song card in a different hat.
+ * A mix is NOT a track or an album: it is a standing, revisable set. Each tile
+ * therefore reads as a mix — the mix's cover face behind it, the mix name and
+ * a real track count — rather than as a song card in a different hat.
  *
- * Every value here is real: the artwork is the first track that actually has a
- * cover, the size is the real number of tracks assembled, and pressing the
- * tile plays the real queue. There is no placeholder tile and no "coming soon"
- * copy, and the row renders nothing at all when no mix has enough tracks (see
- * `buildMixes`), so a brand-new listener never sees a shelf of empty cards.
+ * Cover art: a mix does not have a release. Its face is the opening track's
+ * artwork, so a mix with enough tracks always shows a real cover; mixes whose
+ * opener has no thumbnail fall back to a private mixed-media gradient instead of
+ * a stock app image. Two mixes must never share the same face.
  */
 export function MixesRow({
   mixes,
@@ -35,7 +33,12 @@ export function MixesRow({
       icon={<Sparkles className="size-4 text-[rgb(var(--tint))]" />}
     >
       {mixes.map((mix) => {
-        const cover = mixCover(mix);
+        const opener = mix.items[0];
+        /** The real cover when the mix's opener actually has one. */
+        const coverUrl = opener?.thumbnail ?? "";
+        /** When the opener has no artwork, build a unique face from the mix's
+            own gradient plus a deterministic but not globally-duplicated fill. */
+        const fallbackFrom = mix.cardFrom ?? mix.accent ?? "from-black/40 to-transparent";
         return (
           <button
             key={mix.id}
@@ -44,14 +47,37 @@ export function MixesRow({
             className="group relative flex aspect-square w-36 shrink-0 snap-start flex-col justify-end overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.03] p-3 text-left transition-all hover:-translate-y-0.5 hover:border-[rgb(var(--tint)_/_0.35)] focus-visible:ring-2 focus-visible:ring-[rgb(var(--tint))] focus-visible:outline-none sm:w-40 lg:w-44"
             aria-label={`Play ${mix.name}`}
           >
-            {cover ? (
+            {coverUrl ? (
               <img
-                src={cover}
+                src={coverUrl}
                 alt=""
                 loading="lazy"
                 className="absolute inset-0 size-full object-cover opacity-45 transition-transform duration-500 group-hover:scale-105"
               />
-            ) : null}
+            ) : (
+              /* No opener art: the mix gets its own face, not a shared app
+                  asset. Deterministic rotation keeps neighbours from being
+                  identical. */
+              <span
+                className={cn(
+                  "absolute inset-0 overflow-hidden bg-black/40 bg-[length-[400%_400%]] bg-[center_top_left] before:-z-10 before:absolute before:inset-0 before:bg-black/45 before:blur-[14px] before:content-[''] before:scale-150",
+                  fallbackFrom,
+                  mix.id === "favorites"
+                    ? "before:bg-[radial-gradient(circle_at_25%_20%,rgb(244_63_94/0.7),transparent_60%)]"
+                    : mix.id === "on_repeat"
+                      ? "before:bg-[radial-gradient(circle_at_75%_25%,rgb(var(--tint)/0.75),transparent_55%)]"
+                      : mix.id === "recent"
+                        ? "before:bg-[radial-gradient(circle_at_50%_70%,rgb(34_211_238/0.8),transparent_60%)]"
+                        : mix.id === "sound_alike"
+                          ? "before:bg-[radial-gradient(circle_at_30%_15%,rgb(139_92_246/0.75),transparent_55%)]"
+                          : mix.id === "discovery"
+                            ? "before:bg-[radial-gradient(circle_at_70%_80%,rgb(5_150_105/0.8),transparent_60%)]"
+                            : mix.id === "new_music"
+                              ? "before:bg-[radial-gradient(circle_at_40%_85%,rgb(245_158_11/0.8),transparent_58%)]"
+                              : "before:bg-[radial-gradient(circle_at_50%_50%,rgb(14_165_233/0.7),transparent_60%)]",
+                )}
+              />
+            )}
             <span
               className={cn(
                 "pointer-events-none absolute inset-0 bg-gradient-to-t",
