@@ -228,7 +228,15 @@ describe("one preference drives both Home and autoplay", () => {
         convex.indexOf(action),
         convex.indexOf(action) + 3000,
       );
-      expect(body).toContain("buildTuning(args.exploration)");
+      // The derivation itself was upgraded: `buildTuning` applied the stated
+      // preference directly, and it is now `adaptiveTuning`, which corrects
+      // that preference by how the listener actually responds. What this test
+      // has always guarded is not the function's NAME — it is that both
+      // actions derive their profile the SAME way, from the SAME preference,
+      // so Home and autoplay cannot drift apart.
+      expect(body).toContain(
+        "adaptiveTuning(args.exploration, userSignals.plays)",
+      );
     }
   });
 

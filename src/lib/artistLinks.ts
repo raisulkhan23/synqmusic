@@ -36,7 +36,13 @@ export function normaliseAlbumName(raw: string | null | undefined): string {
   const withoutDescriptors = squash(
     base.replace(/\b(album|ep|explicit|single)\b/g, " "),
   );
-  return withoutDescriptors || base;
+  // Deliberately NO `|| base` fallback. It used to resurrect the raw name
+  // whenever stripping left nothing, so an upload whose "album" field is
+  // literally "Single" normalised to "single" — a placeholder that then
+  // MATCHED an album search for the same placeholder. A name made only of
+  // format words is not an album, and must normalise to nothing. See
+  // `matchesAlbum`, which treats empty as "not a match".
+  return withoutDescriptors;
 }
 
 /** `/artist/Rick Astley` — a real name or nothing. */

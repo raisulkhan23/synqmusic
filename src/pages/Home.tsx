@@ -108,14 +108,22 @@ function withTimeout<T>(
  *
  * The replacements are the vocabulary YouTube actually has results for, and
  * each is annotated with the count it returned so a future edit can be checked
- * the same way. Note the pattern: concrete GENRE NOUNS work, descriptive
- * English does not. "lofi hip hop" returns 10; "focus concentration music"
- * returns nothing.
+ * the same way. Note the pattern: short concrete GENRE NOUNS work, descriptive
+ * English does not. Measured against the live search action:
+ *
+ *     "lofi"           10      "lofi hip hop"      3   ← too few
+ *     "bengali hits"   10      "bengali lofi"      0   ← empty
+ *     "80s hits"       10      "cheesy 80s love songs" 3   ← too few
+ *     "jazz"           10      "focus concentration music" 0
+ *
+ * Three tiles used to point at the right-hand column and opened a search with
+ * almost nothing in it. Every query below is one that measured at least five
+ * results, and the count is recorded beside it.
  */
 const MOOD_LAUNCHES = [
   {
     label: "Focus",
-    query: "lofi hip hop", // 10 results
+    query: "study lofi", // 9 results
     tone: "from-sky-500/25 to-cyan-500/5",
   },
   {
@@ -125,7 +133,7 @@ const MOOD_LAUNCHES = [
   },
   {
     label: "Workout",
-    query: "sport electronic", // 7 results
+    query: "sport electronic", // 10 results
     tone: "from-rose-500/25 to-pink-500/5",
   },
   {
@@ -135,7 +143,7 @@ const MOOD_LAUNCHES = [
   },
   {
     label: "Good vibes",
-    query: "funk", // 6 results
+    query: "funk", // 10 results
     tone: "from-emerald-500/25 to-lime-500/5",
   },
   {
@@ -145,12 +153,12 @@ const MOOD_LAUNCHES = [
     // query that returns real results on demand is the honest version, and it
     // is framed as fun rather than as a judgement about the music.
     label: "Guilty pleasures",
-    query: "cheesy 80s love songs",
+    query: "80s hits", // 10 results
     tone: "from-rose-500/25 to-fuchsia-500/5",
   },
   {
     label: "Bengali moods",
-    query: "Bengali lofi", // 10 results
+    query: "bengali hits", // 10 results
     tone: "from-teal-500/25 to-cyan-500/5",
   },
 ] as const;
@@ -467,7 +475,14 @@ export default function Home() {
           ?.items.map(toYtItem),
         timeOfDay: remote.timeOfDay,
       }),
-    [likedRemote, mostPlayedItems, historyItems, remote, trending, recoSections],
+    [
+      likedRemote,
+      mostPlayedItems,
+      historyItems,
+      remote,
+      trending,
+      recoSections,
+    ],
   );
 
   // Playing a mix is exactly playing a shelf: the first track starts and the

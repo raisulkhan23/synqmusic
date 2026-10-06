@@ -117,7 +117,11 @@ describe("autoplay and Home run on the same engine", () => {
 
   test("autoplay falls back to the existing related mix instead of stopping", () => {
     const start = store.indexOf("function completeEndedTrack");
-    const body = store.slice(start, start + 4000);
+    // 4000 was too tight once the end-of-track handler grew its crossfade and
+    // queue-exhaustion branches; the fallback sat just past the window, so the
+    // test failed while the code it describes was correct. Sized to reach the
+    // fallback with room to spare rather than to the old line count.
+    const body = store.slice(start, start + 7000);
     expect(body).toContain("fetchPersonalNext");
     expect(body).toContain("fetchRelatedMix");
     // The fallback must run whenever the engine returns nothing.

@@ -91,7 +91,9 @@ export interface UserSignals {
  * `global_fallback` are deliberately worded as non-personal so a cold-start row
  * never reads as if it knew the listener.
  */
-export function explainReason(reason: RecoReason | null | undefined): string | null {
+export function explainReason(
+  reason: RecoReason | null | undefined,
+): string | null {
   switch (reason) {
     case "based_on_likes":
       return "From songs you liked";
@@ -389,8 +391,7 @@ export function adaptExploration(
   // Confidence ramps in over the first forty rated plays so the correction is
   // gentle while the picture is still forming and firm once it is clear.
   const confidence = Math.min(1, tolerance.recommended / 40);
-  const shift =
-    (0.5 - skipRatio) * 2 * ADAPT_MAX_SHIFT * confidence;
+  const shift = (0.5 - skipRatio) * 2 * ADAPT_MAX_SHIFT * confidence;
   return clampExploration(value + shift);
 }
 
@@ -411,6 +412,11 @@ export function adaptiveTuning(
 
 /** Coerce anything into a sane 0..100 exploration value. */
 export function clampExploration(value: unknown): number {
+  // `null` means NO PREFERENCE, not "zero". `Number(null)` is 0, so the
+  // generic numeric path read a missing preference as the strongest possible
+  // familiarity lean — the exact opposite of the middle it is supposed to
+  // mean, and silent because 0 is a legal value. Checked before the coercion.
+  if (value === null || value === undefined) return DEFAULT_EXPLORATION;
   const n = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(n)) return DEFAULT_EXPLORATION;
   return Math.min(100, Math.max(0, n));

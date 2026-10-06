@@ -38,7 +38,7 @@ const whatsNewCards = [
     title: "Search that actually finds the song",
     body: "Type what you mean — the right track comes back first.",
     points: [
-      'Typing "we dont talk anymore" no longer buries "We Don\'t Talk Anymore"',
+      'Typing "we dont talk anymore" puts "We Don\'t Talk Anymore" first',
       "Fuzzy matching forgives typos, missing apostrophes and bad spelling",
       "Asking for a version — live, remix, slowed — brings that version up",
       "Versions are tagged on every row so you can see them at a glance",

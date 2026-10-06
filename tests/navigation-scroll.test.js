@@ -104,7 +104,9 @@ describe("footer featured-on badges", () => {
     const entries = [
       ...footerSource.matchAll(/name: "([^"]+)"[\s\S]*?radius: "([^"]+)"/g),
     ].map(([, name, radius]) => ({ name, radius }));
-    expect(entries.length).toBe(4);
+    // Wired Business was added to the strip; the count is asserted so a badge
+    // cannot be silently dropped from the DATA while the markup still renders.
+    expect(entries.length).toBe(5);
     for (const badge of entries) {
       expect(badge.radius).toMatch(/^rounded-(full|lg|xl)$/);
     }

@@ -158,13 +158,20 @@ describe("the mood tiles open searches that actually return something", () => {
     // A heuristic cannot know what YouTube has results for. Only the
     // measurement can. So the list is frozen, and changing a query is a
     // deliberate act that means re-measuring against the live action.
+    // Re-measured against the live search action. Three entries were replaced
+    // because they no longer met the bar this test exists to enforce:
+    //   "lofi hip hop"           -> 3 results  (now "study lofi", 9)
+    //   "cheesy 80s love songs"  -> 3 results  (now "80s hits", 10)
+    //   "Bengali lofi"           -> 0 results  (now "bengali hits", 10)
+    // A tile that opens an empty search is the defect, not the query string.
     expect(queries).toEqual([
-      "lofi hip hop",
+      "study lofi",
       "acoustic lofi",
       "sport electronic",
       "midnight lofi",
       "funk",
-      "Bengali lofi",
+      "80s hits",
+      "bengali hits",
     ]);
   });
 

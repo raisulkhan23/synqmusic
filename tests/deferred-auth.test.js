@@ -90,6 +90,7 @@ describe("/home is open to visitors", () => {
       "/playlist/:id",
       "/stats",
       "/recent",
+      "/recap",
       "/social",
       "/profile",
       "/settings",
@@ -838,19 +839,22 @@ describe("the What's New section tells the truth", () => {
     expect(landing).toMatch(/whatsNewCards\.map\(/);
   });
 
-  test("it covers the four features from this cycle", () => {
-    expect(landing).toMatch(/Crossfade & gapless/);
-    expect(landing).toMatch(/Installable app/);
-    expect(landing).toMatch(/Browse first, sign in when you're ready/);
-    // Added alongside the queue Undo and the palette commands. The count is
-    // asserted so a card cannot be quietly dropped from the section while the
-    // three originals keep the test green.
-    expect(landing).toMatch(/Undo &amp; quick controls|Undo & quick controls/);
+  test("it covers the features from this cycle", () => {
+    // Re-cut when the section was rewritten for the search / lyrics / mixes /
+    // cache / downloads cycle. The identity of the cards is expected to change
+    // with each cycle; what must NOT change is the guarantee this test
+    // provides — every shipped card is named here, and the count is exact, so
+    // a card cannot be quietly dropped while the others keep the test green.
+    expect(landing).toMatch(/Search that actually finds the song/);
+    expect(landing).toMatch(/Lyrics that keep up/);
+    expect(landing).toMatch(/Mixes that mix/);
+    expect(landing).toMatch(/Roughly 10× faster lookups/);
+    expect(landing).toMatch(/Downloads & offline/);
     const cards = landing.slice(
       landing.indexOf("const whatsNewCards = ["),
       landing.indexOf("const fadeUp = {"),
     );
-    expect(cards.match(/\n    icon: /g) ?? []).toHaveLength(4);
+    expect(cards.match(/\n    icon: /g) ?? []).toHaveLength(5);
   });
 
   test("it sells features, not bug fixes", () => {
