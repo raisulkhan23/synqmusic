@@ -109,6 +109,38 @@ const convexSiteUrl = (
   (import.meta.env.VITE_CONVEX_URL as string) ?? ""
 ).replace(".cloud", ".site");
 const audioProxyBase = `${convexSiteUrl}/audio-proxy`;
+
+/**
+ * The first NON-NULL value from several promises.
+ *
+ * Deliberately NOT `Promise.race`: a race settles on the first to SETTLE, and
+ * here the first to settle is usually the fast FAILURE — the Convex resolver
+ * answering "no stream" in ~230ms. That would discard Piped's real answer a
+ * moment later and report a false outage. This resolves on the first SUCCESS,
+ * and reports null only once every branch has produced null.
+ */
+function firstResolved<T>(promises: Promise<T | null>[]): Promise<T | null> {
+  return new Promise((resolve) => {
+    let pending = promises.length;
+    let settled = false;
+    for (const promise of promises) {
+      promise
+        .then((value) => {
+          if (settled || value == null) return;
+          settled = true;
+          resolve(value);
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          if (settled) return;
+          if (--pending === 0) {
+            settled = true;
+            resolve(null);
+          }
+        });
+    }
+  });
+}
 const resolveYoutubeStream = async (
   videoId: string,
 ): Promise<string | null> => {
@@ -140,37 +172,65 @@ const resolveYoutubeStream = async (
   // errors in the console on every single play, alongside a comment claiming
   // resolution ran from the user's IP. The two resolvers below are the real
   // paths, and they are unchanged.
-  try {
-    ytResolveClient =
-      ytResolveClient ??
-      new ConvexClient(import.meta.env.VITE_CONVEX_URL as string);
-    // Network-aware quality: prefer a lighter stream when the connection is poor.
-    type NetInfo = { effectiveType?: string };
-    const net = (navigator as Navigator & { connection?: NetInfo }).connection;
-    const slow =
-      net?.effectiveType === "2g" ||
-      net?.effectiveType === "slow-2g" ||
-      net?.effectiveType === "3g";
-    const res = await ytResolveClient.action(api.youtube.resolveStream, {
-      videoId,
-      quality: slow ? "low" : "high",
-    });
-    if (res?.url) return `${audioProxyBase}?u=${encodeURIComponent(res.url)}`;
-  } catch {
-    /* fall through to browser-side resolution */
-  }
-  // 2) Browser-side fallback via public Piped instances. These resolve from
-  // the USER's IP, so unlike the Convex resolver they are not met with YouTube's
-  // datacenter bot-check. The implementation moved to `lib/pipedResolve` so the
+  const viaConvex = async (): Promise<string | null> => {
+    try {
+      ytResolveClient =
+        ytResolveClient ??
+        new ConvexClient(import.meta.env.VITE_CONVEX_URL as string);
+      // Network-aware quality: prefer a lighter stream when the connection is poor.
+      type NetInfo = { effectiveType?: string };
+      const net = (navigator as Navigator & { connection?: NetInfo })
+        .connection;
+      const slow =
+        net?.effectiveType === "2g" ||
+        net?.effectiveType === "slow-2g" ||
+        net?.effectiveType === "3g";
+      const res = await ytResolveClient.action(api.youtube.resolveStream, {
+        videoId,
+        quality: slow ? "low" : "high",
+      });
+      if (res?.url) return `${audioProxyBase}?u=${encodeURIComponent(res.url)}`;
+      return null;
+    } catch {
+      // Any Convex failure is expected and falls through to Piped.
+      return null;
+    }
+  };
+
+  // Both resolvers, AT ONCE.
+  //
+  // They used to run in sequence: the Convex action first, and the
+  // browser-side Piped path only when it returned null. Convex runs on a
+  // datacenter IP and meets YouTube's bot-check, so it returns null for MOST
+  // tracks — measured live at 4 of 5. In sequence that cost `convex + piped`
+  // (501-693ms measured on exactly those tracks) before the deck even knew it
+  // had no stream, and the listener heard nothing for the whole of it. Racing
+  // them takes Convex's latency out of the failure path entirely — it becomes
+  // `max(convex, piped)`, 282-389ms measured — and changes nothing when Convex
+  // succeeds.
+  //
+  // The loser is ABORTED rather than left running, so a Convex success does not
+  // spend one of the two surviving Piped instances' requests for nothing.
+  const aborter = new AbortController();
+
+  // Browser-side resolution via public Piped instances. These resolve from the
+  // USER's IP, so unlike the Convex resolver they are not met with YouTube's
+  // datacenter bot-check. The implementation lives in `lib/pipedResolve` so the
   // download path resolves exactly the same way — while it was inline here,
   // playback worked and downloading did not, for the same track at once.
   // NOTE: `resolveViaPiped` returns `{ url, failures }`, NOT a bare string.
-  // This call site must test `piped.url` — an `if (piped)` truthiness check
-  // would be true even when resolution failed, and would hand the caller an
-  // object where a URL string belongs.
-  const piped = await resolveViaPiped(videoId);
-  if (piped.url) return piped.url;
-  return null;
+  // This call site must read `.url` — an `if (piped)` truthiness check would be
+  // true even when resolution failed, and would hand the caller an object where
+  // a URL string belongs.
+  const viaPiped = resolveViaPiped(videoId, aborter.signal)
+    .then((piped) => piped.url)
+    .catch(() => null);
+
+  const url = await firstResolved([viaConvex(), viaPiped]);
+  // Cancel whichever branch is still in flight. Convex's action cannot be
+  // aborted, but the Piped request can, and that is the one worth saving.
+  aborter.abort();
+  return url;
 };
 
 /**

@@ -82,6 +82,38 @@ describe("no artificial delay before a song plays", () => {
     expect(flatStore).toContain("void audio.play().catch(() => undefined)");
   });
 
+  test("both resolvers run at once, so a failed Convex lookup costs nothing", () => {
+    // They used to run SEQUENTIALLY: Convex first, Piped only on a null. Convex
+    // sits behind YouTube's datacenter bot-check and answered null for 4 of 5
+    // videos when measured, so the sequence paid `convex + piped` (501-693ms)
+    // before the deck knew it had no stream. Racing them is `max` instead
+    // (282-389ms measured).
+    expect(flatStore).toMatch(/const viaConvex = async/);
+    expect(flatStore).toMatch(/const viaPiped = resolveViaPiped\(videoId/);
+    expect(flatStore).toMatch(/await firstResolved\(\[viaConvex\(\), viaPiped\]\)/);
+    // The loser must be cancelled, not left to burn one of the two surviving
+    // Piped instances' requests when Convex already answered.
+    expect(flatStore).toMatch(/aborter\.abort\(\)/);
+    expect(flatStore).toContain("resolveViaPiped(videoId, aborter.signal)");
+  });
+
+  test("the race takes the first SUCCESS, not the first to settle", () => {
+    // `Promise.race` would settle on the fast FAILURE — Convex answering null
+    // in ~230ms — and discard Piped's real answer a moment later, turning a
+    // working track into a reported outage.
+    const start = store.indexOf("function firstResolved");
+    expect(start).toBeGreaterThan(-1);
+    const body = store.slice(start, start + 900);
+    expect(body).toContain("value == null");
+    expect(body).not.toContain("Promise.race");
+  });
+
+  test("a cancelled Piped search stops before spending another instance", () => {
+    expect(piped).toMatch(/signal\?: AbortSignal/);
+    expect(piped).toMatch(/if \(signal\?\.aborted\) break;/);
+    expect(piped).toMatch(/addEventListener\("abort", onOuterAbort/);
+  });
+
   test("the Piped fallback picks the fast stream, not the label that sorts first", () => {
     // MEASURED (first 64 KB, ranged) on the one instance that still serves
     // muxed streams:

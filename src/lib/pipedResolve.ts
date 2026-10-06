@@ -138,10 +138,18 @@ const hostOf = (base: string): string => base.replace(/^https?:\/\//, "");
  */
 export async function resolveViaPiped(
   videoId: string,
+  /**
+   * Cancels the whole search. Used by the caller that RACES this against the
+   * Convex resolver: when Convex wins, this request is abandoned rather than
+   * left running, so a success there does not spend one of the two surviving
+   * Piped instances' requests for nothing.
+   */
+  signal?: AbortSignal,
 ): Promise<PipedResolution> {
   if (!videoId || typeof fetch !== "function") {
     return { url: null, failures: [] };
   }
+  if (signal?.aborted) return { url: null, failures: [] };
 
   const failures: PipedResolutionFailure[] = [];
 
@@ -157,22 +165,33 @@ export async function resolveViaPiped(
     // instance was broken" in the failures the caller shows a person.
     const remaining = deadline - Date.now();
     if (remaining <= 0) {
-      failures.push({ instance: host, detail: "not tried: resolve budget spent" });
+      failures.push({
+        instance: host,
+        detail: "not tried: resolve budget spent",
+      });
       break;
     }
+
+    // Cancelled between instances: stop before starting another request.
+    if (signal?.aborted) break;
 
     let res: Response;
     try {
       const ctrl = new AbortController();
+      const onOuterAbort = () => ctrl.abort();
+      signal?.addEventListener("abort", onOuterAbort, { once: true });
       // An instance can never outlive the overall budget, not even the first.
       const timer = setTimeout(
         () => ctrl.abort(),
         Math.min(RESOLVE_TIMEOUT_MS, remaining),
       );
       try {
-        res = await fetch(`${base}/streams/${videoId}`, { signal: ctrl.signal });
+        res = await fetch(`${base}/streams/${videoId}`, {
+          signal: ctrl.signal,
+        });
       } finally {
         clearTimeout(timer);
+        signal?.removeEventListener("abort", onOuterAbort);
       }
     } catch (err) {
       // A network error, a DNS failure, an aborted timeout, or a CORS block —
@@ -197,7 +216,7 @@ export async function resolveViaPiped(
         videoOnly?: boolean;
         mimeType?: string;
       }[];
-    } & { proxyUrl?: string; };
+    } & { proxyUrl?: string };
     try {
       data = (await res.json()) as typeof data;
     } catch {
