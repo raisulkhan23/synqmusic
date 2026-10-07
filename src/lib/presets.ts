@@ -39,9 +39,9 @@ export type PresetId =
   | "snqx-dream"
   | "snqx-focus"
   | "snqx-late-night"
-  | "snqx-studio"
-  | "snqx-night"
-  | "snqx-neon";
+  | "snqx-original-studio"
+  | "snqx-original-night"
+  | "snqx-original-neon";
 
 export interface PresetMeta {
   /** Stable id. */
@@ -80,7 +80,7 @@ export type PresetCategory =
 export const PRESETS: ReadonlyArray<PresetMeta> = [
   // ── Recommended (small, strong starting points) ──────────────────────────
   {
-    id: "snqx-studio",
+    id: "snqx-original-studio",
     name: "Studio",
     tagline: "SYNQ's default, tuned for music-first focus",
     category: "Recommended",
@@ -119,7 +119,7 @@ export const PRESETS: ReadonlyArray<PresetMeta> = [
 
   // ── SYNQ Originals ────────────────────────────────────────────────────────
   {
-    id: "snqx-studio",
+    id: "snqx-original-studio",
     name: "SYNQ Studio",
     tagline: "The official SYNQ atmosphere, unhurried",
     category: "SYNQ Originals",
@@ -128,7 +128,7 @@ export const PRESETS: ReadonlyArray<PresetMeta> = [
     preview: "203 244 143",
   },
   {
-    id: "snqx-night",
+    id: "snqx-original-night",
     name: "SYNQ Night",
     tagline: "Darker default, lime keeps its place",
     category: "SYNQ Originals",
@@ -138,7 +138,7 @@ export const PRESETS: ReadonlyArray<PresetMeta> = [
     calm: true,
   },
   {
-    id: "snqx-neon",
+    id: "snqx-original-neon",
     name: "SYNQ Neon",
     tagline: "SYNQ lime plus a stronger ambient glow",
     category: "SYNQ Originals",

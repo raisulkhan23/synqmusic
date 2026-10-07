@@ -245,7 +245,7 @@ function applyPresetTokens(tokens: PresetTokens): void {
   } else {
     root.dataset.calm = "";
     // Keep the attribute in sync even when turning calm off explicitly.
-    void root.removeAttribute("data-calm");
+    root.removeAttribute("data-calm");
   }
   // Fire the scene change event so the shell and any listener can sync derived
   // state without a full re-render of playback.
