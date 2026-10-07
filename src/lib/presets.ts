@@ -14,6 +14,7 @@
 
 /** A preset id the app understands. */
 export type PresetId =
+  | "snqx-studio"
   | "snqx-midnight"
   | "snqx-aurora"
   | "snqx-eclipse"
@@ -78,9 +79,9 @@ export type PresetCategory =
 
 /** The curated catalog. Quality over quantity: each preset is distinct. */
 export const PRESETS: ReadonlyArray<PresetMeta> = [
-  // ── Recommended (small, strong starting points) ──────────────────────────
+  // Recommended: small, strong starting points.
   {
-    id: "snqx-original-studio",
+    id: "snqx-studio",
     name: "Studio",
     tagline: "SYNQ's default, tuned for music-first focus",
     category: "Recommended",
@@ -117,7 +118,7 @@ export const PRESETS: ReadonlyArray<PresetMeta> = [
     calm: true,
   },
 
-  // ── SYNQ Originals ────────────────────────────────────────────────────────
+  // SYNQ Originals.
   {
     id: "snqx-original-studio",
     name: "SYNQ Studio",
@@ -147,7 +148,7 @@ export const PRESETS: ReadonlyArray<PresetMeta> = [
     tint: "203 244 143",
   },
 
-  // ── Cinematic ─────────────────────────────────────────────────────────────
+  // Cinematic.
   {
     id: "snqx-eclipse",
     name: "Eclipse",
@@ -167,7 +168,7 @@ export const PRESETS: ReadonlyArray<PresetMeta> = [
     preview: "167 139 250",
   },
 
-  // ── Nature ────────────────────────────────────────────────────────────────
+  // Nature.
   {
     id: "snqx-forest",
     name: "Forest",
@@ -196,7 +197,7 @@ export const PRESETS: ReadonlyArray<PresetMeta> = [
     preview: "251 146 60",
   },
 
-  // ── Seasonal ──────────────────────────────────────────────────────────────
+  // Seasonal.
   {
     id: "snqx-sakura-day",
     name: "Sakura Day",
@@ -243,7 +244,7 @@ export const PRESETS: ReadonlyArray<PresetMeta> = [
     preview: "45 212 191",
   },
 
-  // ── Colorful / Expressive ─────────────────────────────────────────────────
+  // Colorful / Expressive.
   {
     id: "snqx-cyber",
     name: "Cyber",
@@ -281,7 +282,7 @@ export const PRESETS: ReadonlyArray<PresetMeta> = [
     preview: "45 212 191",
   },
 
-  // ── Minimal ───────────────────────────────────────────────────────────────
+  // Minimal.
   {
     id: "snqx-pure-amoled",
     name: "Pure AMOLED",
@@ -320,7 +321,7 @@ export const PRESETS: ReadonlyArray<PresetMeta> = [
     preview: "220 225 235",
   },
 
-  // ── Mood ──────────────────────────────────────────────────────────────────
+  // Mood.
   {
     id: "snqx-dream",
     name: "Dream",
@@ -367,6 +368,26 @@ export const PRESET_BY_ID: Readonly<Record<PresetId, PresetMeta>> =
   Object.fromEntries(PRESETS.map((p) => [p.id, p])) as Readonly<
     Record<PresetId, PresetMeta>
   >;
+
+// Internal catalog sanity check: keep the ids unique and fully mapped.
+const _PRESET_IDS = PRESETS.map((p) => p.id);
+if (_PRESET_IDS.length !== new Set(_PRESET_IDS).size) {
+  const dupes = _PRESET_IDS.filter(
+    (k, i, all) => all.indexOf(k) !== all.lastIndexOf(k),
+  );
+  throw new Error(
+    `SYNQ preset catalog contains duplicate ids: ${[...new Set(dupes)].join(", ")}`,
+  );
+}
+
+for (const [key, value] of Object.entries(PRESET_BY_ID)) {
+  const typed = key as PresetId;
+  if (!PRESETS.some((p) => p.id === typed)) {
+    throw new Error(
+      `PRESET_BY_ID contains an id that is not in PRESETS: ${typed}`,
+    );
+  }
+}
 
 /** Presets grouped by category, in catalog order. */
 export function presetsByCategory(): ReadonlyArray<{

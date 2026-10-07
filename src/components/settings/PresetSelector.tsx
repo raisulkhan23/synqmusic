@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Sparkles, Palette, Check, Moon, Cloud, Sun, Monitor, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -11,22 +11,18 @@ import {
   type PresetTokens,
 } from "@/lib/presets";
 
-/** A compact preset picker for Settings → Appearance.
+/**
+ * A compact preset picker for Settings → Appearance.
  *
- * It does not own accent/themeMode/trackPalettes/wallpaper. It only sets the
- * compact preset id and, when a preset ships a scene/tint, the coordinated
- * CSS tokens the rest of the app already reads. Preset switching therefore
- * never resets playback, the queue, or account state — it is a CSS surface
- * switch plus a small number of coordinated accent tokens.
+ * It does not own accent / themeMode / trackPalettes / wallpaper. It only sets
+ * the compact preset id and, when a preset ships a scene or tint, the
+ * coordinated CSS tokens the rest of the app already reads. Preset switching
+ * therefore never resets playback, the queue, or account state — it is a CSS
+ * surface switch plus a small number of coordinated accent tokens.
  */
 export function PresetSelector() {
   const [category, setCategory] = useState<PresetCategory>("Recommended");
-  const [selected, setSelected] = useState<PresetId | null>(null);
-  const [localized, setLocalized] = useState(false);
-
-  const [groups, setGroups] = useState(
-    () => presetsByCategory(),
-  );
+  const [groups] = useState(() => presetsByCategory());
 
   // Keep the selected row in sync with the session stored preset id once the
   // first render has read it. The picker is a UI layer; persistence is owned
@@ -39,22 +35,30 @@ export function PresetSelector() {
     }
   }, []);
 
-  const selectedMeta = selected ? PRESET_BY_ID[selected] : null;
+  // When a preset is already stored, keep the picker in sync after the first
+  // render without re-choosing on every key press.
+  const [activeId, setActiveId] = useState<PresetId | null>(storedId);
+
+  useEffect(() => {
+    if (storedId && activeId !== storedId) {
+      setActiveId(storedId);
+    }
+  }, [storedId]);
+
+  const selectedMeta = activeId ? PRESET_BY_ID[activeId] : null;
 
   const applyPreset = (preset: PresetMeta) => {
-    setSelected(preset.id);
+    setActiveId(preset.id);
     try {
       localStorage.setItem("ss.presetId", preset.id);
     } catch {
       /* storage unavailable; the picker stays usable */
     }
     applyTokens(preset.id);
-    setLocalized(true);
   };
 
   const toggleCategory = (next: PresetCategory) => {
     setCategory(next);
-    setLocalized(false);
   };
 
   return (
@@ -118,7 +122,7 @@ export function PresetSelector() {
               <PresetCard
                 key={meta.id}
                 meta={meta}
-                selected={selected === meta.id}
+                selected={activeId === meta.id}
                 onSelect={() => applyPreset(meta)}
               />
             );
@@ -243,8 +247,6 @@ function applyPresetTokens(tokens: PresetTokens): void {
   if (tokens.calm) {
     root.dataset.calm = "";
   } else {
-    root.dataset.calm = "";
-    // Keep the attribute in sync even when turning calm off explicitly.
     root.removeAttribute("data-calm");
   }
   // Fire the scene change event so the shell and any listener can sync derived
