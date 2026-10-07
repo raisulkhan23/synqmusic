@@ -210,6 +210,22 @@ html.light img {
 
 /* Signature scenes coordinate the full accent system without overriding the
    listener's Dark, Light, or AMOLED preference. */
+/* SYNQ scenes — focused accent system overrides keyed by `data-scene`.
+   These do not replace Dark/Light/AMOLED mode; they override the accent
+   system, the sidebar ring, and the `--tint` the rest of the UI already
+   reads. */
+html[data-scene="studio"] {
+  --primary: oklch(0.83 0.19 127);
+  --primary-foreground: oklch(0.16 0.02 262);
+  --ring: oklch(0.83 0.19 127 / 58%);
+  --chart-1: oklch(0.8 0.2 127);
+  --sidebar-primary: oklch(0.83 0.19 127);
+  --sidebar-ring: oklch(0.83 0.19 127 / 48%);
+  --brand: oklch(0.83 0.19 127);
+  --brand-foreground: oklch(0.16 0.02 262);
+  --tint: 203 244 143;
+}
+
 html[data-scene="aurora"] {
   --primary: oklch(0.76 0.17 294);
   --primary-foreground: oklch(0.16 0.03 294);
@@ -244,6 +260,294 @@ html[data-scene="tide"] {
   --brand: oklch(0.78 0.13 189);
   --brand-foreground: oklch(0.15 0.03 210);
   --tint: 45 212 191;
+}
+
+html[data-scene="midnight"] {
+  --primary: oklch(0.62 0.16 250);
+  --primary-foreground: oklch(0.15 0.03 250);
+  --ring: oklch(0.62 0.16 250 / 54%);
+  --chart-1: oklch(0.55 0.14 250);
+  --sidebar-primary: oklch(0.62 0.16 250);
+  --sidebar-ring: oklch(0.62 0.16 250 / 44%);
+  --brand: oklch(0.62 0.16 250);
+  --brand-foreground: oklch(0.15 0.03 250);
+  --tint: 80 140 220;
+}
+
+html[data-scene="eclipse"] {
+  --primary: oklch(0.66 0.17 298);
+  --primary-foreground: oklch(0.16 0.03 298);
+  --ring: oklch(0.66 0.17 298 / 56%);
+  --chart-1: oklch(0.6 0.15 298);
+  --sidebar-primary: oklch(0.66 0.17 298);
+  --sidebar-ring: oklch(0.66 0.17 298 / 46%);
+  --brand: oklch(0.66 0.17 298);
+  --brand-foreground: oklch(0.16 0.03 298);
+  --tint: 150 120 235;
+}
+
+html[data-scene="nebula"] {
+  --primary: oklch(0.7 0.16 296);
+  --primary-foreground: oklch(0.16 0.03 296);
+  --ring: oklch(0.7 0.16 296 / 56%);
+  --chart-1: oklch(0.64 0.15 296);
+  --sidebar-primary: oklch(0.7 0.16 296);
+  --sidebar-ring: oklch(0.7 0.16 296 / 46%);
+  --brand: oklch(0.7 0.16 296);
+  --brand-foreground: oklch(0.16 0.03 296);
+  --tint: 165 125 245;
+}
+
+html[data-scene="forest"] {
+  --primary: oklch(0.72 0.15 145);
+  --primary-foreground: oklch(0.16 0.02 145);
+  --ring: oklch(0.72 0.15 145 / 56%);
+  --chart-1: oklch(0.67 0.14 145);
+  --sidebar-primary: oklch(0.72 0.15 145);
+  --sidebar-ring: oklch(0.72 0.15 145 / 46%);
+  --brand: oklch(0.72 0.15 145);
+  --brand-foreground: oklch(0.16 0.02 145);
+  --tint: 76 143 43;
+}
+
+html[data-scene="coffee"] {
+  --primary: oklch(0.74 0.14 75);
+  --primary-foreground: oklch(0.17 0.03 75);
+  --ring: oklch(0.74 0.14 75 / 56%);
+  --chart-1: oklch(0.7 0.13 75);
+  --sidebar-primary: oklch(0.74 0.14 75);
+  --sidebar-ring: oklch(0.74 0.14 75 / 46%);
+  --brand: oklch(0.74 0.14 75);
+  --brand-foreground: oklch(0.17 0.03 75);
+  --tint: 251 146 60;
+}
+
+html[data-scene="sunset"] {
+  --primary: oklch(0.73 0.16 52);
+  --primary-foreground: oklch(0.17 0.03 52);
+  --ring: oklch(0.73 0.16 52 / 56%);
+  --chart-1: oklch(0.68 0.15 52);
+  --sidebar-primary: oklch(0.73 0.16 52);
+  --sidebar-ring: oklch(0.73 0.16 52 / 46%);
+  --brand: oklch(0.73 0.16 52);
+  --brand-foreground: oklch(0.17 0.03 52);
+  --tint: 251 120 65;
+}
+
+html[data-scene="autumn"] {
+  --primary: oklch(0.72 0.15 52);
+  --primary-foreground: oklch(0.16 0.03 52);
+  --ring: oklch(0.72 0.15 52 / 56%);
+  --chart-1: oklch(0.67 0.14 52);
+  --sidebar-primary: oklch(0.72 0.15 52);
+  --sidebar-ring: oklch(0.72 0.15 52 / 46%);
+  --brand: oklch(0.72 0.15 52);
+  --brand-foreground: oklch(0.16 0.03 52);
+  --tint: 251 110 55;
+}
+
+html[data-scene="winter"] {
+  --primary: oklch(0.8 0.13 190);
+  --primary-foreground: oklch(0.16 0.02 205);
+  --ring: oklch(0.8 0.13 190 / 56%);
+  --chart-1: oklch(0.75 0.12 190);
+  --sidebar-primary: oklch(0.8 0.13 190);
+  --sidebar-ring: oklch(0.8 0.13 190 / 46%);
+  --brand: oklch(0.8 0.13 190);
+  --brand-foreground: oklch(0.16 0.02 205);
+  --tint: 130 190 220;
+}
+
+html[data-scene="pure-amoled"] {
+  --primary: oklch(0.78 0.2 127);
+  --primary-foreground: oklch(0.14 0.02 262);
+  --ring: oklch(0.78 0.2 127 / 56%);
+  --chart-1: oklch(0.74 0.19 127);
+  --sidebar-primary: oklch(0.78 0.2 127);
+  --sidebar-ring: oklch(0.78 0.2 127 / 46%);
+  --brand: oklch(0.78 0.2 127);
+  --brand-foreground: oklch(0.14 0.02 262);
+  --tint: 130 200 120;
+}
+
+html[data-scene="graphite"] {
+  --primary: oklch(0.72 0.04 262);
+  --primary-foreground: oklch(0.16 0.02 262);
+  --ring: oklch(0.72 0.04 262 / 54%);
+  --chart-1: oklch(0.68 0.04 262);
+  --sidebar-primary: oklch(0.72 0.04 262);
+  --sidebar-ring: oklch(0.72 0.04 262 / 44%);
+  --brand: oklch(0.72 0.04 262);
+  --brand-foreground: oklch(0.16 0.02 262);
+  --tint: 180 180 185;
+}
+
+html[data-scene="cloud"] {
+  --primary: oklch(0.58 0.16 245);
+  --primary-foreground: oklch(0.16 0.02 248);
+  --ring: oklch(0.58 0.16 245 / 50%);
+  --chart-1: oklch(0.53 0.14 245);
+  --sidebar-primary: oklch(0.58 0.16 245);
+  --sidebar-ring: oklch(0.58 0.16 245 / 42%);
+  --brand: oklch(0.58 0.16 245);
+  --brand-foreground: oklch(0.16 0.02 248);
+  --tint: 96 140 190;
+}
+
+html[data-scene="frost"] {
+  --primary: oklch(0.74 0.15 200);
+  --primary-foreground: oklch(0.15 0.02 210);
+  --ring: oklch(0.74 0.15 200 / 56%);
+  --chart-1: oklch(0.69 0.14 200);
+  --sidebar-primary: oklch(0.74 0.15 200);
+  --sidebar-ring: oklch(0.74 0.15 200 / 46%);
+  --brand: oklch(0.74 0.15 200);
+  --brand-foreground: oklch(0.15 0.02 210);
+  --tint: 150 200 220;
+}
+
+html[data-scene="cyber"] {
+  --primary: oklch(0.74 0.16 190);
+  --primary-foreground: oklch(0.15 0.03 185);
+  --ring: oklch(0.74 0.16 190 / 56%);
+  --chart-1: oklch(0.68 0.15 190);
+  --sidebar-primary: oklch(0.74 0.16 190);
+  --sidebar-ring: oklch(0.74 0.16 190 / 46%);
+  --brand: oklch(0.74 0.16 190);
+  --brand-foreground: oklch(0.15 0.03 185);
+  --tint: 70 200 215;
+}
+
+html[data-scene="synthwave"] {
+  --primary: oklch(0.72 0.17 310);
+  --primary-foreground: oklch(0.16 0.03 310);
+  --ring: oklch(0.72 0.17 310 / 56%);
+  --chart-1: oklch(0.66 0.16 310);
+  --sidebar-primary: oklch(0.72 0.17 310);
+  --sidebar-ring: oklch(0.72 0.17 310 / 46%);
+  --brand: oklch(0.72 0.17 310);
+  --brand-foreground: oklch(0.16 0.03 310);
+  --tint: 205 80 170;
+}
+
+html[data-scene="violet"] {
+  --primary: oklch(0.72 0.17 292);
+  --primary-foreground: oklch(0.16 0.03 292);
+  --ring: oklch(0.72 0.17 292 / 56%);
+  --chart-1: oklch(0.66 0.15 292);
+  --sidebar-primary: oklch(0.72 0.17 292);
+  --sidebar-ring: oklch(0.72 0.17 292 / 46%);
+  --brand: oklch(0.72 0.17 292);
+  --brand-foreground: oklch(0.16 0.03 292);
+  --tint: 160 120 235;
+}
+
+html[data-scene="electric"] {
+  --primary: oklch(0.78 0.15 215);
+  --primary-foreground: oklch(0.15 0.02 225);
+  --ring: oklch(0.78 0.15 215 / 56%);
+  --chart-1: oklch(0.73 0.14 215);
+  --sidebar-primary: oklch(0.78 0.15 215);
+  --sidebar-ring: oklch(0.78 0.15 215 / 46%);
+  --brand: oklch(0.78 0.15 215);
+  --brand-foreground: oklch(0.15 0.02 225);
+  --tint: 70 180 255;
+}
+
+html[data-scene="dream"] {
+  --primary: oklch(0.74 0.15 300);
+  --primary-foreground: oklch(0.16 0.02 300);
+  --ring: oklch(0.74 0.15 300 / 56%);
+  --chart-1: oklch(0.68 0.14 300);
+  --sidebar-primary: oklch(0.74 0.15 300);
+  --sidebar-ring: oklch(0.74 0.15 300 / 46%);
+  --brand: oklch(0.74 0.15 300);
+  --brand-foreground: oklch(0.16 0.02 300);
+  --tint: 210 150 190;
+}
+
+html[data-scene="rainy-night"] {
+  --primary: oklch(0.62 0.13 220);
+  --primary-foreground: oklch(0.14 0.02 225);
+  --ring: oklch(0.62 0.13 220 / 52%);
+  --chart-1: oklch(0.57 0.12 220);
+  --sidebar-primary: oklch(0.62 0.13 220);
+  --sidebar-ring: oklch(0.62 0.13 220 / 42%);
+  --brand: oklch(0.62 0.13 220);
+  --brand-foreground: oklch(0.14 0.02 225);
+  --tint: 90 140 175;
+}
+
+html[data-scene="late-night"] {
+  --primary: oklch(0.6 0.13 270);
+  --primary-foreground: oklch(0.14 0.02 270);
+  --ring: oklch(0.6 0.13 270 / 52%);
+  --chart-1: oklch(0.55 0.12 270);
+  --sidebar-primary: oklch(0.6 0.13 270);
+  --sidebar-ring: oklch(0.6 0.13 270 / 42%);
+  --brand: oklch(0.6 0.13 270);
+  --brand-foreground: oklch(0.14 0.02 270);
+  --tint: 135 115 190;
+}
+
+html[data-scene="focus"] {
+  --primary: oklch(0.7 0.05 255);
+  --primary-foreground: oklch(0.15 0.02 255);
+  --ring: oklch(0.7 0.05 255 / 52%);
+  --chart-1: oklch(0.66 0.05 255);
+  --sidebar-primary: oklch(0.7 0.05 255);
+  --sidebar-ring: oklch(0.7 0.05 255 / 42%);
+  --brand: oklch(0.7 0.05 255);
+  --brand-foreground: oklch(0.15 0.02 255);
+  --tint: 160 165 175;
+}
+
+html[data-scene="night"] {
+  --primary: oklch(0.58 0.15 260);
+  --primary-foreground: oklch(0.14 0.02 260);
+  --ring: oklch(0.58 0.15 260 / 52%);
+  --chart-1: oklch(0.53 0.13 260);
+  --sidebar-primary: oklch(0.58 0.15 260);
+  --sidebar-ring: oklch(0.58 0.15 260 / 42%);
+  --brand: oklch(0.58 0.15 260);
+  --brand-foreground: oklch(0.14 0.02 260);
+  --tint: 120 180 120;
+}
+
+html[data-scene="sakura-day"] {
+  --primary: oklch(0.76 0.16 350);
+  --primary-foreground: oklch(0.17 0.02 350);
+  --ring: oklch(0.76 0.16 350 / 56%);
+  --chart-1: oklch(0.7 0.15 350);
+  --sidebar-primary: oklch(0.76 0.16 350);
+  --sidebar-ring: oklch(0.76 0.16 350 / 46%);
+  --brand: oklch(0.76 0.16 350);
+  --brand-foreground: oklch(0.17 0.02 350);
+  --tint: 250 150 170;
+}
+
+html[data-scene="sakura-night"] {
+  --primary: oklch(0.7 0.15 330);
+  --primary-foreground: oklch(0.16 0.03 330);
+  --ring: oklch(0.7 0.15 330 / 54%);
+  --chart-1: oklch(0.64 0.14 330);
+  --sidebar-primary: oklch(0.7 0.15 330);
+  --sidebar-ring: oklch(0.7 0.15 330 / 44%);
+  --brand: oklch(0.7 0.15 330);
+  --brand-foreground: oklch(0.16 0.03 330);
+  --tint: 210 130 160;
+}
+
+html[data-scene="ocean"] {
+  --primary: oklch(0.76 0.13 192);
+  --primary-foreground: oklch(0.15 0.02 205);
+  --ring: oklch(0.76 0.13 192 / 56%);
+  --chart-1: oklch(0.7 0.12 192);
+  --sidebar-primary: oklch(0.76 0.13 192);
+  --sidebar-ring: oklch(0.76 0.13 192 / 46%);
+  --brand: oklch(0.76 0.13 192);
+  --brand-foreground: oklch(0.15 0.02 205);
+  --tint: 55 185 205;
 }
 
 html,
