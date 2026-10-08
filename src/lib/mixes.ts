@@ -32,6 +32,66 @@
 
 import type { YtItem } from "@/lib/youtube";
 
+/** Shape of a stored remote like, as returned by `api.likes.myLikedRemote`. */
+export interface RemoteLike {
+  trackId: string;
+  title: string;
+  artistName: string;
+  coverUrl: string;
+  duration: number;
+  youtubeId?: string;
+  source: string;
+}
+
+/**
+ * Build the "favorites" source rows for a mix from the signed-in liked tracks,
+ * failing over to tracks the listener has already played when those are thin.
+ *
+ * The Favorites Mix is the one mix every signed-in listener should actually own,
+ * so it is built from the strongest available signal instead of only the liked set
+ * (which can be empty when the app cannot reach the provider's catalog). Liked
+ * tracks win when present; history and most-played are used as a strict, order-
+ * stable fallback.
+ */
+export function buildFavoritesItems(
+  liked: RemoteLike[] | undefined,
+  recent: YtItem[],
+  mostPlayed: YtItem[],
+): YtItem[] {
+  const likedItems = likedToYtItems(liked);
+  if (likedItems.length > 0) {
+    return likedItems.slice(0, MAX_MIX_TRACKS);
+  }
+
+  // Fall back to tracks the listener has already chosen for themselves. Most-
+  // played is the stronger personal signal, so it comes first; recent augments
+  // it when there are not enough most-played tracks to fill the mix.
+  const pool = [...mostPlayed, ...recent];
+  const seen = new Set<string>();
+  const out: YtItem[] = [];
+  for (const item of pool) {
+    if (!item || !item.id || !item.title || seen.has(item.id)) continue;
+    seen.add(item.id);
+    out.push(item);
+    if (out.length >= MAX_MIX_TRACKS) break;
+  }
+  return out;
+}
+
+/** Map the liked-remote snapshot shape onto the `YtItem` shape `buildMixes` uses. */
+function likedToYtItems(liked: RemoteLike[] | undefined): YtItem[] {
+  if (!liked || liked.length === 0) return [];
+  return liked
+    .filter((r) => Boolean(r.youtubeId && r.title))
+    .map((r) => ({
+      id: r.youtubeId!,
+      title: r.title,
+      artist: r.artistName,
+      duration: r.duration,
+      thumbnail: r.coverUrl,
+    }));
+}
+
 /** One personalized mix, ready to render or play. */
 export interface Mix {
   id: string;
@@ -47,7 +107,7 @@ export interface Mix {
 /** The already-fetched Home data a mix may be assembled from. */
 export interface MixSources {
   /** Tracks the listener has liked, newest first (signed-in only). */
-  favorites?: YtItem[];
+  favorites?: RemoteLike[];
   /** The listener's most-played tracks, most played first. */
   mostPlayed?: YtItem[];
   /** Recently played, most recent first. */
@@ -130,10 +190,10 @@ const BLUEPRINTS: MixBlueprint[] = [
   {
     id: "favorites",
     name: "Favorites Mix",
-    subtitle: "The songs you saved, ready when you want them",
+    subtitle: "The songs you saved, plus the ones you keep coming back to",
     accent: "from-rose-400/28 to-transparent",
     cardFrom: "from-[rgb(244_63_94/0.32)] via-rose-500/20 to-transparent",
-    pick: (s) => s.favorites ?? [],
+    pick: (s) => buildFavoritesItems(s.favorites, s.recent ?? [], s.mostPlayed ?? []),
   },
   {
     id: "on_repeat",

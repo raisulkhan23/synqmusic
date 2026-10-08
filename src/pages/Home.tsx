@@ -7,7 +7,9 @@ import { Shelf } from "@/components/core/shelf";
 import { MixesRow } from "@/components/home/MixesRow";
 import { api } from "@/convex/_generated/api";
 import { explainReason, type RecoCandidate } from "@/lib/recommend";
-import { buildMixes, type Mix } from "@/lib/mixes";
+import { buildFavoritesItems, buildMixes, type Mix } from "@/lib/mixes";
+import { buildFavoritesItems, buildMixes, type Mix } from "@/lib/mixes";
+
 import { greeting } from "@/lib/format";
 import { toPlayableYoutube, type Playable } from "@/lib/playable";
 import { shuffleList } from "@/lib/queueOrder";
@@ -455,15 +457,16 @@ export default function Home() {
   const mixes: Mix[] = useMemo(
     () =>
       buildMixes({
-        favorites: likedRemote
-          ?.filter((r) => r.youtubeId)
-          .map((r) => ({
-            id: r.youtubeId as string,
-            title: r.title,
-            artist: r.artistName,
-            duration: r.duration,
-            thumbnail: r.coverUrl,
-          })),
+        // Favorites Mix is the one mix every signed-in listener should actually own,
+        // so it gets the strongest possible source: liked tracks first, then the tracks
+        // the listener has already played (history + most-played). When the catalog the
+        // app can reach is thin that matters more than a narrower "only liked" source
+        // that leaves the card empty.
+        favorites: buildFavoritesItems(
+          likedRemote,
+          historyItems,
+          mostPlayedItems,
+        ),
         mostPlayed: mostPlayedItems,
         recent: historyItems,
         discovery: remote.discover,
