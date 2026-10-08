@@ -7,8 +7,7 @@ import { Shelf } from "@/components/core/shelf";
 import { MixesRow } from "@/components/home/MixesRow";
 import { api } from "@/convex/_generated/api";
 import { explainReason, type RecoCandidate } from "@/lib/recommend";
-import { buildFavoritesItems, buildMixes, type Mix } from "@/lib/mixes";
-import { buildFavoritesItems, buildMixes, type Mix } from "@/lib/mixes";
+import { buildFavoritesItems, buildMixes, type Mix, type RemoteLike } from "@/lib/mixes";
 
 import { greeting } from "@/lib/format";
 import { toPlayableYoutube, type Playable } from "@/lib/playable";
@@ -462,11 +461,16 @@ export default function Home() {
         // the listener has already played (history + most-played). When the catalog the
         // app can reach is thin that matters more than a narrower "only liked" source
         // that leaves the card empty.
+        // FavoritesMix is the one mix every signed-in listener should actually own,
+        // so it gets the strongest possible source: liked tracks first, then the tracks
+        // the listener has already played (history + most-played). When the catalog the
+        // app can reach is thin that matters more than a narrower "only liked" source
+        // that leaves the card empty.
         favorites: buildFavoritesItems(
           likedRemote,
           historyItems,
           mostPlayedItems,
-        ),
+        ) as unknown as RemoteLike[],
         mostPlayed: mostPlayedItems,
         recent: historyItems,
         discovery: remote.discover,
