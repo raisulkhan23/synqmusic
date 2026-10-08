@@ -24,7 +24,7 @@ export default function HaloSearchDemo() {
   const [blobTranslucent, setBlobTranslucent] = useState(false)
   /** Browser timer id (`window.setTimeout`); avoid `NodeJS.Timeout` mismatch in tsc with `@types/node`. */
   const loadTimerRef = useRef<number | null>(null)
-  const haloSearchRef = useRef<HTMLDivElement>(null)
+  const haloSearchRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     return () => {
