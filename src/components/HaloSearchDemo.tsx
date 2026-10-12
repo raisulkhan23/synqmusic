@@ -24,7 +24,7 @@ export default function HaloSearchDemo() {
   const [blobTranslucent, setBlobTranslucent] = useState(false)
   /** Browser timer id (`window.setTimeout`); avoid `NodeJS.Timeout` mismatch in tsc with `@types/node`. */
   const loadTimerRef = useRef<number | null>(null)
-  const haloSearchRef = useRef<HTMLDivElement | null>(null)
+  const          ref={          ref={haloSearchRef}} = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     return () => {
@@ -98,7 +98,7 @@ export default function HaloSearchDemo() {
           onKeyDown={handleKeyDown}
           placeholder="Search docs, APIs, or ask a question…"
           value={searchValue}
-        haloSearchRef
+          ref={          ref={haloSearchRef}}
         />
 
         <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
