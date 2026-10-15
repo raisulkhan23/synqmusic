@@ -13,8 +13,10 @@ const SITE_URL_ENV = (
 
 const TRUSTED_ORIGINS = [
   SITE_URL_ENV,
-  "https://synqmusic.freebuff.app",
-  "https://synq-music.freebuff.app",
+  "https://synqmusic.com",
+  "https://synq-music.com",
+  "https://frugal-lobster-91.convex.site",
+  "https://frugal-lobster-91.convex.cloud",
   "https://freebuff.com",
   "https://www.freebuff.com",
 ]
