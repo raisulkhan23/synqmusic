@@ -27,7 +27,7 @@ function isTrustedOrigin(origin: string): boolean {
   const normalized = origin.replace(/\/$/, "");
   return (
     TRUSTED_ORIGINS.includes(normalized) ||
-    /^https:\/\/(?:[a-z0-9-]+\.)*freebuff\.(?:app|com)$/i.test(normalized) ||
+    /^https:\/\/(?:[a-z0-9-]+\.)*freebuff\.(?:app|com|dev)$/i.test(normalized) ||
     /^https:\/\/[a-z0-9-]+\.vly\.sh$/i.test(normalized)
   );
 }
