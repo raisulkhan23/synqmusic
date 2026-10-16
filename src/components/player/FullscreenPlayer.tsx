@@ -57,6 +57,7 @@ import {
   Share2,
   Loader2,
   MicVocal,
+  Monitor,
   Moon,
   Repeat,
   Scissors,
@@ -531,6 +532,7 @@ export function FullscreenPlayer() {
   const setRate = usePlayerStore((s) => s.setRate);
   const audioFilter = usePlayerStore((s) => s.audioFilter);
   const setAudioFilter = usePlayerStore((s) => s.setAudioFilter);
+  const toggleVideo = usePlayerStore((s) => s.toggleVideo);
 
   const a = accent ?? { r: 196, g: 246, b: 152 };
 
@@ -1476,6 +1478,27 @@ export function FullscreenPlayer() {
                 <MicVocal className="size-3.5" />
                 Lyrics
               </button>
+
+              {/* Turn the live video overlay on/off without leaving fullscreen. Only
+                  visible when the global "Video preview" preference is on, because an
+                  in-player toggle is only meaningful when the feature can actually
+                  present (YouTube tracks + embeds allowed). */}
+              {videoEnabled && (
+                <button
+                  type="button"
+                  title={videoEnabled ? "Hide video in fullscreen" : "Show video in fullscreen"}
+                  onClick={() => toggleVideo()}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[11px] font-semibold transition-colors hover:bg-white/[0.08] sm:px-3 sm:py-1 sm:tracking-wide sm:uppercase",
+                    videoEnabled
+                      ? "border-[rgb(var(--tint)_/_0.5)] text-[rgb(var(--tint))]"
+                      : "text-muted-foreground",
+                  )}
+                >
+                  <Monitor className="size-3.5" />
+                  {videoEnabled ? "Video on" : "Video off"}
+                </button>
+              )}
             </div>
           </div>
         </div>
