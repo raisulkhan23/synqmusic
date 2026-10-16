@@ -1109,46 +1109,17 @@ export function FullscreenPlayer() {
             )}
           </div>
 
-          {/* The line being sung right now, in the dead space between the
-              artwork and the title.
-
-              Three lines: the one before, the one now, the one after. The
-              neighbours are what make it read as a lyric rather than a
-              caption — and they cost nothing, because the hook already knows
-              which line comes next.
-
-              Spacing is the other half of this. The block sits on its own
-              `my-4` / `my-5` air inside a column that already has `gap-3`,
-              because the first version of this sat directly on top of the
-              song title and the two read as one collided block of text.
-
-              The whole stack is NOT rendered when there is no line yet (before
-              the first lyric, or a track with no lyrics at all) — an empty
-              placeholder would reintroduce the gap it is meant to fill, and a
-              skeleton would be noise on the many songs that have no lyrics.
-              It is also hidden while the panel is open on a phone, where the
-              panel covers the screen and two copies of the same line would
-              be showing at once. */}
+          {/* Lyric line, kept compact and centred under the cover art. */}
           <div
             aria-live="off"
             className={cn(
-              "w-full flex-col items-center overflow-hidden",
-              // One branch, no contradictory utilities fighting each other:
-              // nothing at all without a line; hidden on a phone while the
-              // panel covers the screen; visible everywhere else.
+              "flex flex-col items-center justify-center overflow-hidden",
               !lyrics.activeLine
                 ? "hidden"
                 : lyricsOpen
                   ? "hidden lg:flex"
                   : "flex",
-              // Keep the lyric block compact instead of letting it dominate the player height.
-              lyrics.activeLine && "my-2 sm:my-2",
-              // THE BUG THIS FIXES. The artwork and the metadata block both
-              // reserve the panel's width with `lg:pr-[28rem]` so they slide
-              // left and stay clear of it. This stack was missing that, so
-              // when the panel opened it stayed centred across the FULL
-              // viewport — putting the lyrics behind the panel while the
-              // title and the controls correctly moved out from under it.
+              lyrics.activeLine && "my-2",
               lyricsOpen && "lg:pr-[28rem]",
             )}
           >
