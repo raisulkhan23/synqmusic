@@ -492,13 +492,16 @@ export default function Home() {
     ],
   );
 
-  // Playing a mix is exactly playing a shelf: the first track starts and the
-  // rest of the mix becomes the queue, so autoplay, repeat and shuffle all
-  // keep working through the existing player. No separate mix engine exists.
+  // Playing a mix is exactly playing a shelf: the whole mix becomes the queue,
+  // so autoplay, repeat and shuffle all keep working through the existing player.
+  // No separate mix engine exists.
   const playMix = (mix: Mix) => {
-    const [first, ...rest] = mix.items;
-    if (!first) return;
-    playRemoteItem(first, rest);
+    const playable: Playable[] = mix.items.map(
+      (item) =>
+        toPlayableYoutube(item, `https://youtu.be/${item.id}`, []),
+    );
+    if (playable.length === 0) return;
+    playTrack(playable[0], playable.slice(1));
   };
 
   // "Play something random" — random seed, random pick.
