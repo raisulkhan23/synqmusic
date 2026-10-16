@@ -1102,13 +1102,9 @@ export function FullscreenPlayer() {
               <motion.img
                 src={current.coverUrl}
                 alt={`${current.title} cover art`}
-                className="size-[min(38vh,340px)] rounded-2xl object-cover shadow-[0_30px_80px_rgba(0,0,0,0.6)] ring-1 ring-white/10"
-                animate={{ y: [0, -12, 0] }}
-                transition={{
-                  duration: 7,
-                  repeat: Infinity,
-                  ease: "easeInOut",
-                }}
+                className="size-[min(32vh,280px)] rounded-2xl object-cover shadow-[0_30px_80px_rgba(0,0,0,0.6)] ring-1 ring-white/10"
+                animate={{ y: [0, 0, 0] }}
+                transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
               />
             )}
           </div>
@@ -1145,8 +1141,8 @@ export function FullscreenPlayer() {
                 : lyricsOpen
                   ? "hidden lg:flex"
                   : "flex",
-              // Real air above and below, on top of the column's own gap-3.
-              lyrics.activeLine && "my-4 sm:my-5",
+              // Keep the lyric block compact instead of letting it dominate the player height.
+              lyrics.activeLine && "my-2 sm:my-2",
               // THE BUG THIS FIXES. The artwork and the metadata block both
               // reserve the panel's width with `lg:pr-[28rem]` so they slide
               // left and stay clear of it. This stack was missing that, so
@@ -1156,47 +1152,35 @@ export function FullscreenPlayer() {
               lyricsOpen && "lg:pr-[28rem]",
             )}
           >
-            {/* The neighbours slide as well, so the whole stack drifts upward on the
-                beat instead of only the middle line jumping. They are keyed on
-                their own text, which gives each a transition; a tiny offset
-                (less than a line) keeps it as a supporting motion rather than
-                a second focal point. */}
+            {/* The neighbours are dim support lines. Keep the whole block compact
+                and a single readable height: one narrow neighbor above, one below,
+                both clamped to one line. */}
             <motion.p
               key={lyrics.prevLine}
               initial={reduceMotion ? false : { opacity: 0, y: 6 }}
-              animate={
-                reduceMotion
-                  ? { opacity: 1 }
-                  : { opacity: 1, y: 0 }
-              }
+              animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
               transition={
                 reduceMotion
                   ? { duration: 0.15 }
                   : { type: "spring", stiffness: 320, damping: 36, mass: 0.7 }
               }
               className={cn(
-                "line-clamp-1 w-full max-w-[32rem] text-center text-xs leading-tight text-balance text-foreground/25 sm:text-[13px]",
+                "line-clamp-1 w-full max-w-[26rem] text-center text-xs leading-tight text-balance text-foreground/25 sm:text-[12px]",
                 !lyrics.prevLine && "invisible",
               )}
             >
               {lyrics.prevLine}
             </motion.p>
 
-            {/* The line rises. `mode="wait"` is deliberately NOT used: it finishes
-                the outgoing line before starting the incoming one, which reads
-                as a flicker between two words. Letting both exist at once —
-                the old one travelling up and out, the new one arriving from
-                below — is what makes it feel like the lyric is scrolling
-                rather than swapping. The slight scale difference adds depth so
-                the two lines read as one moving past the other.
-                `prefers-reduced-motion` drops it to a plain fade. */}
+            {/* The line being sung right now. One line only, no multi-line clamp,
+                no large vertical breathing room around it. */}
             <AnimatePresence initial={false}>
               <motion.p
                 key={lyrics.activeLine}
                 initial={
                   reduceMotion
                     ? { opacity: 0 }
-                    : { opacity: 0, y: 16, scale: 0.96 }
+                    : { opacity: 0, y: 8, scale: 0.98 }
                 }
                 animate={
                   reduceMotion
@@ -1206,7 +1190,7 @@ export function FullscreenPlayer() {
                 exit={
                   reduceMotion
                     ? { opacity: 0 }
-                    : { opacity: 0, y: -16, scale: 0.96 }
+                    : { opacity: 0, y: -8, scale: 0.98 }
                 }
                 transition={
                   reduceMotion
@@ -1214,12 +1198,7 @@ export function FullscreenPlayer() {
                     : { type: "spring", stiffness: 320, damping: 34, mass: 0.7 }
                 }
                 className={cn(
-                  // `my-2` is what separates this from the title below it and
-                  // from its own neighbours above.
-                  "my-2 line-clamp-2 w-full max-w-[34rem] text-center text-[0.95rem] leading-snug font-semibold text-balance sm:text-lg",
-                  // Only real timings can be followed; on time-distributed
-                  // guesses the line jumps a phrase at a time and reads as
-                  // broken, so those tracks never animate here.
+                  "line-clamp-1 w-full max-w-[26rem] text-center text-[0.95rem] leading-snug font-semibold text-balance sm:text-base",
                   lyrics.synced ? "text-foreground/90" : "text-foreground/55",
                 )}
               >
@@ -1237,7 +1216,7 @@ export function FullscreenPlayer() {
                   : { type: "spring", stiffness: 320, damping: 36, mass: 0.7 }
               }
               className={cn(
-                "line-clamp-1 w-full max-w-[32rem] text-center text-xs leading-tight text-balance text-foreground/25 sm:text-[13px]",
+                "line-clamp-1 w-full max-w-[26rem] text-center text-xs leading-tight text-balance text-foreground/25 sm:text-[12px]",
                 !lyrics.nextLine && "invisible",
               )}
             >
