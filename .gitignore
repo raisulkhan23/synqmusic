@@ -1,5 +1,36 @@
 .env.local
+.env.build
+.env.keys
+.env.production
 node_modules
 dist
+dist-web
 src/convex/_generated
 isolate
+
+# Build artifacts and release files
+desktop-dist
+zips
+*.apk
+*.zip
+*.exe
+*.blockmap
+android-build.log
+android-build2.log
+
+# Signing material
+*.jks
+*.keystore
+*.p12
+keystore.properties
+keystore.properties.*
+
+# Freebuff project ID
+.freebuff/project-id
+
+# Electron dist files
+electron/dist
+
+# Android build outputs
+android/app/build
+android/app/*.apk
