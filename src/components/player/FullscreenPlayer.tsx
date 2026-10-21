@@ -1312,12 +1312,41 @@ export function FullscreenPlayer() {
               >
                 <ListMusic className="size-5" />
               </button>
-            </div>
-
-            {/* extra playback tools */}
+            </div>              {/* extra playback tools */}
             <div className="flex flex-wrap items-center justify-center gap-2">
               <AbRepeatControls />
               <IntroTrimControl />
+
+              {/* video — only shown when the global video preference is enabled, because
+                  that preference is the runtime gate for showing the YouTube video frame in
+                  fullscreen. */}
+              {videoEnabled ? (
+                <button
+                  type="button"
+                  title="Hide video in fullscreen"
+                  onClick={() => toggleVideo()}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[11px] font-semibold tabular-nums transition-colors hover:bg-white/[0.08]",
+                    "border-[rgb(var(--tint)_/_0.5)] text-[rgb(var(--tint))]",
+                  )}
+                >
+                  <Monitor className="size-4" />
+                  Video off
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  title="Show video in fullscreen"
+                  onClick={() => toggleVideo()}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[11px] font-semibold tabular-nums transition-colors hover:bg-white/[0.08]",
+                    "text-muted-foreground",
+                  )}
+                >
+                  <Monitor className="size-4" />
+                  Video on
+                </button>
+              )}
 
               {/* speed — icon only until a non-1× speed is active */}
               <DropdownMenu modal={false}>
