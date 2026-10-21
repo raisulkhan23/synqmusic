@@ -1312,7 +1312,9 @@ export function FullscreenPlayer() {
               >
                 <ListMusic className="size-5" />
               </button>
-            </div>              {/* extra playback tools */}
+            </div>
+
+            {/* extra playback tools */}
             <div className="flex flex-wrap items-center justify-center gap-2">
               <AbRepeatControls />
               <IntroTrimControl />
@@ -1326,12 +1328,12 @@ export function FullscreenPlayer() {
                   title="Hide video in fullscreen"
                   onClick={() => toggleVideo()}
                   className={cn(
-                    "flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[11px] font-semibold tabular-nums transition-colors hover:bg-white/[0.08]",
+                    "inline-flex items-center justify-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[11px] font-semibold transition-colors hover:bg-white/[0.08]",
                     "border-[rgb(var(--tint)_/_0.5)] text-[rgb(var(--tint))]",
                   )}
                 >
                   <Monitor className="size-4" />
-                  Video off
+                  <span className="whitespace-nowrap">Video off</span>
                 </button>
               ) : (
                 <button
@@ -1339,12 +1341,12 @@ export function FullscreenPlayer() {
                   title="Show video in fullscreen"
                   onClick={() => toggleVideo()}
                   className={cn(
-                    "flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[11px] font-semibold tabular-nums transition-colors hover:bg-white/[0.08]",
+                    "inline-flex items-center justify-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[11px] font-semibold transition-colors hover:bg-white/[0.08]",
                     "text-muted-foreground",
                   )}
                 >
                   <Monitor className="size-4" />
-                  Video on
+                  <span className="whitespace-nowrap">Video on</span>
                 </button>
               )}
 
@@ -1375,7 +1377,7 @@ export function FullscreenPlayer() {
                     <DropdownMenuItem
                       key={r}
                       className={cn(
-                        "gap-2",
+                        "gap-2 justify-center",
                         r === rate && "text-[rgb(var(--tint))]",
                       )}
                       onSelect={() => setRate(r)}
@@ -1417,7 +1419,7 @@ export function FullscreenPlayer() {
                     <DropdownMenuItem
                       key={f.id}
                       className={cn(
-                        "gap-2",
+                        "gap-2 justify-center",
                         f.id === audioFilter && "text-[rgb(var(--tint))]",
                       )}
                       onSelect={() => {
