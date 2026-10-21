@@ -1429,24 +1429,35 @@ export function FullscreenPlayer() {
                 Lyrics
               </button>
 
-              {/* Turn the live video overlay on/off without leaving fullscreen. Only
-                  visible when the global "Video preview" preference is on, because an
-                  in-player toggle is only meaningful when the feature can actually
-                  present (YouTube tracks + embeds allowed). */}
-              {videoEnabled && (
+              {/* Turn the live video overlay on/off without leaving fullscreen. When the
+                  global "Video preview" preference is on, also let the fullscreen player
+                  drive the same setting so a listener can flip audio-only/video on the
+                  fly. */}
+              {videoEnabled ? (
                 <button
                   type="button"
-                  title={videoEnabled ? "Hide video in fullscreen" : "Show video in fullscreen"}
+                  title="Hide video in fullscreen"
                   onClick={() => toggleVideo()}
                   className={cn(
                     "flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[11px] font-semibold transition-colors hover:bg-white/[0.08] sm:px-3 sm:py-1 sm:tracking-wide sm:uppercase",
-                    videoEnabled
-                      ? "border-[rgb(var(--tint)_/_0.5)] text-[rgb(var(--tint))]"
-                      : "text-muted-foreground",
+                    "border-[rgb(var(--tint)_/_0.5)] text-[rgb(var(--tint))]",
                   )}
                 >
                   <Monitor className="size-3.5" />
-                  {videoEnabled ? "Video on" : "Video off"}
+                  Video off
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  title="Show video in fullscreen"
+                  onClick={() => toggleVideo()}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[11px] font-semibold transition-colors hover:bg-white/[0.08] sm:px-3 sm:py-1 sm:tracking-wide sm:uppercase",
+                    "text-muted-foreground",
+                  )}
+                >
+                  <Monitor className="size-3.5" />
+                  Video on
                 </button>
               )}
             </div>
