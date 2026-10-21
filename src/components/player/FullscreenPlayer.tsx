@@ -1312,16 +1312,14 @@ export function FullscreenPlayer() {
               >
                 <ListMusic className="size-5" />
               </button>
-            </div>
-
-            {/* extra playback tools */}
+            </div>              {/* extra playback tools */}
             <div className="flex flex-wrap items-center justify-center gap-2">
               <AbRepeatControls />
               <IntroTrimControl />
 
-              {/* video — only shown when the global video preference is enabled, because
-                  that preference is the runtime gate for showing the YouTube video frame in
-                  fullscreen. */}
+              {/* video — the only video on/off toggle in the fullscreen player. When the
+                  global "Video preview" preference is on, this is the in-player switch that
+                  flips audio-only/video on the fly. */}
               {videoEnabled ? (
                 <button
                   type="button"
@@ -1460,37 +1458,6 @@ export function FullscreenPlayer() {
                 Lyrics
               </button>
 
-              {/* Turn the live video overlay on/off without leaving fullscreen. When the
-                  global "Video preview" preference is on, also let the fullscreen player
-                  drive the same setting so a listener can flip audio-only/video on the
-                  fly. */}
-              {videoEnabled ? (
-                <button
-                  type="button"
-                  title="Hide video in fullscreen"
-                  onClick={() => toggleVideo()}
-                  className={cn(
-                    "flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[11px] font-semibold transition-colors hover:bg-white/[0.08] sm:px-3 sm:py-1 sm:tracking-wide sm:uppercase",
-                    "border-[rgb(var(--tint)_/_0.5)] text-[rgb(var(--tint))]",
-                  )}
-                >
-                  <Monitor className="size-3.5" />
-                  Video off
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  title="Show video in fullscreen"
-                  onClick={() => toggleVideo()}
-                  className={cn(
-                    "flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[11px] font-semibold transition-colors hover:bg-white/[0.08] sm:px-3 sm:py-1 sm:tracking-wide sm:uppercase",
-                    "text-muted-foreground",
-                  )}
-                >
-                  <Monitor className="size-3.5" />
-                  Video on
-                </button>
-              )}
             </div>
           </div>
         </div>
