@@ -14,6 +14,7 @@ const SITE_URL_ENV = (
 const TRUSTED_ORIGINS = [
   SITE_URL_ENV,
   "https://synqmusic.com",
+  "https://synqmusic.pages.dev",
   "https://synq-music.com",
   "https://frugal-lobster-91.convex.site",
   "https://frugal-lobster-91.convex.cloud",
@@ -30,6 +31,13 @@ function isTrustedOrigin(origin: string): boolean {
     /^https:\/\/(?:[a-z0-9-]+\.)*freebuff\.(?:app|com|dev)$/i.test(normalized) ||
     /^https:\/\/[a-z0-9-]+\.vly\.sh$/i.test(normalized)
   );
+}
+
+const FORWARDING_HOST = "synqmusic.freebuff.app";
+const FORWARDING_TARGET = "https://synqmusic.pages.dev";
+
+function isForwardingHost(hostname: string): boolean {
+  return hostname.toLowerCase().replace(/\/$/, "") === FORWARDING_HOST;
 }
 
 export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
@@ -60,4 +68,5 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
       return redirectTo;
     },
   },
+
 });
