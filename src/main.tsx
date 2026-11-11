@@ -36,11 +36,12 @@ if (localStorage.getItem("ss.liquidGlass") === "0") {
 // returning user never sees one frame of the expensive decorations.
 if (localStorage.getItem("ss.performanceMode") === "1") {
   document.documentElement.classList.add("perf-lite");
-}
-// Motion budget, restored before paint for exactly the same reason: "reduced"
+}  // Motion budget, restored before paint for exactly the same reason: "reduced"
 // and "off" must not flash a frame of full motion on the way in. This also
 // migrates the older boolean Reduce-motion setting.
 applyAnimationLevel(readAnimationLevel());
+
+
 // Restore the saved card transparency before paint so glass panels never flash
 // at the default opacity first.
 applyCardTransparency(readCardTransparency());
@@ -355,6 +356,26 @@ function RouteSyncer() {
 
   return null;
 }
+
+function redirectSynqmusicFreebuffAppForwarding() {
+  try {
+    if (
+      typeof window !== "undefined" &&
+      window.location &&
+      window.location.hostname.toLowerCase() === "synqmusic.freebuff.app"
+    ) {
+      const targetUrl =
+        "https://synqmusic.pages.dev" +
+        window.location.pathname +
+        (window.location.search || "");
+      window.location.href = targetUrl;
+    }
+  } catch (_err) {
+    // leave the page alone if anything is wrong
+  }
+}
+
+redirectSynqmusicFreebuffAppForwarding();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
