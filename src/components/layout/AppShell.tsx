@@ -942,10 +942,15 @@ export function AppShell() {
 
         {/* overflow-x is clipped: a single over-wide row must never give the
             page a horizontal scrollbar on a phone. Nested `overflow-x-auto`
-            rails inside a page still scroll normally. */}
+            rails inside a page still scroll normally.
+
+            Desktop (lg+): the content area becomes one of melo's floating
+            panels — a rounded card floating on the background instead of a
+            flush sheet, with the same 28px corner the rail and player carry.
+            Mobile stays flush; a phone has no room for decorative margins. */}
         <main
           data-app-scroll
-          className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto"
+          className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto lg:mx-2 lg:mb-2 lg:rounded-[var(--radius-panel)] lg:border lg:border-white/[0.06] lg:bg-white/[0.02] lg:shadow-[0_18px_60px_rgba(0,0,0,0.25)]"
         >
           {/* ambient accent glow follows the current album art */}
           {ambientGlow && !focusMode && (

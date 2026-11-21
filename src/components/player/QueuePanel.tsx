@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { Reorder, useDragControls } from "framer-motion";
 import { useMutation } from "convex/react";
 
@@ -49,7 +49,52 @@ type QueueReorderRowProps = {
   undoRemoveFromQueue: () => void;
   onMove: (from: number, to: number) => void;
   reorderKey: string;
+  /** Called when the grip starts a drag, so the panel can auto-scroll. */
+  onDragStart: () => void;
 };
+
+/**
+ * melo's drag autoscroll, ported verbatim: while a row is being dragged, a
+ * pointer within 40px of the list's top or bottom edge scrolls the list 8px
+ * per 16ms (~480px/s). Without it, dragging a song toward a long queue's far
+ * end meant dropping it blindly and grabbing again — one repetition per few
+ * rows on a 100-track queue. The loop runs every frame but exits after one
+ * boolean check while no drag is active.
+ */
+function useQueueDragAutoscroll(
+  containerRef: RefObject<HTMLUListElement | null>,
+  draggingRef: RefObject<boolean>,
+): void {
+  useEffect(() => {
+    let raf = 0;
+    let lastY = -1;
+    const onMove = (event: PointerEvent) => {
+      lastY = event.clientY;
+    };
+    const stop = () => {
+      draggingRef.current = false;
+    };
+    const tick = () => {
+      const el = containerRef.current;
+      if (el && draggingRef.current && lastY >= 0) {
+        const rect = el.getBoundingClientRect();
+        if (lastY < rect.top + 40) el.scrollTop -= 8;
+        else if (lastY > rect.bottom - 40) el.scrollTop += 8;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    window.addEventListener("pointermove", onMove, { passive: true });
+    window.addEventListener("pointerup", stop, { passive: true });
+    window.addEventListener("pointercancel", stop, { passive: true });
+    raf = requestAnimationFrame(tick);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", stop);
+      window.removeEventListener("pointercancel", stop);
+      cancelAnimationFrame(raf);
+    };
+  }, [containerRef, draggingRef]);
+}
 
 function QueueReorderRow({
   track,
@@ -61,6 +106,7 @@ function QueueReorderRow({
   undoRemoveFromQueue,
   onMove,
   reorderKey,
+  onDragStart,
 }: QueueReorderRowProps) {
   const controls = useDragControls();
 
@@ -68,7 +114,10 @@ function QueueReorderRow({
     <Reorder.Item
       value={reorderKey}
       dragListener={false}
-      className="group flex items-center gap-2 rounded-lg px-1 py-1.5 transition-colors hover:bg-white/[0.05]"
+      /* melo lifts the row under the pointer (scale 1.02) so it reads as the
+         one being carried, not the list reflowing underneath it. */
+      whileDrag={{ scale: 1.02, zIndex: 30 }}
+      className="group relative flex items-center gap-2 rounded-lg px-1 py-1.5 transition-colors hover:bg-white/[0.05]"
     >
       <button
         type="button"
@@ -78,6 +127,7 @@ function QueueReorderRow({
           // Only the grip starts reordering. The rest of the row keeps the
           // browser's native touch scrolling behavior.
           event.stopPropagation();
+          onDragStart();
           controls.start(event);
         }}
         onClick={(event) => event.stopPropagation()}
@@ -297,6 +347,12 @@ export function QueuePanel() {
     const keys = moveQueueRow(upcomingKeys, from, to);
     if (keys) handleReorder(keys);
   };
+
+  // melo's drag autoscroll: the reorder list scrolls itself while a row is
+  // carried near its edges. See useQueueDragAutoscroll for the numbers.
+  const reorderGroupRef = useRef<HTMLUListElement>(null);
+  const draggingRef = useRef(false);
+  useQueueDragAutoscroll(reorderGroupRef, draggingRef);
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -541,6 +597,7 @@ export function QueuePanel() {
               {/* Own scroll area, capped height — long queues used to push the
                   suggestions block into the drag rows and they collided. */}
               <Reorder.Group
+                ref={reorderGroupRef}
                 axis="y"
                 values={upcomingKeys}
                 onReorder={handleReorder}
@@ -559,6 +616,9 @@ export function QueuePanel() {
                     removeFromQueue={removeFromQueue}
                     undoRemoveFromQueue={undoRemoveFromQueue}
                     onMove={moveRow}
+                    onDragStart={() => {
+                      draggingRef.current = true;
+                    }}
                   />
                 ))}
               </Reorder.Group>

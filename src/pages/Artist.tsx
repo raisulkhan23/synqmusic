@@ -7,9 +7,11 @@ import {
 import { useAction } from "convex/react";
 import {
   AlertTriangle,
+  ArrowLeft,
   ChevronDown,
   ChevronUp,
   Disc3,
+  ListMusic,
   Loader2,
   Play,
   Radio,
@@ -22,6 +24,7 @@ import { toast } from "sonner";
 
 import { Shelf } from "@/components/core/shelf";
 import { MediaCard } from "@/components/tracks/MediaCard";
+import { cn } from "@/lib/utils";
 import { RemoteTrackRow } from "@/components/tracks/RemoteTrackRow";
 import { api } from "@/convex/_generated/api";
 import { buildCatalog } from "@/lib/artistCatalog";
@@ -94,6 +97,14 @@ export default function Artist() {
   const [expandedFor, setExpandedFor] = useState<string | null>(null);
   const [kindFilter, setKindFilter] = useState<ReleaseType | "all">("all");
   const [songLimit, setSongLimit] = useState(100);
+  // melo's About card: the bio collapses to three lines until expanded.
+  const [bioExpanded, setBioExpanded] = useState(false);
+  // melo's horizontal tabs: the three catalogue views become panes. Panes
+  // stay MOUNTED (hidden, not unmounted) so switching tabs never re-fires a
+  // provider request or resets the All-songs hydration progress.
+  const [artistTab, setArtistTab] = useState<
+    "popular" | "discography" | "songs"
+  >("popular");
 
   useEffect(() => {
     if (!query) return;
@@ -353,104 +364,157 @@ export default function Artist() {
 
   return (
     <div className="flex flex-col gap-9 sm:gap-12">
-      {/* ── Artist header ─────────────────────────────────────────────── */}
-      <header className="flex flex-col gap-5 sm:flex-row sm:items-end">
+      {/* ── Artist header: melo's hero treatment ─────────────────────────
+          The artwork becomes a blurred, dimmed banner behind the identity
+          block, with a back affordance and the same 28px panel corner the
+          shell uses. All actions and the honest catalogue meta stay. */}
+      <header className="relative overflow-hidden rounded-[var(--radius-panel)] border border-white/[0.06]">
         {artwork ? (
-          <img
-            src={artwork}
-            alt=""
-            className="size-28 shrink-0 rounded-2xl object-cover ring-1 ring-white/10 sm:size-36"
-          />
-        ) : (
-          <span className="flex size-28 shrink-0 items-center justify-center rounded-2xl bg-[rgb(var(--tint)_/_0.12)] text-[rgb(var(--tint))] sm:size-36">
-            <Disc3 className="size-8" />
-          </span>
-        )}
-        <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-semibold tracking-[0.2em] text-[rgb(var(--tint))] uppercase">
-            Artist
-          </p>
-          <h1 className="font-display mt-1 text-2xl font-bold tracking-tight sm:text-4xl">
-            {artistName}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {catalog.loadingReleases
-              ? "Loading discography…"
-              : catalog.releases.length > 0
-                ? `${catalog.releases.length} releases · ${catalogItems.length} songs loaded${
-                    catalog.hasMoreTracks ? " so far" : ""
-                  }`
-                : canPlay
-                  ? `${searchView.catalog.length} songs available`
-                  : "No catalogue available yet"}
-          </p>
-          {catalog.identity?.description ? (
-            <p className="mt-1 line-clamp-2 max-w-xl text-xs text-muted-foreground/80">
-              {catalog.identity.description}
+          <div className="absolute inset-0" aria-hidden="true">
+            <img
+              src={artwork}
+              alt=""
+              className="size-full scale-110 object-cover opacity-35 blur-md"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-[var(--surface-low)] via-black/35 to-black/10" />
+          </div>
+        ) : null}
+        <button
+          type="button"
+          aria-label="Go back"
+          title="Back"
+          onClick={() => navigate(-1)}
+          className="press-98 absolute top-4 left-4 z-20 inline-flex size-9 items-center justify-center rounded-full border border-white/10 bg-black/40 text-foreground backdrop-blur-sm transition-colors hover:bg-black/60"
+        >
+          <ArrowLeft className="size-4" />
+        </button>
+        <div className="relative z-10 flex flex-col gap-5 p-6 sm:flex-row sm:items-end sm:p-8">
+          {artwork ? (
+            <img
+              src={artwork}
+              alt=""
+              className="size-28 shrink-0 rounded-[var(--radius-cover)] object-cover shadow-[0_18px_50px_rgba(0,0,0,0.5)] ring-1 ring-white/10 sm:size-36"
+            />
+          ) : (
+            <span className="flex size-28 shrink-0 items-center justify-center rounded-[var(--radius-cover)] bg-[rgb(var(--tint)_/_0.12)] text-[rgb(var(--tint))] ring-1 ring-white/10 sm:size-36">
+              <Disc3 className="size-8" />
+            </span>
+          )}
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-semibold tracking-[0.2em] text-[rgb(var(--tint))] uppercase">
+              Artist
             </p>
-          ) : null}
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            {canPlay ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() =>
-                    playAll(
-                      // Everything the catalogues have loaded — never a sample.
-                      catalogItems.length > 0 ? catalogItems : searchView.popular,
-                    )
-                  }
-                  className="inline-flex items-center gap-2 rounded-full bg-[rgb(var(--tint))] px-5 py-2.5 text-sm font-bold text-black transition-transform [@media(hover:hover)]:hover:scale-[1.02]"
-                >
-                  <Play className="size-4 fill-current" />
-                  Play
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    shuffleAll(
-                      catalogItems.length > 0
-                        ? catalogItems
-                        : searchView.catalog,
-                    )
-                  }
-                  className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/[0.05] px-4 py-2.5 text-sm font-semibold transition-colors hover:border-[rgb(var(--tint)_/_0.4)]"
-                >
-                  <Shuffle className="size-4" />
-                  Shuffle
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const seed = catalogItems[0] ?? searchView.popular[0];
-                    if (!seed) return;
-                    startRadio(toPlayable(seed), artistName);
-                  }}
-                  className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/[0.05] px-4 py-2.5 text-sm font-semibold transition-colors hover:border-[rgb(var(--tint)_/_0.4)]"
-                >
-                  <Radio className="size-4" />
-                  Radio
-                </button>
-              </>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => void shareArtist()}
-              className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2.5 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <Share2 className="size-4" />
-              Share
-            </button>
-            <Link
-              to={`/search?q=${encodeURIComponent(artistName)}`}
-              className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2.5 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <Search className="size-4" />
-              Search
-            </Link>
+            <h1 className="font-display mt-1 text-2xl font-bold tracking-tight sm:text-4xl">
+              {artistName}
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {catalog.identity?.audience
+                ? `${catalog.identity.audience} · `
+                : ""}
+              {catalog.loadingReleases
+                ? "Loading discography…"
+                : catalog.releases.length > 0
+                  ? `${catalog.releases.length} releases · ${catalogItems.length} songs loaded${
+                      catalog.hasMoreTracks ? " so far" : ""
+                    }`
+                  : canPlay
+                    ? `${searchView.catalog.length} songs available`
+                    : "No catalogue available yet"}
+            </p>
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              {canPlay ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      playAll(
+                        // Everything the catalogues have loaded — never a sample.
+                        catalogItems.length > 0 ? catalogItems : searchView.popular,
+                      )
+                    }
+                    className="press-98 inline-flex items-center gap-2 rounded-full bg-[rgb(var(--tint))] px-5 py-2.5 text-sm font-bold text-black transition-transform [@media(hover:hover)]:hover:scale-[1.02]"
+                  >
+                    <Play className="size-4 fill-current" />
+                    Play
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      shuffleAll(
+                        catalogItems.length > 0
+                          ? catalogItems
+                          : searchView.catalog,
+                      )
+                    }
+                    className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/[0.05] px-4 py-2.5 text-sm font-semibold transition-colors hover:border-[rgb(var(--tint)_/_0.4)]"
+                  >
+                    <Shuffle className="size-4" />
+                    Shuffle
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const seed = catalogItems[0] ?? searchView.popular[0];
+                      if (!seed) return;
+                      startRadio(toPlayable(seed), artistName);
+                    }}
+                    className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/[0.05] px-4 py-2.5 text-sm font-semibold transition-colors hover:border-[rgb(var(--tint)_/_0.4)]"
+                  >
+                    <Radio className="size-4" />
+                    Radio
+                  </button>
+                </>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => void shareArtist()}
+                className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2.5 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <Share2 className="size-4" />
+                Share
+              </button>
+              <Link
+                to={`/search?q=${encodeURIComponent(artistName)}`}
+                className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2.5 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <Search className="size-4" />
+                Search
+              </Link>
+            </div>
           </div>
         </div>
       </header>
+
+      {/* melo's About card: the bio lives in its own titled panel instead of
+          being clamped inside the identity block. */}
+      {catalog.identity?.description ? (
+        <section
+          aria-labelledby="artist-about-title"
+          className="rounded-[var(--radius-panel)] border border-white/[0.06] bg-[var(--surface-container)] p-5"
+        >
+          <h2
+            id="artist-about-title"
+            className="text-[10px] font-semibold tracking-[0.2em] text-muted-foreground uppercase"
+          >
+            About
+          </h2>
+          <p
+            className={cn(
+              "mt-2 text-sm leading-6 text-muted-foreground",
+              !bioExpanded && "line-clamp-3",
+            )}
+          >
+            {catalog.identity.description}
+          </p>
+          <button
+            type="button"
+            onClick={() => setBioExpanded((value) => !value)}
+            className="mt-2 text-xs font-semibold text-[rgb(var(--tint))] hover:underline"
+          >
+            {bioExpanded ? "Show less" : "Show all"}
+          </button>
+        </section>
+      ) : null}
 
       {/* A catalogue that stopped early says so. */}
       {catalog.truncated ? (
@@ -472,7 +536,47 @@ export default function Artist() {
         </p>
       ) : null}
 
+      {/* ── melo's horizontal tabs: Popular / Discography / Songs ────────── */}
+      <nav
+        aria-label="Artist catalogue sections"
+        className="flex items-center gap-1 border-b border-white/[0.06]"
+      >
+        {(
+          [
+            { id: "popular", label: "Popular", icon: Play },
+            { id: "discography", label: "Discography", icon: Disc3 },
+            { id: "songs", label: "All songs", icon: ListMusic },
+          ] as const
+        ).map((tab) => {
+          const active = artistTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setArtistTab(tab.id)}
+              aria-pressed={active}
+              className={cn(
+                "relative flex items-center gap-2 rounded-t-[14px] px-5 py-3 text-[13px] transition-colors",
+                active
+                  ? "bg-white/[0.08] font-semibold text-foreground"
+                  : "font-medium text-muted-foreground hover:bg-white/[0.05] hover:text-foreground",
+              )}
+            >
+              <tab.icon className="size-4" />
+              {tab.label}
+              {active ? (
+                <span
+                  aria-hidden="true"
+                  className="absolute inset-x-4 bottom-0 h-[2px] rounded-full bg-[rgb(var(--tint))]"
+                />
+              ) : null}
+            </button>
+          );
+        })}
+      </nav>
+
       {/* ── Popular: the source's ranking, explicitly a shortcut. */}
+      <div className={cn(artistTab !== "popular" && "hidden")}>
       {popularSource === null ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="size-4 animate-spin" />
@@ -491,7 +595,7 @@ export default function Artist() {
               Ranked by the music source
             </span>
           </div>
-          <div className="flex flex-col gap-0.5">
+          <div className="stagger-in flex flex-col gap-0.5">
             {searchView.popular.map((item, index) => (
               <RemoteTrackRow
                 key={item.id}
@@ -525,8 +629,10 @@ export default function Artist() {
           }
         />
       ) : null}
+      </div>
 
       {/* ── Discography: the artist's actual releases. */}
+      <div className={cn(artistTab !== "discography" && "hidden")}>
       {releaseGroups.length > 0 ? (
         <section aria-labelledby="artist-discography">
           <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
@@ -609,8 +715,10 @@ export default function Artist() {
           Loading the discography…
         </div>
       ) : null}
+      </div>
 
       {/* ── All songs: everything read from those releases. */}
+      <div className={cn(artistTab !== "songs" && "hidden")}>
       {visibleCatalog.length > 0 || catalog.loadingTracks ? (
         <section aria-labelledby="artist-all-songs">
           <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
@@ -656,7 +764,7 @@ export default function Artist() {
               </select>
             </div>
           </div>
-          <div className="flex flex-col gap-0.5">
+          <div className="stagger-in flex flex-col gap-0.5">
             {songsForList.map((item, index) => (
               <RemoteTrackRow
                 key={item.id}
@@ -726,6 +834,7 @@ export default function Artist() {
           </p>
         </section>
       ) : null}
+      </div>
 
       {/* ── Guest appearances, kept out of the artist's own discography. */}
       {searchView.featured.length > 0 ? (
@@ -741,7 +850,7 @@ export default function Artist() {
               Guest features, not {artistName}&apos;s own releases
             </span>
           </div>
-          <div className="flex flex-col gap-0.5">
+          <div className="stagger-in flex flex-col gap-0.5">
             {searchView.featured.slice(0, 20).map((item, index) => (
               <RemoteTrackRow
                 key={item.id}

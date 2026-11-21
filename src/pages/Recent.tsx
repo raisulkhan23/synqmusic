@@ -259,7 +259,7 @@ export default function Recent() {
           No plays match this filter.
         </p>
       ) : (
-        <div className="flex flex-col gap-0.5">
+        <div className="stagger-in flex flex-col gap-0.5">
           {items.map((item, i) => {
             const entry = filtered[i];
             return (

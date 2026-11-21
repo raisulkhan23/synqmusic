@@ -1,0 +1,11 @@
+# Bun runtime configuration.
+#
+# [test].root pins `bun test` to the MAINTAINED suite in `tests/`. Without it,
+# bun walks the whole repo and also picks up `isolate/android-release/tests/` —
+# a frozen snapshot of an older android-release tree whose tests reference
+# files that only exist in the main tree (e.g. src/hooks/useNativeDownloads.ts)
+# and therefore fail there no matter what the main tree does. The snapshot is
+# kept for reference; it is not part of this suite's contract.
+
+[test]
+root = "./tests"

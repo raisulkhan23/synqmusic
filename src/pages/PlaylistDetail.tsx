@@ -687,7 +687,7 @@ export default function PlaylistDetail() {
       )}
 
       {rows.length > 0 ? (
-        <div className="flex flex-col gap-0.5">
+        <div className="stagger-in flex flex-col gap-0.5">
           {rows.length > 5 && (
             <div className="relative mb-3 max-w-sm">
               <SearchIcon className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />

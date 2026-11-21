@@ -50,7 +50,11 @@ describe("artwork leads, everything else follows", () => {
   });
 
   test("artist cards are round, song cards are not", () => {
-    expect(card).toContain('round ? "rounded-full" : "rounded-lg"');
+    // The song corner is the shared --radius-cover token (0.875rem) rather
+    // than a literal — the artist-vs-song distinction is what matters.
+    expect(card).toContain(
+      'round ? "rounded-full" : "rounded-[var(--radius-cover)]"',
+    );
   });
 
   test("artwork is lazy and decoded off the main thread", () => {

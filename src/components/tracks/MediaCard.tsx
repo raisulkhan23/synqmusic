@@ -101,15 +101,18 @@ export function MediaCard({
           }
         }}
         className={cn(
-          "block w-full rounded-xl p-2 text-left transition-colors duration-200",
-          "hover:bg-white/[0.06] focus-visible:bg-white/[0.06] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[rgb(var(--tint))]",
+          // melo card language: rounded-[16px] padding block, surface-step
+          // hover with a -4px lift, and a cover corner a step tighter than
+          // the card so the artwork reads as an inset object.
+          "press-98 block w-full rounded-[var(--radius-card)] p-2 text-left transition-[color,background-color,border-color,transform] duration-200 hover:-translate-y-1",
+          "hover:bg-[var(--surface-container)] focus-visible:bg-[var(--surface-container)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[rgb(var(--tint))]",
         )}
       >
         <div className="relative">
           <div
             className={cn(
-              "relative aspect-square w-full overflow-hidden bg-white/[0.04] ring-1 ring-white/10",
-              round ? "rounded-full" : "rounded-lg",
+              "relative aspect-square w-full overflow-hidden bg-white/[0.04] ring-1 ring-white/10 transition-transform duration-200",
+              round ? "rounded-full" : "rounded-[var(--radius-cover)]",
             )}
           >
             {item.thumbnail ? (

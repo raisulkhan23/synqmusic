@@ -140,6 +140,33 @@
   /* dynamic album-art tint (overridden by the player); default = brand brass */
   --tint: 227 182 98;
 
+  /* ── Surface container scale (ported from the melo reference) ─────────────
+     melo builds its floating-panel composition from five elevation steps and
+     times its motion on one emphasized curve. Both are ported here in SYNQ's
+     own warm-ink palette rather than melo's zinc greys — the GEOMETRY and the
+     TIMING are the reference, not its grey. Components should pick the step
+     that matches their nesting depth instead of inventing alpha whites. */
+  --surface-lowest: oklch(0.125 0.007 76);
+  --surface-low: oklch(0.163 0.007 76);
+  --surface-container: oklch(0.19 0.008 76);
+  --surface-high: oklch(0.225 0.009 76);
+  --surface-highest: oklch(0.255 0.009 76);
+  /* Corner of the big floating panels (content card, playbar). melo's 28px
+     corner is the signature of its desktop composition. */
+  --radius-panel: 1.75rem;
+  --radius-card: 1rem;
+  --radius-cover: 0.875rem;
+  /* M3 emphasized: the single curve melo times everything on. SYNQ's
+     --ease-out stays the default for enter/exit; this is for large surfaces
+     (panels, players, drawers) where the flatter start reads as calmer. */
+  --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+  --duration-panel-m3: 350ms;
+  /* Hover responses land in ~70ms so rows and cards feel instant, then ease
+     out slower — melo's hover-in/out pair. */
+  --ease-hover-in: cubic-bezier(0.1, 0.9, 0.2, 1);
+  --duration-hover-in: 70ms;
+  --duration-hover-out: 100ms;
+
   /* Glass opacities, driven by the card transparency slider in
      Settings → Appearance (see src/lib/cardTransparency.ts). Higher = more
      see-through. */
@@ -2043,4 +2070,115 @@ html.reduce-motion *::after {
   .glass-card::before {
     content: none !important;
   }
+}
+
+/* ── melo-derived motion utilities ──────────────────────────────────────────
+   The staggered entrance and the press response are the two melo signatures
+   that make lists feel hand-set rather than printed. Delays run 30ms per row
+   up to eight rows (melo's exact ladder); past that every later row lands
+   together, so a 200-row list does not take a second to finish entering. */
+
+@keyframes fade-up-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.stagger-in > * {
+  animation: fade-up-in var(--duration-panel-m3) var(--ease-emphasized)
+    backwards;
+}
+.stagger-in > *:nth-child(2) { animation-delay: 30ms; }
+.stagger-in > *:nth-child(3) { animation-delay: 60ms; }
+.stagger-in > *:nth-child(4) { animation-delay: 90ms; }
+.stagger-in > *:nth-child(5) { animation-delay: 120ms; }
+.stagger-in > *:nth-child(6) { animation-delay: 150ms; }
+.stagger-in > *:nth-child(7) { animation-delay: 180ms; }
+.stagger-in > *:nth-child(8) { animation-delay: 210ms; }
+
+/* Press response for rows and cards: a quick compress on activation, the
+   same 0.98 melo uses. transform-only, so it composites on the GPU. */
+.press-98 {
+  transition: transform 0.12s cubic-bezier(0.2, 0, 0, 1);
+}
+.press-98:active {
+  transform: scale(0.98);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stagger-in > * {
+    animation: none;
+  }
+  .press-98:active {
+    transform: none;
+  }
+}
+
+/* ── melo's playbar title marquee ───────────────────────────────────────────
+   Runs only when the title overflows (the component measures and sets
+   --marquee-shift). The travel rests at both ends, and the right edge fades
+   under a 24px mask — the same treatment melo gives its playbar titles. */
+@keyframes title-marquee {
+  0%,
+  12% {
+    transform: translateX(0);
+  }
+  88%,
+  100% {
+    transform: translateX(calc(-1 * var(--marquee-shift, 0px)));
+  }
+}
+
+.title-marquee-outer {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    #000 0%,
+    #000 calc(100% - 24px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    #000 0%,
+    #000 calc(100% - 24px),
+    transparent 100%
+  );
+}
+
+.title-marquee-run {
+  animation: title-marquee 11s var(--ease-emphasized) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .title-marquee-run {
+    animation: none;
+  }
+}
+
+/* ── melo's morphing play/pause glyph ───────────────────────────────────────
+   One SVG, two paths whose `d` attribute transitions between the play
+   triangle and the two pause bars. Chromium and Firefox animate the `d`
+   property; Safari falls back to an instant swap, which is still correct —
+   the same graceful degrade melo ships. The `.playing` class (set by the
+   transport) selects the bar shapes. */
+.play-pause-morph path {
+  fill: currentColor;
+  stroke-linecap: round;
+  transition: d 400ms var(--ease-emphasized);
+}
+.play-pause-morph .morph-path-1 {
+  d: path("M 8.8 5.8 L 13.5 8.8 L 13.5 15.2 L 8.8 18.2 Z");
+}
+.play-pause-morph .morph-path-2 {
+  d: path("M 13.5 8.8 L 18 12 L 18 12 L 13.5 15.2 Z");
+}
+.play-pause-morph.playing .morph-path-1 {
+  d: path("M 6.8 5.8 L 9.2 5.8 L 9.2 18.2 L 6.8 18.2 Z");
+}
+.play-pause-morph.playing .morph-path-2 {
+  d: path("M 14.8 5.8 L 17.2 5.8 L 17.2 18.2 L 14.8 18.2 Z");
 }

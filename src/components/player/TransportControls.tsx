@@ -8,8 +8,6 @@ import { usePlayerStore } from "@/store/player";
 import { toast } from "sonner";
 import {
   Loader2,
-  Pause,
-  Play,
   Repeat,
   Repeat1,
   Shuffle,
@@ -128,10 +126,23 @@ export function TransportControls({
       >
         {isBuffering && current ? (
           <Loader2 className="size-[18px] animate-spin" />
-        ) : isPlaying ? (
-          <Pause className="size-[18px] stroke-[2.4]" />
         ) : (
-          <Play className="ml-0.5 size-[18px] fill-current stroke-[1.8]" />
+          /* melo's morphing glyph: one SVG whose two paths transition their
+             `d` between the play triangle and the pause bars (pure CSS, see
+             .play-pause-morph in index.css). The whole 24px viewBox shifts
+             0.5px left when playing so the two bars stay optically centred. */
+          <svg
+            viewBox="0 0 24 24"
+            className={cn(
+              "play-pause-morph size-[19px]",
+              isPlaying && "playing -ml-[1px]",
+            )}
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path className="morph-path-1" d="" />
+            <path className="morph-path-2" d="" />
+          </svg>
         )}
       </button>
       <IconButton disabled={!current} onClick={next} label="Next">

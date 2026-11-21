@@ -4,6 +4,7 @@ import { useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { SeekBar } from "@/components/player/SeekBar";
 import { TransportControls } from "@/components/player/TransportControls";
+import { VisualizerCanvas } from "@/components/player/VisualizerCanvas";
 import { VolumeControl } from "@/components/player/VolumeControl";
 import { accentFromString, dominantColor } from "@/lib/covers";
 import { formatTime } from "@/lib/format";
@@ -702,15 +703,24 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
            the gap below it at every breakpoint. Asymmetric margins made the top
            edge sit flush against the content above on tablets, and the 8px
            mobile gap was swallowed by the player's outer glow. */
-          "mobile-player liquid-glass dynamic-island isolate z-40 mx-auto my-3 flex h-[68px] w-full min-w-0 max-w-[28rem] shrink-0 items-center gap-2 self-center overflow-hidden rounded-[1.6rem] border border-white/[0.1] px-2.5 transition-ui duration-200 sm:h-auto sm:w-auto sm:max-w-none sm:rounded-none sm:border-x-0 sm:border-b-0 sm:px-4 sm:gap-3 lg:w-[min(92vw,760px)] lg:rounded-[2rem] lg:border lg:border-white/10 lg:px-3 lg:py-2 lg:shadow-[0_18px_60px_rgba(0,0,0,0.38)] [@media(hover:hover)]:lg:hover:scale-[1.01]",
+          "mobile-player liquid-glass dynamic-island isolate z-40 mx-auto my-3 flex h-[68px] w-full min-w-0 max-w-[28rem] shrink-0 items-center gap-2 self-center overflow-hidden rounded-[1.6rem] border border-white/[0.1] px-2.5 transition-ui duration-200 sm:h-auto sm:w-auto sm:max-w-none sm:rounded-none sm:border-x-0 sm:border-b-0 sm:px-4 sm:gap-3 lg:w-[min(96vw,1280px)] lg:min-h-[80px] lg:rounded-[var(--radius-panel)] lg:border lg:border-white/[0.08] lg:px-5 lg:py-2.5 lg:shadow-[0_24px_80px_rgba(0,0,0,0.45)] [@media(hover:hover)]:lg:hover:scale-[1.005]",
           compact
-            ? "sm:min-h-[60px] lg:min-h-[52px] lg:py-1"
-            : "sm:min-h-[76px] lg:min-h-[68px] lg:py-2",
+            ? "sm:min-h-[60px] lg:min-h-[56px] lg:py-1.5"
+            : "sm:min-h-[76px] lg:min-h-[80px] lg:py-2.5",
         )}
       >
         <div
           className="mobile-island-aura pointer-events-none absolute inset-0"
           aria-hidden="true"
+        />
+
+        {/* melo's playbar signature: a spectrum wash behind the whole bar.
+            The canvas honours the visualizer toggle and performance mode on
+            its own; here it is decoration, so it never catches pointers and
+            stays quiet enough to read under every control. */}
+        <VisualizerCanvas
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 bottom-0 z-0 hidden h-12 opacity-[0.14] sm:block"
         />
 
         {/* now playing */}
@@ -739,14 +749,13 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
           </button>
           <div className="min-w-0 flex-1 overflow-hidden">
             <div className="flex min-w-0 items-center gap-1.5">
-              <p
+              <MarqueeText
+                text={current.title}
                 className={cn(
-                  "min-w-0 flex-1 truncate text-sm font-semibold",
+                  "min-w-0 flex-1 text-sm font-semibold",
                   isPlaying && "text-[rgb(var(--tint))]",
                 )}
-              >
-                {current.title}
-              </p>
+              />
               <span className="mobile-live-cue" aria-hidden="true">
                 <i />
                 <i />
@@ -809,11 +818,13 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
         </div>
 
         {/* transport + seek — timestamps are desktop-only; on mobile the
-            seekbar sits alone so prev/play/next never collide with them */}
+            seekbar sits alone so prev/play/next never collide with them.
+            The seek row grows into the wider melo-style bar instead of
+            stopping at 576px (max-w-xl). */}
         <div className="relative z-10 flex w-auto shrink-0 flex-col items-center gap-0.5 sm:min-w-0 sm:flex-1 sm:basis-0 lg:min-w-0">
           <TransportControls className="sm:hidden" compact />
           <TransportControls className="hidden sm:grid" />
-          <div className="hidden w-full max-w-xl items-center gap-2 sm:flex">
+          <div className="hidden w-full max-w-2xl items-center gap-2 sm:flex">
             <span className="w-11 shrink-0 text-right text-[10px] font-medium tabular-nums text-muted-foreground">
               {formatTime(currentTime)}
             </span>
@@ -871,5 +882,79 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
         </div>
       </footer>
     </>
+  );
+}
+
+/**
+ * melo's playbar title: a single line that, when it overflows, scrolls
+ * slowly end-to-end under a right-edge fade instead of truncating with an
+ * ellipsis. The shift distance is measured (scrollWidth vs clientWidth) and
+ * passed to the keyframes as `--marquee-shift`, so the animation always
+ * travels exactly the hidden amount and rests at each end before turning
+ * around — no fractional letters stranded mid-fade.
+ */
+function MarqueeText({
+  text,
+  className,
+}: {
+  text: string;
+  className?: string;
+}) {
+  const outerRef = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLParagraphElement>(null);
+  const [shift, setShift] = useState(0);
+
+  useEffect(() => {
+    const measure = () => {
+      const outer = outerRef.current;
+      const inner = innerRef.current;
+      if (!outer || !inner) return;
+      const over = inner.scrollWidth - outer.clientWidth;
+      // A 4px tolerance keeps a just-fitting title from crawling.
+      setShift(over > 4 ? over : 0);
+    };
+    measure();
+    // happy-dom (the test environment) has no ResizeObserver; a bare
+    // reference would throw inside the render tree and take the whole shell
+    // down. Without the observer the marquee still measures once on mount
+    // and on window resize — it just misses container-only resizes, which
+    // only matter in a real browser that has the API anyway.
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", measure);
+      return () => {
+        window.removeEventListener("resize", measure);
+      };
+    }
+    const observer = new ResizeObserver(measure);
+    if (outerRef.current) observer.observe(outerRef.current);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [text]);
+
+  return (
+    <div
+      ref={outerRef}
+      className="title-marquee-outer min-w-0 flex-1 overflow-hidden"
+      aria-hidden={false}
+    >
+      <p
+        ref={innerRef}
+        className={cn(
+          "inline-block whitespace-nowrap",
+          shift > 0 && "title-marquee-run",
+          className,
+        )}
+        style={
+          shift > 0
+            ? ({ "--marquee-shift": `${shift + 24}px` } as React.CSSProperties)
+            : undefined
+        }
+      >
+        {text}
+      </p>
+    </div>
   );
 }

@@ -1,6 +1,6 @@
-import { Link, useParams } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
 import { useAction } from "convex/react";
-import { Disc3, Loader2, Play, Search } from "lucide-react";
+import { ArrowLeft, Disc3, Loader2, Play, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -34,6 +34,7 @@ import { readTracklist, useArtistCatalog } from "@/hooks/useArtistCatalog";
  * for anything the release list does not contain, and says so when it is used.
  */
 export default function Album() {
+  const navigate = useNavigate();
   const params = useParams();
   const route = useMemo(
     () => parseAlbumRoute(params.artist, params.album),
@@ -262,19 +263,42 @@ export default function Album() {
 
   return (
     <div className="flex flex-col gap-9 sm:gap-12">
-      <header className="flex flex-col gap-5 sm:flex-row sm:items-end">
+      {/* melo's hero treatment: the artwork becomes a blurred banner behind
+          the identity block, with a back affordance — same panel corner as
+          the artist page and the shell. */}
+      <header className="relative overflow-hidden rounded-[var(--radius-panel)] border border-white/[0.06]">
         {artwork ? (
-          <img
-            src={artwork}
-            alt=""
-            className="size-28 shrink-0 rounded-2xl object-cover ring-1 ring-white/10 sm:size-40"
-          />
-        ) : (
-          <span className="flex size-28 shrink-0 items-center justify-center rounded-2xl bg-[rgb(var(--tint)_/_0.12)] text-[rgb(var(--tint))] sm:size-40">
-            <Disc3 className="size-8" />
-          </span>
-        )}
-        <div className="min-w-0 flex-1">
+          <div className="absolute inset-0" aria-hidden="true">
+            <img
+              src={artwork}
+              alt=""
+              className="size-full scale-110 object-cover opacity-35 blur-md"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-[var(--surface-low)] via-black/35 to-black/10" />
+          </div>
+        ) : null}
+        <button
+          type="button"
+          aria-label="Go back"
+          title="Back"
+          onClick={() => navigate(-1)}
+          className="press-98 absolute top-4 left-4 z-20 inline-flex size-9 items-center justify-center rounded-full border border-white/10 bg-black/40 text-foreground backdrop-blur-sm transition-colors hover:bg-black/60"
+        >
+          <ArrowLeft className="size-4" />
+        </button>
+        <div className="relative z-10 flex flex-col gap-5 p-6 sm:flex-row sm:items-end sm:p-8">
+          {artwork ? (
+            <img
+              src={artwork}
+              alt=""
+              className="size-28 shrink-0 rounded-[var(--radius-cover)] object-cover shadow-[0_18px_50px_rgba(0,0,0,0.5)] ring-1 ring-white/10 sm:size-40"
+            />
+          ) : (
+            <span className="flex size-28 shrink-0 items-center justify-center rounded-[var(--radius-cover)] bg-[rgb(var(--tint)_/_0.12)] text-[rgb(var(--tint))] ring-1 ring-white/10 sm:size-40">
+              <Disc3 className="size-8" />
+            </span>
+          )}
+          <div className="min-w-0 flex-1">
           <p className="text-[10px] font-semibold tracking-[0.2em] text-[rgb(var(--tint))] uppercase">
             {release?.kind === "single"
               ? "Single"
@@ -321,6 +345,7 @@ export default function Album() {
               Search
             </Link>
           </div>
+        </div>
         </div>
       </header>
 

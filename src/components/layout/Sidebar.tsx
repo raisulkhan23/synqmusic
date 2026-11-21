@@ -64,7 +64,7 @@ export function Sidebar() {
           animate={{ width: 72, opacity: 1 }}
           exit={{ width: 240, opacity: 0 }}
           transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-          className="liquid-glass hidden w-[72px] shrink-0 flex-col items-center overflow-hidden border-r border-white/[0.06] py-3 lg:flex"
+          className="liquid-glass my-2 ml-2 hidden w-[72px] shrink-0 flex-col items-center overflow-hidden rounded-[var(--radius-panel)] border border-white/[0.06] py-3 lg:flex"
         >
           <Logo
             to="/home"
@@ -204,7 +204,7 @@ export function Sidebar() {
           animate={{ width: 240, opacity: 1 }}
           exit={{ width: 72, opacity: 0 }}
           transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-          className="liquid-glass hidden w-60 shrink-0 flex-col border-r border-white/[0.06] lg:flex"
+          className="liquid-glass my-2 ml-2 hidden w-60 shrink-0 flex-col rounded-[var(--radius-panel)] border border-white/[0.06] lg:flex"
         >
           <div className="flex h-16 items-center justify-between px-5">
             <Logo to="/home" />

@@ -7,6 +7,7 @@ import {
   TrackActionsMenu,
   useTrackActions,
 } from "@/components/tracks/useTrackActions";
+import { Equalizer } from "@/components/player/Equalizer";
 import { usePlayerStore } from "@/store/player";
 import { Heart, Loader2, Music4, Pause, Play, Radio } from "lucide-react";
 import type { ReactNode } from "react";
@@ -78,15 +79,23 @@ export function RemoteTrackRow({
         }}
         className={cn(
           // Touch layout: taller, roomier row so a thumb tap is easy and the
-          // text never feels squeezed. Pointer devices keep the dense list row.
-          "group relative flex min-h-14 select-none items-center gap-3 rounded-xl px-3 py-2.5 transition-colors hover:bg-white/[0.05] active:bg-white/[0.08] sm:min-h-0 sm:py-1.5",
-          isCurrent && "bg-white/[0.04]",
+          // text never feels squeezed. Pointer devices adopt melo's row
+          // language: a 20px-radius fill that appears in ~70ms (instant), a
+          // 0.98 press compress, and a surface-container hover rather than a
+          // white-alpha overlay — the row reads as an elevated step of the
+          // same material, not a highlight painted on top.
+          "press-98 group relative flex min-h-14 select-none items-center gap-3 rounded-[1.25rem] px-3 py-2.5 transition-colors hover:bg-[var(--surface-container)] active:bg-[var(--surface-high)] sm:min-h-0 sm:py-1.5",
+          isCurrent && "bg-[var(--surface-container)]",
         )}
       >
         {/* Rank / hover-to-play is pointless on touch and only adds clutter. */}
         <div className="relative hidden shrink-0 items-center justify-center sm:flex">
           {resolving ? (
             <Loader2 className="size-4 animate-spin text-[rgb(var(--tint))]" />
+          ) : isCurrent && isPlaying ? (
+            /* melo's playing-row signature: the rank becomes live EQ bars, so
+               the one song actually sounding is identifiable without reading. */
+            <Equalizer className="h-3.5" />
           ) : (
             <span className="text-sm tabular-nums text-muted-foreground/60">
               {index}

@@ -235,7 +235,7 @@ export default function Liked() {
               Shuffle
             </button>
           </div>
-          <div className="flex flex-col gap-0.5">
+          <div className="stagger-in flex flex-col gap-0.5">
             {remoteLikes.map((row, i) => (
               <RemoteTrackRow
                 key={row.trackId}
