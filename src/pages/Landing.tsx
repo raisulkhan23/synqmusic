@@ -555,11 +555,11 @@ export default function Landing() {
               <ArrowRight className="size-4 transition-transform [@media(hover:hover)]:group-hover:translate-x-1" />
             </Link>
             <a
-              href={WINDOWS_INSTALLER_URL}
+              href="#downloads"
               className="inline-flex items-center gap-2 rounded-full border border-white/10 px-5 py-3 text-sm font-semibold text-muted-foreground transition-colors hover:border-white/20 hover:text-foreground"
             >
               <Download className="size-4" />
-              Download for Windows
+              Download app
             </a>
             <a
               href="#experience"
@@ -919,7 +919,7 @@ export default function Landing() {
               Download .apk <ArrowRight className="size-4 transition-transform [@media(hover:hover)]:group-hover:translate-x-1" />
             </span>
           </a>
-          <div className="flex flex-col gap-4 rounded-2xl border border-white/[0.07] bg-white/[0.03] p-6">
+          <div className="group flex flex-col gap-4 rounded-2xl border border-white/[0.07] bg-white/[0.03] p-6">
             <span className="flex size-12 items-center justify-center rounded-xl bg-brand/12 text-brand ring-1 ring-brand/20">
               <Download className="size-6" />
             </span>
@@ -931,7 +931,7 @@ export default function Landing() {
               </p>
             </div>
             <div className="mt-auto">
-              <InstallAppButton />
+              <InstallAppButton variant="link" />
             </div>
           </div>
         </div>

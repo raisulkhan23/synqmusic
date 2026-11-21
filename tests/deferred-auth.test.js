@@ -792,27 +792,46 @@ describe("SYNQ can be downloaded from the landing page", () => {
   const landing = readSource("src/pages/Landing.tsx");
   const button = readSource("src/components/pwa/InstallAppButton.tsx");
 
-  test("the landing page renders the install button", () => {
+  test("the landing page renders the install button inside the labelled PWA card", () => {
     expect(landing).toMatch(/import \{ InstallAppButton \}/);
-    expect(landing).toMatch(/<InstallAppButton \/>/);
+    expect(landing).toMatch(/<InstallAppButton variant="link" \/>/);
+    // Exactly ONE render site: the Web (PWA) card. Anywhere else (the hero,
+    // the nav) is where "Download" means "the app", not "a browser install".
+    const count = (landing.match(/<InstallAppButton/g) ?? []).length;
+    expect(count).toBe(1);
+    // The card carries the group class so the link's arrow slides on hover,
+    // matching the Windows/Android cards' interaction.
+    expect(landing).toMatch(/"group flex flex-col gap-4 rounded-2xl/);
   });
 
-  test("the download CTAs lead to the desktop installer, not only the PWA", () => {
-    // The hero used to render the PWA install button as "Download app", so the
+  test("the hero's Download button routes to the download section, not a PWA install", () => {
+    // The hero once rendered the PWA install button as "Download app", so the
     // most prominent download on the page installed a browser app and never
-    // reached the .exe. The installer CTA must be there in its place.
+    // reached the installers. The hero CTA now scrolls to the download
+    // section, where Windows, Android and PWA are offered side by side.
+    const hero = landing.slice(0, landing.indexOf('id="experience"'));
+    expect(hero).toMatch(/href="#downloads"/);
+    expect(hero).toMatch(/Download app/);
+    // And no PWA-install affordance is RENDERED in the hero — the import at
+    // the top of the file is fine; a JSX usage is not.
+    expect(hero).not.toMatch(/<InstallAppButton/);
+  });
+
+  test("the download CTAs still lead to the desktop installer", () => {
     expect(landing).toMatch(/const WINDOWS_INSTALLER_URL =\s*\n?\s*"https:\/\/github\.com\/raisulkhan23\/synqmusic\/releases\/latest\/download\/synq-windows-setup\.exe"/);
     const installerLinks = (
       landing.match(/href=\{WINDOWS_INSTALLER_URL\}/g) ?? []
     ).length;
+    // The mid-page CTA and the Windows card both reach the .exe directly.
     expect(installerLinks).toBeGreaterThanOrEqual(2);
     expect(landing).toMatch(/Download for Windows/);
   });
 
   test("the PWA option stays available where it is labelled as one", () => {
-    // Still the right answer for mobile/web visitors — it just must not be the
-    // page's only download, and it has to sit in the explicitly-labelled card.
-    const count = (landing.match(/<InstallAppButton \/>/g) ?? []).length;
+    // Still the right answer for mobile/web visitors — it just must not be
+    // the page's only download, and it has to sit in the explicitly-labelled
+    // card, styled like the other cards' link CTAs.
+    const count = (landing.match(/<InstallAppButton/g) ?? []).length;
     expect(count).toBeGreaterThanOrEqual(1);
   });
 
