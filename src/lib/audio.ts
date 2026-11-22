@@ -144,7 +144,28 @@ export function setDeckRate(rate: number): void {
   if (typeof window === "undefined") return;
   const d = ensureDecks();
   deckRate = Math.min(2, Math.max(0.5, rate));
+  // The preserving "Speed" slider owns the rate now — exactly what the
+  // fullscreen speed dropdown has always meant.
+  tapeMode = false;
   applyDeckRateAndPitch(d);
+  notifyEqChange();
+}
+
+/**
+ * "Speed (pitch)": tape-style speed that raises/lowers the key as it moves.
+ * Takes ownership of the rate (mutually exclusive with the preserving slider,
+ * as in melo) and disables pitch preservation. Any pitch shift rides on top.
+ */
+export function setTapeSpeed(speed: number): void {
+  if (typeof window === "undefined") return;
+  const d = ensureDecks();
+  deckRate = Math.min(2, Math.max(0.5, speed));
+  // melo's slider reads 1.00x as "off": exactly 1.0 hands the rate back to
+  // the preserving mode, so the panel's two sliders can both legitimately
+  // show 1.00x only when nothing is active.
+  tapeMode = deckRate !== 1;
+  applyDeckRateAndPitch(d);
+  notifyEqChange();
 }
 
 /**
@@ -157,6 +178,7 @@ export function setDeckPitch(semitones: number): void {
   const d = ensureDecks();
   deckPitch = Math.min(12, Math.max(-12, Math.round(semitones)));
   applyDeckRateAndPitch(d);
+  notifyEqChange();
 }
 
 /** The listener's "speed changes keep the key" preference (used at pitch 0). */
@@ -165,12 +187,15 @@ export function setRatePreservesPitch(preserve: boolean): void {
   const d = ensureDecks();
   ratePreservesPitch = preserve;
   applyDeckRateAndPitch(d);
+  notifyEqChange();
 }
 
 function applyDeckRateAndPitch(d: Record<"a" | "b", Deck>): void {
-  const shifted = deckPitch !== 0;
   // The pitch shift rides ON the rate: rate × 2^(semitones/12). Clamped to a
-  // range every browser accepts.
+  // range every browser accepts. Preservation is disabled whenever a pitch
+  // shift is active (it would undo the shift) or the tape mode owns the rate;
+  // otherwise the listener's keep-the-key preference rules.
+  const shifted = deckPitch !== 0 || tapeMode;
   const effective = Math.min(
     4,
     Math.max(0.25, deckRate * Math.pow(2, deckPitch / 12)),
@@ -211,6 +236,21 @@ export function getDeckPitch(): number {
 /** The current preserve-pitch preference. */
 export function getRatePreservesPitch(): boolean {
   return ratePreservesPitch;
+}
+
+/** The rate shown by the preserving "Speed" slider (1.0 when tape mode owns it). */
+export function getSpeed(): number {
+  return tapeMode ? 1 : deckRate;
+}
+
+/** The rate shown by the tape-style "Speed (pitch)" slider (1.0 otherwise). */
+export function getTapeSpeed(): number {
+  return tapeMode ? deckRate : 1;
+}
+
+/** Whether the tape-style speed mode currently owns the rate. */
+export function getTapeMode(): boolean {
+  return tapeMode;
 }
 
 /**
@@ -397,6 +437,22 @@ function applyDistortionMix(amount: number): { wet: number; dry: number } {
 }
 
 /**
+ * Gentle harmonic-saturation curve for the enhancer (melo's
+ * `_makeHarmonicCurve`): a cubic softening term rather than hard folding, so
+ * low amounts add warmth instead of audible clipping.
+ */
+function makeHarmonicCurve(amount: number): Float32Array<ArrayBuffer> {
+  const k = Math.max(0, amount) * 0.02;
+  const samples = 1024;
+  const curve = new Float32Array(samples);
+  for (let i = 0; i < samples; i++) {
+    const x = (i * 2) / samples - 1;
+    curve[i] = x - k * Math.pow(x, 3);
+  }
+  return curve;
+}
+
+/**
  * Configure the normalization nodes for the current toggle state.
  *
  * OFF must be TRANSPARENT, not "off but still limiting": the limiter sits in
@@ -506,16 +562,35 @@ let gainOut: GainNode | null = null;
 
 // --- post-effect stage: dry path + vibe taps + normalization ------------------
 // After the effect chain the signal splits: a dry path (which the distortion
-// tap ducks when active), the reverb and distortion taps in parallel, and then
-// volume normalization (a gain the RMS loop steers, followed by a brickwall
-// limiter) before the analyser.
+// tap ducks when active), the reverb, echo and distortion taps in parallel,
+// and then the user's volume gain, volume normalization (a gain the RMS loop
+// steers, followed by a brickwall limiter) before the analyser. Every path —
+// dry AND taps — sums at the user gain, so the gain slider and the limiter
+// hear exactly what the listener hears (melo's single master-gain sum).
 let postFxDry: GainNode | null = null;
 let reverbConvolver: ConvolverNode | null = null;
 let reverbWet: GainNode | null = null;
 let distortionShaper: WaveShaperNode | null = null;
 let distortionWet: GainNode | null = null;
+let echoDelay: DelayNode | null = null;
+let echoFeedback: GainNode | null = null;
+let echoWet: GainNode | null = null;
+let userGain: GainNode | null = null;
 let normGain: GainNode | null = null;
 let normLimiter: DynamicsCompressorNode | null = null;
+
+// --- enhancer chain nodes (melo's HQ chain, between the decks and the EQ) -----
+// Wired in ONLY while enabled: deck gains connect to `enhancerIn` and the
+// chain hands off to the EQ stage. When disabled the decks connect straight
+// to the EQ, exactly as before the enhancer existed — "off" must be the same
+// graph the app shipped with.
+let enhancerIn: GainNode | null = null;
+let enhancerComp: DynamicsCompressorNode | null = null;
+let enhancerBass: BiquadFilterNode | null = null;
+let enhancerVocal: BiquadFilterNode | null = null;
+let enhancerAir: BiquadFilterNode | null = null;
+let enhancerSat: WaveShaperNode | null = null;
+let enhancerLimiter: DynamicsCompressorNode | null = null;
 
 // User EQ state (persisted by settings; applied whenever the graph exists)
 let eqBass = 0; // dB
@@ -530,11 +605,41 @@ const eqBands: number[] = EQ_BAND_FREQUENCIES.map(() => 0); // dB per band
 // Pitch is tape-style: the deck's effective rate becomes rate × 2^(n/12) with
 // pitch preservation disabled, so a positive value genuinely raises the key
 // (the Nightcore mechanism) rather than resampling it back to the original.
+//
+// Speed is ONE rate with TWO modes, which is what melo's "Speed" and
+// "Speed (pitch)" sliders really are: the preserving browser rate, or the
+// tape-style rate that drags the key along. The mode flag decides which of
+// the panel's two sliders owns the value (they are mutually exclusive, as in
+// melo) — but the RATE itself is a single number, so the fullscreen speed
+// dropdown and every other existing `setDeckRate` consumer keep their exact
+// rate × pitch composition.
 let deckRate = 1;
+let tapeMode = false; // true = "Speed (pitch)" owns the rate; speed drags the key
 let deckPitch = 0; // semitones, -12..+12
 let ratePreservesPitch = true; // the user's "speed keeps the key" preference
 let reverbMix = 0; // 0..1 wet level of the room simulation
 let distortionAmount = 0; // 0..100
+let echoAmount = 0; // 0..100 wet level of the echo tap
+let volumeGain = 1; // 0..2 — melo's "volume gain", pre-limiter output boost
+
+// --- enhancer (melo's "High Quality" chain, renamed) ---------------------------
+export type EnhancerEngineId = "harmonic" | "air" | "depth";
+
+interface EnhancerSettings {
+  engine: EnhancerEngineId;
+  /** -50..50, percentage-style like melo's knobs. */
+  vocal: number;
+  air: number;
+  bass: number;
+}
+
+let enhancerEnabled = false;
+let enhancerSettings: EnhancerSettings = {
+  engine: "harmonic",
+  vocal: 0,
+  air: 0,
+  bass: 0,
+};
 
 // --- volume normalization -----------------------------------------------------
 let volumeNormalization = false;
@@ -720,6 +825,31 @@ export function ensureGraph(): boolean {
       distortionWet = null;
     }
 
+    // Echo tap: a feedback delay (melo's values — 300 ms, 35% regen), created
+    // guarded like the other taps: a missing DelayNode must cost the echo,
+    // never the graph.
+    try {
+      echoDelay = audioCtx.createDelay(1.0);
+      echoDelay.delayTime.value = 0.3;
+      echoFeedback = audioCtx.createGain();
+      echoFeedback.gain.value = 0.35;
+      echoWet = audioCtx.createGain();
+      echoWet.gain.value = echoAmount / 100;
+      echoDelay.connect(echoFeedback);
+      echoFeedback.connect(echoDelay);
+    } catch {
+      echoDelay = null;
+      echoFeedback = null;
+      echoWet = null;
+    }
+
+    // The user's volume gain: every path (dry + taps) sums here, before
+    // normalization and the limiter — so a >100% boost is still guarded
+    // against clipping, and 0% really is silence. Unguarded like postFxDry:
+    // createGain exists in every WebAudio implementation.
+    userGain = audioCtx.createGain();
+    userGain.gain.value = volumeGain;
+
     try {
       normGain = audioCtx.createGain();
       normGain.gain.value = 1;
@@ -728,6 +858,50 @@ export function ensureGraph(): boolean {
     } catch {
       normGain = null;
       normLimiter = null;
+    }
+
+    // Enhancer chain (melo's HQ chain): compressor → low shelf → vocal
+    // peaking → air shelf → harmonic saturation → brickwall limiter. Guarded
+    // as one unit — a missing DynamicsCompressor or WaveShaper disables the
+    // enhancer for the session but leaves the standard graph untouched, and
+    // the decks keep their direct route to the EQ.
+    try {
+      enhancerIn = audioCtx.createGain();
+      enhancerComp = audioCtx.createDynamicsCompressor();
+      enhancerBass = audioCtx.createBiquadFilter();
+      enhancerBass.type = "lowshelf";
+      enhancerBass.frequency.value = 80;
+      enhancerVocal = audioCtx.createBiquadFilter();
+      enhancerVocal.type = "peaking";
+      enhancerVocal.frequency.value = 2500;
+      enhancerVocal.Q.value = 1.2;
+      enhancerAir = audioCtx.createBiquadFilter();
+      enhancerAir.type = "highshelf";
+      enhancerAir.frequency.value = 9000;
+      enhancerSat = audioCtx.createWaveShaper();
+      enhancerSat.oversample = "2x";
+      enhancerLimiter = audioCtx.createDynamicsCompressor();
+      enhancerLimiter.threshold.value = -1;
+      enhancerLimiter.knee.value = 0;
+      enhancerLimiter.ratio.value = 20;
+      enhancerLimiter.attack.value = 0.005;
+      enhancerLimiter.release.value = 0.05;
+      enhancerIn.connect(enhancerComp);
+      enhancerComp.connect(enhancerBass);
+      enhancerBass.connect(enhancerVocal);
+      enhancerVocal.connect(enhancerAir);
+      enhancerAir.connect(enhancerSat);
+      enhancerSat.connect(enhancerLimiter);
+      enhancerLimiter.connect(eqBassNode);
+      applyEnhancerParams();
+    } catch {
+      enhancerIn = null;
+      enhancerComp = null;
+      enhancerBass = null;
+      enhancerVocal = null;
+      enhancerAir = null;
+      enhancerSat = null;
+      enhancerLimiter = null;
     }
 
     // Deck wiring happens after the chain is complete — see the capture block
@@ -756,25 +930,32 @@ export function ensureGraph(): boolean {
     try {
       analyser = audioCtx.createAnalyser();
       analyser.fftSize = 256;
-      // Dry path (ducked by the distortion mix), then normalization, then the
-      // analyser — the taps feed the analyser directly in parallel.
+      // Dry path (ducked by the distortion mix), then the user gain, then
+      // normalization, then the analyser — the taps feed the user gain too, so
+      // the volume-gain slider and the limiter hear the whole mix (melo's
+      // single master-gain sum).
       gainOut.connect(postFxDry);
-      if (normGain && normLimiter) {
-        postFxDry.connect(normGain);
-        normGain.connect(normLimiter);
-        normLimiter.connect(analyser);
-      } else {
-        postFxDry.connect(analyser);
-      }
+      postFxDry.connect(userGain);
       if (reverbConvolver && reverbWet) {
         gainOut.connect(reverbConvolver);
         reverbConvolver.connect(reverbWet);
-        reverbWet.connect(analyser);
+        reverbWet.connect(userGain);
       }
       if (distortionShaper && distortionWet) {
         gainOut.connect(distortionShaper);
         distortionShaper.connect(distortionWet);
-        distortionWet.connect(analyser);
+        distortionWet.connect(userGain);
+      }
+      if (echoDelay && echoWet) {
+        gainOut.connect(echoDelay);
+        echoWet.connect(userGain);
+      }
+      if (normGain && normLimiter) {
+        userGain.connect(normGain);
+        normGain.connect(normLimiter);
+        normLimiter.connect(analyser);
+      } else {
+        userGain.connect(analyser);
       }
       analyser.connect(audioCtx.destination);
     } catch {
@@ -783,11 +964,13 @@ export function ensureGraph(): boolean {
       // of this stage survived.
       try {
         if (normGain && normLimiter) {
-          postFxDry.connect(normGain);
+          postFxDry.connect(userGain);
+          userGain.connect(normGain);
           normGain.connect(normLimiter);
           normLimiter.connect(audioCtx.destination);
         } else {
-          postFxDry.connect(audioCtx.destination);
+          postFxDry.connect(userGain);
+          userGain.connect(audioCtx.destination);
         }
       } catch {
         // Last resort — direct. The decks were not captured yet, so this
@@ -826,7 +1009,7 @@ export function ensureGraph(): boolean {
       }
       try {
         deck.source.connect(deck.gain);
-        deck.gain.connect(eqBassNode);
+        connectDeckGainToChain(deck.gain);
       } catch {
         /* already connected */
       }
@@ -886,6 +1069,17 @@ export function ensureGraph(): boolean {
       reverbWet = null;
       distortionShaper = null;
       distortionWet = null;
+      echoDelay = null;
+      echoFeedback = null;
+      echoWet = null;
+      userGain = null;
+      enhancerIn = null;
+      enhancerComp = null;
+      enhancerBass = null;
+      enhancerVocal = null;
+      enhancerAir = null;
+      enhancerSat = null;
+      enhancerLimiter = null;
       normGain = null;
       normLimiter = null;
       analyser = null;
@@ -960,8 +1154,12 @@ export function hasAudioProcessing(): boolean {
     eqMono ||
     eqBands.some((band) => band !== 0) ||
     deckPitch !== 0 ||
+    deckRate !== 1 ||
     reverbMix > 0 ||
     distortionAmount > 0 ||
+    echoAmount > 0 ||
+    volumeGain !== 1 ||
+    enhancerEnabled ||
     volumeNormalization
   );
 }
@@ -976,6 +1174,208 @@ function notifyEqChange(): void {
     eqChangeListener?.();
   } catch {
     /* ignore */
+  }
+}
+
+/**
+ * Route a deck's transition gain into the downstream chain: through the
+ * enhancer when it is enabled, otherwise straight to the EQ stage — the same
+ * switch melo makes in `_updateRouting`. Called from every wiring site so a
+ * deck attached mid-session always lands on the CURRENT route.
+ */
+function connectDeckGainToChain(deckGain: GainNode): void {
+  if (enhancerEnabled && enhancerIn) deckGain.connect(enhancerIn);
+  else if (eqBassNode) deckGain.connect(eqBassNode);
+}
+
+/**
+ * Re-route every already-wired deck after the enhancer toggles. Disconnecting
+ * the deck gain is safe: its ONLY downstream connection is this chain.
+ */
+function rerouteDecks(): void {
+  const d = decks;
+  if (!d || !audioCtx) return;
+  for (const slot of ["a", "b"] as const) {
+    const gain = d[slot].gain;
+    if (!gain) continue;
+    try {
+      gain.disconnect();
+    } catch {
+      /* not connected */
+    }
+    connectDeckGainToChain(gain);
+  }
+}
+
+// --- enhancer (melo's "High Quality" chain, renamed) ---------------------------
+//
+// Three engines with the same shape as melo's, described by what they do
+// rather than melo's internal codenames:
+//   harmonic — the most saturation (melo's hqmusic-3)
+//   air      — a slight fixed high-shelf lift (melo's glyphs-7B)
+//   depth    — a slight fixed low-shelf lift and firmer compression
+//             (melo's fyro1.1)
+
+export const ENHANCER_ENGINES: {
+  id: EnhancerEngineId;
+  label: string;
+  description: string;
+}[] = [
+  { id: "harmonic", label: "Harmonic", description: "Warmth and presence" },
+  { id: "air", label: "Air", description: "High-end detail and space" },
+  { id: "depth", label: "Depth", description: "Low-end weight and control" },
+];
+
+export const ENHANCER_PRESETS: {
+  id: string;
+  label: string;
+  vocal: number;
+  air: number;
+  bass: number;
+}[] = [
+  { id: "studio", label: "Studio", vocal: 0, air: 0, bass: 0 },
+  { id: "vinyl", label: "Vinyl", vocal: 15, air: -15, bass: 25 },
+  { id: "concert", label: "Concert", vocal: -10, air: 30, bass: 15 },
+];
+
+/** The enhancer's per-engine fixed character, mirroring melo's switch. */
+function enhancerEngineCharacter(engine: EnhancerEngineId): {
+  saturation: number;
+  baseBass: number;
+  baseAir: number;
+  ratio: number;
+} {
+  switch (engine) {
+    case "air":
+      return { saturation: 0.2, baseBass: 0, baseAir: 2.5, ratio: 1.5 };
+    case "depth":
+      return { saturation: 0.2, baseBass: 3.0, baseAir: 0, ratio: 2.0 };
+    case "harmonic":
+    default:
+      return { saturation: 0.5, baseBass: 0, baseAir: 0, ratio: 1.5 };
+  }
+}
+
+/** Paint the current enhancer settings onto the nodes (no-ops without them). */
+function applyEnhancerParams(): void {
+  if (!enhancerComp) return;
+  try {
+    const char = enhancerEngineCharacter(enhancerSettings.engine);
+    enhancerComp.threshold.value = -12;
+    enhancerComp.knee.value = 10;
+    enhancerComp.ratio.value = char.ratio;
+    enhancerComp.attack.value = 0.01;
+    enhancerComp.release.value = 0.1;
+    if (enhancerSat) enhancerSat.curve = makeHarmonicCurve(char.saturation);
+    // melo's knob scaling: ±50% on the slider → ±4 dB on the node, plus the
+    // engine's fixed tilt. Clamped so extremes cannot fight the limiter.
+    if (enhancerBass)
+      enhancerBass.gain.value = Math.max(
+        -4,
+        Math.min(4, char.baseBass + enhancerSettings.bass * 0.08),
+      );
+    if (enhancerVocal)
+      enhancerVocal.gain.value = Math.max(
+        -4,
+        Math.min(4, enhancerSettings.vocal * 0.08),
+      );
+    if (enhancerAir)
+      enhancerAir.gain.value = Math.max(
+        -4,
+        Math.min(4, char.baseAir + enhancerSettings.air * 0.08),
+      );
+  } catch {
+    /* context not running */
+  }
+}
+
+/**
+ * Enable or disable the enhancer, optionally updating its settings. When the
+ * graph exists the decks are re-routed immediately; without one the state is
+ * held and a later `ensureGraph()` wires it (the same contract as every other
+ * setter in this file).
+ */
+export function setEnhancer(
+  enabled: boolean,
+  settings?: Partial<EnhancerSettings>,
+): void {
+  enhancerEnabled = enabled;
+  if (settings) enhancerSettings = { ...enhancerSettings, ...settings };
+  if (audioCtx && eqBassNode) {
+    // The chain's hand-off to the EQ may not exist yet on a graph that was
+    // built before the enhancer feature — build it now (guarded, like the
+    // rest of the chain).
+    if (enabled && !enhancerIn) buildEnhancerChain();
+    rerouteDecks();
+    if (enabled) applyEnhancerParams();
+    else neutralizeEnhancerNodes();
+  }
+  notifyEqChange();
+}
+
+export function isEnhancerEnabled(): boolean {
+  return enhancerEnabled;
+}
+
+export function getEnhancerSettings(): EnhancerSettings {
+  return { ...enhancerSettings };
+}
+
+/**
+ * Late-build the enhancer chain on a graph that predates it. Mirrors the
+ * guarded block in `ensureGraph()`; no-ops when the chain already exists.
+ */
+function buildEnhancerChain(): void {
+  if (!audioCtx || !eqBassNode || enhancerIn) return;
+  try {
+    enhancerIn = audioCtx.createGain();
+    enhancerComp = audioCtx.createDynamicsCompressor();
+    enhancerBass = audioCtx.createBiquadFilter();
+    enhancerBass.type = "lowshelf";
+    enhancerBass.frequency.value = 80;
+    enhancerVocal = audioCtx.createBiquadFilter();
+    enhancerVocal.type = "peaking";
+    enhancerVocal.frequency.value = 2500;
+    enhancerVocal.Q.value = 1.2;
+    enhancerAir = audioCtx.createBiquadFilter();
+    enhancerAir.type = "highshelf";
+    enhancerAir.frequency.value = 9000;
+    enhancerSat = audioCtx.createWaveShaper();
+    enhancerSat.oversample = "2x";
+    enhancerLimiter = audioCtx.createDynamicsCompressor();
+    enhancerLimiter.threshold.value = -1;
+    enhancerLimiter.knee.value = 0;
+    enhancerLimiter.ratio.value = 20;
+    enhancerLimiter.attack.value = 0.005;
+    enhancerLimiter.release.value = 0.05;
+    enhancerIn.connect(enhancerComp);
+    enhancerComp.connect(enhancerBass);
+    enhancerBass.connect(enhancerVocal);
+    enhancerVocal.connect(enhancerAir);
+    enhancerAir.connect(enhancerSat);
+    enhancerSat.connect(enhancerLimiter);
+    enhancerLimiter.connect(eqBassNode);
+  } catch {
+    enhancerIn = null;
+    enhancerComp = null;
+    enhancerBass = null;
+    enhancerVocal = null;
+    enhancerAir = null;
+    enhancerSat = null;
+    enhancerLimiter = null;
+  }
+}
+
+/** Park the enhancer nodes at neutral so a disabled chain colors nothing. */
+function neutralizeEnhancerNodes(): void {
+  if (!audioCtx) return;
+  try {
+    const t = audioCtx.currentTime;
+    if (enhancerBass) enhancerBass.gain.setTargetAtTime(0, t, 0.02);
+    if (enhancerVocal) enhancerVocal.gain.setTargetAtTime(0, t, 0.02);
+    if (enhancerAir) enhancerAir.gain.setTargetAtTime(0, t, 0.02);
+  } catch {
+    /* context not running */
   }
 }
 
@@ -1185,19 +1585,70 @@ export function getDistortion(): number {
   return distortionAmount;
 }
 
+// --- echo ---------------------------------------------------------------------
+
+/**
+ * Set the echo level, 0 (dry) to 100 (melo's maximum). The delay/feedback
+ * nodes run at melo's fixed character (300 ms, 35% regen); the slider drives
+ * only how much of the delayed signal mixes back in.
+ */
+export function setEcho(amount: number): void {
+  echoAmount = Math.min(100, Math.max(0, amount));
+  if (echoWet) {
+    try {
+      echoWet.gain.value = echoAmount / 100;
+    } catch {
+      /* context not running */
+    }
+  }
+  notifyEqChange();
+}
+
+export function getEcho(): number {
+  return echoAmount;
+}
+
+// --- volume gain ----------------------------------------------------------------
+
+/**
+ * The user's output gain (0..2 — the "Volume gain" slider's 0–200%), applied
+ * to `userGain` where every path sums, BEFORE normalization and the limiter:
+ * boosts stay guarded against clipping, and the value always describes what
+ * the listener actually hears.
+ */
+export function setVolumeGain(gain: number): void {
+  volumeGain = Math.min(2, Math.max(0, gain));
+  if (userGain) {
+    try {
+      userGain.gain.value = volumeGain;
+    } catch {
+      /* context not running */
+    }
+  }
+  notifyEqChange();
+}
+
+export function getVolumeGain(): number {
+  return volumeGain;
+}
+
 // --- volume normalization -------------------------------------------------------
 
 /**
  * Enable or disable loudness normalization. Toggling OFF parks the gain at
  * unity AND makes the limiter transparent (ratio 1, threshold 0) — "off" must
  * be the same chain as before normalization existed.
+ *
+ * No eager `ensureGraph()` here: a startup restore runs before any user
+ * gesture, and building the context outside a gesture leaves it suspended —
+ * the recorded state is painted onto the nodes the moment the graph does
+ * build (`ensureGraph` starts the loop for an already-enabled preference).
  */
 export function setVolumeNormalization(enabled: boolean): void {
   volumeNormalization = enabled;
   applyNormalizationNodes();
   if (enabled) {
-    if (!ensureGraph()) return;
-    startNormalizationLoop();
+    if (normGain && audioCtx) startNormalizationLoop();
   } else {
     stopNormalizationLoop();
   }
@@ -1475,7 +1926,7 @@ export function ensureDeckAttached(slot: "a" | "b"): boolean {
       deck.gain = ctx.createGain();
       deck.gain.gain.value = 1;
       deck.source.connect(deck.gain);
-      deck.gain.connect(eqBassNode);
+      connectDeckGainToChain(deck.gain);
     }
     return true;
   } catch {

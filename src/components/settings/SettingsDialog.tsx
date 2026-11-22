@@ -36,27 +36,18 @@ import {
   usePwaInstall,
 } from "@/lib/pwa";
 import {
-  applyEqPreset,
-  setAudioFilter,
-  setEqBalance,
-  setEqBass,
-  setEqBand,
-  resetEqBands,
-  setEqMono,
-  setEqTreble,
-  setDeckPitch,
-  setRatePreservesPitch,
-  setReverbMix,
-  setDistortion,
-  setVolumeNormalization,
   EQ_BAND_FREQUENCIES,
   EQ_BAND_MIN_DB,
   EQ_BAND_MAX_DB,
-  type AudioFilterId,
   AUDIO_FILTERS,
   AUDIO_EFFECT_DELAY_MESSAGE,
   ensureGraph,
 } from "@/lib/audio";
+// Every audio-customization value comes from the shared audio settings store
+// — the same source the Audio panel in the player bar reads and writes — so
+// the two surfaces can never show (or persist) different values.
+import { useAudioSettingsStore } from "@/store/audioSettings";
+import { EQ_PRESETS } from "@/lib/audioSettings";
 import { useAuth } from "@/hooks/use-auth";
 import {
   clearPlayHistory,
@@ -416,89 +407,30 @@ export function SettingsDialog({
   const [clearing, setClearing] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
 
-  // Audio settings — persisted locally, applied live to the Web Audio graph.
-  const [eq, setEq] = useState(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem("ss.eq") ?? "{}") as {
-        bass?: number;
-        treble?: number;
-        balance?: number;
-        mono?: boolean;
-        bands?: number[];
-        filter?: AudioFilterId;
-      };
-      // Effects are session-scoped. Do not resurrect a previous Bass Boost
-      // from localStorage while a new track is already playing.
-      return { ...saved, filter: usePlayerStore.getState().audioFilter };
-    } catch {
-      return { filter: usePlayerStore.getState().audioFilter };
-    }
-  });
-  const persistEq = (next: typeof eq) => {
-    setEq(next);
-    try {
-      localStorage.setItem("ss.eq", JSON.stringify(next));
-    } catch {
-      /* ignore */
-    }
-  };
-
-  // Vibe settings (pitch / reverb / distortion) and loudness normalization —
-  // same pattern as the EQ: persisted locally, applied live to the graph.
-  const [pitch, setPitch] = useState(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem("ss.pitch") ?? "{}") as {
-        semitones?: number;
-        preserve?: boolean;
-      };
-      return { semitones: saved.semitones ?? 0, preserve: saved.preserve ?? true };
-    } catch {
-      return { semitones: 0, preserve: true };
-    }
-  });
-  const persistPitch = (next: typeof pitch) => {
-    setPitch(next);
-    try {
-      localStorage.setItem("ss.pitch", JSON.stringify(next));
-    } catch {
-      /* ignore */
-    }
-  };
-  const [reverb, setReverb] = useState(() => {
-    const saved = Number(localStorage.getItem("ss.reverb"));
-    return Number.isFinite(saved) && saved > 0 ? Math.min(100, saved) : 0;
-  });
-  const persistReverb = (value: number) => {
-    setReverb(value);
-    try {
-      localStorage.setItem("ss.reverb", String(value));
-    } catch {
-      /* ignore */
-    }
-  };
-  const [distortion, setDistortionLevel] = useState(() => {
-    const saved = Number(localStorage.getItem("ss.distortion"));
-    return Number.isFinite(saved) && saved > 0 ? Math.min(100, saved) : 0;
-  });
-  const persistDistortion = (value: number) => {
-    setDistortionLevel(value);
-    try {
-      localStorage.setItem("ss.distortion", String(value));
-    } catch {
-      /* ignore */
-    }
-  };
-  const [normalize, setNormalize] = useState(
-    () => localStorage.getItem("ss.normalize") === "1",
-  );
-  const persistNormalize = (value: boolean) => {
-    setNormalize(value);
-    try {
-      localStorage.setItem("ss.normalize", value ? "1" : "0");
-    } catch {
-      /* ignore */
-    }
-  };
+  // Audio settings — read from the shared audio settings store, which owns
+  // persistence (`ss.audioSettings`), the migration from the old per-key
+  // blobs, and the engine application. Writing here updates the player-bar
+  // Audio panel too; the old component-local `useState` copies (seeded once
+  // from localStorage, never re-read) are what let the two surfaces disagree.
+  const audioSettings = useAudioSettingsStore((s) => s.audio);
+  const activeFilter = usePlayerStore((s) => s.audioFilter);
+  const setAudioFilterAction = usePlayerStore((s) => s.setAudioFilter);
+  // Individual action selectors: actions are stable references, so these
+  // never re-subscribe (an object-literal selector would loop in zustand v5).
+  const setEqBassAction = useAudioSettingsStore((s) => s.setEqBass);
+  const setEqTrebleAction = useAudioSettingsStore((s) => s.setEqTreble);
+  const setEqBalanceAction = useAudioSettingsStore((s) => s.setEqBalance);
+  const setEqMonoAction = useAudioSettingsStore((s) => s.setEqMono);
+  const setEqBandAction = useAudioSettingsStore((s) => s.setEqBand);
+  const resetEqBandsAction = useAudioSettingsStore((s) => s.resetEqBands);
+  const setPitchAction = useAudioSettingsStore((s) => s.setPitch);
+  const setKeepKeyAction = useAudioSettingsStore((s) => s.setKeepKey);
+  const setReverbAction = useAudioSettingsStore((s) => s.setReverb);
+  const setDistortionAction = useAudioSettingsStore((s) => s.setDistortion);
+  const setNormalizeAction = useAudioSettingsStore((s) => s.setNormalize);
+  const setSpeedPitchAction = useAudioSettingsStore((s) => s.setSpeedPitch);
+  const setEqPresetAction = useAudioSettingsStore((s) => s.setEqPreset);
+  const keepKey = audioSettings.keepKey;
 
   // Keep the editable name in sync with the user. The reset is keyed by the
   // dialog OPENING (not by an in-render setState) and happens in the same
@@ -1412,13 +1344,14 @@ export function SettingsDialog({
                 key={p.label}
                 type="button"
                 onClick={() => {
-                  applyEqPreset({ bass: p.bass, treble: p.treble });
-                  persistEq({ ...eq, bass: p.bass, treble: p.treble });
+                  const preset = EQ_PRESETS.find((q) => q.label === p.label);
+                  if (preset) setEqPresetAction(preset.id);
                   toast(`EQ preset: ${p.label}`);
                 }}
                 className={cn(
                   "rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
-                  eq.bass === p.bass && eq.treble === p.treble
+                  audioSettings.eqBass === p.bass &&
+                    audioSettings.eqTreble === p.treble
                     ? "border-transparent bg-[rgb(var(--tint)_/_0.2)] text-[rgb(var(--tint))]"
                     : "border-white/10 text-muted-foreground hover:border-white/30 hover:text-foreground",
                 )}
@@ -1431,19 +1364,17 @@ export function SettingsDialog({
           {/* bass */}
           <EqSlider
             label="Bass"
-            value={eq.bass ?? 0}
+            value={audioSettings.eqBass}
             onChange={(v) => {
-              setEqBass(v);
-              persistEq({ ...eq, bass: v });
+              setEqBassAction(v);
               if (v !== 0) toast(AUDIO_EFFECT_DELAY_MESSAGE);
             }}
           />
           <EqSlider
             label="Treble"
-            value={eq.treble ?? 0}
+            value={audioSettings.eqTreble}
             onChange={(v) => {
-              setEqTreble(v);
-              persistEq({ ...eq, treble: v });
+              setEqTrebleAction(v);
             }}
           />
           <EqSlider
@@ -1451,7 +1382,7 @@ export function SettingsDialog({
             min={-1}
             max={1}
             step={0.1}
-            value={eq.balance ?? 0}
+            value={audioSettings.eqBalance}
             format={(v) =>
               v === 0
                 ? "Center"
@@ -1460,19 +1391,17 @@ export function SettingsDialog({
                   : `R ${Math.round(v * 100)}%`
             }
             onChange={(v) => {
-              setEqBalance(v);
-              persistEq({ ...eq, balance: v });
+              setEqBalanceAction(v);
             }}
           />
 
           <ToggleRow
             label="Mono audio"
             description="Same signal in both ears — good for single-ear listening"
-            on={eq.mono ?? false}
+            on={audioSettings.eqMono}
             onToggle={() => {
-              const next = !(eq.mono ?? false);
-              setEqMono(next);
-              persistEq({ ...eq, mono: next });
+              const next = !audioSettings.eqMono;
+              setEqMonoAction(next);
               if (next) toast(AUDIO_EFFECT_DELAY_MESSAGE);
             }}
           />
@@ -1484,11 +1413,7 @@ export function SettingsDialog({
               <button
                 type="button"
                 onClick={() => {
-                  resetEqBands();
-                  persistEq({
-                    ...eq,
-                    bands: EQ_BAND_FREQUENCIES.map(() => 0),
-                  });
+                  resetEqBandsAction();
                   toast("EQ bands reset");
                 }}
                 className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:text-foreground"
@@ -1502,7 +1427,7 @@ export function SettingsDialog({
             </p>
             <div className="mt-3 grid grid-cols-10 items-end gap-1.5">
               {EQ_BAND_FREQUENCIES.map((freq, index) => {
-                const value = eq.bands?.[index] ?? 0;
+                const value = audioSettings.eqBands[index] ?? 0;
                 return (
                   <div
                     key={freq}
@@ -1518,11 +1443,7 @@ export function SettingsDialog({
                       step={1}
                       value={[value]}
                       onValueChange={(values) => {
-                        const next = values[0] ?? 0;
-                        setEqBand(index, next);
-                        const bands = [...(eq.bands ?? EQ_BAND_FREQUENCIES.map(() => 0))];
-                        bands[index] = next;
-                        persistEq({ ...eq, bands });
+                        setEqBandAction(index, values[0] ?? 0);
                       }}
                       aria-label={`${freq} hertz band`}
                       className="h-24 w-4 data-[orientation=vertical]:min-h-24"
@@ -1542,22 +1463,20 @@ export function SettingsDialog({
             min={-12}
             max={12}
             step={1}
-            value={pitch.semitones}
+            value={audioSettings.pitch}
             format={(v) => (v === 0 ? "Original key" : `${v > 0 ? "+" : ""}${v} semitones`)}
             onChange={(v) => {
-              setDeckPitch(v);
-              persistPitch({ ...pitch, semitones: v });
+              setPitchAction(v);
               if (v !== 0) toast(AUDIO_EFFECT_DELAY_MESSAGE);
             }}
           />
           <ToggleRow
             label="Speed keeps the key"
             description="When on, changing playback speed preserves pitch. When off, speeding up raises it (the classic Nightcore / slowed mechanism)."
-            on={pitch.preserve}
+            on={keepKey}
             onToggle={() => {
-              const next = !pitch.preserve;
-              setRatePreservesPitch(next);
-              persistPitch({ ...pitch, preserve: next });
+              const next = !keepKey;
+              setKeepKeyAction(next);
               if (!next) toast(AUDIO_EFFECT_DELAY_MESSAGE);
             }}
           />
@@ -1565,32 +1484,29 @@ export function SettingsDialog({
             label="Reverb"
             min={0}
             max={100}
-            value={reverb}
+            value={audioSettings.reverb}
             format={(v) => (v === 0 ? "Dry" : `${Math.round(v)}% room`)}
             onChange={(v) => {
-              setReverbMix(v / 100);
-              persistReverb(v);
+              setReverbAction(v);
             }}
           />
           <EqSlider
             label="Distortion"
             min={0}
             max={100}
-            value={distortion}
+            value={audioSettings.distortion}
             format={(v) => (v === 0 ? "Clean" : `${Math.round(v)}% drive`)}
             onChange={(v) => {
-              setDistortion(v);
-              persistDistortion(v);
+              setDistortionAction(v);
             }}
           />
           <ToggleRow
             label="Volume normalization"
             description="Keeps loud and quiet songs near the same level by steering the gain toward a target loudness, with a limiter catching peaks."
-            on={normalize}
+            on={audioSettings.normalize}
             onToggle={() => {
-              const next = !normalize;
-              setVolumeNormalization(next);
-              persistNormalize(next);
+              const next = !audioSettings.normalize;
+              setNormalizeAction(next);
               if (next) toast(AUDIO_EFFECT_DELAY_MESSAGE);
             }}
           />
@@ -1607,66 +1523,56 @@ export function SettingsDialog({
                 {
                   label: "Clean",
                   apply: () => {
+                    // setRate lands the speed in both stores (the player
+                    // store mirrors it through noteExternalSpeed); the tape
+                    // mode releases its claim on the rate.
                     setRate(1);
-                    setDeckPitch(0);
-                    setRatePreservesPitch(true);
-                    setReverbMix(0);
-                    setDistortion(0);
-                    persistPitch({ semitones: 0, preserve: true });
-                    persistReverb(0);
-                    persistDistortion(0);
+                    setPitchAction(0);
+                    setKeepKeyAction(true);
+                    setReverbAction(0);
+                    setDistortionAction(0);
                   },
                 },
                 {
                   label: "Nightcore",
                   apply: () => {
+                    // Player store first, then the tape speed takes
+                    // ownership — the same ordering the Audio panel uses.
                     setRate(1.25);
-                    setRatePreservesPitch(false);
-                    setDeckPitch(0);
-                    setReverbMix(0);
-                    setDistortion(0);
-                    persistPitch({ semitones: 0, preserve: false });
-                    persistReverb(0);
-                    persistDistortion(0);
+                    setSpeedPitchAction(1.25);
+                    setPitchAction(0);
+                    setReverbAction(0);
+                    setDistortionAction(0);
                   },
                 },
                 {
                   label: "Slowed + Reverb",
                   apply: () => {
                     setRate(0.85);
-                    setRatePreservesPitch(true);
-                    setDeckPitch(0);
-                    setReverbMix(0.35);
-                    setDistortion(0);
-                    persistPitch({ semitones: 0, preserve: true });
-                    persistReverb(35);
-                    persistDistortion(0);
+                    setSpeedPitchAction(0.85);
+                    setPitchAction(0);
+                    setReverbAction(35);
+                    setDistortionAction(0);
                   },
                 },
                 {
                   label: "Speed up",
                   apply: () => {
                     setRate(1.15);
-                    setRatePreservesPitch(true);
-                    setDeckPitch(0);
-                    setReverbMix(0);
-                    setDistortion(0);
-                    persistPitch({ semitones: 0, preserve: true });
-                    persistReverb(0);
-                    persistDistortion(0);
+                    setPitchAction(0);
+                    setKeepKeyAction(true);
+                    setReverbAction(0);
+                    setDistortionAction(0);
                   },
                 },
                 {
                   label: "Daycore",
                   apply: () => {
                     setRate(0.75);
-                    setRatePreservesPitch(false);
-                    setDeckPitch(-2);
-                    setReverbMix(0.25);
-                    setDistortion(0);
-                    persistPitch({ semitones: -2, preserve: false });
-                    persistReverb(25);
-                    persistDistortion(0);
+                    setSpeedPitchAction(0.75);
+                    setPitchAction(-2);
+                    setReverbAction(25);
+                    setDistortionAction(0);
                   },
                 },
               ].map((preset) => (
@@ -1701,14 +1607,17 @@ export function SettingsDialog({
                   key={f.id}
                   type="button"
                   onClick={() => {
-                    if (setAudioFilter(f.id)) {
-                      persistEq({ ...eq, filter: f.id });
+                    if (setAudioFilterAction(f.id)) {
+                      // Sound effects are session-scoped by design: no
+                      // persistence, so nothing resurrects a Bass Boost
+                      // after a restart. The active one reads from the
+                      // player store, which is the single source of truth.
                       if (f.id !== "off") toast(AUDIO_EFFECT_DELAY_MESSAGE);
                     } else toast.error("Effects need a browser with Web Audio");
                   }}
                   className={cn(
                     "flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors",
-                    (eq.filter ?? "off") === f.id
+                    activeFilter === f.id
                       ? "border-transparent bg-[rgb(var(--tint)_/_0.2)] text-[rgb(var(--tint))]"
                       : "border-white/10 text-muted-foreground hover:border-white/30 hover:text-foreground",
                   )}

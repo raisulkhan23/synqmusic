@@ -2,65 +2,48 @@ import { describe, expect, test } from "bun:test";
 import { readSource } from "./helpers/tailwind-css.js";
 
 /**
- * Why the ⌘K hint was clipped.
+ * Why the ⌘K hint was clipped, and where it lives now.
  *
- * `CommandPaletteHint` rendered a `⌕ Search ⌘K` pill — a magnifier, the word
+ * `CommandPaletteHint` renders a `⌕ Search ⌘K` pill — a magnifier, the word
  * "Search" and a bordered `⌘K` badge, roughly 110px wide with its padding.
  *
- * The only place it was mounted was the **collapsed** sidebar rail, which is
- * `w-[72px]`. A 110px button in a 72px rail cannot fit: the rail's children
- * are centred in a 40px-wide column, so the pill overflowed on both sides and
- * the right-hand `⌘K` badge was sliced off by the rail's own edge. That is
- * exactly what the screenshot showed.
+ * It was originally mounted ONLY in a 72px collapsed rail, where it overflowed
+ * and was sliced off; the fix introduced a width-aware `compact` form. The
+ * sidebar has since been reconstructed into the reference's single labelled
+ * layout (one 200px sidebar, no rail variants), so the invariant is simpler
+ * now: the sidebar is wide enough for the FULL pill, mounts exactly one
+ * hint, and never re-introduces a fixed-width rail that cannot fit it.
  *
- * It is now width-aware. `compact` is the icon-only form for the 72px rail;
- * the full pill, which genuinely fits, lives in the expanded 240px sidebar —
- * where it did not exist before. So the rail that could not fit it is the one
- * that lost it, and the rail that can fit it gained it.
- *
- * The invariant that matters, and the one that was violated: **a fixed-width
- * rail must never contain a full pill.** The `compact` prop has to exist and
- * has to be used there.
+ * The invariant that still matters: **the palette must be discoverable in the
+ * shell, and the hint must drive the same store as the ⌘K hotkey.**
  */
 
 const sidebar = readSource("src/components/layout/Sidebar.tsx");
 const palette = readSource("src/components/core/CommandPalette.tsx");
 
-/** Comments explain the fix and quote the old markup verbatim, so they must
- *  come out before an assertion about what the rail *renders*. */
-const stripComments = (text) =>
-  text.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ");
-
-/** The collapsed rail block: from `width: 72` to the expanded `</motion.aside>`. */
-function collapsedRail(source) {
-  const start = source.indexOf("width: 72");
-  expect(start).toBeGreaterThan(-1);
-  const end = source.indexOf('key="expanded"', start);
-  expect(end).toBeGreaterThan(start);
-  return stripComments(source.slice(start, end));
-}
-
-/** The expanded rail block: from `key="expanded"` to the end of the file. */
-function expandedRail(source) {
-  const start = source.indexOf('key="expanded"');
-  expect(start).toBeGreaterThan(-1);
-  return stripComments(source.slice(start));
-}
-
-describe("the collapsed 72px rail cannot contain a pill", () => {
-  test("the hint mounted in the rail is the compact, icon-only form", () => {
-    const rail = collapsedRail(sidebar);
-    const mount = rail.match(/<CommandPaletteHint[^>]*\/>/);
-    expect(mount).not.toBeNull();
-    // No `compact` prop means the full `⌕ Search ⌘K` pill, which is the bug.
-    expect(mount[0]).toMatch(/\bcompact\b/);
+describe("the ⌘K hint in the labelled sidebar", () => {
+  test("the sidebar mounts exactly one full-width hint", () => {
+    // One 200px sidebar, one mount, and it is NOT the compact icon-only
+    // form — the labelled sidebar genuinely fits the full pill.
+    const mounts = sidebar.match(/<CommandPaletteHint[^>]*\/>/g) ?? [];
+    expect(mounts.length).toBe(1);
+    expect(mounts[0]).not.toMatch(/\bcompact\b/);
   });
 
-  test("the rail block itself never contains the pill's own markup", () => {
-    // The compact form is icon-only. If the `Search` word and the `⌘K` badge
-    // ever come back into the collapsed rail, the pill is back in a 72px box.
-    const rail = collapsedRail(sidebar);
-    expect(rail).not.toMatch(/⌘K/);
+  test("no fixed-width rail narrower than the pill exists in the sidebar", () => {
+    // The old bug: a 110px pill inside a 72px rail. The reconstructed
+    // sidebar must not contain any width utility below ~110px for its own
+    // container, so the clipping failure mode cannot return.
+    expect(sidebar).not.toMatch(/w-\[7[0-9]px\]|w-\[6[0-9]px\]/);
+  });
+
+  test("the hint is placed above the account row, inside the sidebar", () => {
+    // Discoverability: it sits in the sidebar's bottom cluster, adjacent to
+    // the account menu, rather than buried in a route.
+    const hintIdx = sidebar.indexOf("<CommandPaletteHint");
+    const accountIdx = sidebar.indexOf("<AccountMenu");
+    expect(hintIdx).toBeGreaterThan(-1);
+    expect(accountIdx).toBeGreaterThan(hintIdx);
   });
 });
 
@@ -68,31 +51,24 @@ describe("CommandPaletteHint is width-aware", () => {
   test("it takes a `compact` prop that defaults to the full pill", () => {
     expect(palette).toMatch(/compact = false/);
     // The full form has to stay the default so every other caller is
-    // unaffected, and so the expanded sidebar gets the label + shortcut.
-    // The span carries a layout class, so match the element, not the text.
+    // unaffected. The span carries a layout class, so match the element, not
+    // the text.
     expect(palette).toMatch(/<span[^>]*>Search<\/span>/);
     expect(palette).toMatch(/<kbd[^>]*>\s*⌘K\s*<\/kbd>/);
   });
 
-  test("the compact form is a fixed square that fits a 40px column", () => {
-    // `size-9` (36px) matches the rail's other icon buttons (`size-9` for
-    // settings, `size-10` for the primary actions) and is comfortably inside
-    // the 72px rail even with the rail's own padding.
+  test("the compact form stays a fixed square, for any future narrow mount", () => {
     expect(palette).toMatch(/if \(compact\) \{/);
     const compactBranch = palette.slice(
       palette.indexOf("if (compact) {"),
       palette.indexOf("if (compact) {") + 900,
     );
     expect(compactBranch).toMatch(/size-9/);
-    // It must not carry text content.
     expect(compactBranch).not.toMatch(/<span[^>]*>Search<\/span>/);
     expect(compactBranch).not.toMatch(/<kbd/);
   });
 
   test("both forms stay reachable and labelled for assistive tech", () => {
-    // An icon-only button with no accessible name is invisible to a screen
-    // reader, so `aria-label` and the `title` shortcut hint are load-bearing
-    // in the compact form specifically.
     const compactBranch = palette.slice(
       palette.indexOf("if (compact) {"),
       palette.indexOf("if (compact) {") + 900,
@@ -100,22 +76,8 @@ describe("CommandPaletteHint is width-aware", () => {
     expect(compactBranch).toMatch(/aria-label="Open command palette"/);
     expect(compactBranch).toMatch(/title="Search \(⌘K\)"/);
   });
-});
 
-describe("the hint exists in both rails", () => {
-  test("the expanded 240px sidebar has it too, where the pill does fit", () => {
-    // The rail that could not fit the pill is the one that lost it, so the
-    // discoverability it was there to provide would be gone entirely. The
-    // expanded rail is where the full pill belongs.
-    const expanded = expandedRail(sidebar);
-    const mount = expanded.match(/<CommandPaletteHint[^>]*\/>/);
-    expect(mount).not.toBeNull();
-    // And it must NOT be compact — that rail is 240px wide.
-    expect(mount[0]).not.toMatch(/\bcompact\b/);
-  });
-
-  test("both mounts drive the same store as the ⌘K hotkey", () => {
-    // Two buttons, one store — the hint can never disagree with the hotkey.
+  test("the mount drives the same store as the ⌘K hotkey", () => {
     expect(palette).toMatch(
       /export function CommandPaletteHint[\s\S]{0,400}usePalette\(\(s\) => s\.setOpen\)/,
     );

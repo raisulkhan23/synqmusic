@@ -225,12 +225,14 @@ beforeAll(() => {
   expect(audio.ensureGraph()).toBe(true);
   const ctx = contexts.at(-1);
   // Creation order: fxIn, gainOut, then the post-effect stage's dry gain and
-  // normalization gain (this fake has no Convolver/WaveShaper/Compressor, so
-  // those guarded taps fail and create nothing — the real graph has them),
-  // then one gain per deck in [a, b] order.
-  expect(ctx.createdGains.length).toBe(6);
-  deckGainA = ctx.createdGains[4];
-  deckGainB = ctx.createdGains[5];
+  // normalization gain, then the user volume gain (melo's "volume gain",
+  // unguarded like the dry gain), then the enhancer's input gain (its
+  // compressor throws on this fake, so the rest of that chain creates
+  // nothing), and finally one gain per deck in [a, b] order. The guarded
+  // echo tap fails at createDelay before any of its gains are made.
+  expect(ctx.createdGains.length).toBe(8);
+  deckGainA = ctx.createdGains[6];
+  deckGainB = ctx.createdGains[7];
   expect(deckGainA.kind).toBe("gain");
   expect(deckGainB.kind).toBe("gain");
 });

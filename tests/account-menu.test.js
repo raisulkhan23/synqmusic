@@ -103,13 +103,14 @@ describe("a signed-in listener can always sign out", () => {
     expect(importsSymbol(src.menu, "useAuthActions")).toBe(false);
   });
 
-  test("the sidebar renders the account menu in BOTH layout branches", () => {
+  test("the sidebar renders the account menu", () => {
     expect(importsSymbol(src.sidebar, "AccountMenu")).toBe(true);
-    // Two mount sites: the 72px rail and the 240px panel. One would mean a
-    // collapsed sidebar with no way out of the account.
-    expect(count(src.sidebar, "<AccountMenu")).toBe(2);
-    // Whitespace-tolerant: prettier reflows these props across lines.
-    expect(src.sidebar).toMatch(/<AccountMenu\s+variant="collapsed"/);
+    // The reference reconstruction collapsed the old two layout branches into
+    // ONE labelled sidebar, so there is exactly one mount — but it must be
+    // the expanded variant (the sidebar is wide enough for the email row),
+    // and the count pins "exactly one" so the old double-mount cannot creep
+    // back through a copy-paste.
+    expect(count(src.sidebar, "<AccountMenu")).toBe(1);
     expect(src.sidebar).toMatch(/<AccountMenu\s+variant="expanded"/);
   });
 

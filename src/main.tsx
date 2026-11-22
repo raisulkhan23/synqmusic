@@ -104,6 +104,7 @@ import ImportHub from "./pages/ImportHub.tsx";
 import Artist from "./pages/Artist.tsx";
 import Album from "./pages/Album.tsx";
 import Liked from "./pages/Liked.tsx";
+import Albums from "./pages/Albums.tsx";
 import Playlists from "./pages/Playlists.tsx";
 import PlaylistDetail from "./pages/PlaylistDetail.tsx";
 import Admin from "./pages/Admin.tsx";
@@ -357,7 +358,9 @@ const convex = new ConvexReactClient(
   convexUrl || "https://about.blank.internal",
   // skipConvexDeploymentUrlCheck: the stand-in above is deliberately not a
   // real deployment id, and the SDK aborts on that check otherwise.
-  convexUrl ? undefined : ({ skipConvexDeploymentUrlCheck: true } as any),
+  convexUrl
+    ? undefined
+    : ({ skipConvexDeploymentUrlCheck: true } as unknown),
 );
 
 /** Keeps \`html.perf-lite\` in sync with the store.
@@ -552,6 +555,16 @@ createRoot(document.getElementById("root")!).render(
                       <RequireAuth>
                         <PageBoundary>
                           <Liked />
+                        </PageBoundary>
+                      </RequireAuth>
+                    }
+                  />
+                  <Route
+                    path="/albums"
+                    element={
+                      <RequireAuth>
+                        <PageBoundary>
+                          <Albums />
                         </PageBoundary>
                       </RequireAuth>
                     }

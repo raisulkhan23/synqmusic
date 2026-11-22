@@ -54,7 +54,7 @@ export function shouldUseFallback(element: {
 }
 
 /** Apply the placeholder to one image. Safe to call more than once. */
-export function applyImageFallback(element: any): boolean {
+export function applyImageFallback(element: HTMLImageElement): boolean {
   if (!shouldUseFallback(element)) return false;
   try {
     element.setAttribute(FALLBACK_ATTR, "1");
@@ -73,15 +73,15 @@ let installed = false;
  * The `error` event does not bubble, hence the capture phase — that is what
  * lets a single listener observe every image in the document.
  */
-export function installImageFallback(target?: any): () => void {
-  const host: any =
+export function installImageFallback(target?: EventTarget | Window): () => void {
+  const host: EventTarget | Window | undefined =
     target ?? (typeof window !== "undefined" ? window : undefined);
   if (!host || typeof host.addEventListener !== "function") return () => {};
   if (installed) return () => {};
   installed = true;
 
   const onError = (event: Event) => {
-    const element = event.target as any;
+    const element = event.target as HTMLImageElement;
     applyImageFallback(element);
   };
 

@@ -441,17 +441,24 @@ describe("crossfade is built on two real audio decks", () => {
   test("the transition gain sits before the EQ, not on the user's volume", () => {
     // The spec requires master volume to stay independent of the transition,
     // so the blend gain is a separate node feeding the head of the chain.
-    expect(audioSource).toMatch(/deck\.gain\.connect\(eqBassNode\)/);
+    // The deck gain connects through the routing helper, which sends it
+    // straight to the EQ — or through the enhancer chain when that is
+    // enabled, which still lands on the same EQ stage afterwards.
+    expect(audioSource).toMatch(/connectDeckGainToChain\(deck\.gain\)/);
+    expect(audioSource).toMatch(/deckGain\.connect\(eqBassNode\)/);
     expect(audioSource).toMatch(/getAudio\(\)\.volume = /);
   });
 
   test("both decks feed the same EQ / balance / effects chain", () => {
-    // The chain now ends `gainOut → postFxDry → [normalization] → analyser`
-    // (the post-effect stage the 10-band EQ, reverb, distortion and volume
-    // normalization added) — the invariant is that the decks' shared
-    // downstream chain still reaches the one analyser.
+    // The chain now ends `gainOut → postFxDry → userGain → [normalization] →
+    // analyser` — the post-effect stage the 10-band EQ, reverb, distortion,
+    // echo, the volume gain and volume normalization added, with the taps
+    // also summing at the user gain (melo's single master-gain sum). The
+    // invariant is unchanged: the decks' shared downstream chain still
+    // reaches the one analyser.
     expect(audioSource).toMatch(/gainOut\.connect\(postFxDry\)/);
-    expect(audioSource).toMatch(/postFxDry\.connect\(analyser\)|postFxDry\.connect\(normGain\)/);
+    expect(audioSource).toMatch(/postFxDry\.connect\(userGain\)/);
+    expect(audioSource).toMatch(/userGain\.connect\(normGain\)|userGain\.connect\(analyser\)/);
     expect(audioSource).toMatch(/filterSource = d\[activeDeck\]\.source/);
   });
 

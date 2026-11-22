@@ -86,6 +86,7 @@ describe("/home is open to visitors", () => {
       .filter(Boolean);
     const PRIVATE = [
       "/liked",
+      "/albums",
       "/playlists",
       "/playlist/:id",
       "/stats",
@@ -102,7 +103,7 @@ describe("/home is open to visitors", () => {
     for (const path of guarded) {
       expect(ALLOWED).toContain(path);
     }
-    // And all nine are still guarded — this catches a guard being deleted as
+    // And all ten are still guarded — this catches a guard being deleted as
     // well as one being added in the wrong place.
     for (const path of PRIVATE) expect(guarded).toContain(path);
   });

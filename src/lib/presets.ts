@@ -380,7 +380,7 @@ if (_PRESET_IDS.length !== new Set(_PRESET_IDS).size) {
   );
 }
 
-for (const [key, value] of Object.entries(PRESET_BY_ID)) {
+for (const [key] of Object.entries(PRESET_BY_ID)) {
   const typed = key as PresetId;
   if (!PRESETS.some((p) => p.id === typed)) {
     throw new Error(

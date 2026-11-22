@@ -17,6 +17,7 @@ const PAGES = [
   "ImportHub",
   "Artist",
   "Album",
+  "Albums",
   "Liked",
   "Playlists",
   "PlaylistDetail",
@@ -76,7 +77,7 @@ describe("no route can hang waiting for a chunk that never arrives", () => {
   });
 
   test("all twenty-four pages are accounted for", () => {
-    expect(PAGES.length).toBe(24);
+    expect(PAGES.length).toBe(25);
   });
 
   test("no page is loaded through a dynamic import, so there is no chunk to wait for", () => {

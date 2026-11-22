@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router";
 
 import { RemoteTrackRow } from "@/components/tracks/RemoteTrackRow";
 import { SoundCloudResults } from "@/components/search/SoundCloudResults";
+import { useShellStore } from "@/lib/shell";
 import { api } from "@/convex/_generated/api";
 import { toPlayableYoutube } from "@/lib/playable";
 import { cleanArtistName, type YtItem } from "@/lib/youtube";
@@ -376,6 +377,9 @@ export default function Search() {
   const [searchParams, setSearchParams] = useSearchParams();
   const sharedQuery = searchParams.get("q");
   const [typedQuery, setTypedQuery] = useState("");
+  // The global source selector (top bar) decides which index leads the
+  // results; the other source stays available below, clearly labelled.
+  const searchSource = useShellStore((s) => s.searchSource);
   /**
    * Adopt a query and clear the `?q=` it may have come from.
    *
@@ -814,6 +818,12 @@ export default function Search() {
         </>
       ) : (
         <div className="flex flex-col gap-10">
+          {/* The selected source's results lead. SoundCloud rows play from
+              SoundCloud itself through the decks; when it leads, the YouTube
+              matches stay below as a clearly-labelled second option. */}
+          {searchSource === "soundcloud" && hasQuery ? (
+            <SoundCloudResults query={query} />
+          ) : null}
           <section>
             {/* Ranked matches, not "related" content. The old heading told the
                 user these were loosely related when the list is in fact the
@@ -821,9 +831,11 @@ export default function Search() {
             <div className="mb-2 flex items-center gap-2">
               <Globe className="size-4 text-[rgb(var(--tint))]" />
               <h2 className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
-                {ytResults && ytResults.length > 0
-                  ? `Top matches (${ytResults.length})`
-                  : "Top matches"}
+                {searchSource === "soundcloud"
+                  ? "Also on YouTube Music"
+                  : ytResults && ytResults.length > 0
+                    ? `Top matches (${ytResults.length})`
+                    : "Top matches"}
               </h2>
             </div>
 
@@ -917,9 +929,12 @@ export default function Search() {
 
           {/* SoundCloud is a first-class playable source (unlike Jamendo, which
               stayed a discovery index): its rows play from SoundCloud's own
-              progressive streams through the decks. Rendered whenever there is
-              something to look for; it owns its loading and failure states. */}
-          {hasQuery ? <SoundCloudResults query={query} /> : null}
+              progressive streams through the decks. When it is the SELECTED
+              source it already leads above; this secondary render covers the
+              YouTube-Music-selected default so both indexes stay reachable. */}
+          {hasQuery && searchSource !== "soundcloud" ? (
+            <SoundCloudResults query={query} />
+          ) : null}
 
           {/* Jamendo is intentionally NOT rendered here.
               Creative Commons discovery lives behind the header CC switch,

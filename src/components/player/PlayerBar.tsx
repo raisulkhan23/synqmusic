@@ -6,6 +6,7 @@ import { SeekBar } from "@/components/player/SeekBar";
 import { TransportControls } from "@/components/player/TransportControls";
 import { VisualizerCanvas } from "@/components/player/VisualizerCanvas";
 import { VolumeControl } from "@/components/player/VolumeControl";
+import { AudioSettingsPanel } from "@/components/player/AudioSettingsPanel";
 import { accentFromString, dominantColor } from "@/lib/covers";
 import { formatTime } from "@/lib/format";
 import { toPlayableYoutube } from "@/lib/playable";
@@ -30,6 +31,7 @@ import {
   Moon,
   Scissors,
   Search,
+  SlidersHorizontal,
   Undo2,
   X,
 } from "lucide-react";
@@ -320,6 +322,9 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
   // never changes (it used to live after an early return, which broke React's
   // rules of hooks and could crash the player bar).
   const [likePulse, setLikePulse] = useState(false);
+  // The Audio panel (melo's audio customization card) — open state lives
+  // here because the trigger button sits in the bar's right cluster.
+  const [audioPanelOpen, setAudioPanelOpen] = useState(false);
   const toggleLike = usePlayerStore((s) => s.toggleLike);
   const queueOpen = usePlayerStore((s) => s.queueOpen);
   const setQueueOpen = usePlayerStore((s) => s.setQueueOpen);
@@ -847,6 +852,20 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
           <IntroTrimChip />
           <button
             type="button"
+            aria-label="Open audio settings"
+            aria-expanded={audioPanelOpen}
+            onClick={() => setAudioPanelOpen(!audioPanelOpen)}
+            className={cn(
+              "hidden rounded-full p-2 transition-colors hover:bg-white/[0.06] sm:block lg:p-1.5",
+              audioPanelOpen
+                ? "text-[rgb(var(--tint))]"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <SlidersHorizontal className="size-4" />
+          </button>
+          <button
+            type="button"
             aria-label="Open queue"
             onClick={() => setQueueOpen(!queueOpen)}
             className={cn(
@@ -881,6 +900,13 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
           <span style={{ transform: `scaleX(${playbackProgress / 100})` }} />
         </div>
       </footer>
+      {/* The Audio panel floats above the bar (fixed, so the footer's
+          overflow-hidden clip never cuts it) and closes on outside click,
+          Escape, or the header button. */}
+      <AudioSettingsPanel
+        open={audioPanelOpen}
+        onClose={() => setAudioPanelOpen(false)}
+      />
     </>
   );
 }

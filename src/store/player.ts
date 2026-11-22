@@ -13,16 +13,6 @@ import {
   setDeckMuted,
   setDeckRate,
   setAudioFilter,
-  setEqBass as setEqBassLib,
-  setEqTreble as setEqTrebleLib,
-  setEqBalance as setEqBalanceLib,
-  setEqMono as setEqMonoLib,
-  setEqBands as setEqBandsLib,
-  setDeckPitch as setDeckPitchLib,
-  setRatePreservesPitch as setRatePreservesPitchLib,
-  setReverbMix as setReverbMixLib,
-  setDistortion as setDistortionLib,
-  setVolumeNormalization as setVolumeNormalizationLib,
   ensureGraph,
   hasAudioProcessing,
   describeDecks,
@@ -43,6 +33,15 @@ import {
   AUDIO_FILTERS,
   type AudioFilterId,
 } from "@/lib/audio";
+// The audio customization settings (EQ curve, pitch, FX, gain, enhancer,
+// normalization) hydrate through their own store, which owns their
+// persistence and migration. Importing it here runs that hydration once at
+// startup, replacing the per-key localStorage restore this file used to do.
+import {
+  hydrateAudioSettings,
+  noteExternalSpeed,
+  useAudioSettingsStore,
+} from "@/store/audioSettings";
 import {
   DEFAULT_CROSSFADE,
   DEFAULT_GAPLESS,
@@ -278,7 +277,7 @@ const RESOLVE_RACE_MS = 1_200;
 function resolveWithDeadline(videoId: string): Promise<string | null> {
   return Promise.race([
     ytResolve(videoId),
-    new Promise<null>((r) => setTimeout(() => r(null), RESOLVE_RACE_MS)),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), RESOLVE_RACE_MS)),
   ]);
 }
 
@@ -965,7 +964,7 @@ interface PlayerStore {
   setExploration: (value: number) => void;
   cycleRepeat: () => void;
   setRate: (rate: number) => void;
-  setAudioFilter: (id: AudioFilterId) => void;
+  setAudioFilter: (id: AudioFilterId) => boolean;
   /** minutes, "end" (after current song) or null to cancel */
   setSleepTimer: (mode: number | "end" | "queue" | null) => void;
   /** Turn smart intro trim on/off. Persisted like every other preference. */
@@ -1226,7 +1225,22 @@ const initialIntroTrim = readBool("ss.introTrim", false);
 const storedRepeat = localStorage.getItem("ss.repeat");
 const initialRepeat: RepeatMode =
   storedRepeat === "all" || storedRepeat === "one" ? storedRepeat : "off";
-const initialRate = Math.min(2, Math.max(0.5, readNum("ss.rate", 1)));
+// The HUD's starting rate mirrors the hydrated audio settings model, not a
+// bare ss.rate read: the model owns the speed restore (including WHICH mode —
+// preserving or tape — owns the rate), and its store constructs during this
+// module's imports, so the hydrated values are already applied to the engine
+// by the time this line runs. ss.rate stays in lockstep because every speed
+// write goes through both stores.
+const hydratedAudioModel = useAudioSettingsStore.getState().audio;
+const initialRate = Math.min(
+  2,
+  Math.max(
+    0.5,
+    hydratedAudioModel.speedPitch !== 1
+      ? hydratedAudioModel.speedPitch
+      : hydratedAudioModel.speed,
+  ),
+);
 const initialAutoplay = readBool("ss.autoplay", true);
 // Video presentation defaults OFF — the audio player is the product and the
 // overlaid YouTube player has been unreliable. It is a persisted preference
@@ -3196,51 +3210,19 @@ function wireAudio() {
   wired = true;
   setDeckVolume(initialVolume);
   setDeckMuted(initialMuted);
-  setDeckRate(initialRate);
+  // NOTE: no deck-rate write here. The audio settings model owns the speed
+  // restore and was applied to the decks when this module imported it — and
+  // a bare preserving-rate write at this point would silently flip a
+  // persisted tape-speed (Speed (pitch)) back to the preserving mode, because
+  // the preserving setter always hands ownership to the Speed setting. The
+  // HUD's initial `rate` is derived from the hydrated model instead.
 
-  // Restore persisted audio settings (EQ / balance / mono / 10-band curve /
-  // pitch / reverb / distortion / normalization).
-  try {
-    const eq = JSON.parse(localStorage.getItem("ss.eq") ?? "{}") as {
-      bass?: number;
-      treble?: number;
-      balance?: number;
-      mono?: boolean;
-      bands?: number[];
-      filter?: string;
-    };
-    if (typeof eq.bass === "number") setEqBassLib(eq.bass);
-    if (typeof eq.treble === "number") setEqTrebleLib(eq.treble);
-    if (typeof eq.balance === "number") setEqBalanceLib(eq.balance);
-    if (eq.mono) setEqMonoLib(true);
-    if (Array.isArray(eq.bands)) setEqBandsLib(eq.bands);
-    // Sound effects are intentionally session-only. Applying a persisted
-    // effect after startup made Bass Boost appear at random while a track was
-    // already playing; the user must explicitly enable it again.
-  } catch {
-    /* ignore */
-  }
-  try {
-    const pitch = JSON.parse(localStorage.getItem("ss.pitch") ?? "{}") as {
-      semitones?: number;
-      preserve?: boolean;
-    };
-    if (typeof pitch.preserve === "boolean") setRatePreservesPitchLib(pitch.preserve);
-    if (typeof pitch.semitones === "number")
-      setDeckPitchLib(Math.min(12, Math.max(-12, pitch.semitones)));
-  } catch {
-    /* ignore */
-  }
-  try {
-    const reverb = Number(localStorage.getItem("ss.reverb"));
-    if (Number.isFinite(reverb) && reverb > 0) setReverbMixLib(Math.min(1, reverb / 100));
-    const distortion = Number(localStorage.getItem("ss.distortion"));
-    if (Number.isFinite(distortion) && distortion > 0)
-      setDistortionLib(Math.min(100, distortion));
-    setVolumeNormalizationLib(localStorage.getItem("ss.normalize") === "1");
-  } catch {
-    /* ignore */
-  }
+  // Restore the audio customization settings (EQ / balance / mono / 10-band
+  // curve / pitch / speed mode / reverb / distortion / echo / gain / enhancer
+  // / normalization). The audio settings store owns the keys, the migration
+  // from the old per-key blobs, and the engine application — this call just
+  // makes sure it has happened by the time playback can start.
+  hydrateAudioSettings();
 
   bindAudioDeck(getAudio());
 
@@ -4767,6 +4749,10 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     // Both decks: a prepared incoming track must not start at the old speed.
     setDeckRate(r);
     ytEngine.setRate(r);
+    // The Audio panel mirrors the speed model — a rate set here (fullscreen
+    // dropdown, keyboard shortcuts) moves ownership to the preserving "Speed"
+    // setting there, so the two UIs can never disagree about the speed.
+    noteExternalSpeed(r);
     writeSetting("ss.rate", String(r));
     set({ rate: r });
     // Nudge the seek bar / HUD to re-sync: the YouTube engine reports time in
@@ -4778,11 +4764,14 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     }
   };
 
-  const setAudioFilterAction = (id: AudioFilterId) => {
+  const setAudioFilterAction = (id: AudioFilterId): boolean => {
     // Warm the graph in the same gesture — a suspended context makes the
     // whole effect chain a silent no-op.
     if (id !== "off") ensureGraph();
-    setAudioFilter(id);
+    // Surface the engine's answer: false means Web Audio could not be built,
+    // and callers must not present the effect as active.
+    const ok = setAudioFilter(id);
+    if (!ok) return false;
     set({ audioFilter: id });
     if (id !== "off") {
       trackEvent("audio_effect_applied", {
@@ -4853,6 +4842,7 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
     // it explicitly: a left-over fixed overlay is a click blocker, and this is
     // the exact moment one used to appear (enabling an effect).
     if (!get().fullscreen) ytEngine.dismissVideo();
+    return true;
   };
 
   /**

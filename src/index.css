@@ -91,66 +91,62 @@
   --duration-press: 120ms;
   --duration-ui: 200ms;
   --duration-panel: 280ms;
-  /* Warm ink, not blue-black. The old `262` hue was a blue-grey that made every
-     surface read as a developer dashboard; ±76 keeps the same darkness but
-     puts the neutrals in the same family as the accent, so nothing looks like
-     two palettes stacked. */
-  --background: oklch(0.148 0.007 76);
-  --foreground: oklch(0.96 0.006 85);
-  --card: oklch(0.19 0.008 76);
-  --card-foreground: oklch(0.96 0.006 85);
-  --popover: oklch(0.205 0.009 76);
-  --popover-foreground: oklch(0.96 0.006 85);
-  /* Brass. Deliberately NOT the acid lime the app shipped with: lime-on-black
-     is the default palette of every 2025 AI product, and it fought the violet
-     brand artwork. Hue 82 is far enough from `--destructive` (22) that the two
-     never read as the same signal. */
-  --primary: oklch(0.8 0.115 82);
-  --primary-foreground: oklch(0.165 0.02 76);
-  --secondary: oklch(0.25 0.009 76);
-  --secondary-foreground: oklch(0.96 0.006 85);
-  --muted: oklch(0.23 0.008 76);
-  --muted-foreground: oklch(0.725 0.012 82);
-  --accent: oklch(0.255 0.009 76);
-  --accent-foreground: oklch(0.96 0.006 85);
+  /* The reference desktop palette: near-black and charcoal, NEUTRAL grey
+     (no warm cast), hairline borders, and the SYNQ lime reserved for
+     selected states and important controls. Everything else stays quiet. */
+  --background: oklch(0.148 0 0);
+  --foreground: oklch(0.955 0 0);
+  --card: oklch(0.168 0.002 270);
+  --card-foreground: oklch(0.955 0 0);
+  --popover: oklch(0.185 0.003 270);
+  --popover-foreground: oklch(0.955 0 0);
+  /* SYNQ lime (#CBF48F) — selected states and primary controls only. It
+     carries the whole accent system, which is why it appears once here and
+     everywhere else reads it indirectly. */
+  --primary: oklch(0.91 0.125 118);
+  --primary-foreground: oklch(0.2 0.04 118);
+  --secondary: oklch(0.23 0.002 270);
+  --secondary-foreground: oklch(0.955 0 0);
+  --muted: oklch(0.215 0.002 270);
+  --muted-foreground: oklch(0.665 0.005 275);
+  --accent: oklch(0.24 0.003 270);
+  --accent-foreground: oklch(0.955 0 0);
   --destructive: oklch(0.7 0.19 22);
   --border: oklch(1 0 0 / 9%);
   --input: oklch(1 0 0 / 12%);
-  --ring: oklch(0.8 0.115 82 / 55%);
-  /* A chart ramp, not a rainbow: brass → copper → clay → sage → dusty violet.
-     Five unrelated hues is what makes a stats page look generically "data". */
-  --chart-1: oklch(0.8 0.115 82);
-  --chart-2: oklch(0.72 0.11 62);
-  --chart-3: oklch(0.66 0.08 42);
-  --chart-4: oklch(0.7 0.06 150);
-  --chart-5: oklch(0.62 0.07 300);
-  --sidebar: oklch(0.163 0.007 76);
-  --sidebar-foreground: oklch(0.9 0.006 82);
-  --sidebar-primary: oklch(0.8 0.115 82);
-  --sidebar-primary-foreground: oklch(0.165 0.02 76);
-  --sidebar-accent: oklch(0.25 0.009 76);
-  --sidebar-accent-foreground: oklch(0.96 0.006 85);
+  --ring: oklch(0.91 0.125 118 / 55%);
+  /* A chart ramp, not a rainbow: lime → mint → teal → sand → dusty violet. */
+  --chart-1: oklch(0.91 0.125 118);
+  --chart-2: oklch(0.78 0.1 150);
+  --chart-3: oklch(0.72 0.08 190);
+  --chart-4: oklch(0.8 0.07 90);
+  --chart-5: oklch(0.66 0.07 300);
+  --sidebar: oklch(0.175 0.002 270);
+  --sidebar-foreground: oklch(0.94 0 0);
+  --sidebar-primary: oklch(0.91 0.125 118);
+  --sidebar-primary-foreground: oklch(0.2 0.04 118);
+  --sidebar-accent: oklch(0.24 0.003 270);
+  --sidebar-accent-foreground: oklch(0.955 0 0);
   --sidebar-border: oklch(1 0 0 / 8%);
-  --sidebar-ring: oklch(0.8 0.115 82 / 50%);
+  --sidebar-ring: oklch(0.91 0.125 118 / 50%);
 
-  /* SYNQ brand accent (the "sleeve brass") */
-  --brand: oklch(0.8 0.115 82);
-  --brand-foreground: oklch(0.165 0.02 76);
+  /* SYNQ brand accent (the lime) */
+  --brand: oklch(0.91 0.125 118);
+  --brand-foreground: oklch(0.2 0.04 118);
 
-  /* dynamic album-art tint (overridden by the player); default = brand brass */
-  --tint: 227 182 98;
+  /* dynamic album-art tint (overridden by the player); default = the lime */
+  --tint: 203 244 143;
 
   /* ── Surface container scale (ported from the melo reference) ─────────────
      melo builds its floating-panel composition from five elevation steps and
-     times its motion on one emphasized curve. Both are ported here in SYNQ's
-     own warm-ink palette rather than melo's zinc greys — the GEOMETRY and the
-     TIMING are the reference, not its grey. Components should pick the step
-     that matches their nesting depth instead of inventing alpha whites. */
-  --surface-lowest: oklch(0.125 0.007 76);
-  --surface-low: oklch(0.163 0.007 76);
-  --surface-container: oklch(0.19 0.008 76);
-  --surface-high: oklch(0.225 0.009 76);
-  --surface-highest: oklch(0.255 0.009 76);
+     times its motion on one emphasized curve. Neutral charcoal to match the
+     reference desktop palette. Components should pick the step that matches
+     their nesting depth instead of inventing alpha whites. */
+  --surface-lowest: oklch(0.125 0 0);
+  --surface-low: oklch(0.163 0.002 270);
+  --surface-container: oklch(0.19 0.002 270);
+  --surface-high: oklch(0.225 0.003 270);
+  --surface-highest: oklch(0.26 0.003 270);
   /* Corner of the big floating panels (content card, playbar). melo's 28px
      corner is the signature of its desktop composition. */
   --radius-panel: 1.75rem;
@@ -178,12 +174,12 @@
 /* AMOLED mode: true-black variant of dark (set alongside .dark) */
 html.amoled.dark {
   --background: oklch(0 0 0);
-  --card: oklch(0.095 0.005 76);
-  --popover: oklch(0.105 0.006 76);
-  --sidebar: oklch(0.07 0.004 76);
-  --secondary: oklch(0.18 0.008 76);
-  --accent: oklch(0.19 0.008 76);
-  --muted: oklch(0.16 0.007 76);
+  --card: oklch(0.095 0 0);
+  --popover: oklch(0.105 0 0);
+  --sidebar: oklch(0.07 0 0);
+  --secondary: oklch(0.18 0 0);
+  --accent: oklch(0.19 0 0);
+  --muted: oklch(0.16 0 0);
   --border: oklch(1 0 0 / 7%);
 }
 
@@ -224,40 +220,40 @@ html.light img {
 }
 
 .dark {
-  --background: oklch(0.148 0.007 76);
-  --foreground: oklch(0.96 0.006 85);
-  --card: oklch(0.19 0.008 76);
-  --card-foreground: oklch(0.96 0.006 85);
-  --popover: oklch(0.205 0.009 76);
-  --popover-foreground: oklch(0.96 0.006 85);
-  --primary: oklch(0.8 0.115 82);
-  --primary-foreground: oklch(0.165 0.02 76);
-  --secondary: oklch(0.25 0.009 76);
-  --secondary-foreground: oklch(0.96 0.006 85);
-  --muted: oklch(0.23 0.008 76);
-  --muted-foreground: oklch(0.725 0.012 82);
-  --accent: oklch(0.255 0.009 76);
-  --accent-foreground: oklch(0.96 0.006 85);
+  --background: oklch(0.148 0 0);
+  --foreground: oklch(0.955 0 0);
+  --card: oklch(0.168 0.002 270);
+  --card-foreground: oklch(0.955 0 0);
+  --popover: oklch(0.185 0.003 270);
+  --popover-foreground: oklch(0.955 0 0);
+  --primary: oklch(0.91 0.125 118);
+  --primary-foreground: oklch(0.2 0.04 118);
+  --secondary: oklch(0.23 0.002 270);
+  --secondary-foreground: oklch(0.955 0 0);
+  --muted: oklch(0.215 0.002 270);
+  --muted-foreground: oklch(0.665 0.005 275);
+  --accent: oklch(0.24 0.003 270);
+  --accent-foreground: oklch(0.955 0 0);
   --destructive: oklch(0.7 0.19 22);
   --border: oklch(1 0 0 / 9%);
   --input: oklch(1 0 0 / 12%);
-  --ring: oklch(0.8 0.115 82 / 55%);
-  --chart-1: oklch(0.8 0.115 82);
-  --chart-2: oklch(0.72 0.11 62);
-  --chart-3: oklch(0.66 0.08 42);
-  --chart-4: oklch(0.7 0.06 150);
-  --chart-5: oklch(0.62 0.07 300);
-  --sidebar: oklch(0.163 0.007 76);
-  --sidebar-foreground: oklch(0.9 0.006 82);
-  --sidebar-primary: oklch(0.8 0.115 82);
-  --sidebar-primary-foreground: oklch(0.165 0.02 76);
-  --sidebar-accent: oklch(0.25 0.009 76);
-  --sidebar-accent-foreground: oklch(0.96 0.006 85);
+  --ring: oklch(0.91 0.125 118 / 55%);
+  --chart-1: oklch(0.91 0.125 118);
+  --chart-2: oklch(0.78 0.1 150);
+  --chart-3: oklch(0.72 0.08 190);
+  --chart-4: oklch(0.8 0.07 90);
+  --chart-5: oklch(0.66 0.07 300);
+  --sidebar: oklch(0.175 0.002 270);
+  --sidebar-foreground: oklch(0.94 0 0);
+  --sidebar-primary: oklch(0.91 0.125 118);
+  --sidebar-primary-foreground: oklch(0.2 0.04 118);
+  --sidebar-accent: oklch(0.24 0.003 270);
+  --sidebar-accent-foreground: oklch(0.955 0 0);
   --sidebar-border: oklch(1 0 0 / 8%);
-  --sidebar-ring: oklch(0.8 0.115 82 / 50%);
-  --brand: oklch(0.8 0.115 82);
-  --brand-foreground: oklch(0.165 0.02 76);
-  --tint: 227 182 98;
+  --sidebar-ring: oklch(0.91 0.125 118 / 50%);
+  --brand: oklch(0.91 0.125 118);
+  --brand-foreground: oklch(0.2 0.04 118);
+  --tint: 203 244 143;
 }
 
 /* Signature scenes coordinate the full accent system without overriding the
@@ -267,15 +263,18 @@ html.light img {
    system, the sidebar ring, and the `--tint` the rest of the UI already
    reads. */
 html[data-scene="studio"] {
-  --primary: oklch(0.8 0.115 82);
-  --primary-foreground: oklch(0.165 0.02 76);
-  --ring: oklch(0.8 0.115 82 / 55%);
-  --chart-1: oklch(0.8 0.115 82);
-  --sidebar-primary: oklch(0.8 0.115 82);
-  --sidebar-ring: oklch(0.8 0.115 82 / 48%);
-  --brand: oklch(0.8 0.115 82);
-  --brand-foreground: oklch(0.165 0.02 76);
-  --tint: 227 182 98;
+  /* The DEFAULT scene = the reference desktop palette: neutral charcoal with
+     the SYNQ lime accent. Kept identical to the .dark base so "studio" is
+     the shipped look rather than a re-theme. */
+  --primary: oklch(0.91 0.125 118);
+  --primary-foreground: oklch(0.2 0.04 118);
+  --ring: oklch(0.91 0.125 118 / 55%);
+  --chart-1: oklch(0.91 0.125 118);
+  --sidebar-primary: oklch(0.91 0.125 118);
+  --sidebar-ring: oklch(0.91 0.125 118 / 48%);
+  --brand: oklch(0.91 0.125 118);
+  --brand-foreground: oklch(0.2 0.04 118);
+  --tint: 203 244 143;
 }
 
 html[data-scene="aurora"] {

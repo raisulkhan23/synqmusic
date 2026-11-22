@@ -53,6 +53,12 @@ function Slider({
         <SliderPrimitive.Thumb
           data-slot="slider-thumb"
           key={index}
+          // The accessible name belongs on the THUMB the user focuses, not
+          // the root Radix drops it on — an aria-label passed to this
+          // component labels the thumb, so keyboard users hear which slider
+          // they are on.
+          aria-label={props["aria-label"]}
+          aria-disabled={props.disabled === true ? true : undefined}
           className="border-primary ring-ring/50 block size-4 shrink-0 rounded-full border bg-white shadow-sm transition-[color,box-shadow] hover:ring-4 focus-visible:ring-4 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50"
         />
       ))}

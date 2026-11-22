@@ -18,6 +18,9 @@ import { PlayerBar } from "@/components/player/PlayerBar";
 import { QueuePanel } from "@/components/player/QueuePanel";
 import { useIntroTrim } from "@/components/player/useIntroTrim";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { TopBar } from "@/components/shell/TopBar";
+import { RightPanel } from "@/components/shell/RightPanel";
+import { useShellStore } from "@/lib/shell";
 import { MobileMoreMenu } from "@/components/layout/MobileMoreMenu";
 import { Logo } from "@/components/brand/Logo";
 import { SiteFooter } from "@/components/landing/SiteFooter";
@@ -365,6 +368,8 @@ export function AppShell() {
   const accent = usePlayerStore((s) => s.accent);
   const accentTheme = usePlayerStore((s) => s.accentTheme);
   const compactMode = usePlayerStore((s) => s.compactMode);
+  // The lyrics / now-playing column (the reference's third workspace panel).
+  const rightPanelOpen = useShellStore((s) => s.rightPanelOpen);
   const ambientGlow = usePlayerStore((s) => s.ambientGlow);
   const wallpaper = usePlayerStore((s) => s.wallpaper);
   const wallpaperType = usePlayerStore((s) => s.wallpaperType);
@@ -767,7 +772,7 @@ export function AppShell() {
     <div
       ref={shellRef}
       className={cn(
-        "theme-surface relative isolate flex h-dvh overflow-hidden bg-background text-foreground",
+        "theme-surface relative isolate flex h-dvh flex-col overflow-hidden bg-background text-foreground",
         compactMode && "compact-shell",
         focusLayout === "study" && "focus-study",
         focusLayout === "work" && "focus-work",
@@ -870,6 +875,14 @@ export function AppShell() {
             <div className="absolute inset-0 bg-gradient-to-b from-background/20 via-background/10 to-background/55" />
           </div>
         )}
+      {/* The reference's global search row spans the full width above the
+          three-column workspace (sidebar · content · lyrics panel). Mobile
+          hides it: the phone has its own top bar and search page. */}
+      <div className="hidden shrink-0 lg:block">
+        <TopBar />
+      </div>
+
+      <div className="flex min-h-0 min-w-0 flex-1">
       <Sidebar />
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -986,12 +999,20 @@ export function AppShell() {
               kind of thing the mode exists to remove. */}
           {!focusMode && <SiteFooter />}
         </main>
+      </div>
 
-        <PlayerBar
-          compact={
-            compactMode || focusLayout === "work" || focusLayout === "sleep"
-          }
-        />
+      {/* The reference's persistent right panel: lyrics / now-playing. It
+          belongs to the SHELL — it stays mounted while the centre column
+          changes route, exactly like the sidebar and the player. Collapsible
+          from its own header; the preference persists. */}
+      {rightPanelOpen && <RightPanel />}
+      </div>
+
+      <PlayerBar
+        compact={
+          compactMode || focusLayout === "work" || focusLayout === "sleep"
+        }
+      />
 
         {/* Mobile bottom nav. Display, column count, stacking AND the desktop
             hide are all owned by `.mobile-bottom-nav` in index.css. They were
@@ -1038,7 +1059,6 @@ export function AppShell() {
             );
           })}
         </nav>
-      </div>
 
       <QueuePanel />
       {/* Mounted once each, at the shell level. Both render null until they
