@@ -56,14 +56,24 @@ export function TopBar() {
   };
 
   return (
-    <div className="flex shrink-0 items-center justify-between gap-3 px-4 py-2.5 sm:px-6">
+    /*
+      A THREE-COLUMN GRID, not `justify-between`.
+
+      With a flex row the search only LOOKED centred when the two side groups
+      happened to be the same width — they are not: the left group is one 32px
+      button and the right holds that plus two source pills. So the input sat
+      left of centre and drifted further as the source labels grew. Equal
+      `1fr` outer columns pin the middle column at the row's true centre no
+      matter what either side contains.
+    */
+    <div className="grid shrink-0 grid-cols-[minmax(0,1fr)_minmax(0,36rem)_minmax(0,1fr)] items-center gap-3 px-4 py-2.5 sm:px-6">
       {/* Sidebar collapse/expand toggle — only on desktop where sidebar exists */}
       <button
         type="button"
         aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
         title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
         onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-        className="hidden shrink-0 lg:flex size-8 items-center justify-center rounded-lg border border-white/[0.08] text-muted-foreground transition-colors hover:border-white/25 hover:text-foreground"
+        className="hidden size-8 shrink-0 items-center justify-center justify-self-start rounded-lg border border-white/[0.08] text-muted-foreground transition-colors hover:border-white/25 hover:text-foreground lg:flex"
       >
         {sidebarCollapsed ? (
           <ChevronRight className="size-4" />
@@ -74,7 +84,7 @@ export function TopBar() {
 
       {/* Centered search form — takes available space between sidebar toggle and right controls */}
       <form
-        className="relative flex-1 max-w-xl mx-4"
+        className="relative w-full"
         onSubmit={(event) => {
           event.preventDefault();
           submit();
@@ -109,7 +119,7 @@ export function TopBar() {
       </form>
 
       {/* Right controls group: lyrics panel toggle + source selector */}
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex shrink-0 items-center justify-self-end gap-2">
         {/* Lyrics panel toggle — on the RIGHT side, near the right panel it controls */}
         <button
           type="button"

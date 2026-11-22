@@ -120,6 +120,7 @@ import {
   registerAudioRouteLossHandler,
 } from "@/lib/mediaSession";
 import { useAuthGate, type AuthIntent } from "@/store/authGate";
+import { useShellStore } from "@/lib/shell";
 
 /**
  * Resolve a direct audio stream URL for a YouTube video via the Convex
@@ -261,25 +262,14 @@ const resolveYoutubeStream = async (
   return url;
 };
 
-/**
- * Resolve, but never wait forever.
- *
- * `ytResolve` talks to a Convex action and then to a list of public Piped
- * instances. Any of those can hang — and while it does, the track sits at
- * `isBuffering: true` with position 0.0 and no sound, because the IFrame that
- * could have played it has not been started yet. Resolution therefore loses a
- * race against a short timer: the YouTube player is the only audio source that
- * has ever reliably worked, so it must never be gated behind a best-effort
- * lookup.
- */
-const RESOLVE_RACE_MS = 1_200;
-
-function resolveWithDeadline(videoId: string): Promise<string | null> {
-  return Promise.race([
-    ytResolve(videoId),
-    new Promise<null>((resolve) => setTimeout(() => resolve(null), RESOLVE_RACE_MS)),
-  ]);
-}
+// NOTE: `resolveWithDeadline` (a 1.2s race against `ytResolve`) used to live
+// here. It was retired because resolution normally takes longer than 1.2s, so
+// the timer won the race, the deck was abandoned with no source, and playback
+// fell through to the IFrame — the engine that hangs forever when YouTube
+// refuses to play. The deck path now races a generous 15s cap inline (see
+// `loadTrack`), which only guards a hung fetch instead of betting on the
+// IFrame. Nothing calls this helper any more, so it is gone rather than left
+// as a trap for the next reader.
 
 const ytResolveCache = new Map<string, Promise<string | null>>();
 
@@ -5524,12 +5514,18 @@ export const usePlayerStore = create<PlayerStore>()((set, get) => {
       }),
 
     hideSidebarEmail: localStorage.getItem("ss.hideSidebarEmail") === "1",
-    toggleSidebarCollapsed: () =>
-      set((state) => {
-        const next = !state.sidebarCollapsed;
-        writeSetting("ss.sidebarCollapsed", next ? "1" : "0");
-        return { sidebarCollapsed: next };
-      }),
+    // The SIDEBAR renders from the shell store, which owns this flag, so this
+    // mirrors that store instead of flipping a second copy. Keeping its own
+    // boolean here meant anything that went through this action — the
+    // preferences sync applying another device's value, for one — wrote
+    // `ss.sidebarCollapsed`, flipped a flag nothing rendered from, and left
+    // the visible sidebar untouched until a reload.
+    toggleSidebarCollapsed: () => {
+      const shell = useShellStore.getState();
+      const next = !shell.sidebarCollapsed;
+      shell.setSidebarCollapsed(next);
+      set({ sidebarCollapsed: next });
+    },
     sidebarCollapsed: localStorage.getItem("ss.sidebarCollapsed") === "1",
     toggleHideSidebarEmail: () =>
       set((state) => {

@@ -358,9 +358,10 @@ const convex = new ConvexReactClient(
   convexUrl || "https://about.blank.internal",
   // skipConvexDeploymentUrlCheck: the stand-in above is deliberately not a
   // real deployment id, and the SDK aborts on that check otherwise.
-  convexUrl
-    ? undefined
-    : ({ skipConvexDeploymentUrlCheck: true } as unknown),
+  // No cast: `skipConvexDeploymentUrlCheck` is a real field of
+  // ConvexReactClientOptions. Casting the object to `unknown` only made the
+  // whole argument unassignable and broke `tsc -b`.
+  convexUrl ? undefined : { skipConvexDeploymentUrlCheck: true },
 );
 
 /** Keeps \`html.perf-lite\` in sync with the store.

@@ -2,6 +2,7 @@ import { useAction } from "convex/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Cloud,
+  Download,
   ExternalLink,
   Heart,
   Loader2,
@@ -11,6 +12,8 @@ import {
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import { toPlayableSoundcloud } from "@/lib/playable";
+import { requestAuthorizedDownload } from "@/lib/authorizedDownload";
+import { nativeDownloadsSupported } from "@/lib/nativeDownloads";
 import { usePlayerStore } from "@/store/player";
 import type { ScTrack } from "@/convex/soundcloud";
 
@@ -153,8 +156,16 @@ function SoundCloudRow({
 }) {
   const liked = usePlayerStore((s) => s.liked);
   const toggleLike = usePlayerStore((s) => s.toggleLike);
+  const authorizeDownload = useAction(api.downloads.authorizeDownload);
   const playable = toPlayableSoundcloud(track);
   const isLiked = liked[playable.id] !== undefined;
+  // Every other surface (the track menu, the fullscreen player) offers the
+  // download action for an `sc:` track and lets the SERVER decide: the search
+  // row was the one place a downloadable SoundCloud upload could not be saved
+  // at all. The grant is re-read server-side on this request, so the button is
+  // an offer, not a claim — an upload whose artist never enabled downloads
+  // comes back with the honest refusal.
+  const canDownload = nativeDownloadsSupported();
 
   return (
     <div className="group flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors hover:bg-white/[0.05]">
@@ -218,6 +229,33 @@ function SoundCloudRow({
           }
         />
       </button>
+      {canDownload ? (
+        <button
+          type="button"
+          aria-label={`Download ${track.title}`}
+          title="Download"
+          onClick={() => {
+            void (async () => {
+              const result = await requestAuthorizedDownload(
+                authorizeDownload,
+                playable.id,
+              );
+              if (result.started) {
+                toast.success("Download started");
+              } else {
+                toast.error(result.refusal.message, {
+                  description: result.refusal.retryable
+                    ? "Try again in a moment."
+                    : undefined,
+                });
+              }
+            })();
+          }}
+          className="shrink-0 rounded-full p-1.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-foreground"
+        >
+          <Download className="size-3.5" />
+        </button>
+      ) : null}
       {track.permalinkUrl ? (
         <a
           href={track.permalinkUrl}

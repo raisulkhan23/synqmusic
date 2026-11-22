@@ -335,6 +335,24 @@ export function loadAudioSettings(): AudioSettings {
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
 /**
+ * Drop a pending debounced save WITHOUT writing it.
+ *
+ * `saveAudioSettings` is debounced (300ms) through a module-level timer, so a
+ * caller that changes settings and then hands control elsewhere leaves a write
+ * armed. That write reads `localStorage` when it FIRES, not when it was
+ * scheduled — so in a test process, where several test FILES share this module
+ * but each installs its own window, the late write lands in the next file's
+ * freshly seeded storage and replaces its fixture. Cancelling first makes the
+ * next file's starting state its own.
+ */
+export function cancelPendingAudioSettingsSave(): void {
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+}
+
+/**
  * Persist the settings (debounced, melo's 300 ms) so a slider drag does not
  * serialize on every input event. Writes only the versioned blob — the
  * legacy keys are never resurrected.

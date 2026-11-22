@@ -33,6 +33,16 @@ globalThis.Audio = win.Audio;
 globalThis.requestAnimationFrame = () => 0;
 globalThis.cancelAnimationFrame = () => {};
 
+// A previous test file can leave a 300ms debounced save armed in
+// lib/audioSettings. It reads `localStorage` when it FIRES, so it would land in
+// THIS window's storage after the fixture below is seeded and replace the tape
+// speed with that file's defaults — the flake this test used to show on a slow
+// first run. Cancel it before seeding so the starting state is ours.
+const { cancelPendingAudioSettingsSave } = await import(
+  "../src/lib/audioSettings.ts"
+);
+cancelPendingAudioSettingsSave();
+
 // A persisted TAPE speed (Speed (pitch) owns the rate) — the exact shape the
 // startup bug used to destroy.
 win.localStorage.setItem(
@@ -48,6 +58,12 @@ const {
   noteExternalSpeed,
 } = await import("../src/store/audioSettings.ts");
 const engine = await import("../src/lib/audio.ts");
+
+// Start from a NEUTRAL engine. bun shares canonical module instances across
+// test FILES in one process, so without this the tape/EQ state an earlier file
+// left behind decides this test's starting point and it can fail on a run
+// order it never chose.
+engine.resetAudioEngine();
 
 describe("the speed model survives full startup", () => {
   test("wireAudio's hydration leaves a persisted tape speed owning the rate", () => {

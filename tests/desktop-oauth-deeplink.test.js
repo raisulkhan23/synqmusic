@@ -116,9 +116,14 @@ describe("the server-rewritten synq:// callback URL validates", () => {
   });
 
   test("both slash forms of the callback are understood", () => {
-    oauth.recordPendingCallback("path-form", { nonce: "n", ts: Date.now() });
+    // ONE clock read, used for both the record and the URL. Validation requires
+    // the URL's `ts` to EQUAL the recorded one (that is what rejects a replay
+    // with a rewritten timestamp), so reading the clock twice made this test
+    // fail whenever a millisecond ticked between the two calls.
+    const ts = Date.now();
+    oauth.recordPendingCallback("path-form", { nonce: "n", ts });
     const pathForm = oauth.parseDeepLinkParams(
-      `synq:/callback?client=path-form&ts=${Date.now()}&nonce=n&code=C`,
+      `synq:/callback?client=path-form&ts=${ts}&nonce=n&code=C`,
     );
     expect(pathForm).not.toBeNull();
     expect(pathForm.code).toBe("C");

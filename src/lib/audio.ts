@@ -1936,3 +1936,46 @@ export function ensureDeckAttached(slot: "a" | "b"): boolean {
     return !!deck.source;
   }
 }
+
+/**
+ * Return every USER-CONTROLLED engine value to its neutral default.
+ *
+ * The engine's settings live in module-level variables, which is exactly right
+ * in the app — a hot reload must not drop the listener's EQ — and exactly
+ * wrong inside one test process, where bun shares canonical module instances
+ * across test FILES. A test asserting "a persisted tape speed survives
+ * hydration" could otherwise inherit whatever tape state an earlier file left
+ * behind, and fail on a run order it never chose.
+ *
+ * This goes through the PUBLIC setters rather than assigning the variables, so
+ * an already-built graph receives the same neutral values (a reset that left the
+ * EQ filters at their old dB would only look reset).
+ *
+ * Deliberately NOT reset: the AudioContext, the decks, the graph and
+ * `graphBuildFailed`. One MediaElementSource per element is a spec limit, so a
+ * "reset" that closed the context or re-captured a deck would make the graph
+ * unrecoverable for the rest of the session — a worse defect than the ordering
+ * noise this fixes. `graphBuildFailed` is a fact about the device, not user
+ * state, so it stays true once it is true.
+ */
+export function resetAudioEngine(): void {
+  setEqBass(0);
+  setEqTreble(0);
+  setEqBalance(0);
+  setEqMono(false);
+  resetEqBands();
+  // 1.00x hands the rate back to preserving mode, so this clears tapeMode too.
+  setTapeSpeed(1);
+  setDeckPitch(0);
+  setRatePreservesPitch(true);
+  setReverbMix(0);
+  setDistortion(0);
+  setEcho(0);
+  setVolumeGain(1);
+  setEnhancer(false, { engine: "harmonic", vocal: 0, air: 0, bass: 0 });
+  setVolumeNormalization(false);
+  setAudioFilter("off");
+  // The 8D orbit is a rAF loop; leaving it running would keep panning a deck
+  // that is supposed to be neutral, and in a test process it outlives the test.
+  stopRotation();
+}

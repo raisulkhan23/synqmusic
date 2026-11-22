@@ -63,13 +63,17 @@ describe("a total resolver outage must not stop playback", () => {
     expect(branch).not.toContain("resolveWithDeadline(videoId)");
   });
 
-  test("the deadline is short enough to actually save the track", () => {
-    // Long enough to catch a warm resolver, short enough that the listener is
-    // not staring at a spinner. 1.2s.
-    expect(player).toMatch(/const RESOLVE_RACE_MS = 1_200;/);
-    expect(player).toMatch(
-      /function resolveWithDeadline[\s\S]{0,600}?setTimeout\(\(\) => r\(null\), RESOLVE_RACE_MS\)/,
-    );
+  test("the retired 1.2s deadline cannot come back", () => {
+    // This test used to pin `RESOLVE_RACE_MS = 1_200` and the
+    // `resolveWithDeadline` helper. Both were retired for the reason the deck
+    // test above states: a 1.2s race loses to a normal resolver, abandons the
+    // deck, and hands playback to the IFrame that hangs on a bot-check. The
+    // helper is deleted now, so this pins its absence — reintroducing it would
+    // restore the exact defect the rest of this file exists to prevent.
+    // Matched as DEFINITIONS, not bare words: the retired helper is still
+    // named in a comment explaining why it is gone, and that note is useful.
+    expect(player).not.toMatch(/const RESOLVE_RACE_MS\s*=/);
+    expect(player).not.toMatch(/function resolveWithDeadline\s*\(/);
   });
 
   test("the IFrame fallback is armed with a watchdog", () => {

@@ -118,6 +118,25 @@ async function settle() {
   await new Promise((resolve) => setTimeout(resolve, 100));
 }
 
+/**
+ * Wait until the previous view is really gone.
+ *
+ * After a click the router commits and the new page's effects land on their
+ * own schedule, which a fixed sleep cannot predict: under load the sleep
+ * expired before the commit, the URL had changed but the old page was still on
+ * screen, and the test failed on an app that was working. Polling the actual
+ * user-visible outcome is both deterministic and still an assertion that the
+ * swap happened — it throws if the view never changes.
+ */
+async function waitForView(container, gone, timeoutMs = 8000) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (!container.textContent.includes(gone)) return;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error(`the view never swapped away from "${gone}"`);
+}
+
 function click(container, selector) {
   const el = container.querySelector(selector);
   if (!el) throw new Error(`no element matched ${selector}`);
@@ -168,6 +187,7 @@ describe("clicking through to an artist in a real DOM", () => {
 
     await click(container, `a[href="${ARTIST_HREF}"]`);
 
+    await waitForView(container, "YOUR LIBRARY");
     expect(win.location.pathname).toBe(ARTIST_HREF);
     expect(container.textContent).not.toContain("YOUR LIBRARY");
     expect(container.textContent).toContain("Charlie Puth");
@@ -216,6 +236,7 @@ describe("clicking through to an artist in a real DOM", () => {
 
     await click(container, `a[href="${ARTIST_HREF}"]`);
 
+    await waitForView(container, "YOUR LIBRARY");
     expect(win.location.pathname).toBe(ARTIST_HREF);
     expect(container.textContent).not.toContain("YOUR LIBRARY");
     expect(container.textContent).toContain("Charlie Puth");
@@ -266,6 +287,7 @@ describe("clicking through to an artist in a real DOM", () => {
 
     await click(container, `div[role="button"]`);
 
+    await waitForView(container, "YOUR SHELF");
     expect(win.location.pathname).toBe(ARTIST_HREF);
     expect(container.textContent).not.toContain("YOUR SHELF");
     expect(container.textContent).toContain("Charlie Puth");
@@ -322,6 +344,7 @@ describe("clicking through to an artist in a real DOM", () => {
 
       await click(container, `a[href="${ARTIST_HREF}"]`);
 
+      await waitForView(container, "Recently played");
       expect(win.location.pathname).toBe(ARTIST_HREF);
       expect(container.textContent).not.toContain("Recently played");
       expect(container.textContent).toContain("Charlie Puth");
